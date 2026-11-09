@@ -1,0 +1,9 @@
+viewport (1280.0, 803.0)
+Formation label y = 444
+Play style override label y = 524
+Formation label y = 444
+Play style override label y = 524
+Kick Off button bottom y = 771
+card Match  y 119..594
+card Home team  y 119..608
+card Away team  y 119..608

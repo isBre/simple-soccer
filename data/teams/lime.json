@@ -1,0 +1,113 @@
+{
+  "id": "lime",
+  "name": "Lime Comets",
+  "short": "LIM",
+  "colors": {
+    "primary": "a4d12a",
+    "secondary": "1b3a0e"
+  },
+  "kit": "hoops",
+  "logo": {
+    "shape": "diamond",
+    "pattern": "stripes",
+    "symbol": "star",
+    "c1": "a4d12a",
+    "c2": "1b3a0e",
+    "c3": "ffffff"
+  },
+  "style": "switch_play",
+  "formations": {},
+  "players": [
+    {
+      "id": "lime_0",
+      "name": "Remo Dumont",
+      "number": 1,
+      "pos": "GK",
+      "attrs": {
+        "finishing": 51,
+        "passing": 64,
+        "defending": 73,
+        "positioning": 83,
+        "reaction": 76
+      }
+    },
+    {
+      "id": "lime_1",
+      "name": "Hugo Sandoval",
+      "number": 4,
+      "pos": "DEF",
+      "attrs": {
+        "finishing": 55,
+        "passing": 67,
+        "defending": 79,
+        "positioning": 74,
+        "reaction": 71
+      }
+    },
+    {
+      "id": "lime_2",
+      "name": "Bruno Haas",
+      "number": 5,
+      "pos": "DEF",
+      "attrs": {
+        "finishing": 64,
+        "passing": 68,
+        "defending": 73,
+        "positioning": 74,
+        "reaction": 66
+      }
+    },
+    {
+      "id": "lime_3",
+      "name": "Otto Lindgren",
+      "number": 8,
+      "pos": "MID",
+      "attrs": {
+        "finishing": 66,
+        "passing": 80,
+        "defending": 51,
+        "positioning": 80,
+        "reaction": 83
+      }
+    },
+    {
+      "id": "lime_4",
+      "name": "Marek Petrov",
+      "number": 10,
+      "pos": "MID",
+      "attrs": {
+        "finishing": 65,
+        "passing": 76,
+        "defending": 65,
+        "positioning": 78,
+        "reaction": 68
+      }
+    },
+    {
+      "id": "lime_5",
+      "name": "Teo Dumont",
+      "number": 9,
+      "pos": "FWD",
+      "attrs": {
+        "finishing": 69,
+        "passing": 70,
+        "defending": 57,
+        "positioning": 61,
+        "reaction": 70
+      }
+    },
+    {
+      "id": "lime_6",
+      "name": "Sven Halvorsen",
+      "number": 11,
+      "pos": "FWD",
+      "attrs": {
+        "finishing": 75,
+        "passing": 63,
+        "defending": 53,
+        "positioning": 75,
+        "reaction": 72
+      }
+    }
+  ]
+}

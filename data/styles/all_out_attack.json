@@ -1,0 +1,23 @@
+{
+  "name": "All-Out Attack",
+  "description": "Everyone pushes forward, high risk, shoots on sight.",
+  "line_height": 0.85,
+  "compactness": 0.6,
+  "width": 1.2,
+  "press": 0.85,
+  "marking": 0.3,
+  "directness": 0.75,
+  "shoot_range": 0.75,
+  "pass_bias": 0.5,
+  "risk": 0.85,
+  "keeper_sweep": 0.6,
+  "forward_stay": 0.1,
+  "support_dist": 200,
+  "fluidity": 0.85,
+  "attack_commit": 1.0,
+  "intercept": 0.2,
+  "counter_press": 0.0,
+  "long_shot": 0.0,
+  "switch_play": 0.0,
+  "id": "all_out_attack"
+}

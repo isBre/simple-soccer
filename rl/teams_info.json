@@ -1,0 +1,114 @@
+[
+  {
+    "held_out": false,
+    "id": "cobalt",
+    "strength": 61.8,
+    "style": "total_football",
+    "tier": "weak"
+  },
+  {
+    "held_out": true,
+    "id": "scorpions",
+    "strength": 63.2,
+    "style": "park_the_bus",
+    "tier": "weak"
+  },
+  {
+    "held_out": false,
+    "id": "ember",
+    "strength": 63.6,
+    "style": "long_ball",
+    "tier": "weak"
+  },
+  {
+    "held_out": false,
+    "id": "bulls",
+    "strength": 64.2,
+    "style": "dribblers",
+    "tier": "weak"
+  },
+  {
+    "held_out": false,
+    "id": "rose",
+    "strength": 68.4,
+    "style": "sharpshooters",
+    "tier": "average"
+  },
+  {
+    "held_out": true,
+    "id": "fern",
+    "strength": 72.6,
+    "style": "wing_play",
+    "tier": "average"
+  },
+  {
+    "held_out": false,
+    "id": "harbor",
+    "strength": 73.2,
+    "style": "all_out_attack",
+    "tier": "average"
+  },
+  {
+    "held_out": false,
+    "id": "lime",
+    "strength": 74.0,
+    "style": "switch_play",
+    "tier": "average"
+  },
+  {
+    "held_out": false,
+    "id": "owls",
+    "strength": 75.8,
+    "style": "balanced",
+    "tier": "strong"
+  },
+  {
+    "held_out": true,
+    "id": "granite",
+    "strength": 77.4,
+    "style": "catenaccio",
+    "tier": "strong"
+  },
+  {
+    "held_out": false,
+    "id": "dune",
+    "strength": 79.4,
+    "style": "counter_attack",
+    "tier": "strong"
+  },
+  {
+    "held_out": false,
+    "id": "onyx",
+    "strength": 81.6,
+    "style": "man_to_man",
+    "tier": "strong"
+  },
+  {
+    "held_out": false,
+    "id": "tide",
+    "strength": 84.0,
+    "style": "gegenpress",
+    "tier": "elite"
+  },
+  {
+    "held_out": true,
+    "id": "borealis",
+    "strength": 85.0,
+    "style": "high_press",
+    "tier": "elite"
+  },
+  {
+    "held_out": false,
+    "id": "aurora",
+    "strength": 88.2,
+    "style": "tiki_taka",
+    "tier": "elite"
+  },
+  {
+    "held_out": false,
+    "id": "arrows",
+    "strength": 89.4,
+    "style": "zone_trap",
+    "tier": "elite"
+  }
+]

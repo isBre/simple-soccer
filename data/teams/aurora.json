@@ -1,0 +1,113 @@
+{
+  "id": "aurora",
+  "name": "Aurora FC",
+  "short": "AUR",
+  "colors": {
+    "primary": "f2c230",
+    "secondary": "1b2a5c"
+  },
+  "kit": "halves",
+  "logo": {
+    "shape": "shield",
+    "pattern": "halves",
+    "symbol": "star",
+    "c1": "f2c230",
+    "c2": "1b2a5c",
+    "c3": "ffffff"
+  },
+  "style": "tiki_taka",
+  "formations": {},
+  "players": [
+    {
+      "id": "aurora_0",
+      "name": "Yann Janssen",
+      "number": 1,
+      "pos": "GK",
+      "attrs": {
+        "finishing": 62,
+        "passing": 82,
+        "defending": 75,
+        "positioning": 91,
+        "reaction": 96
+      }
+    },
+    {
+      "id": "aurora_1",
+      "name": "Dani Novak",
+      "number": 4,
+      "pos": "DEF",
+      "attrs": {
+        "finishing": 77,
+        "passing": 73,
+        "defending": 89,
+        "positioning": 88,
+        "reaction": 72
+      }
+    },
+    {
+      "id": "aurora_2",
+      "name": "Zeno Sandoval",
+      "number": 5,
+      "pos": "DEF",
+      "attrs": {
+        "finishing": 76,
+        "passing": 82,
+        "defending": 91,
+        "positioning": 90,
+        "reaction": 95
+      }
+    },
+    {
+      "id": "aurora_3",
+      "name": "Ciro Fabbri",
+      "number": 8,
+      "pos": "MID",
+      "attrs": {
+        "finishing": 83,
+        "passing": 93,
+        "defending": 86,
+        "positioning": 96,
+        "reaction": 82
+      }
+    },
+    {
+      "id": "aurora_4",
+      "name": "Arjun Moretti",
+      "number": 10,
+      "pos": "MID",
+      "attrs": {
+        "finishing": 76,
+        "passing": 85,
+        "defending": 88,
+        "positioning": 89,
+        "reaction": 83
+      }
+    },
+    {
+      "id": "aurora_5",
+      "name": "Zeno Ferrante",
+      "number": 9,
+      "pos": "FWD",
+      "attrs": {
+        "finishing": 95,
+        "passing": 85,
+        "defending": 67,
+        "positioning": 79,
+        "reaction": 87
+      }
+    },
+    {
+      "id": "aurora_6",
+      "name": "Remo Fabbri",
+      "number": 11,
+      "pos": "FWD",
+      "attrs": {
+        "finishing": 82,
+        "passing": 87,
+        "defending": 80,
+        "positioning": 73,
+        "reaction": 80
+      }
+    }
+  ]
+}

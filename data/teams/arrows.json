@@ -1,0 +1,113 @@
+{
+  "id": "arrows",
+  "name": "Silver Arrows",
+  "short": "ARR",
+  "colors": {
+    "primary": "c9ced6",
+    "secondary": "1a2a4a"
+  },
+  "kit": "stripes",
+  "logo": {
+    "shape": "shield",
+    "pattern": "chevron",
+    "symbol": "cross",
+    "c1": "c9ced6",
+    "c2": "1a2a4a",
+    "c3": "ffffff"
+  },
+  "style": "zone_trap",
+  "formations": {},
+  "players": [
+    {
+      "id": "arrows_0",
+      "name": "Jonas Holm",
+      "number": 1,
+      "pos": "GK",
+      "attrs": {
+        "finishing": 65,
+        "passing": 79,
+        "defending": 83,
+        "positioning": 89,
+        "reaction": 96
+      }
+    },
+    {
+      "id": "arrows_1",
+      "name": "Tomas Petrov",
+      "number": 4,
+      "pos": "DEF",
+      "attrs": {
+        "finishing": 82,
+        "passing": 91,
+        "defending": 96,
+        "positioning": 88,
+        "reaction": 82
+      }
+    },
+    {
+      "id": "arrows_2",
+      "name": "Otto Ivanek",
+      "number": 5,
+      "pos": "DEF",
+      "attrs": {
+        "finishing": 80,
+        "passing": 70,
+        "defending": 96,
+        "positioning": 93,
+        "reaction": 79
+      }
+    },
+    {
+      "id": "arrows_3",
+      "name": "Marek Rinaldi",
+      "number": 8,
+      "pos": "MID",
+      "attrs": {
+        "finishing": 83,
+        "passing": 95,
+        "defending": 86,
+        "positioning": 88,
+        "reaction": 89
+      }
+    },
+    {
+      "id": "arrows_4",
+      "name": "Sami Holm",
+      "number": 10,
+      "pos": "MID",
+      "attrs": {
+        "finishing": 85,
+        "passing": 96,
+        "defending": 78,
+        "positioning": 85,
+        "reaction": 86
+      }
+    },
+    {
+      "id": "arrows_5",
+      "name": "Marek Ivanek",
+      "number": 9,
+      "pos": "FWD",
+      "attrs": {
+        "finishing": 91,
+        "passing": 84,
+        "defending": 72,
+        "positioning": 87,
+        "reaction": 88
+      }
+    },
+    {
+      "id": "arrows_6",
+      "name": "Milan Marchetti",
+      "number": 11,
+      "pos": "FWD",
+      "attrs": {
+        "finishing": 82,
+        "passing": 84,
+        "defending": 81,
+        "positioning": 89,
+        "reaction": 92
+      }
+    }
+  ]
+}

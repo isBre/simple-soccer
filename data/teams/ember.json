@@ -1,0 +1,113 @@
+{
+  "id": "ember",
+  "name": "Ember City",
+  "short": "EMB",
+  "colors": {
+    "primary": "d6402f",
+    "secondary": "1a1a1a"
+  },
+  "kit": "halves",
+  "logo": {
+    "shape": "shield",
+    "pattern": "quarters",
+    "symbol": "bolt",
+    "c1": "d6402f",
+    "c2": "1a1a1a",
+    "c3": "ffffff"
+  },
+  "style": "long_ball",
+  "formations": {},
+  "players": [
+    {
+      "id": "ember_0",
+      "name": "Yann Quaranta",
+      "number": 1,
+      "pos": "GK",
+      "attrs": {
+        "finishing": 38,
+        "passing": 51,
+        "defending": 60,
+        "positioning": 71,
+        "reaction": 73
+      }
+    },
+    {
+      "id": "ember_1",
+      "name": "Hugo Dragan",
+      "number": 4,
+      "pos": "DEF",
+      "attrs": {
+        "finishing": 56,
+        "passing": 53,
+        "defending": 69,
+        "positioning": 60,
+        "reaction": 58
+      }
+    },
+    {
+      "id": "ember_2",
+      "name": "Anton Moretti",
+      "number": 5,
+      "pos": "DEF",
+      "attrs": {
+        "finishing": 53,
+        "passing": 54,
+        "defending": 80,
+        "positioning": 59,
+        "reaction": 54
+      }
+    },
+    {
+      "id": "ember_3",
+      "name": "Oskar Ferrante",
+      "number": 8,
+      "pos": "MID",
+      "attrs": {
+        "finishing": 53,
+        "passing": 66,
+        "defending": 61,
+        "positioning": 54,
+        "reaction": 57
+      }
+    },
+    {
+      "id": "ember_4",
+      "name": "Emil Dragan",
+      "number": 10,
+      "pos": "MID",
+      "attrs": {
+        "finishing": 54,
+        "passing": 65,
+        "defending": 58,
+        "positioning": 51,
+        "reaction": 53
+      }
+    },
+    {
+      "id": "ember_5",
+      "name": "Ivo Ulrich",
+      "number": 9,
+      "pos": "FWD",
+      "attrs": {
+        "finishing": 65,
+        "passing": 59,
+        "defending": 45,
+        "positioning": 55,
+        "reaction": 63
+      }
+    },
+    {
+      "id": "ember_6",
+      "name": "Pavel Sandoval",
+      "number": 11,
+      "pos": "FWD",
+      "attrs": {
+        "finishing": 67,
+        "passing": 54,
+        "defending": 43,
+        "positioning": 53,
+        "reaction": 60
+      }
+    }
+  ]
+}

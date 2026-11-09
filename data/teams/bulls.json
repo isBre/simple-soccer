@@ -1,0 +1,113 @@
+{
+  "id": "bulls",
+  "name": "Maroon Bulls",
+  "short": "BUL",
+  "colors": {
+    "primary": "7a1f2b",
+    "secondary": "f1e3c8"
+  },
+  "kit": "solid",
+  "logo": {
+    "shape": "circle",
+    "pattern": "band",
+    "symbol": "bolt",
+    "c1": "7a1f2b",
+    "c2": "f1e3c8",
+    "c3": "f1e3c8"
+  },
+  "style": "dribblers",
+  "formations": {},
+  "players": [
+    {
+      "id": "bulls_0",
+      "name": "Leon Zanetti",
+      "number": 1,
+      "pos": "GK",
+      "attrs": {
+        "finishing": 43,
+        "passing": 48,
+        "defending": 56,
+        "positioning": 62,
+        "reaction": 74
+      }
+    },
+    {
+      "id": "bulls_1",
+      "name": "Remo Castell",
+      "number": 4,
+      "pos": "DEF",
+      "attrs": {
+        "finishing": 43,
+        "passing": 58,
+        "defending": 68,
+        "positioning": 67,
+        "reaction": 56
+      }
+    },
+    {
+      "id": "bulls_2",
+      "name": "Niko Mazur",
+      "number": 5,
+      "pos": "DEF",
+      "attrs": {
+        "finishing": 38,
+        "passing": 60,
+        "defending": 64,
+        "positioning": 65,
+        "reaction": 66
+      }
+    },
+    {
+      "id": "bulls_3",
+      "name": "Leon Moretti",
+      "number": 8,
+      "pos": "MID",
+      "attrs": {
+        "finishing": 56,
+        "passing": 64,
+        "defending": 59,
+        "positioning": 66,
+        "reaction": 72
+      }
+    },
+    {
+      "id": "bulls_4",
+      "name": "Hugo Quaranta",
+      "number": 10,
+      "pos": "MID",
+      "attrs": {
+        "finishing": 48,
+        "passing": 64,
+        "defending": 56,
+        "positioning": 67,
+        "reaction": 54
+      }
+    },
+    {
+      "id": "bulls_5",
+      "name": "Jonas Iliev",
+      "number": 9,
+      "pos": "FWD",
+      "attrs": {
+        "finishing": 67,
+        "passing": 51,
+        "defending": 40,
+        "positioning": 58,
+        "reaction": 60
+      }
+    },
+    {
+      "id": "bulls_6",
+      "name": "Ivo Iliev",
+      "number": 11,
+      "pos": "FWD",
+      "attrs": {
+        "finishing": 73,
+        "passing": 58,
+        "defending": 53,
+        "positioning": 51,
+        "reaction": 67
+      }
+    }
+  ]
+}

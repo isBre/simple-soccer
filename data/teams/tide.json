@@ -1,0 +1,113 @@
+{
+  "id": "tide",
+  "name": "Teal Tide",
+  "short": "TID",
+  "colors": {
+    "primary": "1fa39a",
+    "secondary": "0b2e3a"
+  },
+  "kit": "stripes",
+  "logo": {
+    "shape": "circle",
+    "pattern": "chevron",
+    "symbol": "bolt",
+    "c1": "1fa39a",
+    "c2": "0b2e3a",
+    "c3": "ffffff"
+  },
+  "style": "gegenpress",
+  "formations": {},
+  "players": [
+    {
+      "id": "tide_0",
+      "name": "Remo Zanetti",
+      "number": 1,
+      "pos": "GK",
+      "attrs": {
+        "finishing": 46,
+        "passing": 70,
+        "defending": 85,
+        "positioning": 85,
+        "reaction": 88
+      }
+    },
+    {
+      "id": "tide_1",
+      "name": "Felix Giordano",
+      "number": 4,
+      "pos": "DEF",
+      "attrs": {
+        "finishing": 67,
+        "passing": 70,
+        "defending": 94,
+        "positioning": 83,
+        "reaction": 64
+      }
+    },
+    {
+      "id": "tide_2",
+      "name": "Luca Vidal",
+      "number": 5,
+      "pos": "DEF",
+      "attrs": {
+        "finishing": 73,
+        "passing": 77,
+        "defending": 87,
+        "positioning": 82,
+        "reaction": 83
+      }
+    },
+    {
+      "id": "tide_3",
+      "name": "Milan Gallo",
+      "number": 8,
+      "pos": "MID",
+      "attrs": {
+        "finishing": 82,
+        "passing": 91,
+        "defending": 78,
+        "positioning": 71,
+        "reaction": 76
+      }
+    },
+    {
+      "id": "tide_4",
+      "name": "Arjun Ferrante",
+      "number": 10,
+      "pos": "MID",
+      "attrs": {
+        "finishing": 80,
+        "passing": 89,
+        "defending": 85,
+        "positioning": 86,
+        "reaction": 82
+      }
+    },
+    {
+      "id": "tide_5",
+      "name": "Niko Carraro",
+      "number": 9,
+      "pos": "FWD",
+      "attrs": {
+        "finishing": 88,
+        "passing": 68,
+        "defending": 77,
+        "positioning": 81,
+        "reaction": 85
+      }
+    },
+    {
+      "id": "tide_6",
+      "name": "Sven Marchetti",
+      "number": 11,
+      "pos": "FWD",
+      "attrs": {
+        "finishing": 91,
+        "passing": 73,
+        "defending": 81,
+        "positioning": 83,
+        "reaction": 84
+      }
+    }
+  ]
+}

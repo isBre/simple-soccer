@@ -1,0 +1,24 @@
+{
+  "id": "arena",
+  "name": "Arena (5v5, large)",
+  "sizes": [
+    4,
+    5
+  ],
+  "half_w": 640,
+  "half_h": 300,
+  "goal_half": 115,
+  "net_depth": 55,
+  "out_x": 700,
+  "out_y": 355,
+  "center_r": 120,
+  "post_r": 10,
+  "box_depth": 165,
+  "box_half": 190,
+  "stripes": 12,
+  "colors": {
+    "pitch": "58874a",
+    "outer": "3f6034",
+    "line": "e2f2d9"
+  }
+}

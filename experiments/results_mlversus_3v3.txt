@@ -1,0 +1,45 @@
+== experiment mlversus: 160 matches in 452.6s ==
+avg goals/match 2.02 | shots 35.2 | on target 16.9 | passes 42.9 (24% ok) | recoveries 63.7 | own goals 0.09 | draws 51/160 | |poss-50| 4.3
+grades by role played (per player-match): mean +-sd [min..max] | tkl int rec drb disp keyp prog clr g a sv touches
+  GK n=320  7.99 +-0.96 [4.7..9.8] | 0.30 1.25 3.00 0.01 0.47 0.21 0.16 6.82 0.00 0.00 4.51 17.9
+  MID n=640  6.46 +-1.19 [4.2..9.5] | 7.00 8.14 12.82 0.67 6.96 1.25 0.40 3.67 0.48 0.01 0.00 57.8
+  all: p10 5.2  p50 7.0  p90 8.8 | xG/match 6.31 vs goals/match 1.93 (own goals excluded)
+ball zones (left->right fifths) 21/19/21/19/20 % | idle ball 1.4% of play
+keeper: saves/match 9.0 | save rate 82% (saves / (saves+goals)) | kickoff wait 14 ticks avg | distinct first-kickoff waits 7/160
+own goals by role/last-touch: { "GK/clear": 6, "MID/touch": 2, "MID/pass": 5, "GK/touch": 2 } | avg ticks since touch 35 | avg ball speed 2.1
+                   P    W    D    L    GF/m  GA/m  pts/m
+bulls                20   10    0   10  1.45  1.45   1.50
+ember                20   10    0   10  1.20  1.20   1.50
+fern                 20    8    4    8  1.05  1.05   1.40
+granite              20    8    4    8  1.05  1.05   1.40
+owls                 20    8    4    8  1.10  1.10   1.40
+rose                 20    8    4    8  1.40  1.40   1.40
+arrows               20    7    6    7  0.85  0.85   1.35
+borealis             20    7    6    7  1.15  1.15   1.35
+cobalt               20    7    6    7  0.90  0.90   1.35
+tide                 20    7    6    7  1.00  1.00   1.35
+dune                 20    6    8    6  0.65  0.65   1.30
+lime                 20    5   10    5  1.00  1.00   1.25
+onyx                 20    5   10    5  0.85  0.85   1.25
+scorpions            20    5   10    5  1.05  1.05   1.25
+aurora               20    4   12    4  0.70  0.70   1.20
+harbor               20    4   12    4  0.80  0.80   1.20
+NEURAL NET (as NEW) vs RULE-BASED bot (as legacy) (mirror teams): W 70  D 51  L 39  | win% 44  pts/m 1.63 | GF 1.23 GA 0.79 per match
+  new    per match: shots 17.8 | on target 9.0 (51%) | passes 36.6 (19% ok) | recoveries 31.2
+  legacy per match: shots 17.3 | on target 7.9 (45%) | passes 6.3 (51% ok) | recoveries 32.5
+  arrows      W3 D3 L4  GF 10 GA 7
+  aurora      W4 D6 L0  GF 10 GA 4
+  borealis    W6 D3 L1  GF 17 GA 6
+  bulls       W6 D0 L4  GF 18 GA 11
+  cobalt      W6 D3 L1  GF 13 GA 5
+  dune        W2 D4 L4  GF 5 GA 8
+  ember       W8 D0 L2  GF 17 GA 7
+  fern        W3 D2 L5  GF 12 GA 9
+  granite     W7 D2 L1  GF 17 GA 4
+  harbor      W1 D6 L3  GF 7 GA 9
+  lime        W5 D5 L0  GF 14 GA 6
+  onyx        W2 D5 L3  GF 7 GA 10
+  owls        W5 D2 L3  GF 14 GA 8
+  rose        W3 D2 L5  GF 10 GA 18
+  scorpions   W5 D5 L0  GF 15 GA 6
+  tide        W4 D3 L3  GF 11 GA 9

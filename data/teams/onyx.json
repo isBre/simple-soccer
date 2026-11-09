@@ -1,0 +1,113 @@
+{
+  "id": "onyx",
+  "name": "Onyx Titans",
+  "short": "ONY",
+  "colors": {
+    "primary": "2a2a2e",
+    "secondary": "ffd54a"
+  },
+  "kit": "solid",
+  "logo": {
+    "shape": "hex",
+    "pattern": "band",
+    "symbol": "crown",
+    "c1": "2a2a2e",
+    "c2": "ffd54a",
+    "c3": "ffd54a"
+  },
+  "style": "man_to_man",
+  "formations": {},
+  "players": [
+    {
+      "id": "onyx_0",
+      "name": "Zeno Xander",
+      "number": 1,
+      "pos": "GK",
+      "attrs": {
+        "finishing": 40,
+        "passing": 73,
+        "defending": 86,
+        "positioning": 80,
+        "reaction": 85
+      }
+    },
+    {
+      "id": "onyx_1",
+      "name": "Niko Yilmaz",
+      "number": 4,
+      "pos": "DEF",
+      "attrs": {
+        "finishing": 65,
+        "passing": 79,
+        "defending": 73,
+        "positioning": 83,
+        "reaction": 84
+      }
+    },
+    {
+      "id": "onyx_2",
+      "name": "Emil Zanetti",
+      "number": 5,
+      "pos": "DEF",
+      "attrs": {
+        "finishing": 62,
+        "passing": 79,
+        "defending": 78,
+        "positioning": 81,
+        "reaction": 81
+      }
+    },
+    {
+      "id": "onyx_3",
+      "name": "Hugo Marchetti",
+      "number": 8,
+      "pos": "MID",
+      "attrs": {
+        "finishing": 74,
+        "passing": 96,
+        "defending": 70,
+        "positioning": 88,
+        "reaction": 74
+      }
+    },
+    {
+      "id": "onyx_4",
+      "name": "Otto Xander",
+      "number": 10,
+      "pos": "MID",
+      "attrs": {
+        "finishing": 76,
+        "passing": 83,
+        "defending": 78,
+        "positioning": 79,
+        "reaction": 72
+      }
+    },
+    {
+      "id": "onyx_5",
+      "name": "Zeno Haas",
+      "number": 9,
+      "pos": "FWD",
+      "attrs": {
+        "finishing": 79,
+        "passing": 79,
+        "defending": 62,
+        "positioning": 80,
+        "reaction": 87
+      }
+    },
+    {
+      "id": "onyx_6",
+      "name": "Matej Jarvis",
+      "number": 11,
+      "pos": "FWD",
+      "attrs": {
+        "finishing": 91,
+        "passing": 69,
+        "defending": 64,
+        "positioning": 74,
+        "reaction": 77
+      }
+    }
+  ]
+}

@@ -1,0 +1,18 @@
+== DAgger: teacher=balanced classic 3v3 180s ==
+iter 0: student pts/m 0.07  GF 0.93  GA 2.86   (dataset 67930, 277s elapsed)
+iter 1: student pts/m 0.00  GF 0.71  GA 5.14   (dataset 137862, 491s elapsed)
+iter 2: student pts/m 0.50  GF 1.00  GA 2.50   (dataset 208632, 702s elapsed)
+iter 3: student pts/m 0.64  GF 1.36  GA 2.71   (dataset 280741, 913s elapsed)
+iter 4: student pts/m 1.00  GF 1.36  GA 2.14   (dataset 350646, 1126s elapsed)
+iter 5: student pts/m 1.07  GF 1.36  GA 2.00   (dataset 435507, 1345s elapsed)
+-- final (best model) vs teacher --
+opponent         teacher pts/m  GF/GA      |  ML pts/m  GF/GA
+balanced              1.50   1.25/1.25   |     2.50   3.75/2.25
+counter_attack        2.50   2.75/1.25   |     1.00   2.00/3.25
+high_press            0.25   0.50/1.75   |     1.25   2.50/3.00
+long_ball             0.75   1.75/3.00   |     2.25   3.50/2.25
+park_the_bus          3.00   3.50/0.75   |     1.00   1.50/2.75
+tiki_taka             1.00   1.25/1.25   |     1.00   1.75/2.25
+wing_play             1.50   2.25/2.25   |     1.50   2.00/1.00
+average               1.50                 |    1.50   (ML GF 2.43 GA 2.39)
+total 1451s

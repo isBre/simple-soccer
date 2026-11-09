@@ -1,0 +1,1 @@
+{"imitate": "balanced", "pitch": "arena", "size": 5, "duration": 180, "collect_games": 2, "games": 2, "samples": 80000, "epochs": 8, "kick_weight": 8, "hidden": 32, "eval_only": false, "temperature": 1.0, "lr": 0.003}

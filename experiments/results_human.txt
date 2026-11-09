@@ -1,0 +1,5 @@
+== human-control experiment: 4 matches, 43196 active ticks ==
+teammate within 34px of the human: 1.4% of ticks
+a bot chaser while the human is on the ball: 13.0% of ticks
+human assigned as keeper: 0.0% of ticks
+goals for/against per match: 0.50 / 0.25 | opp shots on target 0.5 | own saves 0.2

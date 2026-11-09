@@ -1,0 +1,13 @@
+== experiment sanity: 48 matches in 103.1s ==
+avg goals/match 2.75 | shots 5.4 | on target 4.4 | passes 33.7 (52% ok) | recoveries 65.1 | own goals 0.00 | draws 11/48 | |poss-50| 5.3
+ball zones (left->right fifths) 9/23/32/26/10 % | idle ball 0.9% of play
+keeper: saves/match 1.2 | save rate 30% (saves / (saves+goals)) | kickoff wait 18 ticks avg | distinct first-kickoff waits 19/48
+                   P    W    D    L    GF/m  GA/m  pts/m
+dune                 11    9    1    1  2.18  0.82   2.55
+aurora               10    6    2    2  1.50  0.70   2.00
+ember                10    5    3    2  1.40  0.90   1.80
+granite               8    4    2    2  1.25  1.00   1.75
+harbor                9    3    1    5  1.89  2.11   1.11
+cobalt               10    3    2    5  1.10  1.60   1.10
+borealis             20    4    5   11  1.20  1.90   0.85
+fern                 18    3    6    9  0.94  1.44   0.83

@@ -1,0 +1,25 @@
+{
+  "id": "classic",
+  "name": "Classic",
+  "sizes": [
+    1,
+    2,
+    3
+  ],
+  "half_w": 370,
+  "half_h": 170,
+  "goal_half": 64,
+  "net_depth": 40,
+  "out_x": 420,
+  "out_y": 200,
+  "center_r": 75,
+  "post_r": 8,
+  "box_depth": 0,
+  "box_half": 0,
+  "stripes": 0,
+  "colors": {
+    "pitch": "718c5a",
+    "outer": "5b7347",
+    "line": "c7e6bd"
+  }
+}

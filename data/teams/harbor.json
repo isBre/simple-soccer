@@ -1,0 +1,113 @@
+{
+  "id": "harbor",
+  "name": "Harbor Sharks",
+  "short": "HAR",
+  "colors": {
+    "primary": "8e3fb8",
+    "secondary": "e8e8e8"
+  },
+  "kit": "hoops",
+  "logo": {
+    "shape": "diamond",
+    "pattern": "halves",
+    "symbol": "ring",
+    "c1": "8e3fb8",
+    "c2": "e8e8e8",
+    "c3": "ffffff"
+  },
+  "style": "all_out_attack",
+  "formations": {},
+  "players": [
+    {
+      "id": "harbor_0",
+      "name": "Bruno Vidal",
+      "number": 1,
+      "pos": "GK",
+      "attrs": {
+        "finishing": 38,
+        "passing": 66,
+        "defending": 71,
+        "positioning": 80,
+        "reaction": 74
+      }
+    },
+    {
+      "id": "harbor_1",
+      "name": "Bruno Ivanek",
+      "number": 4,
+      "pos": "DEF",
+      "attrs": {
+        "finishing": 54,
+        "passing": 74,
+        "defending": 71,
+        "positioning": 70,
+        "reaction": 69
+      }
+    },
+    {
+      "id": "harbor_2",
+      "name": "Yann Halvorsen",
+      "number": 5,
+      "pos": "DEF",
+      "attrs": {
+        "finishing": 51,
+        "passing": 65,
+        "defending": 75,
+        "positioning": 84,
+        "reaction": 58
+      }
+    },
+    {
+      "id": "harbor_3",
+      "name": "Marek Haas",
+      "number": 8,
+      "pos": "MID",
+      "attrs": {
+        "finishing": 65,
+        "passing": 75,
+        "defending": 60,
+        "positioning": 77,
+        "reaction": 75
+      }
+    },
+    {
+      "id": "harbor_4",
+      "name": "Matej Weiss",
+      "number": 10,
+      "pos": "MID",
+      "attrs": {
+        "finishing": 75,
+        "passing": 79,
+        "defending": 78,
+        "positioning": 63,
+        "reaction": 65
+      }
+    },
+    {
+      "id": "harbor_5",
+      "name": "Jonas Weiss",
+      "number": 9,
+      "pos": "FWD",
+      "attrs": {
+        "finishing": 62,
+        "passing": 63,
+        "defending": 60,
+        "positioning": 59,
+        "reaction": 74
+      }
+    },
+    {
+      "id": "harbor_6",
+      "name": "Pavel Quaranta",
+      "number": 11,
+      "pos": "FWD",
+      "attrs": {
+        "finishing": 76,
+        "passing": 65,
+        "defending": 61,
+        "positioning": 75,
+        "reaction": 73
+      }
+    }
+  ]
+}

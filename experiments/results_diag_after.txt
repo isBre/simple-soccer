@@ -1,0 +1,19 @@
+== ai_diag: 12 matches, goals 19, stat shots 232 (on target 150 = 65%) ==
+shoot decisions 7887, shoot kicks 259
+on target, perfect aim, bot's velocity estimate: 84%
+on target, perfect aim, TRUE ball velocity      : 86%
+mean |estimated - true| ball velocity at kick   : 0.57 px/tick
+on target, perfect aim from TRUE ball pos+vel      : 86%
+mean |predicted contact point - real ball pos| at kick: 0.0 px
+mean misalignment vs TRUE desired direction deg: 7.3
+kicks within 4 deg of true desired dir: 97 (37%), on target 91%
+on target, skill error only  : 80%
+on target, ACTUAL            : 74%
+mean kick misalignment deg   : 5.6
+mean skill error deg         : 4.3
+mean velocity-compensation shift deg: 4.6
+mean ball speed at kick      : 1.01
+  near: 151 kicks, 70% on target
+  mid: 76 kicks, 82% on target
+  far: 32 kicks, 75% on target
+  ball already moving (>1.5): 38 kicks, 79% on target

@@ -1,0 +1,23 @@
+{
+  "name": "Counter-Attack",
+  "description": "Sits back, then breaks fast with forwards held high.",
+  "line_height": 0.3,
+  "compactness": 0.45,
+  "width": 1.0,
+  "press": 0.3,
+  "marking": 0.5,
+  "directness": 0.7,
+  "shoot_range": 0.65,
+  "pass_bias": 0.55,
+  "risk": 0.6,
+  "keeper_sweep": 0.25,
+  "forward_stay": 0.85,
+  "support_dist": 180,
+  "fluidity": 0.5,
+  "attack_commit": 0.35,
+  "intercept": 0.6,
+  "counter_press": 0.0,
+  "long_shot": 0.0,
+  "switch_play": 0.0,
+  "id": "counter_attack"
+}

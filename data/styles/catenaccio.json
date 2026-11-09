@@ -1,0 +1,23 @@
+{
+  "name": "Catenaccio",
+  "description": "Fixed keeper, deep disciplined block, man-marking and sudden long strikes.",
+  "line_height": 0.1,
+  "compactness": 0.65,
+  "width": 0.8,
+  "press": 0.15,
+  "marking": 0.9,
+  "directness": 0.65,
+  "shoot_range": 0.55,
+  "pass_bias": 0.35,
+  "risk": 0.15,
+  "keeper_sweep": 0.05,
+  "forward_stay": 0.35,
+  "support_dist": 170,
+  "fluidity": 0.0,
+  "attack_commit": 0.1,
+  "intercept": 0.8,
+  "counter_press": 0.0,
+  "long_shot": 0.0,
+  "switch_play": 0.0,
+  "id": "catenaccio"
+}

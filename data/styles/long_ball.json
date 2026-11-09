@@ -1,0 +1,23 @@
+{
+  "name": "Long Ball",
+  "description": "Direct, long passes and early shots.",
+  "line_height": 0.5,
+  "compactness": 0.4,
+  "width": 1.0,
+  "press": 0.4,
+  "marking": 0.3,
+  "directness": 0.9,
+  "shoot_range": 0.62,
+  "pass_bias": 0.55,
+  "risk": 0.6,
+  "keeper_sweep": 0.3,
+  "forward_stay": 0.5,
+  "support_dist": 220,
+  "fluidity": 0.4,
+  "attack_commit": 0.3,
+  "intercept": 0.4,
+  "counter_press": 0.0,
+  "long_shot": 0.0,
+  "switch_play": 0.0,
+  "id": "long_ball"
+}

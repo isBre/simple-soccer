@@ -1,0 +1,23 @@
+{
+  "name": "Wing Play",
+  "description": "Stretches the pitch and attacks down the flanks.",
+  "line_height": 0.5,
+  "compactness": 0.6,
+  "width": 1.35,
+  "press": 0.45,
+  "marking": 0.3,
+  "directness": 0.55,
+  "shoot_range": 0.6,
+  "pass_bias": 0.7,
+  "risk": 0.45,
+  "keeper_sweep": 0.3,
+  "forward_stay": 0.4,
+  "support_dist": 170,
+  "fluidity": 0.6,
+  "attack_commit": 0.55,
+  "intercept": 0.4,
+  "counter_press": 0.0,
+  "long_shot": 0.0,
+  "switch_play": 0.3,
+  "id": "wing_play"
+}

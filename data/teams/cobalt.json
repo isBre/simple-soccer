@@ -1,0 +1,113 @@
+{
+  "id": "cobalt",
+  "name": "Cobalt Rangers",
+  "short": "COB",
+  "colors": {
+    "primary": "2f5fd0",
+    "secondary": "f2f2f2"
+  },
+  "kit": "solid",
+  "logo": {
+    "shape": "circle",
+    "pattern": "stripes",
+    "symbol": "ring",
+    "c1": "2f5fd0",
+    "c2": "f2f2f2",
+    "c3": "f2f2f2"
+  },
+  "style": "total_football",
+  "formations": {},
+  "players": [
+    {
+      "id": "cobalt_0",
+      "name": "Remo Brandt",
+      "number": 1,
+      "pos": "GK",
+      "attrs": {
+        "finishing": 38,
+        "passing": 40,
+        "defending": 53,
+        "positioning": 64,
+        "reaction": 82
+      }
+    },
+    {
+      "id": "cobalt_1",
+      "name": "Yann Holm",
+      "number": 4,
+      "pos": "DEF",
+      "attrs": {
+        "finishing": 44,
+        "passing": 47,
+        "defending": 55,
+        "positioning": 57,
+        "reaction": 58
+      }
+    },
+    {
+      "id": "cobalt_2",
+      "name": "Bruno Novak",
+      "number": 5,
+      "pos": "DEF",
+      "attrs": {
+        "finishing": 46,
+        "passing": 55,
+        "defending": 73,
+        "positioning": 60,
+        "reaction": 57
+      }
+    },
+    {
+      "id": "cobalt_3",
+      "name": "Niko Holm",
+      "number": 8,
+      "pos": "MID",
+      "attrs": {
+        "finishing": 54,
+        "passing": 66,
+        "defending": 56,
+        "positioning": 53,
+        "reaction": 56
+      }
+    },
+    {
+      "id": "cobalt_4",
+      "name": "Emil Haas",
+      "number": 10,
+      "pos": "MID",
+      "attrs": {
+        "finishing": 64,
+        "passing": 65,
+        "defending": 43,
+        "positioning": 52,
+        "reaction": 63
+      }
+    },
+    {
+      "id": "cobalt_5",
+      "name": "Pavel Castell",
+      "number": 9,
+      "pos": "FWD",
+      "attrs": {
+        "finishing": 58,
+        "passing": 56,
+        "defending": 53,
+        "positioning": 67,
+        "reaction": 56
+      }
+    },
+    {
+      "id": "cobalt_6",
+      "name": "Ciro Holm",
+      "number": 11,
+      "pos": "FWD",
+      "attrs": {
+        "finishing": 62,
+        "passing": 57,
+        "defending": 52,
+        "positioning": 63,
+        "reaction": 53
+      }
+    }
+  ]
+}

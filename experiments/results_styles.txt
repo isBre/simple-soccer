@@ -1,0 +1,22 @@
+== experiment styles: 100 matches in 229.6s ==
+avg goals/match 2.04 | shots 7.1 | on target 4.8 | passes 36.4 (52% ok) | recoveries 35.0 | own goals 0.01 | draws 30/100 | |poss-50| 5.2
+grades by role played (per player-match): mean +-sd [min..max] | tkl int rec drb disp keyp prog clr g a sv touches
+  GK n=200  6.54 +-1.04 [4.6..9.1] | 0.03 1.03 0.47 0.01 0.03 0.01 0.20 1.25 0.01 0.00 0.78 4.7
+  DEF n=400  6.55 +-0.87 [4.8..9.6] | 1.13 0.85 3.38 0.11 0.82 0.05 0.52 2.02 0.08 0.01 0.01 12.4
+  MID n=200  6.18 +-1.19 [4.4..9.2] | 2.63 3.04 8.28 0.46 2.88 0.34 0.42 2.24 0.42 0.04 0.01 30.6
+  FWD n=200  6.10 +-1.11 [4.6..8.8] | 2.71 4.12 9.35 0.85 3.07 0.29 0.18 1.05 0.42 0.04 0.00 33.7
+  all: p10 5.1  p50 6.3  p90 7.7 | xG/match 1.85 vs goals/match 2.03 (own goals excluded)
+ball zones (left->right fifths) 12/23/30/23/13 % | idle ball 1.2% of play
+keeper: saves/match 1.6 | save rate 44% (saves / (saves+goals)) | kickoff wait 17 ticks avg | distinct first-kickoff waits 1/100
+own goals by role/last-touch: { "DEF/touch": 1 } | avg ticks since touch 89 | avg ball speed 0.4
+                   P    W    D    L    GF/m  GA/m  pts/m
+long_ball            20    9    7    4  1.35  0.70   1.70
+tiki_taka            20   10    2    8  0.95  1.10   1.60
+counter_attack       20    8    7    5  1.25  0.80   1.55
+all_out_attack       20    7    8    5  1.30  1.20   1.45
+balanced             20    8    5    7  1.15  1.00   1.45
+catenaccio           20    7    8    5  0.65  0.60   1.45
+park_the_bus         20    6    7    7  0.80  0.70   1.25
+high_press           20    6    5    9  0.95  1.35   1.15
+wing_play            20    5    6    9  1.05  1.35   1.05
+total_football       20    4    5   11  0.75  1.40   0.85

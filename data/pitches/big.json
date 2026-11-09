@@ -1,0 +1,24 @@
+{
+  "id": "big",
+  "name": "Big (5v5)",
+  "sizes": [
+    4,
+    5
+  ],
+  "half_w": 520,
+  "half_h": 240,
+  "goal_half": 90,
+  "net_depth": 45,
+  "out_x": 575,
+  "out_y": 285,
+  "center_r": 100,
+  "post_r": 9,
+  "box_depth": 130,
+  "box_half": 150,
+  "stripes": 10,
+  "colors": {
+    "pitch": "5f8f4e",
+    "outer": "466b3a",
+    "line": "dcefd2"
+  }
+}

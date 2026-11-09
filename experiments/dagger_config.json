@@ -1,0 +1,1 @@
+{"imitate": "balanced", "pitch": "classic", "size": 3, "duration": 180, "iters": 5, "collect_games": 2, "keep": 0.4, "train_cap": 100000, "hidden": 64, "first_epochs": 8, "epochs": 4, "lr": 0.002, "kick_weight": 8, "eval_games": 1, "final_games": 2, "betas": [1.0, 0.5, 0.25, 0.0, 0.0, 0.0]}

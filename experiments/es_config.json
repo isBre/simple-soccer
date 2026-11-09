@@ -1,0 +1,1 @@
+{"teacher": "balanced", "pitch": "classic", "size": 3, "gens": 24, "pairs": 6, "sigma": 0.02, "alpha": 0.005, "opps_per_gen": 4, "eval_every": 4, "gen_duration": 90, "duration": 180, "final_games": 2, "start": "res://data/models/dagger_balanced_best.json"}

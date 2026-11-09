@@ -1,0 +1,23 @@
+{
+  "name": "Man-to-Man",
+  "description": "Every outfield player sticks to an opponent and denies the pass.",
+  "line_height": 0.45,
+  "compactness": 0.5,
+  "width": 1.0,
+  "press": 0.5,
+  "marking": 1.0,
+  "directness": 0.5,
+  "shoot_range": 0.55,
+  "pass_bias": 0.55,
+  "risk": 0.4,
+  "keeper_sweep": 0.3,
+  "forward_stay": 0.1,
+  "support_dist": 150,
+  "fluidity": 0.3,
+  "attack_commit": 0.3,
+  "intercept": 0.6,
+  "counter_press": 0.0,
+  "long_shot": 0.0,
+  "switch_play": 0.0,
+  "id": "man_to_man"
+}

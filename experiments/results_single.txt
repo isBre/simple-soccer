@@ -1,0 +1,16 @@
+== experiment single: 1 matches in 0.8s ==
+avg goals/match 1.00 | shots 3.0 | on target 2.0 | passes 41.0 (54% ok) | recoveries 57.0 | own goals 0.00 | draws 0/1 | |poss-50| 4.5
+ball zones (left->right fifths) 12/28/29/19/12 % | idle ball 2.4% of play
+keeper: saves/match 0.0 | save rate 0% (saves / (saves+goals)) | kickoff wait 15 ticks avg | distinct first-kickoff waits 1/1
+aurora 0 - 1 borealis | MoM uid 18
+  2' goal team 1 by Zeno Zanetti
+  t0 GK  Yann Janssen       rat 5.8 g0 a0 sh0/0 pass 1/1 rec 3 sv 0 dist 297
+  t0 DEF Zeno Sandoval      rat 5.9 g0 a0 sh0/0 pass 2/2 rec 2 sv 0 dist 1017
+  t0 DEF Dani Novak         rat 6.1 g0 a0 sh0/0 pass 3/6 rec 9 sv 0 dist 1314
+  t0 MID Ciro Fabbri        rat 6.6 g0 a0 sh1/2 pass 4/6 rec 8 sv 0 dist 1853
+  t0 FWD Zeno Ferrante      rat 6.0 g0 a0 sh0/0 pass 3/6 rec 8 sv 0 dist 1824
+  t1 GK  Ivo Giordano       rat 7.0 g0 a0 sh0/0 pass 0/0 rec 1 sv 0 dist 292
+  t1 DEF Sven Iliev         rat 7.2 g0 a0 sh0/0 pass 5/10 rec 9 sv 0 dist 1444
+  t1 DEF Dario Carraro      rat 7.7 g0 a0 sh0/0 pass 0/0 rec 6 sv 0 dist 1436
+  t1 MID Otto Giordano      rat 7.0 g0 a0 sh0/0 pass 3/4 rec 4 sv 0 dist 1749
+  t1 FWD Zeno Zanetti       rat 7.0 g1 a0 sh1/1 pass 1/6 rec 7 sv 0 dist 1788

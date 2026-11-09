@@ -1,0 +1,113 @@
+{
+  "id": "scorpions",
+  "name": "Sand Scorpions",
+  "short": "SCO",
+  "colors": {
+    "primary": "d8c27a",
+    "secondary": "5a3b17"
+  },
+  "kit": "hoops",
+  "logo": {
+    "shape": "hex",
+    "pattern": "halves",
+    "symbol": "cross",
+    "c1": "d8c27a",
+    "c2": "5a3b17",
+    "c3": "ffffff"
+  },
+  "style": "park_the_bus",
+  "formations": {},
+  "players": [
+    {
+      "id": "scorpions_0",
+      "name": "Kofi Petrov",
+      "number": 1,
+      "pos": "GK",
+      "attrs": {
+        "finishing": 38,
+        "passing": 54,
+        "defending": 57,
+        "positioning": 59,
+        "reaction": 61
+      }
+    },
+    {
+      "id": "scorpions_1",
+      "name": "Dani Janssen",
+      "number": 4,
+      "pos": "DEF",
+      "attrs": {
+        "finishing": 56,
+        "passing": 54,
+        "defending": 67,
+        "positioning": 67,
+        "reaction": 57
+      }
+    },
+    {
+      "id": "scorpions_2",
+      "name": "Jonas Sandoval",
+      "number": 5,
+      "pos": "DEF",
+      "attrs": {
+        "finishing": 55,
+        "passing": 62,
+        "defending": 70,
+        "positioning": 46,
+        "reaction": 49
+      }
+    },
+    {
+      "id": "scorpions_3",
+      "name": "Sven Moretti",
+      "number": 8,
+      "pos": "MID",
+      "attrs": {
+        "finishing": 50,
+        "passing": 67,
+        "defending": 57,
+        "positioning": 64,
+        "reaction": 61
+      }
+    },
+    {
+      "id": "scorpions_4",
+      "name": "Elio Holm",
+      "number": 10,
+      "pos": "MID",
+      "attrs": {
+        "finishing": 65,
+        "passing": 63,
+        "defending": 62,
+        "positioning": 62,
+        "reaction": 68
+      }
+    },
+    {
+      "id": "scorpions_5",
+      "name": "Milan Xander",
+      "number": 9,
+      "pos": "FWD",
+      "attrs": {
+        "finishing": 76,
+        "passing": 53,
+        "defending": 51,
+        "positioning": 49,
+        "reaction": 70
+      }
+    },
+    {
+      "id": "scorpions_6",
+      "name": "Bruno Ferrante",
+      "number": 11,
+      "pos": "FWD",
+      "attrs": {
+        "finishing": 66,
+        "passing": 67,
+        "defending": 44,
+        "positioning": 57,
+        "reaction": 59
+      }
+    }
+  ]
+}

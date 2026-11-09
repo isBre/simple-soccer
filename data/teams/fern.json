@@ -1,0 +1,113 @@
+{
+  "id": "fern",
+  "name": "Fern Valley",
+  "short": "FER",
+  "colors": {
+    "primary": "2e9e5b",
+    "secondary": "f4f1de"
+  },
+  "kit": "stripes",
+  "logo": {
+    "shape": "circle",
+    "pattern": "chevron",
+    "symbol": "star",
+    "c1": "2e9e5b",
+    "c2": "f4f1de",
+    "c3": "ffffff"
+  },
+  "style": "wing_play",
+  "formations": {},
+  "players": [
+    {
+      "id": "fern_0",
+      "name": "Sven Yilmaz",
+      "number": 1,
+      "pos": "GK",
+      "attrs": {
+        "finishing": 50,
+        "passing": 61,
+        "defending": 73,
+        "positioning": 86,
+        "reaction": 77
+      }
+    },
+    {
+      "id": "fern_1",
+      "name": "Niko Sandoval",
+      "number": 4,
+      "pos": "DEF",
+      "attrs": {
+        "finishing": 58,
+        "passing": 64,
+        "defending": 74,
+        "positioning": 74,
+        "reaction": 70
+      }
+    },
+    {
+      "id": "fern_2",
+      "name": "Matej Sandoval",
+      "number": 5,
+      "pos": "DEF",
+      "attrs": {
+        "finishing": 60,
+        "passing": 66,
+        "defending": 66,
+        "positioning": 64,
+        "reaction": 57
+      }
+    },
+    {
+      "id": "fern_3",
+      "name": "Sven Weiss",
+      "number": 8,
+      "pos": "MID",
+      "attrs": {
+        "finishing": 58,
+        "passing": 69,
+        "defending": 56,
+        "positioning": 71,
+        "reaction": 70
+      }
+    },
+    {
+      "id": "fern_4",
+      "name": "Marek Quaranta",
+      "number": 10,
+      "pos": "MID",
+      "attrs": {
+        "finishing": 68,
+        "passing": 71,
+        "defending": 75,
+        "positioning": 76,
+        "reaction": 69
+      }
+    },
+    {
+      "id": "fern_5",
+      "name": "Sami Keller",
+      "number": 9,
+      "pos": "FWD",
+      "attrs": {
+        "finishing": 72,
+        "passing": 59,
+        "defending": 64,
+        "positioning": 61,
+        "reaction": 75
+      }
+    },
+    {
+      "id": "fern_6",
+      "name": "Dario Ivanek",
+      "number": 11,
+      "pos": "FWD",
+      "attrs": {
+        "finishing": 81,
+        "passing": 70,
+        "defending": 50,
+        "positioning": 60,
+        "reaction": 74
+      }
+    }
+  ]
+}

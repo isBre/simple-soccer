@@ -1,0 +1,22 @@
+== experiment strength: 60 matches in 131.7s ==
+avg goals/match 1.85 | shots 7.1 | on target 4.8 | passes 35.3 (53% ok) | recoveries 35.9 | own goals 0.02 | draws 13/60 | |poss-50| 4.5
+grades by role played (per player-match): mean +-sd [min..max] | tkl int rec drb disp keyp prog clr g a sv touches
+  GK n=120  6.58 +-1.09 [4.7..8.8] | 0.03 0.69 0.33 0.00 0.01 0.00 0.14 1.18 0.00 0.00 0.84 4.4
+  DEF n=240  6.47 +-0.84 [4.5..8.0] | 0.91 0.73 2.33 0.04 0.59 0.01 0.59 2.01 0.01 0.00 0.00 9.9
+  MID n=120  6.34 +-1.31 [4.1..9.1] | 3.41 4.28 9.17 0.60 3.51 0.36 0.42 2.58 0.42 0.02 0.00 34.5
+  FWD n=120  6.11 +-1.26 [4.6..9.4] | 2.92 3.34 9.88 0.75 3.49 0.31 0.14 1.53 0.47 0.02 0.00 34.2
+  all: p10 5.0  p50 6.3  p90 7.7 | xG/match 2.03 vs goals/match 1.83 (own goals excluded)
+ball zones (left->right fifths) 12/23/28/25/13 % | idle ball 1.3% of play
+keeper: saves/match 1.7 | save rate 48% (saves / (saves+goals)) | kickoff wait 18 ticks avg | distinct first-kickoff waits 3/60
+own goals by role/last-touch: { "DEF/touch": 1 } | avg ticks since touch 76 | avg ball speed 0.4
+                   P    W    D    L    GF/m  GA/m  pts/m
+L90                  24   17    2    5  1.75  0.38   2.21
+L80                  24   15    5    4  1.12  0.42   2.08
+L70                  24    7    9    8  0.79  0.75   1.25
+L60                  24    4    5   15  0.50  1.50   0.71
+L50                  24    4    5   15  0.46  1.58   0.71
+stronger side by rating gap:  n   win%  draw%  loss%  GF/m  GA/m
+  gap 10    24     46     29     25   1.04  0.54
+  gap 20    18     44     28     28   1.00  0.56
+  gap 30    12     92      8      0   2.00  0.08
+  gap 40     6    100      0      0   3.00  0.33

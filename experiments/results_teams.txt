@@ -1,0 +1,45 @@
+== experiment teams: 240 matches in 1036.5s ==
+avg goals/match 2.31 | shots 18.4 | on target 6.8 | passes 24.5 (60% ok) | recoveries 44.6 | own goals 0.01 | draws 73/240 | |poss-50| 4.6
+grades by role played (per player-match): mean +-sd [min..max] | tkl int rec drb disp keyp prog clr g a sv touches
+  GK n=480  6.59 +-1.01 [4.2..9.0] | 0.07 0.00 1.36 0.00 0.04 0.00 0.17 1.74 0.00 0.00 1.34 5.5
+  DEF n=960  6.44 +-0.88 [4.6..9.0] | 1.71 0.53 3.63 0.15 1.44 0.06 0.48 1.71 0.03 0.00 0.00 12.9
+  MID n=480  6.53 +-1.27 [4.5..9.7] | 5.50 3.40 11.47 0.89 5.49 0.34 0.45 2.56 0.51 0.03 0.00 43.3
+  FWD n=480  6.44 +-1.19 [4.4..9.4] | 5.46 3.40 11.67 1.06 6.05 0.36 0.14 1.33 0.58 0.03 0.00 45.8
+  all: p10 5.2  p50 6.4  p90 7.9 | xG/match 3.87 vs goals/match 2.30 (own goals excluded)
+ball zones (left->right fifths) 11/22/31/24/12 % | idle ball 1.4% of play
+keeper: saves/match 2.7 | save rate 54% (saves / (saves+goals)) | kickoff wait 16 ticks avg | distinct first-kickoff waits 1/240
+own goals by role/last-touch: { "DEF/touch": 2, "FWD/pass": 1 } | avg ticks since touch 49 | avg ball speed 2.2
+                   P    W    D    L    GF/m  GA/m  pts/m
+arrows               30   19    6    5  1.27  0.50   2.10
+borealis             30   16    9    5  1.43  0.93   1.90
+onyx                 30   16    8    6  1.53  0.80   1.87
+rose                 30   14    9    7  1.13  0.80   1.70
+aurora               30   12    9    9  1.23  0.97   1.50
+granite              30   11   11    8  1.23  0.70   1.47
+scorpions            30   10   14    6  1.07  0.83   1.47
+harbor               30   11   10    9  1.23  1.30   1.43
+owls                 30   11   10    9  1.40  1.17   1.43
+tide                 30   11    8   11  1.30  1.20   1.37
+bulls                30    9   11   10  1.33  1.17   1.27
+lime                 30    9    8   13  1.30  1.43   1.17
+dune                 30    5   11   14  0.83  1.57   0.87
+ember                30    6    8   16  0.93  1.57   0.87
+fern                 30    4    8   18  0.73  1.60   0.67
+cobalt               30    3    6   21  0.53  1.97   0.50
+play profile per match:      poss%  shots  on-tgt  xG    passes (ok%)  dribbles  tkl+int
+arrows                49   13.6    4.8  2.74     9.7 (70%)      2.4     25.6
+borealis              54    9.4    3.6  2.04    13.1 (69%)      2.4     25.6
+onyx                  54   10.0    3.6  2.05    11.5 (67%)      2.2     23.0
+rose                  46   13.1    3.1  2.35    10.1 (54%)      2.4     22.1
+aurora                52   11.2    3.1  2.24    11.3 (64%)      1.7     22.9
+granite               49    9.2    4.1  1.90     8.5 (63%)      3.0     22.8
+scorpions             46    6.1    2.5  1.20     9.4 (59%)      2.6     18.0
+harbor                51   10.0    4.0  2.24    15.5 (57%)      2.5     25.8
+owls                  50    9.3    3.4  1.82    12.7 (62%)      2.0     20.3
+tide                  55   10.9    3.1  2.12    15.2 (65%)      2.1     28.2
+bulls                 50    9.5    4.6  2.28    11.1 (57%)      3.1     24.6
+lime                  51    8.2    3.8  2.11    13.7 (60%)      2.1     20.9
+dune                  48    9.8    3.2  2.07    11.5 (56%)      2.0     20.3
+ember                 47    5.5    2.6  1.25    12.2 (52%)      1.9     19.9
+fern                  49    7.6    2.7  1.67    13.9 (60%)      1.4     19.9
+cobalt                51    4.2    1.9  0.90    16.8 (53%)      2.0     16.9

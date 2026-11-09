@@ -1,0 +1,23 @@
+{
+  "name": "Switch Play",
+  "description": "Wide and patient: moves the ball to the far side to find space.",
+  "line_height": 0.55,
+  "compactness": 0.5,
+  "width": 1.3,
+  "press": 0.45,
+  "marking": 0.35,
+  "directness": 0.5,
+  "shoot_range": 0.58,
+  "pass_bias": 0.65,
+  "risk": 0.5,
+  "keeper_sweep": 0.3,
+  "forward_stay": 0.35,
+  "support_dist": 170,
+  "fluidity": 0.6,
+  "attack_commit": 0.55,
+  "switch_play": 0.5,
+  "intercept": 0.5,
+  "counter_press": 0.0,
+  "long_shot": 0.0,
+  "id": "switch_play"
+}

@@ -1,0 +1,113 @@
+{
+  "id": "borealis",
+  "name": "Borealis Wolves",
+  "short": "BOR",
+  "colors": {
+    "primary": "3aa0d8",
+    "secondary": "0d1b2a"
+  },
+  "kit": "stripes",
+  "logo": {
+    "shape": "hex",
+    "pattern": "chevron",
+    "symbol": "bolt",
+    "c1": "3aa0d8",
+    "c2": "0d1b2a",
+    "c3": "ffffff"
+  },
+  "style": "high_press",
+  "formations": {},
+  "players": [
+    {
+      "id": "borealis_0",
+      "name": "Ivo Giordano",
+      "number": 1,
+      "pos": "GK",
+      "attrs": {
+        "finishing": 58,
+        "passing": 73,
+        "defending": 84,
+        "positioning": 90,
+        "reaction": 94
+      }
+    },
+    {
+      "id": "borealis_1",
+      "name": "Dario Carraro",
+      "number": 4,
+      "pos": "DEF",
+      "attrs": {
+        "finishing": 73,
+        "passing": 77,
+        "defending": 84,
+        "positioning": 79,
+        "reaction": 75
+      }
+    },
+    {
+      "id": "borealis_2",
+      "name": "Sven Iliev",
+      "number": 5,
+      "pos": "DEF",
+      "attrs": {
+        "finishing": 71,
+        "passing": 75,
+        "defending": 81,
+        "positioning": 96,
+        "reaction": 75
+      }
+    },
+    {
+      "id": "borealis_3",
+      "name": "Matej Zanetti",
+      "number": 8,
+      "pos": "MID",
+      "attrs": {
+        "finishing": 62,
+        "passing": 96,
+        "defending": 71,
+        "positioning": 79,
+        "reaction": 78
+      }
+    },
+    {
+      "id": "borealis_4",
+      "name": "Otto Giordano",
+      "number": 10,
+      "pos": "MID",
+      "attrs": {
+        "finishing": 69,
+        "passing": 92,
+        "defending": 90,
+        "positioning": 85,
+        "reaction": 81
+      }
+    },
+    {
+      "id": "borealis_5",
+      "name": "Zeno Zanetti",
+      "number": 9,
+      "pos": "FWD",
+      "attrs": {
+        "finishing": 94,
+        "passing": 76,
+        "defending": 72,
+        "positioning": 88,
+        "reaction": 73
+      }
+    },
+    {
+      "id": "borealis_6",
+      "name": "Kofi Bellini",
+      "number": 11,
+      "pos": "FWD",
+      "attrs": {
+        "finishing": 91,
+        "passing": 67,
+        "defending": 64,
+        "positioning": 82,
+        "reaction": 78
+      }
+    }
+  ]
+}

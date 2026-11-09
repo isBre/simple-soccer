@@ -1,0 +1,23 @@
+{
+  "name": "Sharpshooters",
+  "description": "Shoots from distance as soon as a lane opens up.",
+  "line_height": 0.5,
+  "compactness": 0.5,
+  "width": 1.0,
+  "press": 0.4,
+  "marking": 0.4,
+  "directness": 0.5,
+  "shoot_range": 0.9,
+  "pass_bias": 0.45,
+  "risk": 0.55,
+  "keeper_sweep": 0.3,
+  "forward_stay": 0.5,
+  "support_dist": 170,
+  "fluidity": 0.5,
+  "attack_commit": 0.4,
+  "long_shot": 1.0,
+  "intercept": 0.5,
+  "counter_press": 0.0,
+  "switch_play": 0.0,
+  "id": "sharpshooters"
+}

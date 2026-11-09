@@ -1,0 +1,113 @@
+{
+  "id": "dune",
+  "name": "Dune Hawks",
+  "short": "DUN",
+  "colors": {
+    "primary": "d98b3a",
+    "secondary": "4a2c12"
+  },
+  "kit": "hoops",
+  "logo": {
+    "shape": "diamond",
+    "pattern": "band",
+    "symbol": "crown",
+    "c1": "d98b3a",
+    "c2": "4a2c12",
+    "c3": "fff1d0"
+  },
+  "style": "counter_attack",
+  "formations": {},
+  "players": [
+    {
+      "id": "dune_0",
+      "name": "Nils Okafor",
+      "number": 1,
+      "pos": "GK",
+      "attrs": {
+        "finishing": 41,
+        "passing": 61,
+        "defending": 75,
+        "positioning": 83,
+        "reaction": 82
+      }
+    },
+    {
+      "id": "dune_1",
+      "name": "Arjun Bellini",
+      "number": 4,
+      "pos": "DEF",
+      "attrs": {
+        "finishing": 66,
+        "passing": 63,
+        "defending": 93,
+        "positioning": 69,
+        "reaction": 77
+      }
+    },
+    {
+      "id": "dune_2",
+      "name": "Felix Holm",
+      "number": 5,
+      "pos": "DEF",
+      "attrs": {
+        "finishing": 63,
+        "passing": 69,
+        "defending": 83,
+        "positioning": 82,
+        "reaction": 68
+      }
+    },
+    {
+      "id": "dune_3",
+      "name": "Matej Halvorsen",
+      "number": 8,
+      "pos": "MID",
+      "attrs": {
+        "finishing": 67,
+        "passing": 78,
+        "defending": 65,
+        "positioning": 68,
+        "reaction": 73
+      }
+    },
+    {
+      "id": "dune_4",
+      "name": "Ivo Bellini",
+      "number": 10,
+      "pos": "MID",
+      "attrs": {
+        "finishing": 79,
+        "passing": 85,
+        "defending": 83,
+        "positioning": 80,
+        "reaction": 74
+      }
+    },
+    {
+      "id": "dune_5",
+      "name": "Oskar Giordano",
+      "number": 9,
+      "pos": "FWD",
+      "attrs": {
+        "finishing": 86,
+        "passing": 64,
+        "defending": 51,
+        "positioning": 71,
+        "reaction": 83
+      }
+    },
+    {
+      "id": "dune_6",
+      "name": "Hugo Zanetti",
+      "number": 11,
+      "pos": "FWD",
+      "attrs": {
+        "finishing": 81,
+        "passing": 73,
+        "defending": 58,
+        "positioning": 68,
+        "reaction": 71
+      }
+    }
+  ]
+}

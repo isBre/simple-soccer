@@ -1,0 +1,23 @@
+{
+  "name": "Gegenpress",
+  "description": "Wins the ball back within seconds of losing it with extra chasers, then strikes.",
+  "line_height": 0.7,
+  "compactness": 0.85,
+  "width": 1.0,
+  "press": 0.85,
+  "marking": 0.5,
+  "directness": 0.4,
+  "shoot_range": 0.6,
+  "pass_bias": 0.65,
+  "risk": 0.55,
+  "keeper_sweep": 0.4,
+  "forward_stay": 0.2,
+  "support_dist": 140,
+  "fluidity": 0.6,
+  "attack_commit": 0.55,
+  "counter_press": 1.0,
+  "intercept": 0.5,
+  "long_shot": 0.0,
+  "switch_play": 0.0,
+  "id": "gegenpress"
+}

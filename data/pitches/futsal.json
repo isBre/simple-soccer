@@ -1,0 +1,24 @@
+{
+  "id": "futsal",
+  "name": "Futsal",
+  "sizes": [
+    1,
+    2
+  ],
+  "half_w": 280,
+  "half_h": 125,
+  "goal_half": 55,
+  "net_depth": 35,
+  "out_x": 325,
+  "out_y": 160,
+  "center_r": 60,
+  "post_r": 7,
+  "box_depth": 0,
+  "box_half": 0,
+  "stripes": 0,
+  "colors": {
+    "pitch": "4f7f9a",
+    "outer": "3c6178",
+    "line": "d4e8f2"
+  }
+}

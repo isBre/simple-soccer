@@ -1,0 +1,113 @@
+--- /tmp/style_bot.pre_fix.gd	2026-11-09 09:59:29.414002289 +0000
++++ scripts/ai/style_bot.gd	2026-11-09 09:59:29.396266524 +0000
+@@ -28,6 +28,7 @@
+ var _noise_tick := -999
+ var _icp_t := 0.0                 # ticks until the chaser meets the ball
+ var _bv_contact := Vector2.ZERO   # ball velocity expected at that moment
++var _wait := 0                    # ticks spent in kick range waiting for a good alignment
+ 
+ 
+ func _init(s: StyleDef, r: RandomNumberGenerator) -> void:
+@@ -111,6 +112,7 @@
+     var in_front := bp.x * ax > -pd.half_w * 0.1
+     _mate = null
+     _err = 0.0
++    _wait = 0
+ 
+     # the ball's reach is fixed by the physics, so shot / pass distances must not grow with the pitch
+     var shoot_r := minf(style.shoot_range * pd.half_w * 1.15, 330.0 * (1.0 + 0.4 * style.long_shot)) \
+@@ -317,12 +319,18 @@
+ func _play_ball(sim: MatchSim, p: SimPlayer, brain: TeamBrain, bp: Vector2) -> void:
+     var ax := sim.attack_dir(p.team)
+     var pd := sim.pitch
++    # at close range the ball is felt, not seen: use its real position and velocity instead of the
++    # delayed / predicted contact point (which is ~20 px off at the moment of the kick)
++    var gap := p.pos.distance_to(sim.ball.pos)
++    var w := clampf(1.0 - (gap - 32.0) / 40.0, 0.0, 1.0)
++    var bv := _bv_contact.lerp(sim.ball.vel, w)
++    bp = bp.lerp(sim.ball.pos, w)
+     var d := _aim - bp
+     if d.length() < 1.0:
+         d = Vector2(ax, 0.0)
+     d = d.normalized().rotated(_err)
+     if _kind != "dribble":
+-        d = _compensated_dir(d, _bv_contact)
++        d = _compensated_dir(d, bv)
+     var rel := p.pos - bp
+     var along := rel.dot(d)
+     var lateral := rel.cross(d)
+@@ -348,8 +356,19 @@
+     if _kick:
+         var to_ball := sim.ball.pos - p.pos
+         var dist := to_ball.length()
+-        var need := 0.95 if (_kind == "shoot" or _kind == "pass") else 0.8
+-        if dist - reach < MatchSim.KICK_RANGE and to_ball.normalized().dot(d) > need:
++        var in_range := dist - reach < MatchSim.KICK_RANGE
++        var fire := false
++        if in_range:
++            if _kind == "shoot" or _kind == "pass":
++                # a kick sends the ball along (player -> ball): only fire when THAT direction is close enough to the
++                # wanted one (tolerance from how much room the shot / pass has); wait a few ticks, then relax
++                fire = _aligned(sim, p, to_ball / maxf(dist, 0.001), d, bp)
++                if not fire:
++                    _wait += 1
++            else:
++                fire = to_ball.normalized().dot(d) > 0.8
++        if fire:
++            _wait = 0
+             p.input_kick = true
+             p.kick_intent = _kind
+             if DIAG and _kind == "shoot":
+@@ -575,7 +594,7 @@
+ 
+ 
+ ## y where a kick along `dir` (added to the ball's current velocity) crosses the goal line; INF if it never does
+-func _diag_cross(sim: MatchSim, dir: Vector2, gx: float, ax: float) -> float:
++func _cross_y(sim: MatchSim, dir: Vector2, gx: float, ax: float) -> float:
+     var v := sim.ball.vel + dir * MatchSim.KICK_STRENGTH * sim.ball.inv_mass
+     var pos := sim.ball.pos
+     for i in 140:
+@@ -591,15 +610,15 @@
+     var gx := ax * sim.pitch.half_w
+     var gh := sim.pitch.goal_half - sim.ball.radius
+     var d0 := _compensated_dir((_aim - bp).normalized(), _bv_contact)    # no skill error, no alignment slack
+-    var ya := _diag_cross(sim, n, gx, ax)         # what actually happens
+-    var ys := _diag_cross(sim, d, gx, ax)         # skill error only (perfect alignment)
+-    var yp := _diag_cross(sim, d0, gx, ax)        # perfect (velocity compensation uses the bot's estimate)
++    var ya := _cross_y(sim, n, gx, ax)         # what actually happens
++    var ys := _cross_y(sim, d, gx, ax)         # skill error only (perfect alignment)
++    var yp := _cross_y(sim, d0, gx, ax)        # perfect (velocity compensation uses the bot's estimate)
+     var d1 := _compensated_dir((_aim - bp).normalized(), sim.ball.vel)
+-    var yt := _diag_cross(sim, d1, gx, ax)        # perfect with the TRUE ball velocity
++    var yt := _cross_y(sim, d1, gx, ax)        # perfect with the TRUE ball velocity
+     if absf(yt) < gh:
+         _dcount("on_target_true_comp")
+     var d2 := _compensated_dir((_aim - sim.ball.pos).normalized(), sim.ball.vel)
+-    var y2 := _diag_cross(sim, d2, gx, ax)        # perfect: aimed from the TRUE ball position with the TRUE velocity
++    var y2 := _cross_y(sim, d2, gx, ax)        # perfect: aimed from the TRUE ball position with the TRUE velocity
+     if absf(y2) < gh:
+         _dcount("on_target_true_origin")
+     _dcount("origin_err_sum", bp.distance_to(sim.ball.pos))
+@@ -630,3 +649,22 @@
+         _dcount("kicks_ball_moving")
+         if absf(ya) < gh:
+             _dcount("ot_ball_moving")
++
++
++## Is the real kick normal n close enough to the wanted direction d for this shot / pass?
++## Tolerance = angle under which the ball still goes where it is meant to (inside the goal mouth, onto the
++## receiver), relaxed the longer the player has waited so he never dithers around the ball.
++func _aligned(sim: MatchSim, p: SimPlayer, n: Vector2, d: Vector2, bp: Vector2) -> bool:
++    var ang := absf(n.angle_to(d))
++    var tol: float
++    if _kind == "shoot":
++        var ax := sim.attack_dir(p.team)
++        var gx := ax * sim.pitch.half_w
++        var yd := _cross_y(sim, d, gx, ax)
++        var slack := sim.pitch.goal_half - sim.ball.radius - absf(yd) if yd != INF else 0.0
++        tol = atan2(maxf(slack, 8.0), maxf(absf(gx - bp.x), 60.0))
++        tol = clampf(tol, deg_to_rad(2.5), deg_to_rad(9.0))
++    else:
++        tol = clampf(atan2(16.0, maxf(bp.distance_to(_aim), 60.0)), deg_to_rad(3.0), deg_to_rad(10.0))
++    tol *= 1.0 + float(_wait) / 4.0
++    return ang < tol

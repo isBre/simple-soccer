@@ -1,0 +1,46 @@
+{
+  "id": "big_pillars",
+  "name": "Big with Pillars (5v5)",
+  "sizes": [
+    4,
+    5
+  ],
+  "half_w": 520,
+  "half_h": 240,
+  "goal_half": 90,
+  "net_depth": 45,
+  "out_x": 575,
+  "out_y": 285,
+  "center_r": 100,
+  "post_r": 9,
+  "box_depth": 130,
+  "box_half": 150,
+  "stripes": 10,
+  "obstacles": [
+    [
+      0,
+      -135,
+      18
+    ],
+    [
+      0,
+      135,
+      18
+    ],
+    [
+      -250,
+      0,
+      14
+    ],
+    [
+      250,
+      0,
+      14
+    ]
+  ],
+  "colors": {
+    "pitch": "6a7f55",
+    "outer": "4d5e3e",
+    "line": "dcefd2"
+  }
+}

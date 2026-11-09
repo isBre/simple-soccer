@@ -1,0 +1,13 @@
+# Godot 4+ specific ignores
+.godot/
+/android/
+
+# local RL training artefacts
+__pycache__/
+*.pt
+logs/
+export/
+
+# keep only curated models in git
+out_5v5/*
+!out_5v5/rl_s5_vs_keeper_last.json

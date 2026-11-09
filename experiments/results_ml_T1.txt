@@ -1,0 +1,10 @@
+== imitation learning: teacher=balanced, pitch=classic 3v3, 180s, total 178s ==
+opponent         teacher pts/m  GF/GA      |  ML pts/m  GF/GA
+balanced              1.50   1.25/1.25   |     0.00   0.50/2.75
+counter_attack        2.50   2.75/1.25   |     0.00   1.75/4.75
+high_press            0.25   0.50/1.75   |     0.00   1.00/5.25
+long_ball             0.75   1.75/3.00   |     0.00   0.25/4.75
+park_the_bus          3.00   3.50/0.75   |     0.00   0.25/3.00
+tiki_taka             1.00   1.25/1.25   |     0.75   1.25/3.25
+wing_play             1.50   2.25/2.25   |     0.75   1.25/3.50
+average               1.50                 |    0.21
