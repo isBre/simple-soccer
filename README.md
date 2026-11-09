@@ -4,6 +4,22 @@ A Haxball-style football game for Godot 4.6 built for AI experiments: custom 60 
 
 Run the project and the main menu opens (`res://scenes/main.tscn`).
 
+<p align="center">
+  <img src="docs/screenshots/goal0.gif" alt="A goal in a 5v5 match" width="49%">
+  <img src="docs/screenshots/goal1.gif" alt="Another goal, with the goal banner and confetti" width="49%">
+</p>
+
+## Screenshots
+
+| | |
+|---|---|
+| ![Main menu](docs/screenshots/menu.png)<br>**Main menu** | ![Quick match](docs/screenshots/quick_match.png)<br>**Quick match setup**: pitch, size, teams, formations, control |
+| ![Kickoff](docs/screenshots/match_kickoff.png)<br>**Kickoff**: the camera zooms in before the whistle | ![Live match](docs/screenshots/match_play.png)<br>**Live match**: RL Team vs Aurora FC, 5v5 on the arena pitch |
+| ![Teams browser](docs/screenshots/teams.png)<br>**Teams & squads**: logos, kits, rosters, styles, star ratings | ![Tournament setup](docs/screenshots/tournament_setup.png)<br>**Tournament setup**: league, knockout or groups + knockout |
+
+![Match report](docs/screenshots/report.png)
+*Match report: score, scorers, team stats and a 3.0-10.0 grade for every player.*
+
 **UI work: follow `DESIGN.md`** (tokens, components, screen layouts, rollout plan).
 
 ## Controls
@@ -69,6 +85,9 @@ Status: plain imitation reached 0.21 points/match vs the teacher's 1.50; after 5
 
 ## Team control mode
 `MatchConfig.ControlMode.TEAM`: Q switches to the teammate nearest the ball; `auto_switch` does it automatically (`MatchSim.set_controlled` / `switch_controlled`).
+
+## Regenerating the screenshots
+With a window available (not `--headless`): `Godot --path . res://tools/capture_screenshots.tscn`. It plays a real RL Team match, saves the PNGs and dumps frames around goals to `docs/screenshots/clip*/`, then run `python3 tools/make_gifs.py` to shrink the PNGs and build the GIFs.
 
 ## Not included (by design)
 Fatigue, fouls, offside, substitutions.
