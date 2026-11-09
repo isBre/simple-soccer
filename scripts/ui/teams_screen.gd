@@ -64,7 +64,7 @@ func _show_team(t: TeamDef) -> void:
     var info := UIKit.vbox(4)
     info.add_child(UIKit.label(t.name, UIKit.FS_H1))
     info.add_child(UIKit.label("%s  -  %s" % [t.short, t.style.name], UIKit.FS_BODY, UIKit.ACCENT))
-    var d := UIKit.label(t.style.description, UIKit.FS_BODY, UIKit.MUTED)
+    var d := UIKit.label(t.style_description(), UIKit.FS_BODY, UIKit.MUTED)
     d.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
     d.custom_minimum_size = Vector2(480, 0)
     info.add_child(d)
@@ -86,7 +86,10 @@ func _show_team(t: TeamDef) -> void:
     sgrid.add_theme_constant_override("h_separation", 22)
     for k in ["line_height", "press", "marking", "directness", "pass_bias", "width"]:
         sgrid.add_child(UIKit.label("%s %.2f" % [k.replace("_", " "), t.style.get(k)], UIKit.FS_CAPTION, UIKit.MUTED))
-    detail.add_child(sgrid)
+    if t.ml_model == "":
+        detail.add_child(sgrid)
+    else:
+        sgrid.queue_free()          # a net-driven team has no rule-based style parameters
 
     # squad table
     var cols := [

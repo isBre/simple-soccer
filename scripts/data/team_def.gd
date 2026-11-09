@@ -43,6 +43,17 @@ func to_dict() -> Dictionary:
         "kit": kit_pattern, "logo": logo, "style": style_id, "formations": formations, "ml_model": ml_model, "players": pl}
 
 
+## What the UI shows as the team's "style": a net-driven team has no rule-based style.
+func style_label() -> String:
+    return "Neural net (RL)" if ml_model != "" else style.name
+
+
+func style_description() -> String:
+    if ml_model != "":
+        return "All players, goalkeeper included, are controlled by a neural net trained with reinforcement learning. It chooses its own formation and roles (5v5; other sizes fall back to the rule-based style)."
+    return style.description
+
+
 func formation_for(size: int) -> String:
     var f: String = str(formations.get(str(size), ""))
     if f != "" and Formations.size_of(f) == size:

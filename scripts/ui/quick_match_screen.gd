@@ -4,14 +4,11 @@ extends Control
 
 var teams: Array[TeamDef] = []
 var pitches: Array[PitchDef] = []
-var styles: Array = []
 
 var pitch_opt: OptionButton
 var size_opt: OptionButton
 var team_opt: Array = []
 var form_opt: Array = []
-var style_opt: Array = []
-var brain_opt: OptionButton
 var mode_opt: OptionButton
 var dur_opt: OptionButton
 var logos: Array[LogoView] = []
@@ -20,7 +17,6 @@ var rating_view: Array = []
 var pitch_info: Label
 
 const DURATIONS := [60.0, 120.0, 180.0, 300.0]
-const ML_MODEL := "res://data/models/es_balanced_best.json"     # evolved neural-net policy (3v3, classic pitch)
 const ArrowPicker := preload("res://scripts/ui/arrow_picker.gd")
 const StarsView := preload("res://scripts/ui/stars_view.gd")
 
@@ -28,8 +24,6 @@ const StarsView := preload("res://scripts/ui/stars_view.gd")
 func _ready() -> void:
     teams = Database.team_list()
     pitches = Database.pitch_list()
-    styles = Database.styles.keys()
-    styles.sort()
 
     var page := UIKit.vbox(UIKit.SP_16)
     var mc := UIKit.margin(page, UIKit.SP_32)
@@ -61,8 +55,6 @@ func _ready() -> void:
     left.add_child(UIKit.field("Control", mode_opt))
     dur_opt = UIKit.option(["1 minute", "2 minutes", "3 minutes", "5 minutes"], 2, func(_i: int) -> void: pass)
     left.add_child(UIKit.field("Duration", dur_opt))
-    brain_opt = UIKit.option(["Rule-based", "Neural net: away team", "Neural net: both teams"], 0, func(_i: int) -> void: pass)
-    left.add_child(UIKit.field("Bot brain (net = 3v3 classic)", brain_opt))
     var lcard := UIKit.card(left, "Match")
     lcard.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
     body.add_child(lcard)
@@ -112,13 +104,6 @@ func _team_panel(i: int) -> Control:
     var fo: Control = ArrowPicker.new().setup(["-"], 0, Callable())
     form_opt.append(fo)
     v.add_child(UIKit.field("Formation", fo))
-
-    var style_names: Array = ["Team default"]
-    for s: String in styles:
-        style_names.append(Database.styles[s].name)
-    var so: Control = ArrowPicker.new().setup(style_names, 0, Callable())
-    style_opt.append(so)
-    v.add_child(UIKit.field("Play style override", so))
     var c := UIKit.card(v, "Home team" if i == 0 else "Away team")
     c.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     c.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
@@ -168,7 +153,7 @@ func _refresh_formations() -> void:
 func _refresh_team_info(i: int) -> void:
     var t: TeamDef = teams[team_opt[i].selected]
     logos[i].set_team(t)
-    style_lbl[i].text = t.style.name
+    style_lbl[i].text = t.style_label()
     rating_view[i].set_team(t)
     _refresh_formations()
 
@@ -177,11 +162,8 @@ func _start() -> void:
     var a: TeamDef = teams[team_opt[0].selected]
     var b: TeamDef = teams[team_opt[1].selected]
     var p: PitchDef = pitches[pitch_opt.selected]
-    # the neural net was trained for 3v3 on the classic pitch: force that when either team uses it
-    var use_ml: bool = brain_opt.selected > 0
-    var n_size := 3 if use_ml else _selected_size()
-    var pid: String = "classic" if use_ml else p.id
-    var cfg := Database.make_config(a.id, b.id, pid, n_size, DURATIONS[dur_opt.selected], randi())
+    var n_size := _selected_size()
+    var cfg := Database.make_config(a.id, b.id, p.id, n_size, DURATIONS[dur_opt.selected], randi())
     cfg.control = mode_opt.selected as MatchConfig.ControlMode
     if mode_opt.selected == 1:
         cfg.control = MatchConfig.ControlMode.TEAM
@@ -195,11 +177,6 @@ func _start() -> void:
         var fi: int = form_opt[i].selected
         if fi >= 0 and n_size == _selected_size():
             cfg.formations[i] = form_opt[i].get_item_text(fi)
-        if style_opt[i].selected > 0:
-            cfg.style_override[i] = Database.styles[styles[style_opt[i].selected - 1]]
-    for i in 2:
-        if brain_opt.selected == 2 or (brain_opt.selected == 1 and i == 1):
-            cfg.ml_models[i] = MLP.from_dict(Database.read_json(ML_MODEL))
     App.play_match(cfg, _on_match_done, App.menu)
 
 

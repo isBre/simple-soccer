@@ -110,8 +110,8 @@ func _refresh() -> void:
     var t: TeamDef = teams[team_opt.selected]
     logo.set_team(t)
     name_lbl.text = t.name
-    style_lbl.text = t.style.name
-    info.text = t.style.description
+    style_lbl.text = t.style_label()
+    info.text = t.style_description()
     rating_view.set_team(t)
 
 

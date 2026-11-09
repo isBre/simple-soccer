@@ -21,7 +21,7 @@ func _ready() -> void:
 		if a[i] == "--model": model_path = a[i + 1]
 		if a[i] == "--games": games = int(a[i + 1])
 		if a[i] == "--duration": duration = float(a[i + 1])
-	var teams: Array = Database.teams.values()
+	var teams: Array = Database.teams.values().filter(func(t: TeamDef) -> bool: return t.ml_model == "")   # rule-based teams only
 	teams.sort_custom(func(x: TeamDef, y: TeamDef) -> bool: return x.strength() < y.strength())
 	var tiers := ["weak", "average", "strong", "elite"]
 	var list: Array = []

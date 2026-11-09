@@ -1,7 +1,7 @@
 {
-  "id": "rl_agent",
-  "name": "RL Agents",
-  "short": "RLA",
+  "id": "rl_team",
+  "name": "RL Team",
+  "short": "RLT",
   "colors": {
     "primary": "7c4dff",
     "secondary": "0b0b14"
@@ -19,7 +19,7 @@
   "formations": {},
   "players": [
     {
-      "id": "rl_agent_0",
+      "id": "rl_team_0",
       "name": "Oskar Weiss",
       "number": 1,
       "pos": "GK",
@@ -32,7 +32,7 @@
       }
     },
     {
-      "id": "rl_agent_1",
+      "id": "rl_team_1",
       "name": "Leon Keller",
       "number": 4,
       "pos": "DEF",
@@ -45,7 +45,7 @@
       }
     },
     {
-      "id": "rl_agent_2",
+      "id": "rl_team_2",
       "name": "Dario Janssen",
       "number": 5,
       "pos": "DEF",
@@ -58,7 +58,7 @@
       }
     },
     {
-      "id": "rl_agent_3",
+      "id": "rl_team_3",
       "name": "Kofi Yilmaz",
       "number": 8,
       "pos": "MID",
@@ -71,7 +71,7 @@
       }
     },
     {
-      "id": "rl_agent_4",
+      "id": "rl_team_4",
       "name": "Hugo Vidal",
       "number": 10,
       "pos": "MID",
@@ -84,7 +84,7 @@
       }
     },
     {
-      "id": "rl_agent_5",
+      "id": "rl_team_5",
       "name": "Dario Bellini",
       "number": 9,
       "pos": "FWD",
@@ -97,7 +97,7 @@
       }
     },
     {
-      "id": "rl_agent_6",
+      "id": "rl_team_6",
       "name": "Otto Fabbri",
       "number": 11,
       "pos": "FWD",
