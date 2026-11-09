@@ -12,6 +12,7 @@ var logo: Dictionary = {}
 var style_id := "balanced"
 var style: StyleDef = null       # resolved by Database
 var formations: Dictionary = {}  # "5" -> formation name (optional)
+var ml_model := ""               # optional res:// path of an MLP json: the whole team (keeper included) is driven by it
 var players: Array[PlayerDef] = []
 
 
@@ -27,6 +28,7 @@ static func from_dict(d: Dictionary) -> TeamDef:
     t.logo = d.get("logo", {})
     t.style_id = str(d.get("style", "balanced"))
     t.formations = d.get("formations", {})
+    t.ml_model = str(d.get("ml_model", ""))
     for pd in d.get("players", []):
         t.players.append(PlayerDef.from_dict(pd))
     return t
@@ -38,7 +40,7 @@ func to_dict() -> Dictionary:
         pl.append(p.to_dict())
     return {"id": id, "name": name, "short": short,
         "colors": {"primary": color_primary.to_html(false), "secondary": color_secondary.to_html(false)},
-        "kit": kit_pattern, "logo": logo, "style": style_id, "formations": formations, "players": pl}
+        "kit": kit_pattern, "logo": logo, "style": style_id, "formations": formations, "ml_model": ml_model, "players": pl}
 
 
 func formation_for(size: int) -> String:

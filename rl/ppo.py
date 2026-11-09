@@ -50,6 +50,8 @@ def build_stages():
         "s6_weak": dict(cfg={**match, "opp": ",".join(weak)}, metric="pts", target=2.0, max_updates=1500),
         "s7_average": dict(cfg={**match, "opp": ",".join(weak + avg)}, metric="pts", target=1.8, max_updates=1500),
         "s8_strong": dict(cfg={**match, "opp": ",".join(weak + avg + strong)}, metric="pts", target=1.6, max_updates=1500),
+        "s9_all": dict(cfg={**match, "opp": ",".join(weak + avg + strong + elite)},
+                       metric="pts", target=99.0, max_updates=1500),
         "s9_all_selfplay": dict(cfg={**match, "opp": ",".join(weak + avg + strong + elite), "selfplay": 0.3},
                                 metric="pts", target=99.0, max_updates=3000, selfplay=True),
     }

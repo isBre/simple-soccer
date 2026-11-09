@@ -191,6 +191,12 @@ func _build_players() -> void:
     for t in 2:
         var team_def: TeamDef = cfg.teams[t]
         var ax := attack_dir(t)
+        if cfg.ml_models[t] == null and team_def.ml_model != "":
+            # a team driven by a trained net (5v5 only: the net's input size must match this team size)
+            var team_net: MLP = MLModels.load_for(team_def.ml_model, cfg.team_size)
+            if team_net != null:
+                cfg.ml_models[t] = team_net
+                cfg.ml_keeper = true
         var lineup: Array = team_def.lineup(cfg.team_size, cfg.formations[t])
         for i in lineup.size():
             var e: Dictionary = lineup[i]

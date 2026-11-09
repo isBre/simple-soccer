@@ -102,3 +102,9 @@ as GK). `ROLE_OFFSET` is calibrated with `experiments` batches so every role ave
 - A goal only counts once the whole ball is over the goal line (centre beyond `half_w + ball.radius`).
 - Goal frames are drawn in the kit colour that contrasts most with the pitch (brightened if still too close, with a
   dark outline), so a green team on a green pitch stays readable (`MatchView._goal_colour`).
+
+## RL team (plays like the trained net)
+`data/teams/rl_agent.json` ("RL Agents") has `"ml_model": "res://data/models/rl_5v5_arena.json"`: all 5 players,
+keeper included, are driven by a net trained with Python PPO (`rl/`, see `rl/README.md`). Pick it in Quick match /
+Tournament like any other team, on the **5v5** size (the arena pitch is what it trained on). On other sizes the net
+does not fit and the team falls back to its rule-based style. Any team can use a net the same way via `ml_model`.
