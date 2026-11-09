@@ -109,3 +109,6 @@ League result of the shipped weights: 61 W, 3 D, 0 L in 64 full matches against 
 keeper included, are driven by a net trained with Python PPO (`rl/`, see `rl/README.md`). Pick it in Quick match /
 Tournament like any other team, on the **5v5** size (the arena pitch is what it trained on). On other sizes the net
 does not fit and the team falls back to its rule-based style. Any team can use a net the same way via `ml_model`.
+
+`data/teams/rl_team_2.json` ("RL Team 2") uses `data/models/rl_5v5_arena_v2.json`: the same net after extra self-play / league training
+(`rl/selfplay.py`) with human-likeness rewards (pass quality, spacing, kick discipline). "RL Team" keeps the original validated weights.

@@ -41,12 +41,22 @@ var match_mode := false
 var duration := 90.0
 var selfplay := 0.0
 var shaping := 1.0
+var w_pass_prog := 0.0            # reward per completed progressive pass (team)
+var w_pass_ok := 0.0              # reward per other completed pass
+var w_pass_fail := 0.0            # penalty per failed pass
+var w_space := 0.0                # penalty per player and teammate closer than space_radius (not while fighting for the ball)
+var space_radius := 140.0
+var w_kick := 0.0                 # penalty for pressing kick while the ball is out of reach
+var kick_reach := 40.0
+var prev_pass := [0, 0, 0]        # team 0 totals: progressive, ok, failed
+var opp_external := false         # team 1 is controlled from Python too (self-play): its players are extra agents
 var opp_net: MLP = null
 var own_keeper := true            # only used when the keeper is not controlled: keep the rule-based one?
 var external_actions := false     # true -> step() leaves the players' inputs alone (set by MLBot etc.)
 
 var sim: MatchSim
 var agents: Array[SimPlayer] = []
+var opp_agents: Array[SimPlayer] = []
 var rng := RandomNumberGenerator.new()
 var steps := 0
 var ep_return := 0.0
@@ -72,6 +82,13 @@ func configure(c: Dictionary) -> void:
     duration = float(c.get("duration", duration))
     selfplay = float(c.get("selfplay", selfplay))
     shaping = float(c.get("shaping", shaping))
+    opp_external = bool(c.get("opp_external", opp_external))
+    w_pass_prog = float(c.get("w_pass_prog", w_pass_prog))
+    w_pass_ok = float(c.get("w_pass_ok", w_pass_ok))
+    w_pass_fail = float(c.get("w_pass_fail", w_pass_fail))
+    w_space = float(c.get("w_space", w_space))
+    space_radius = float(c.get("space_radius", space_radius))
+    w_kick = float(c.get("w_kick", w_kick))
     own_keeper = bool(c.get("own_keeper", opp != "none"))
     if c.has("seed"):
         rng.seed = int(c["seed"])
@@ -81,8 +98,9 @@ func obs_dim() -> int:
     return OBS_DIM
 
 
+## Learner agents first, then (self-play) the opponent team's players.
 func n_agents() -> int:
-    return n_active
+    return n_active + (size if opp_external else 0)
 
 
 func reset() -> void:
@@ -123,6 +141,17 @@ func reset() -> void:
             pass                                   # stays a rule-based keeper
         else:
             ghosts.append(p)
+    opp_agents.clear()
+    if opp_external:
+        var ordered1: Array[SimPlayer] = []
+        for p: SimPlayer in sim.team_lists[1]:
+            if p.role == "GK":
+                ordered1.push_front(p)
+            else:
+                ordered1.append(p)
+        for p in ordered1:
+            opp_agents.append(p)
+            p.controller = null
     if opp == "none":
         for p: SimPlayer in sim.team_lists[1]:
             ghosts.append(p)
@@ -141,6 +170,7 @@ func reset() -> void:
     prev_pot = _potential()
     prev_scores = [0, 0]
     prev_playing = true
+    prev_pass = _pass_totals()
 
 
 ## Removes a player from the physics and the rule logic but keeps it in team_lists (observations).
@@ -214,9 +244,46 @@ func _potential() -> float:
     return shaping * (-4.0 * d_goal / hw - 4.0 * minf(near, hw) / hw)
 
 
+func _pass_totals() -> Array:
+    var prog := 0
+    var ok := 0
+    var fail := 0
+    for p: SimPlayer in sim.team_lists[0]:
+        prog += p.ps.progressive_passes
+        ok += p.ps.passes_ok
+        fail += p.ps.passes_failed
+    return [prog, ok, fail]
+
+
+## Individual reward terms (kick discipline, spacing), one per learner agent.
+func _individual() -> PackedFloat32Array:
+    var out := PackedFloat32Array()
+    out.resize(agents.size() + opp_agents.size())
+    if w_kick == 0.0 and w_space == 0.0:
+        return out
+    var bp := sim.ball.pos
+    for i in agents.size():
+        var a := agents[i]
+        var da := a.pos.distance_to(bp)
+        var r := 0.0
+        if w_kick > 0.0 and a.input_kick and da > kick_reach:
+            r -= w_kick
+        if w_space > 0.0 and da > 70.0:
+            for j in agents.size():
+                if j != i:
+                    var b := agents[j]
+                    var d := a.pos.distance_to(b.pos)
+                    if d < space_radius and b.pos.distance_to(bp) > 70.0:
+                        r -= w_space * (1.0 - d / space_radius)
+        out[i] = r
+    return out
+
+
 func observe() -> PackedFloat32Array:
     var out := PackedFloat32Array()
     for a in agents:
+        out.append_array(MLBot.features(sim, a, true))
+    for a in opp_agents:
         out.append_array(MLBot.features(sim, a, true))
     return out
 
@@ -224,9 +291,10 @@ func observe() -> PackedFloat32Array:
 ## actions: move idx (0..8) and kick (0/1) per agent, flat [m0, k0, m1, k1, ...].
 ## Returns [reward, done, outcome]. Does NOT auto-reset.
 func step(actions: PackedByteArray) -> Array:
-    for i in (0 if external_actions else agents.size()):
-        sim.set_action(agents[i], clampi(actions[i * 2], 0, 8), actions[i * 2 + 1] != 0)
-        agents[i].kick_intent = ""
+    var all_agents: Array[SimPlayer] = agents + opp_agents
+    for i in (0 if external_actions else all_agents.size()):
+        sim.set_action(all_agents[i], clampi(actions[i * 2], 0, 8), actions[i * 2 + 1] != 0)
+        all_agents[i].kick_intent = ""
     for _k in REPEAT:
         sim.step()
         if not match_mode and sim.state != MatchSim.State.PLAYING:
@@ -262,5 +330,13 @@ func step(actions: PackedByteArray) -> Array:
         elif steps >= max_steps:
             done = true
             outcome = OUT_TIMEOUT
+    if match_mode and (w_pass_prog != 0.0 or w_pass_ok != 0.0 or w_pass_fail != 0.0):
+        var pt := _pass_totals()
+        var d_prog: int = pt[0] - prev_pass[0]
+        var d_ok: int = pt[1] - prev_pass[1]
+        var d_fail: int = pt[2] - prev_pass[2]
+        # progressive passes are a subset of the completed ones: pay the bonus rate for those, the base rate for the rest
+        r += w_pass_prog * float(d_prog) + w_pass_ok * float(maxi(d_ok - d_prog, 0)) - w_pass_fail * float(d_fail)
+        prev_pass = pt
     ep_return += r
-    return [r, done, outcome]
+    return [r, done, outcome, _individual()]

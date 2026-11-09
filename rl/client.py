@@ -87,23 +87,31 @@ class VecEnv:
         for w in self.workers:
             w.recv()
 
-    def step(self, actions):
-        """actions int8 [E, A, 2] -> obs [E,A,D], reward [E], done [E], outcome [E], ep_return [E], gf [E], ga [E]"""
+    def step_async(self, actions):
+        """Send the actions (int8 [E, A, 2]) to all workers; collect with step_wait()."""
         acts = np.ascontiguousarray(actions, dtype=np.int8).reshape(self.E, self.A * 2)
         for i, w in enumerate(self.workers):
             w.send(b"S", acts[i * self.epw:(i + 1) * self.epw].tobytes())
+
+    def step(self, actions):
+        """actions int8 [E, A, 2] -> obs [E,A,D], reward [E,A], done [E], outcome [E], ep_return [E], gf [E], ga [E]"""
+        self.step_async(actions)
+        return self.step_wait()
+
+    def step_wait(self):
         obs, rew, done, outc, epr, gf, ga = [], [], [], [], [], [], []
         e, a, d = self.epw, self.A, self.D
         for w in self.workers:
             b = w.recv()
             o = e * a * d * 4
             obs.append(np.frombuffer(b, np.float32, e * a * d, 0).reshape(e, a, d))
-            rew.append(np.frombuffer(b, np.float32, e, o))
-            done.append(np.frombuffer(b, np.uint8, e, o + e * 4))
-            outc.append(np.frombuffer(b, np.uint8, e, o + e * 5))
-            epr.append(np.frombuffer(b, np.float32, e, o + e * 6))
-            gf.append(np.frombuffer(b, np.uint8, e, o + e * 10))
-            ga.append(np.frombuffer(b, np.uint8, e, o + e * 11))
+            r0 = o + e * a * 4                    # after the per-agent rewards
+            rew.append(np.frombuffer(b, np.float32, e * a, o).reshape(e, a))
+            done.append(np.frombuffer(b, np.uint8, e, r0))
+            outc.append(np.frombuffer(b, np.uint8, e, r0 + e))
+            epr.append(np.frombuffer(b, np.float32, e, r0 + e * 2))
+            gf.append(np.frombuffer(b, np.uint8, e, r0 + e * 6))
+            ga.append(np.frombuffer(b, np.uint8, e, r0 + e * 7))
         return (np.concatenate(obs), np.concatenate(rew), np.concatenate(done).astype(bool),
                 np.concatenate(outc), np.concatenate(epr), np.concatenate(gf), np.concatenate(ga))
 

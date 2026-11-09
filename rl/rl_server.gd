@@ -4,7 +4,7 @@ extends Node
 ##
 ## Frame (client -> server): u8 cmd, u32 len, payload.   Reply: u32 len, payload.
 ##   'C' configure : payload = JSON {envs, seed, ...env config}  -> JSON {envs, agents, obs_dim}
-##   'S' step      : payload = int8[E*A*2] (move, kick)           -> f32 obs[E*A*D] | f32 reward[E]
+##   'S' step      : payload = int8[E*A*2] (move, kick)           -> f32 obs[E*A*D] | f32 reward[E*A] (shared team reward + individual terms)
 ##                                                                  | u8 done[E] | u8 outcome[E] | f32 ep_return[E] | u8 gf[E] | u8 ga[E]
 ##                   (a finished env is reset immediately; its obs is the first obs of the next episode)
 ##   'W' set opponent net : payload = JSON MLP dict (or {} to clear)  -> JSON {ok}
@@ -110,7 +110,9 @@ func _step(payload: PackedByteArray) -> void:
     for i in n_envs:
         var e := envs[i]
         var res := e.step(payload.slice(i * per, (i + 1) * per))
-        rew.append(res[0])
+        var indiv: PackedFloat32Array = res[3]
+        for k in indiv.size():
+            rew.append(float(res[0]) + indiv[k])
         done.append(1 if res[1] else 0)
         outc.append(int(res[2]))
         epr.append(e.ep_return)
