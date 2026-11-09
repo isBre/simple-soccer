@@ -160,6 +160,7 @@ def run_stage(name, S, agent, opt, env, args, log):
         b_done = torch.zeros(T, E)
         b_val = torch.zeros(T, E, A)
         t0 = time.time()
+        torch.set_num_threads(4)                   # rollouts: leave the cores to the simulators
         for t in range(T):
             with torch.no_grad():
                 m, k, lp = agent.act(obs)
@@ -193,6 +194,7 @@ def run_stage(name, S, agent, opt, env, args, log):
         f_adv = (f_adv - f_adv.mean()) / (f_adv.std() + 1e-8)
         n = f_obs.shape[0]
         t1 = time.time()
+        torch.set_num_threads(16)                  # learning: the simulators are idle
         for _ in range(args.epochs):
             perm = torch.randperm(n)
             for s in range(0, n, args.minibatch):
@@ -231,7 +233,7 @@ def run_stage(name, S, agent, opt, env, args, log):
         if upd % 25 == 0:
             save_model(agent, "rl_%s_last.json" % name)
             torch.save(agent.state_dict(), os.path.join(OUT, "rl_agent_%s_last.pt" % name))
-        if S.get("selfplay") and upd % args.eval_every == 0:
+        if match and upd % args.eval_every == 0:
             league_eval(save_model(agent, "rl_%s_last.json" % name), args.eval_games, log)
         if enough and warm and val >= target:
             log("== stage %s PASSED: %.3f >= %.2f after %d updates" % (name, val, target, upd))

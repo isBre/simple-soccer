@@ -104,6 +104,7 @@ as GK). `ROLE_OFFSET` is calibrated with `experiments` batches so every role ave
   dark outline), so a green team on a green pitch stays readable (`MatchView._goal_colour`).
 
 ## RL team (plays like the trained net)
+League result of the shipped weights: 61 W, 3 D, 0 L in 64 full matches against the 16 rule-based teams (2.91 pts/match, 5.1 goals for and 1.1 against per match); details in `rl/results_league_final.txt`.
 `data/teams/rl_team.json` ("RL Team") has `"ml_model": "res://data/models/rl_5v5_arena.json"`: all 5 players,
 keeper included, are driven by a net trained with Python PPO (`rl/`, see `rl/README.md`). Pick it in Quick match /
 Tournament like any other team, on the **5v5** size (the arena pitch is what it trained on). On other sizes the net

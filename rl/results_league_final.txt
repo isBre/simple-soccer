@@ -1,0 +1,35 @@
+# League evaluation of the shipped RL Team model (stage 9, update 1500)
+# 16 rule-based teams x both sides x 2 games, full 180 s matches, arena 5v5, the net drives all 5 players incl. keeper.
+# Held-out teams (never trained against): scorpions, fern, granite, borealis.
+
+team       tier     str   held W  D  L   pts/m   GF/GA
+cobalt     weak     61.8       4  0  0   3.00    5.50/1.00
+scorpions  weak     63.2  yes  4  0  0   3.00    4.50/1.50
+ember      weak     63.6       4  0  0   3.00    4.50/1.25
+bulls      weak     64.2       4  0  0   3.00    5.50/0.50
+rose       average  68.4       3  1  0   2.50    5.00/0.75
+fern       average  72.6  yes  3  1  0   2.50    5.50/1.75
+harbor     average  73.2       4  0  0   3.00    5.25/1.50
+lime       average  74.0       4  0  0   3.00    5.50/0.75
+owls       strong   75.8       3  1  0   2.50    4.75/1.25
+granite    strong   77.4  yes  4  0  0   3.00    4.25/1.00
+dune       strong   79.4       4  0  0   3.00    5.25/0.75
+onyx       strong   81.6       4  0  0   3.00    5.50/1.00
+tide       elite    84.0       4  0  0   3.00    6.00/0.75
+borealis   elite    85.0  yes  4  0  0   3.00    5.25/0.75
+aurora     elite    88.2       4  0  0   3.00    4.00/2.00
+arrows     elite    89.4       4  0  0   3.00    5.25/1.00
+SUMMARY weak    : pts/m 3.00  GF 5.00 GA 1.06  (16 matches)
+SUMMARY average : pts/m 2.75  GF 5.31 GA 1.19  (16 matches)
+SUMMARY strong  : pts/m 2.88  GF 4.94 GA 1.00  (16 matches)
+SUMMARY elite   : pts/m 3.00  GF 5.12 GA 1.12  (16 matches)
+SUMMARY train   : pts/m 2.92  GF 5.17 GA 1.04  (48 matches)
+SUMMARY held    : pts/m 2.88  GF 4.88 GA 1.25  (16 matches)
+SUMMARY all     : pts/m 2.91  GF 5.09 GA 1.09  (64 matches)
+
+# Checkpoint comparison (same 64 matches each, pts/match, GF/GA):
+s9_u1500: pts/m 2.91  GF 5.09 GA 1.09  (64 matches)
+s9_u1250: pts/m 2.88  GF 5.16 GA 1.73  (64 matches)
+s9_u1000: pts/m 2.67  GF 4.70 GA 1.23  (64 matches)
+s8: pts/m 1.89  GF 1.86 GA 0.94  (64 matches)
+s6: pts/m 2.28  GF 1.98 GA 0.64  (64 matches)
