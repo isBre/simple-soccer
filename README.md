@@ -131,3 +131,6 @@ does not fit and the team falls back to its rule-based style. Any team can use a
 
 `data/teams/rl_team_2.json` ("RL Team 2") uses `data/models/rl_5v5_arena_v2.json`: the same net after extra self-play / league training
 (`rl/selfplay.py`) with human-likeness rewards (pass quality, spacing, kick discipline). "RL Team" keeps the original validated weights.
+
+`data/teams/rl_team_3.json` ("RL Team 3") uses `data/models/rl_5v5_arena_v3.json`: the self-play snapshot at update 500 (league 2.97 pts/match,
+0.27 goals against; kick discipline and spacing close to the rule bots, see `rl/results_selfplay.txt`).

@@ -84,10 +84,10 @@ func _run(i: int) -> void:
 	mutex.unlock()
 
 func _ready() -> void:
-	var a := OS.get_cmdline_user_args()
-	for i in a.size():
-		if a[i] == "--model" and i + 1 < a.size():
-			model_net = MLP.from_dict(Database.read_json(a[i + 1]))
+	var cli := OS.get_cmdline_user_args()
+	for i in cli.size():
+		if cli[i] == "--model" and i + 1 < cli.size():
+			model_net = MLP.from_dict(Database.read_json(cli[i + 1]))
 	var n := 8
 	var tasks: Array[int] = []
 	for i in n:

@@ -1,0 +1,114 @@
+{
+  "id": "rl_team_3",
+  "name": "RL Team 3",
+  "short": "RL3",
+  "colors": {
+    "primary": "e63946",
+    "secondary": "1d1d1f"
+  },
+  "kit": "band",
+  "logo": {
+    "shape": "circle",
+    "pattern": "stripes",
+    "symbol": "star",
+    "c1": "e63946",
+    "c2": "1d1d1f",
+    "c3": "ffffff"
+  },
+  "style": "balanced",
+  "formations": {},
+  "players": [
+    {
+      "id": "rl_team_3_0",
+      "name": "Oskar Weiss",
+      "number": 1,
+      "pos": "GK",
+      "attrs": {
+        "finishing": 49,
+        "passing": 58,
+        "defending": 71,
+        "positioning": 79,
+        "reaction": 82
+      }
+    },
+    {
+      "id": "rl_team_3_1",
+      "name": "Leon Keller",
+      "number": 4,
+      "pos": "DEF",
+      "attrs": {
+        "finishing": 61,
+        "passing": 63,
+        "defending": 81,
+        "positioning": 70,
+        "reaction": 73
+      }
+    },
+    {
+      "id": "rl_team_3_2",
+      "name": "Dario Janssen",
+      "number": 5,
+      "pos": "DEF",
+      "attrs": {
+        "finishing": 58,
+        "passing": 78,
+        "defending": 81,
+        "positioning": 60,
+        "reaction": 68
+      }
+    },
+    {
+      "id": "rl_team_3_3",
+      "name": "Kofi Yilmaz",
+      "number": 8,
+      "pos": "MID",
+      "attrs": {
+        "finishing": 67,
+        "passing": 83,
+        "defending": 73,
+        "positioning": 75,
+        "reaction": 70
+      }
+    },
+    {
+      "id": "rl_team_3_4",
+      "name": "Hugo Vidal",
+      "number": 10,
+      "pos": "MID",
+      "attrs": {
+        "finishing": 72,
+        "passing": 79,
+        "defending": 70,
+        "positioning": 75,
+        "reaction": 76
+      }
+    },
+    {
+      "id": "rl_team_3_5",
+      "name": "Dario Bellini",
+      "number": 9,
+      "pos": "FWD",
+      "attrs": {
+        "finishing": 83,
+        "passing": 72,
+        "defending": 64,
+        "positioning": 68,
+        "reaction": 80
+      }
+    },
+    {
+      "id": "rl_team_3_6",
+      "name": "Otto Fabbri",
+      "number": 11,
+      "pos": "FWD",
+      "attrs": {
+        "finishing": 71,
+        "passing": 68,
+        "defending": 60,
+        "positioning": 86,
+        "reaction": 70
+      }
+    }
+  ],
+  "ml_model": "res://data/models/rl_5v5_arena_v3.json"
+}
