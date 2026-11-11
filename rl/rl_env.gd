@@ -49,6 +49,10 @@ var w_xa := 0.0                   # reward per unit of expected goals of the sho
 var pass_individual := false      # pass terms go to the passer (and receiver) instead of the whole team: sharper credit
 var w_recv := 0.0                 # reward to the receiver of a completed pass
 var w_open := 0.0                 # per decision: reward for standing open (distance + clear lane) while a teammate has the ball
+var coop_cap := 0.0               # max cooperation reward (key pass + xA + receive + ok-pass) a team can earn per episode; 0 = no cap
+var coop_used := 0.0
+var w_keeper := 0.0               # per decision: penalty for the keeper straying from its own goal (beyond keeper_free px)
+var keeper_free := 350.0
 var open_min := 120.0
 var open_max := 450.0
 var lane_clear := 45.0
@@ -100,6 +104,9 @@ func configure(c: Dictionary) -> void:
     pass_individual = bool(c.get("pass_individual", pass_individual))
     w_recv = float(c.get("w_recv", w_recv))
     w_open = float(c.get("w_open", w_open))
+    coop_cap = float(c.get("coop_cap", coop_cap))
+    w_keeper = float(c.get("w_keeper", w_keeper))
+    keeper_free = float(c.get("keeper_free", keeper_free))
     open_min = float(c.get("open_min", open_min))
     open_max = float(c.get("open_max", open_max))
     w_space = float(c.get("w_space", w_space))
@@ -120,6 +127,7 @@ func n_agents() -> int:
 
 
 func reset() -> void:
+    coop_used = 0.0
     var cfg := MatchConfig.new()
     cfg.pitch = Database.pitches[pitch_id]
     cfg.team_size = size
@@ -297,7 +305,7 @@ func _individual() -> PackedFloat32Array:
     var out := PackedFloat32Array()
     out.resize(agents.size() + opp_agents.size())
     var credit := match_mode and pass_individual
-    if w_kick == 0.0 and w_space == 0.0 and not credit and w_open == 0.0:
+    if w_kick == 0.0 and w_space == 0.0 and not credit and w_open == 0.0 and w_keeper == 0.0:
         return out
     var bp := sim.ball.pos
     # the carrier: the learner agent that last touched the ball and is next to it
@@ -327,9 +335,17 @@ func _individual() -> PackedFloat32Array:
             var d_kp: int = cur[3] - prev[3]
             var d_xa: float = cur[4] - prev[4]
             var d_recv: int = cur[5] - prev[5]
-            r += w_pass_prog * float(d_prog) + w_pass_ok * float(maxi(d_ok - d_prog, 0)) - w_pass_fail * float(d_fail)
-            r += w_key_pass * float(d_kp) + w_xa * d_xa + w_recv * float(d_recv)
+            r += w_pass_prog * float(d_prog) - w_pass_fail * float(d_fail)
+            var coop := w_pass_ok * float(maxi(d_ok - d_prog, 0)) + w_key_pass * float(d_kp) + w_xa * d_xa + w_recv * float(d_recv)
+            if coop_cap > 0.0 and coop > 0.0:
+                coop = minf(coop, maxf(coop_cap - coop_used, 0.0))
+                coop_used += coop
+            r += coop
             prev_ps[a.uid] = cur
+        if w_keeper > 0.0 and a.role == "GK":
+            var dg := a.pos.distance_to(Vector2(-sim.pitch.half_w, 0.0))
+            if dg > keeper_free:
+                r -= w_keeper * minf((dg - keeper_free) / keeper_free, 1.0)
         if carrier != null and a != carrier:
             var dc := a.pos.distance_to(carrier.pos)
             if dc >= open_min and dc <= open_max:

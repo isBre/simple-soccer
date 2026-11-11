@@ -38,7 +38,7 @@ def make_cfgs(args):
     base = {"pitch": "arena", "size": 5, "own_team": "owls", "n_active": 5, "with_keeper": True,
             "match_mode": True, "duration": 90.0, "max_steps": 3200,
             "w_pass_prog": args.w_pass_prog, "w_pass_ok": args.w_pass_ok, "w_pass_fail": args.w_pass_fail,
-            "pass_individual": bool(args.pass_individual), "w_recv": args.w_recv, "w_open": args.w_open, "w_key_pass": args.w_key_pass, "w_xa": args.w_xa, "w_space": args.w_space, "space_radius": args.space_radius, "w_kick": args.w_kick}
+            "pass_individual": bool(args.pass_individual), "w_recv": args.w_recv, "w_open": args.w_open, "w_key_pass": args.w_key_pass, "w_xa": args.w_xa, "w_space": args.w_space, "space_radius": args.space_radius, "w_kick": args.w_kick, "coop_cap": args.coop_cap, "w_keeper": args.w_keeper, "keeper_free": args.keeper_free}
     return {**base, "opp": pool}, {**base, "opp": "owls", "opp_external": True}
 
 
@@ -81,6 +81,9 @@ def main():
     ap.add_argument("--w_space", type=float, default=0.006)
     ap.add_argument("--space_radius", type=float, default=140.0)
     ap.add_argument("--w_kick", type=float, default=0.01)
+    ap.add_argument("--coop_cap", type=float, default=0.0, help="max cooperation reward per episode (anti reward-farming)")
+    ap.add_argument("--w_keeper", type=float, default=0.0)
+    ap.add_argument("--keeper_free", type=float, default=350.0)
     ap.add_argument("--snapshot_every", type=int, default=40)
     ap.add_argument("--resample_every", type=int, default=20)
     ap.add_argument("--ckpt_every", type=int, default=100)
@@ -159,9 +162,12 @@ def main():
             for t in range(T):
                 obs_L = torch.cat([obs_r, obs_s[:, :5]], 0)                    # [E, 5, D] learner observations
                 with torch.no_grad():
-                    m, k, lp = agent.act(obs_L)
-                    v = agent.value(obs_L)
-                    # opponents (self group): each slot's net acts for its envs
+                    mr_, kr_, lpr_ = agent.act(obs_r)
+                    vr_ = agent.value(obs_r)
+                er.step_async(np.stack([mr_.numpy(), kr_.long().numpy()], -1).astype(np.int8))   # rule workers simulate while we infer the self group
+                with torch.no_grad():
+                    ms_, ks_, lps_ = agent.act(obs_s[:, :5])
+                    vs_ = agent.value(obs_s[:, :5])
                     om = torch.zeros(Es, 5, dtype=torch.long)
                     ok = torch.zeros(Es, 5)
                     for sl in range(NSLOT):
@@ -170,11 +176,10 @@ def main():
                         dm = torch.distributions.Categorical(logits=z[..., :9])
                         om[idx] = dm.sample()
                         ok[idx] = torch.distributions.Bernoulli(logits=z[..., 9]).sample()
-                act_r = torch.stack([m[:Er], k[:Er].long()], -1).numpy().astype(np.int8)
+                m, k, lp, v = (torch.cat([x, y], 0) for x, y in ((mr_, ms_), (kr_, ks_), (lpr_, lps_), (vr_, vs_)))
                 act_s = torch.zeros(Es, 10, 2, dtype=torch.long)
-                act_s[:, :5, 0], act_s[:, :5, 1] = m[Er:], k[Er:].long()
+                act_s[:, :5, 0], act_s[:, :5, 1] = ms_, ks_.long()
                 act_s[:, 5:, 0], act_s[:, 5:, 1] = om, ok.long()
-                er.step_async(act_r)
                 es.step_async(act_s.numpy().astype(np.int8))
                 nr = er.step_wait()
                 ns = es.step_wait()
