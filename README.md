@@ -8,11 +8,6 @@ A Haxball-style football game for Godot 4.6 built for AI experiments: custom 60 
 
 Run the project and the main menu opens (`res://scenes/main.tscn`).
 
-<p align="center">
-  <img src="docs/screenshots/goal0.gif" alt="A goal in a 5v5 match" width="49%">
-  <img src="docs/screenshots/goal1.gif" alt="Another goal, with the goal banner and confetti" width="49%">
-</p>
-
 ## Screenshots
 
 | | |
