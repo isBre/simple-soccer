@@ -21,7 +21,7 @@ func _run(i: int) -> void:
 	var sim := MatchSim.new(c)
 	var st := [{}, {}]
 	for t in 2:
-		st[t] = {"n": 0, "dir_change": 0, "kick_rise": 0, "kick_hold": 0, "idle": 0, "near_ball": 0.0, "spacing": 0.0, "gk_dist": 0.0, "gk_n": 0, "speed": 0.0, "turn180": 0, "near250": 0.0, "nn_dist": 0.0, "close_pairs": 0.0, "passes": 0.0, "passes_ok": 0.0}
+		st[t] = {"n": 0, "dir_change": 0, "kick_rise": 0, "kick_hold": 0, "idle": 0, "near_ball": 0.0, "spacing": 0.0, "gk_dist": 0.0, "gk_n": 0, "speed": 0.0, "turn180": 0, "near250": 0.0, "nn_dist": 0.0, "close_pairs": 0.0, "passes": 0.0, "passes_ok": 0.0, "key_passes": 0.0, "xa": 0.0, "shots": 0.0}
 	var prev := {}
 	var prev_kick := {}
 	while sim.state != MatchSim.State.ENDED and sim.tick < 60 * 120:
@@ -79,6 +79,10 @@ func _run(i: int) -> void:
 	for t in 2:
 		st[t]["passes"] = res["team_stats"][t]["passes"]
 		st[t]["passes_ok"] = res["team_stats"][t]["passes_ok"]
+		st[t]["shots"] = res["team_stats"][t]["shots"]
+	for pl: Dictionary in res["players"]:
+		st[int(pl["team"])]["key_passes"] += float(pl.get("key_passes", 0))
+		st[int(pl["team"])]["xa"] += float(pl.get("xa", 0.0))
 	mutex.lock()
 	results.append({"st": st, "score": sim.scores, "ticks": sim.tick})
 	mutex.unlock()
@@ -109,8 +113,8 @@ func _ready() -> void:
 	for t in 2:
 		var a: Dictionary = agg[t]
 		var n_dec: float = a["n"] / 5.0     # team-decisions
-		print("%s: players within 250px of ball %.2f | nearest-teammate dist %.0f px | pairs closer than 110px %.2f | passes/match %.1f (%.0f%% ok)" % [
-			["RL Team", "rule-based"][t], a["near250"] / (a["n"] / 5.0) * 5.0 / 5.0 * 5.0 / 5.0, a["nn_dist"] / n_dec, a["close_pairs"] / n_dec, a["passes"] / results.size(), 100.0 * a["passes_ok"] / maxf(1.0, a["passes"])])
+		print("%s: players within 250px of ball %.2f | nearest-teammate dist %.0f px | pairs closer than 110px %.2f | passes/match %.1f (%.0f%% ok) | shots/match %.1f | key passes/match %.2f | xA/match %.2f" % [
+			["RL Team", "rule-based"][t], a["near250"] / (a["n"] / 5.0) * 5.0 / 5.0 * 5.0 / 5.0, a["nn_dist"] / n_dec, a["close_pairs"] / n_dec, a["passes"] / results.size(), 100.0 * a["passes_ok"] / maxf(1.0, a["passes"]), a["shots"] / results.size(), a["key_passes"] / results.size(), a["xa"] / results.size()])
 	var sc := ""
 	for r in results:
 		sc += str(r["score"]) + " "

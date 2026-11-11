@@ -44,11 +44,20 @@ var shaping := 1.0
 var w_pass_prog := 0.0            # reward per completed progressive pass (team)
 var w_pass_ok := 0.0              # reward per other completed pass
 var w_pass_fail := 0.0            # penalty per failed pass
+var w_key_pass := 0.0             # reward per key pass (completed pass followed by a shot of the receiver within 4 s)
+var w_xa := 0.0                   # reward per unit of expected goals of the shots created by passes (xA)
+var pass_individual := false      # pass terms go to the passer (and receiver) instead of the whole team: sharper credit
+var w_recv := 0.0                 # reward to the receiver of a completed pass
+var w_open := 0.0                 # per decision: reward for standing open (distance + clear lane) while a teammate has the ball
+var open_min := 120.0
+var open_max := 450.0
+var lane_clear := 45.0
+var prev_ps: Dictionary = {}      # uid -> [ok, failed, progressive, key passes, xA, received]
 var w_space := 0.0                # penalty per player and teammate closer than space_radius (not while fighting for the ball)
 var space_radius := 140.0
 var w_kick := 0.0                 # penalty for pressing kick while the ball is out of reach
 var kick_reach := 40.0
-var prev_pass := [0, 0, 0]        # team 0 totals: progressive, ok, failed
+var prev_pass := [0, 0, 0, 0, 0.0]  # team 0 totals: progressive, ok, failed, key passes, xA
 var opp_external := false         # team 1 is controlled from Python too (self-play): its players are extra agents
 var opp_net: MLP = null
 var own_keeper := true            # only used when the keeper is not controlled: keep the rule-based one?
@@ -86,6 +95,13 @@ func configure(c: Dictionary) -> void:
     w_pass_prog = float(c.get("w_pass_prog", w_pass_prog))
     w_pass_ok = float(c.get("w_pass_ok", w_pass_ok))
     w_pass_fail = float(c.get("w_pass_fail", w_pass_fail))
+    w_key_pass = float(c.get("w_key_pass", w_key_pass))
+    w_xa = float(c.get("w_xa", w_xa))
+    pass_individual = bool(c.get("pass_individual", pass_individual))
+    w_recv = float(c.get("w_recv", w_recv))
+    w_open = float(c.get("w_open", w_open))
+    open_min = float(c.get("open_min", open_min))
+    open_max = float(c.get("open_max", open_max))
     w_space = float(c.get("w_space", w_space))
     space_radius = float(c.get("space_radius", space_radius))
     w_kick = float(c.get("w_kick", w_kick))
@@ -171,6 +187,9 @@ func reset() -> void:
     prev_scores = [0, 0]
     prev_playing = true
     prev_pass = _pass_totals()
+    prev_ps.clear()
+    for a in agents:
+        prev_ps[a.uid] = _ps_vec(a)
 
 
 ## Removes a player from the physics and the rule logic but keeps it in team_lists (observations).
@@ -248,20 +267,44 @@ func _pass_totals() -> Array:
     var prog := 0
     var ok := 0
     var fail := 0
+    var kp := 0
+    var xa := 0.0
     for p: SimPlayer in sim.team_lists[0]:
         prog += p.ps.progressive_passes
         ok += p.ps.passes_ok
         fail += p.ps.passes_failed
-    return [prog, ok, fail]
+        kp += p.ps.key_passes
+        xa += p.ps.xa
+    return [prog, ok, fail, kp, xa]
 
 
-## Individual reward terms (kick discipline, spacing), one per learner agent.
+func _ps_vec(p: SimPlayer) -> Array:
+    return [p.ps.passes_ok, p.ps.passes_failed, p.ps.progressive_passes, p.ps.key_passes, p.ps.xa, p.ps.passes_received]
+
+
+static func _seg_dist(p: Vector2, a: Vector2, b: Vector2) -> float:
+    var ab := b - a
+    var l2 := ab.length_squared()
+    if l2 < 0.0001:
+        return p.distance_to(a)
+    var t := clampf((p - a).dot(ab) / l2, 0.0, 1.0)
+    return p.distance_to(a + ab * t)
+
+
+## Individual reward terms, one per learner agent: kick discipline, spacing, pass credit (passer / receiver)
+## and "standing open" for the ball carrier.
 func _individual() -> PackedFloat32Array:
     var out := PackedFloat32Array()
     out.resize(agents.size() + opp_agents.size())
-    if w_kick == 0.0 and w_space == 0.0:
+    var credit := match_mode and pass_individual
+    if w_kick == 0.0 and w_space == 0.0 and not credit and w_open == 0.0:
         return out
     var bp := sim.ball.pos
+    # the carrier: the learner agent that last touched the ball and is next to it
+    var carrier: SimPlayer = null
+    if w_open > 0.0 and sim.last_touch != null and sim.last_touch.team == 0 and agents.has(sim.last_touch) \
+            and sim.last_touch.pos.distance_to(bp) < 45.0:
+        carrier = sim.last_touch
     for i in agents.size():
         var a := agents[i]
         var da := a.pos.distance_to(bp)
@@ -275,6 +318,28 @@ func _individual() -> PackedFloat32Array:
                     var d := a.pos.distance_to(b.pos)
                     if d < space_radius and b.pos.distance_to(bp) > 70.0:
                         r -= w_space * (1.0 - d / space_radius)
+        if credit:
+            var cur := _ps_vec(a)
+            var prev: Array = prev_ps.get(a.uid, cur)
+            var d_ok: int = cur[0] - prev[0]
+            var d_fail: int = cur[1] - prev[1]
+            var d_prog: int = cur[2] - prev[2]
+            var d_kp: int = cur[3] - prev[3]
+            var d_xa: float = cur[4] - prev[4]
+            var d_recv: int = cur[5] - prev[5]
+            r += w_pass_prog * float(d_prog) + w_pass_ok * float(maxi(d_ok - d_prog, 0)) - w_pass_fail * float(d_fail)
+            r += w_key_pass * float(d_kp) + w_xa * d_xa + w_recv * float(d_recv)
+            prev_ps[a.uid] = cur
+        if carrier != null and a != carrier:
+            var dc := a.pos.distance_to(carrier.pos)
+            if dc >= open_min and dc <= open_max:
+                var clear := true
+                for o: SimPlayer in sim.team_lists[1]:
+                    if _seg_dist(o.pos, carrier.pos, a.pos) < lane_clear:
+                        clear = false
+                        break
+                if clear:
+                    r += w_open
         out[i] = r
     return out
 
@@ -330,13 +395,14 @@ func step(actions: PackedByteArray) -> Array:
         elif steps >= max_steps:
             done = true
             outcome = OUT_TIMEOUT
-    if match_mode and (w_pass_prog != 0.0 or w_pass_ok != 0.0 or w_pass_fail != 0.0):
+    if match_mode and not pass_individual and (w_pass_prog != 0.0 or w_pass_ok != 0.0 or w_pass_fail != 0.0 or w_key_pass != 0.0 or w_xa != 0.0):
         var pt := _pass_totals()
         var d_prog: int = pt[0] - prev_pass[0]
         var d_ok: int = pt[1] - prev_pass[1]
         var d_fail: int = pt[2] - prev_pass[2]
         # progressive passes are a subset of the completed ones: pay the bonus rate for those, the base rate for the rest
         r += w_pass_prog * float(d_prog) + w_pass_ok * float(maxi(d_ok - d_prog, 0)) - w_pass_fail * float(d_fail)
+        r += w_key_pass * float(int(pt[3]) - int(prev_pass[3])) + w_xa * (float(pt[4]) - float(prev_pass[4]))
         prev_pass = pt
     ep_return += r
     return [r, done, outcome, _individual()]

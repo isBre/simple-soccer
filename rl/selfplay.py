@@ -5,8 +5,8 @@ Two groups of Godot workers run side by side and feed ONE learner (shared policy
   * self group : team 1 = the net itself, driven from Python (all 5 players, keeper included). Opponent slots:
                  slot 0 = the frozen shipped model (benchmark: the log shows how the learner scores against it),
                  other slots = past snapshots of the learner (resampled every few updates).
-Extra reward terms (per player) push towards human-like play: completed progressive passes are paid, failed
-passes cost, teammates should not bunch up ("storm"), and kick must only be pressed when the ball is in reach.
+Extra reward terms (per player) push towards human-like play: completed progressive passes are paid, key passes
+(a pass whose receiver shoots) and the xA of those shots are paid, failed passes cost, teammates should not bunch up ("storm"), and kick must only be pressed when the ball is in reach.
 
   /root/rl-venv/bin/python rl/selfplay.py --updates 1500
 """
@@ -38,7 +38,7 @@ def make_cfgs(args):
     base = {"pitch": "arena", "size": 5, "own_team": "owls", "n_active": 5, "with_keeper": True,
             "match_mode": True, "duration": 90.0, "max_steps": 3200,
             "w_pass_prog": args.w_pass_prog, "w_pass_ok": args.w_pass_ok, "w_pass_fail": args.w_pass_fail,
-            "w_space": args.w_space, "space_radius": args.space_radius, "w_kick": args.w_kick}
+            "pass_individual": bool(args.pass_individual), "w_recv": args.w_recv, "w_open": args.w_open, "w_key_pass": args.w_key_pass, "w_xa": args.w_xa, "w_space": args.w_space, "space_radius": args.space_radius, "w_kick": args.w_kick}
     return {**base, "opp": pool}, {**base, "opp": "owls", "opp_external": True}
 
 
@@ -73,6 +73,11 @@ def main():
     ap.add_argument("--w_pass_prog", type=float, default=0.3)
     ap.add_argument("--w_pass_ok", type=float, default=0.05)
     ap.add_argument("--w_pass_fail", type=float, default=0.08)
+    ap.add_argument("--pass_individual", type=int, default=0, help="1: pass rewards go to the passer / receiver, not the whole team")
+    ap.add_argument("--w_recv", type=float, default=0.0)
+    ap.add_argument("--w_open", type=float, default=0.0)
+    ap.add_argument("--w_key_pass", type=float, default=0.0)
+    ap.add_argument("--w_xa", type=float, default=0.0)
     ap.add_argument("--w_space", type=float, default=0.006)
     ap.add_argument("--space_radius", type=float, default=140.0)
     ap.add_argument("--w_kick", type=float, default=0.01)

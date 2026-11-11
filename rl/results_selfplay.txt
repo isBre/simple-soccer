@@ -31,3 +31,7 @@ rule-based: players within 250px of ball 0.65 | nearest-teammate dist 143 px | p
 
 # Reading: kick discipline fixed (kick held 38% -> 4-6%), teammates no longer bunch up (nearest teammate 97 -> 158-179 px, rule bots 143),
 # defence much tighter; pass accuracy 17% -> 20-27% (17% again at update 1000); jitter (direction changes/s ~14 vs 2 for rule bots) not addressed.
+
+== Cooperation fine-tune (coop, from sp_u500; individual pass credit + key pass/xA + stand-open rewards) ==
+coop_u600: league 3.00 pts/m, GF 5.86, GA 0.48 (64 matches, 64 wins). Behaviour: key passes 4.25/match, xA 1.73, shots 11.0, pass acc 28%, dir changes 11.3/s, keeper 405 px from goal.  -> shipped as RL Team 4
+coop_u800: league 3.00 pts/m, GF 5.62, GA 0.28 (64 matches, 64 wins). Behaviour: key passes 1.88, xA 0.49, pass acc 20%, dir changes 13.2/s, keeper 259 px.
