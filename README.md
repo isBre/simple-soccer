@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="docs/banner.svg" alt="Simple Soccer" width="100%">
+</p>
+
 # Simple Soccer
 
 A Haxball-style football game for Godot 4.6 built for AI experiments: custom 60 Hz Haxball physics, data-driven pitches/teams/styles, rule-based AI, per-player stats and grades, and tournaments.
