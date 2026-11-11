@@ -35,3 +35,14 @@ rule-based: players within 250px of ball 0.65 | nearest-teammate dist 143 px | p
 == Cooperation fine-tune (coop, from sp_u500; individual pass credit + key pass/xA + stand-open rewards) ==
 coop_u600: league 3.00 pts/m, GF 5.86, GA 0.48 (64 matches, 64 wins). Behaviour: key passes 4.25/match, xA 1.73, shots 11.0, pass acc 28%, dir changes 11.3/s, keeper 405 px from goal.  -> shipped as RL Team 4
 coop_u800: league 3.00 pts/m, GF 5.62, GA 0.28 (64 matches, 64 wins). Behaviour: key passes 1.88, xA 0.49, pass acc 20%, dir changes 13.2/s, keeper 259 px.
+
+== Overnight run coop2 (from coop_u800, key pass 0.4 / xA 4.0, no cap): REWARD FARMING, not shipped ==
+coop2_u4500: league 3.00 pts/m, GF 10.00, GA 1.25. Behaviour: key passes 46/match, xA 14.2, shots 56, pass acc 66%, nearest teammate 85 px, keeper 770 px from goal.
+coop2_u3000: league 3.00, GF 8.89, GA 0.36. Key passes 40, xA 7.6, shots 51, keeper 428 px.
+
+== coop4 (from coop_u600, key pass 0.15 / xA 1.5, coop_cap 3, keeper penalty 0.006, random_start 0.6): not shipped ==
+coop4_u1200: league 3.00 pts/m, GF 5.73, GA 0.09. Key passes 1.12, xA 0.40, shots 5.5, pass acc 18%, keeper 177 px. Safe but less cooperative.
+coop4_u800: league 3.00, GF 5.30, GA 0.12. Key passes 0.50, keeper 230 px.
+
+== coop5 (from coop_u600, key pass 0.25 / xA 2.5, coop_cap 8, keeper penalty 0.006, random_start 0.6) -> shipped as RL Team 5 (update 1200) ==
+coop5_u1200 behaviour (8 matches x 60 s): key passes 4.62, xA 1.09, shots 13.0, pass acc 23%, dir changes 11.4/s, keeper 137 px. League evaluation: see below once finished.
