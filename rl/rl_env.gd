@@ -49,6 +49,7 @@ var w_xa := 0.0                   # reward per unit of expected goals of the sho
 var pass_individual := false      # pass terms go to the passer (and receiver) instead of the whole team: sharper credit
 var w_recv := 0.0                 # reward to the receiver of a completed pass
 var w_open := 0.0                 # per decision: reward for standing open (distance + clear lane) while a teammate has the ball
+var random_start := 0.0           # match mode: probability that an episode starts from a completely random layout (all players incl. keepers + ball) instead of a kickoff
 var coop_cap := 0.0               # max cooperation reward (key pass + xA + receive + ok-pass) a team can earn per episode; 0 = no cap
 var coop_used := 0.0
 var w_keeper := 0.0               # per decision: penalty for the keeper straying from its own goal (beyond keeper_free px)
@@ -104,6 +105,7 @@ func configure(c: Dictionary) -> void:
     pass_individual = bool(c.get("pass_individual", pass_individual))
     w_recv = float(c.get("w_recv", w_recv))
     w_open = float(c.get("w_open", w_open))
+    random_start = float(c.get("random_start", random_start))
     coop_cap = float(c.get("coop_cap", coop_cap))
     w_keeper = float(c.get("w_keeper", w_keeper))
     keeper_free = float(c.get("keeper_free", keeper_free))
@@ -189,6 +191,8 @@ func reset() -> void:
     if match_mode:
         sim.kickoff_team = rng.randi() % 2
         sim._reset_positions()
+        if random_start > 0.0 and rng.randf() < random_start:
+            _random_layout()
     else:
         _random_start()
     prev_pot = _potential()
@@ -207,6 +211,33 @@ func _ghost(g: SimPlayer) -> void:
     sim.players.erase(g)
     g.pos = Vector2(0.0, sim.pitch.out_y * 2.5)
     g.vel = Vector2.ZERO
+
+
+## Match-mode variant: every player (both teams, keepers too) and the ball anywhere on the pitch, play starts at once.
+func _random_layout() -> void:
+    var pt := sim.pitch
+    sim.kickoff_active = false
+    sim.kickoff_taker = null
+    sim.state = MatchSim.State.PLAYING
+    var hw := pt.half_w * 0.92
+    var hh := pt.half_h * 0.92
+    sim.ball.pos = Vector2(rng.randf_range(-hw, hw), rng.randf_range(-hh, hh))
+    sim.ball.vel = Vector2.from_angle(rng.randf() * TAU) * rng.randf_range(0.0, 3.0)
+    var placed: Array[Vector2] = [sim.ball.pos]
+    for p: SimPlayer in sim.players:
+        var pos := Vector2.ZERO
+        for _try in 40:
+            pos = Vector2(rng.randf_range(-hw, hw), rng.randf_range(-hh, hh))
+            var ok := true
+            for q in placed:
+                if q.distance_to(pos) < 45.0:
+                    ok = false
+                    break
+            if ok:
+                break
+        p.pos = pos
+        p.vel = Vector2.ZERO
+        placed.append(pos)
 
 
 func _random_start() -> void:

@@ -26,6 +26,15 @@ Run the project and the main menu opens (`res://scenes/main.tscn`).
 
 **UI work: follow `DESIGN.md`** (tokens, components, screen layouts, rollout plan).
 
+## Match gallery
+
+Goals from different pitches, sizes and teams (all AI vs AI, recorded with `tools/capture_gifs.gd`):
+
+| | |
+|---|---|
+| ![Classic 3v3](docs/screenshots/classic_3v3.gif)<br>**Classic 3v3**: Owls vs Ember | ![Futsal 2v2](docs/screenshots/futsal_2v2.gif)<br>**Futsal 2v2**: Harbor Sharks vs Dune Hawks |
+| ![Big 4v4](docs/screenshots/big_4v4.gif)<br>**Big pitch 4v4**: Arrows vs Bulls | ![Pillars 5v5](docs/screenshots/pillars_5v5.gif)<br>**Big with pillars 5v5**: Rose vs Tide |
+
 ## Controls
 Arrows/WASD move, X/Space kick, Q switch player (Team mode), T sim speed, Esc/P pause, M quit match, Enter continue after the final whistle.
 
@@ -74,6 +83,10 @@ Modes: single, styles, teams, sanity, strength, versus, human, keeper.
 `experiments/ui_smoke.tscn` walks the UI and saves screenshots to `experiments/shots/`.
 
 ## Machine learning (first step: imitation learning)
+
+<p align="center"><img src="docs/screenshots/rl_derby.gif" alt="RL Team 2 vs RL Team 4" width="60%"></p>
+
+*Two RL teams playing each other (RL Team 2 vs RL Team 4).*
 Everything is plain GDScript, no external dependencies:
 - `scripts/ml/mlp.gd` - small MLP (ReLU, Adam) with a 9-way move head and a kick head; saves/loads JSON.
 - `scripts/ai/ml_bot.gd` - `MLBot`, a policy that replaces StyleBot for outfield players (`MLBot.features(sim, p)` = raw observation + ball/goal relative to the player). Moves and kicks are sampled from the network output.
@@ -91,6 +104,8 @@ Status: plain imitation reached 0.21 points/match vs the teacher's 1.50; after 5
 `MatchConfig.ControlMode.TEAM`: Q switches to the teammate nearest the ball; `auto_switch` does it automatically (`MatchSim.set_controlled` / `switch_controlled`).
 
 ## Regenerating the screenshots
+More goal clips (several teams, pitches and sizes): `xvfb-run -a Godot --path . --resolution 1280x720 res://tools/capture_gifs.tscn` (edit `SCENARIOS` in `tools/capture_gifs.gd`), then `python3 tools/make_gifs.py`.
+
 With a window available (not `--headless`): `Godot --path . res://tools/capture_screenshots.tscn`. It plays a real RL Team match, saves the PNGs and dumps frames around goals to `docs/screenshots/clip*/`, then run `python3 tools/make_gifs.py` to shrink the PNGs and build the GIFs.
 
 ## Not included (by design)
@@ -127,6 +142,14 @@ as GK). `ROLE_OFFSET` is calibrated with `experiments` batches so every role ave
   dark outline), so a green team on a green pitch stays readable (`MatchView._goal_colour`).
 
 ## RL team (plays like the trained net)
+
+<p align="center"><img src="docs/screenshots/rl4_vs_cobalt.gif" alt="RL Team 4 vs Cobalt" width="60%"></p>
+
+*RL Team 4 (cooperation fine-tune) scoring against Cobalt.*
+
+<p align="center"><img src="docs/screenshots/rl3_vs_aurora.gif" alt="RL Team 3 vs Aurora" width="60%"></p>
+
+*RL Team 3 vs Aurora.*
 League result of the shipped weights: 61 W, 3 D, 0 L in 64 full matches against the 16 rule-based teams (2.91 pts/match, 5.1 goals for and 1.1 against per match); details in `rl/results_league_final.txt`.
 `data/teams/rl_team.json` ("RL Team") has `"ml_model": "res://data/models/rl_5v5_arena.json"`: all 5 players,
 keeper included, are driven by a net trained with Python PPO (`rl/`, see `rl/README.md`). Pick it in Quick match /

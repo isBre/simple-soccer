@@ -38,7 +38,7 @@ def make_cfgs(args):
     base = {"pitch": "arena", "size": 5, "own_team": "owls", "n_active": 5, "with_keeper": True,
             "match_mode": True, "duration": 90.0, "max_steps": 3200,
             "w_pass_prog": args.w_pass_prog, "w_pass_ok": args.w_pass_ok, "w_pass_fail": args.w_pass_fail,
-            "pass_individual": bool(args.pass_individual), "w_recv": args.w_recv, "w_open": args.w_open, "w_key_pass": args.w_key_pass, "w_xa": args.w_xa, "w_space": args.w_space, "space_radius": args.space_radius, "w_kick": args.w_kick, "coop_cap": args.coop_cap, "w_keeper": args.w_keeper, "keeper_free": args.keeper_free}
+            "pass_individual": bool(args.pass_individual), "w_recv": args.w_recv, "w_open": args.w_open, "w_key_pass": args.w_key_pass, "w_xa": args.w_xa, "w_space": args.w_space, "space_radius": args.space_radius, "w_kick": args.w_kick, "coop_cap": args.coop_cap, "random_start": args.random_start, "w_keeper": args.w_keeper, "keeper_free": args.keeper_free}
     return {**base, "opp": pool}, {**base, "opp": "owls", "opp_external": True}
 
 
@@ -81,6 +81,7 @@ def main():
     ap.add_argument("--w_space", type=float, default=0.006)
     ap.add_argument("--space_radius", type=float, default=140.0)
     ap.add_argument("--w_kick", type=float, default=0.01)
+    ap.add_argument("--random_start", type=float, default=0.0, help="fraction of episodes that start from a fully random layout instead of a kickoff")
     ap.add_argument("--coop_cap", type=float, default=0.0, help="max cooperation reward per episode (anti reward-farming)")
     ap.add_argument("--w_keeper", type=float, default=0.0)
     ap.add_argument("--keeper_free", type=float, default=350.0)
