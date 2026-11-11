@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/banner.svg" alt="Simple Soccer" width="100%">
+  <img src="icon.svg" alt="Simple Soccer logo" width="128">
 </p>
 
 # Simple Soccer
