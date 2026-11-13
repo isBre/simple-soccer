@@ -160,7 +160,7 @@ def main():
             b_done = torch.zeros(T, E)
             b_val = torch.zeros(T, E, A)
             t0 = time.time()
-            torch.set_num_threads(os.cpu_count())
+            torch.set_num_threads(1)                      # tiny batches: extra threads only steal CPU from the Godot workers
             for t in range(T):
                 obs_L = torch.cat([obs_r, obs_s[:, :5]], 0)                    # [E, 5, D] learner observations
                 with torch.no_grad():

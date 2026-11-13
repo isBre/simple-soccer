@@ -95,6 +95,8 @@ Everything is plain GDScript, no external dependencies:
 
 Status: plain imitation reached 0.21 points/match vs the teacher's 1.50; after 5 DAgger rounds the student matches the teacher on average (1.50 points/match over all 7 styles, 3v3 classic). After 24 ES generations the policy reaches 2.68 points/match (teacher 1.50), GF 3.75 / GA 1.00. Next steps: 5v5 / other pitches, a held-out set of styles and squads to check overfitting, self-play, a Python bridge.
 
+**Live training viewer, Raspberry Pi notes:** see `rl/README.md` (`tools/watch_training.tscn` shows matches of the newest checkpoint with a training sidebar; `tools/net_server.py` runs the nets in numpy because the GDScript `MLP` is too slow for real time on a Pi; `--w_jitter` anti-twitch reward).
+
 ## Team control mode
 `MatchConfig.ControlMode.TEAM`: Q switches to the teammate nearest the ball; `auto_switch` does it automatically (`MatchSim.set_controlled` / `switch_controlled`).
 

@@ -27,6 +27,7 @@ var _intro_id := -1          # kickoff_start of the kickoff we already introduce
 var _zoom_mul := 1.0
 ## Screen-space confetti / sparks for the goal banner.
 var _parts: Array = []
+var effects := true          # false: no confetti or celebration rings (set_effects)
 var _prng := RandomNumberGenerator.new()
 ## Fixed zoom, the same on every pitch so players always look the same size.
 ## The camera follows the ball; pitches smaller than the screen are simply centred.
@@ -137,6 +138,12 @@ func _read_kick() -> bool:
     return Input.is_physical_key_pressed(KEY_X) or Input.is_physical_key_pressed(KEY_SPACE)
 
 
+## Turns the goal confetti and celebration rings on or off (off = cheaper drawing, e.g. on a Raspberry Pi).
+func set_effects(on: bool) -> void:
+    effects = on
+    view.celebration = on
+
+
 func _on_goal(ev: Dictionary) -> void:
     var t: TeamDef = cfg.teams[int(ev["team"])]
     _goal_idx = int(ev["team"])
@@ -146,6 +153,8 @@ func _on_goal(ev: Dictionary) -> void:
     _goal_banner_col = cfg.kits[_goal_idx][0].lightened(0.15)
     _prng.randomize()
     _parts.clear()
+    if not effects:
+        return
     var cx := size.x * 0.5
     var cy := size.y * 0.5 + 5.0
     var palette := [Color("ffd54a"), Color.WHITE, _goal_banner_col, _goal_banner_col.lightened(0.4)]

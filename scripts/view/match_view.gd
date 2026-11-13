@@ -3,6 +3,7 @@ extends Node2D
 ## Draws a MatchSim (pitch, nets, kits, ball). Pure rendering, no logic.
 
 var sim: MatchSim
+var celebration := true         # pulsing rings and confetti around a scorer
 var _pitch_layer: Node2D        # static pitch, goals and lines: drawn once, kept behind the moving parts
 
 
@@ -110,7 +111,7 @@ func _draw() -> void:
             draw_string(font, np, nm, HORIZONTAL_ALIGNMENT_CENTER, 120.0, 13, Color("ffd54a"))
 
     # ball
-    if sim.state == MatchSim.State.GOAL and sim.goal_scorer != null:
+    if celebration and sim.state == MatchSim.State.GOAL and sim.goal_scorer != null:
         _draw_celebration()
     draw_circle(sim.ball.pos, sim.ball.radius, Color.WHITE, true, -1.0, true)
     draw_arc(sim.ball.pos, sim.ball.radius - 1.0, 0.0, TAU, 24, Color.BLACK, 2.0, true)
