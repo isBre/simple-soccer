@@ -59,21 +59,39 @@ nice -n 15 ~/rl-venv/bin/python rl/selfplay.py --start out_5v5/ckpt/jit3_u50.pt 
   > logs/jit6.out 2>&1 &
 ```
 
-## Watching training live (`tools/watch_training.tscn`)
+## Evaluation inside the run (`rl/eval_checkpoint.py`)
 
-A window (needs a display) that plays the newest checkpoint of a run against RL Team 4 in endless matches, next to a sidebar with the run's numbers:
-status, update and elapsed time, points per match (rule-based teams / the starting weights / past snapshots), reward, entropy, opponent pool, sim and learn time,
-which checkpoint is playing / newest / when saved / next save, your own W-D-L record per checkpoint, CPU load, temperature, memory, viewer FPS and charts of points, reward and entropy over the run.
-F3 hides the sidebar. The numbers come from `logs/<tag>.out` (the `selfplay.py` log), so it works while training runs in another process.
+`selfplay.py --eval_every 100` (default; a multiple of `--ckpt_every`, 0 = never) starts a **complete evaluation of every Nth checkpoint** in the background, at the lowest priority, one at a time
+(a new one is skipped while the previous still runs). It writes `logs/sp_eval/<tag>_u<N>.txt` (only once it is complete; last line `DONE <seconds>`):
+1. **League**: all 16 rule-based teams, both sides (`league_eval.gd`): pts/match and goals per team, per tier, trained-against vs held-out teams. `--eval_games` (default 1 = 32 matches), `--eval_duration` (default 90 s per match; the shipped league numbers used 180 s).
+2. **Behaviour** (`behaviour_stats.gd`): direction changes/s (the anti-twitch metric), kick presses, spacing, keeper distance, passes and pass accuracy, key passes, shots, next to the same numbers for the rule bots.
+3. **Head to head** (`h2h_eval.gd`) against RL Team 4 and RL Team 5 (the previous shipped nets), both sides, `--eval_h2h_games` games per side.
+
+All three run the nets in numpy servers (`--remote PORT` in the Godot scripts, `tools/net_server.py`, `RemoteMLP`): the GDScript MLP is too slow on a Raspberry Pi to evaluate a checkpoint in reasonable time.
+Cost on a Pi 4 next to training: about 25-30 minutes of background CPU per evaluation with the defaults (a quick test with 20 s matches took 6 minutes). Run it by hand on any checkpoint:
+`python3 rl/eval_checkpoint.py --model out_5v5/ckpt/x.json --out logs/sp_eval/x.txt [--games 1] [--duration 90] [--h2h_games 3]`.
+`selfplay.py` also writes `logs/<tag>_config.json` (all its settings) at start, which the viewer's SETUP page reads.
+
+## Watching training live (`tools/watch_training.tscn`, touch screen, no keyboard)
+
+A window (needs a display) with a navigation bar of big touch buttons (nothing needs a keyboard):
+- **LIVE**: endless matches of the newest checkpoint against RL Team 4 next to a compact sidebar (status, points per match, checkpoints, machine load, a chart). The match is paused while another page is shown.
+- **TRAINING**: update, speed, points per match (vs rule-based teams / the start weights / past snapshots), reward, entropy, pool, sim/learn time, checkpoints (playing, newest, next checkpoint and next evaluation with estimated time), CPU load, temperature, memory, FPS, and charts of points, reward and entropy over the run.
+- **EVALUATION**: the latest complete evaluation: every team (held-out marked), league summary by tier, head to head, behaviour vs the rule bots.
+- **RECAP**: the whole run: updates, time, speed, first -> latest evaluation (league points, vs RL Team 4 / 5, direction changes, key passes, keeper distance), the best checkpoint, all evaluations, and charts across evaluations.
+- **SETUP**: the rewards with their weights, the observation (54 numbers), actions, network, PPO settings, episodes and opponents (read from the run's config file).
+
+Code: `training_data.gd` (parsing of the log, checkpoints and evaluations, machine info; no UI), `training_page.gd` (full pages), `training_sidebar.gd` (compact panel), `line_chart.gd`, `watch_training.gd/.tscn` (navigation and the match). The numbers come from `logs/<tag>.out` and `logs/sp_eval/`, so it works while training runs in another process.
+`CKPT_EVERY` / `EVAL_EVERY` in `training_data.gd` must match the run's `--ckpt_every` / `--eval_every` (only used for "next checkpoint / evaluation" estimates).
 
 Why a Python server: playing two net teams with the game's GDScript `MLP` ran at about 4 FPS on a Pi (about 300 forward passes per second of 25k multiply-adds each).
 `tools/net_server.py` runs the nets in numpy; `scripts/ml/remote_mlp.gd` (`RemoteMLP`, an `MLP` whose `forward` asks the server) plugs into `MatchConfig.ml_models`.
 The server loads the newest `<tag>_u*.json` each time a match connects, so every match uses the latest weights (before the first checkpoint it plays `--model`).
 
 ```bash
-python3 tools/net_server.py --port 7301 --tag jit6 --model out_5v5/ckpt/jit3_u50.json &      # newest checkpoint of the run
+python3 tools/net_server.py --port 7301 --tag jit7 --model out_5v5/ckpt/jit6_u75.json &      # newest checkpoint of the run
 python3 tools/net_server.py --port 7302 --model data/models/rl_5v5_arena_v4.json &            # the opponent (RL Team 4)
-godot --path . res://tools/watch_training.tscn -- --tag jit6 --start res://out_5v5/ckpt/jit3_u50.json   # --start = the server's --model
+godot --path . res://tools/watch_training.tscn -- --tag jit7 --start res://out_5v5/ckpt/jit6_u75.json [--page training]   # --start = the server's --model
 ```
 
 Frame rate: capped at 30 FPS (physics keeps 60 ticks/s) and without goal confetti (`MatchScreen.set_effects(false)`; the normal game is unchanged).

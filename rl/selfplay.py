@@ -15,6 +15,7 @@ import copy
 import json
 import os
 import subprocess
+import sys
 import time
 from collections import deque
 
@@ -42,16 +43,21 @@ def make_cfgs(args):
     return {**base, "opp": pool}, {**base, "opp": "owls", "opp_external": True}
 
 
-def eval_async(model_path, tag, games, log):
-    """League evaluation + behaviour statistics of a snapshot, in the background (does not pause training)."""
-    os.makedirs(os.path.join(ROOT, "logs", "sp_eval"), exist_ok=True)
+_eval_proc = None
+
+
+def eval_async(model_path, tag, args, log):
+    """Complete evaluation of a snapshot (rl/eval_checkpoint.py: league, behaviour, head to head) in the background, at the
+    lowest priority, one at a time (a new one is skipped while the previous still runs). Result: logs/sp_eval/<tag>.txt"""
+    global _eval_proc
+    if _eval_proc is not None and _eval_proc.poll() is None:
+        log("evaluation of an earlier snapshot still running: skipped %s" % tag)
+        return
     out = os.path.join(ROOT, "logs", "sp_eval", tag + ".txt")
-    rel = "res://" + os.path.relpath(model_path, ROOT)
-    cmd = ("nice -n 5 %s --headless --path %s res://rl/league_eval.tscn -- --model %s --games %d 2>&1 | grep -E 'SUMMARY' > %s; "
-           "nice -n 5 %s --headless --path %s res://rl/behaviour_stats.tscn -- --model %s 2>&1 | grep -E 'RL Team|rule-based' >> %s") % (
-        GODOT, ROOT, rel, games, out, GODOT, ROOT, rel, out)
-    subprocess.Popen(["bash", "-c", cmd], env={**os.environ, "GODOT_SILENCE_ROOT_WARNING": "1"})
-    log("background eval started for %s -> logs/sp_eval/%s.txt" % (tag, tag))
+    cmd = ["nice", "-n", "19", sys.executable, os.path.join(ROOT, "rl", "eval_checkpoint.py"), "--model", model_path, "--out", out,
+           "--games", str(args.eval_games), "--duration", str(args.eval_duration), "--h2h_games", str(args.eval_h2h_games)]
+    _eval_proc = subprocess.Popen(cmd, cwd=os.path.join(ROOT, "rl"), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    log("background evaluation started for %s -> logs/sp_eval/%s.txt" % (tag, tag))
 
 
 def main():
@@ -89,11 +95,16 @@ def main():
     ap.add_argument("--snapshot_every", type=int, default=40)
     ap.add_argument("--resample_every", type=int, default=20)
     ap.add_argument("--ckpt_every", type=int, default=100)
-    ap.add_argument("--eval_every", type=int, default=250)
-    ap.add_argument("--eval_games", type=int, default=2)
+    ap.add_argument("--eval_every", type=int, default=100, help="complete evaluation of the checkpoint every N updates (multiple of --ckpt_every; 0 = never)")
+    ap.add_argument("--eval_games", type=int, default=1, help="league games per team and side (1 = 32 matches)")
+    ap.add_argument("--eval_duration", type=float, default=90.0, help="seconds per evaluation match")
+    ap.add_argument("--eval_h2h_games", type=int, default=3, help="head-to-head games per side against each reference net")
     ap.add_argument("--log_every", type=int, default=5)
     ap.add_argument("--tag", default="sp")
     args = ap.parse_args()
+    os.makedirs(os.path.join(ROOT, "logs"), exist_ok=True)
+    with open(os.path.join(ROOT, "logs", args.tag + "_config.json"), "w") as f:        # read by the live viewer's SETUP page
+        json.dump({**vars(args), "obs_dim": OBS_DIM, "started": int(time.time())}, f, indent=1)
 
     torch.manual_seed(args.seed)
     np.random.seed(args.seed)
@@ -244,8 +255,8 @@ def main():
                 with open(path, "w") as fh:
                     json.dump(agent.to_game_dict(), fh)
                 torch.save(agent.state_dict(), os.path.join(CKPT, "%s_u%d.pt" % (args.tag, upd)))
-                if upd % args.eval_every == 0:
-                    eval_async(path, "%s_u%d" % (args.tag, upd), args.eval_games, log)
+                if args.eval_every > 0 and upd % args.eval_every == 0:
+                    eval_async(path, "%s_u%d" % (args.tag, upd), args, log)
         log("selfplay finished")
     finally:
         er.close()

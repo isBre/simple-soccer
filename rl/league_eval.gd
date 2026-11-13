@@ -2,7 +2,9 @@ extends Node
 ## League evaluation of an exported model on the 5v5 arena: the net drives ALL 5 players (keeper included)
 ## against each of the 16 rule-based teams, on both sides, full 180 s matches (SimBatch, all cores).
 ## Also writes rl/teams_info.json (id, strength, style, tier, held_out) for the trainer.
-##   godot --headless --path . res://rl/league_eval.tscn -- --model res://out_5v5/x.json --games 4 [--duration 180]
+##   godot --headless --path . res://rl/league_eval.tscn -- --model res://out_5v5/x.json --games 4 [--duration 180] [--remote PORT]
+## --remote PORT: the net runs in tools/net_server.py on that port (numpy; the GDScript MLP is ~15x slower on a Raspberry Pi);
+## --model is then only a label.
 ## Held-out teams (never trained against): sorted by strength, indices 1, 5, 9, 13 (one per tier).
 
 var batch := SimBatch.new()
@@ -10,6 +12,7 @@ var meta: Array = []
 var ids: Array = []
 var info: Dictionary = {}
 var model_path := ""
+var remote_port := 0
 var t0 := 0
 
 
@@ -21,6 +24,7 @@ func _ready() -> void:
 		if a[i] == "--model": model_path = a[i + 1]
 		if a[i] == "--games": games = int(a[i + 1])
 		if a[i] == "--duration": duration = float(a[i + 1])
+		if a[i] == "--remote": remote_port = int(a[i + 1])
 	var teams: Array = Database.teams.values().filter(func(t: TeamDef) -> bool: return t.ml_model == "")   # rule-based teams only
 	teams.sort_custom(func(x: TeamDef, y: TeamDef) -> bool: return x.strength() < y.strength())
 	var tiers := ["weak", "average", "strong", "elite"]
@@ -35,7 +39,7 @@ func _ready() -> void:
 	if model_path == "":
 		get_tree().quit()
 		return
-	var net := MLP.from_dict(Database.read_json(model_path))
+	var net: MLP = null if remote_port > 0 else MLP.from_dict(Database.read_json(model_path))
 	var cfgs: Array = []
 	var seed_i := 0
 	for id: String in ids:
@@ -50,7 +54,7 @@ func _ready() -> void:
 				c.teams = [Database.teams["owls"], Database.teams["owls"]]
 				c.teams[1 - side] = Database.teams[id]
 				c.resolve_kits()
-				c.ml_models[side] = net
+				c.ml_models[side] = RemoteMLP.new(remote_port) if remote_port > 0 else net      # one connection per match (matches run on threads)
 				c.ml_keeper = true
 				cfgs.append(c)
 				meta.append({"opp": id, "side": side})

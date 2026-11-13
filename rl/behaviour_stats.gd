@@ -1,8 +1,10 @@
 extends Node
 ## Behaviour statistics, RL Team vs rule-based opponents per decision: jitter, kick presses, clumping, keeper position.
-##   godot --headless --path . res://rl/behaviour_stats.tscn
+##   godot --headless --path . res://rl/behaviour_stats.tscn [-- --model res://x.json | --remote PORT]
+## --remote PORT: the measured net runs in tools/net_server.py (see league_eval.gd).
 var results: Array = []
 var model_net: MLP = null          # optional --model <res:// json>: measure this net instead of the team's shipped one
+var remote_port := 0
 var mutex := Mutex.new()
 
 func _run(i: int) -> void:
@@ -15,7 +17,10 @@ func _run(i: int) -> void:
 	c.match_seed = 900 + i
 	c.teams = [rl, opp]
 	c.resolve_kits()
-	if model_net != null:
+	if remote_port > 0:
+		c.ml_models[0] = RemoteMLP.new(remote_port)
+		c.ml_keeper = true
+	elif model_net != null:
 		c.ml_models[0] = model_net
 		c.ml_keeper = true
 	var sim := MatchSim.new(c)
@@ -92,6 +97,8 @@ func _ready() -> void:
 	for i in cli.size():
 		if cli[i] == "--model" and i + 1 < cli.size():
 			model_net = MLP.from_dict(Database.read_json(cli[i + 1]))
+		if cli[i] == "--remote" and i + 1 < cli.size():
+			remote_port = int(cli[i + 1])
 	var n := 8
 	var tasks: Array[int] = []
 	for i in n:
