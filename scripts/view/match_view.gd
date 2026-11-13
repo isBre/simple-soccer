@@ -3,24 +3,33 @@ extends Node2D
 ## Draws a MatchSim (pitch, nets, kits, ball). Pure rendering, no logic.
 
 var sim: MatchSim
+var _pitch_layer: Node2D        # static pitch, goals and lines: drawn once, kept behind the moving parts
 
 
-func _draw() -> void:
+func _ready() -> void:
+    _pitch_layer = Node2D.new()
+    _pitch_layer.show_behind_parent = true
+    _pitch_layer.draw.connect(_draw_pitch)
+    add_child(_pitch_layer)
+
+
+func _draw_pitch() -> void:
     if sim == null:
         return
     var pd := sim.pitch
     var hw := pd.half_w
     var hh := pd.half_h
-    var font := ThemeDB.fallback_font
 
-    draw_rect(Rect2(-2000, -1200, 4000, 2400), pd.color_outer.darkened(0.25))
-    draw_rect(Rect2(-pd.out_x, -pd.out_y, pd.out_x * 2.0, pd.out_y * 2.0), pd.color_outer)
-    draw_rect(Rect2(-hw, -hh, hw * 2.0, hh * 2.0), pd.color_pitch)
-    if pd.stripes > 0:
-        var w := hw * 2.0 / pd.stripes
-        for i in pd.stripes:
-            if i % 2 == 0:
-                draw_rect(Rect2(-hw + i * w, -hh, w, hh * 2.0), pd.color_pitch.darkened(0.07))
+    # background as non-overlapping pieces (every pixel is painted once: overdraw is what costs on slow GPUs)
+    var out_rect := Rect2(-pd.out_x, -pd.out_y, pd.out_x * 2.0, pd.out_y * 2.0)
+    var pitch_rect := Rect2(-hw, -hh, hw * 2.0, hh * 2.0)
+    _fill_ring(Rect2(-2000, -1200, 4000, 2400), out_rect, pd.color_outer.darkened(0.25))
+    _fill_ring(out_rect, pitch_rect, pd.color_outer)
+    var n := maxi(pd.stripes, 1)
+    var w := hw * 2.0 / n
+    for i in n:
+        var col: Color = pd.color_pitch.darkened(0.07) if (pd.stripes > 0 and i % 2 == 0) else pd.color_pitch
+        _pitch_layer.draw_rect(Rect2(-hw + i * w, -hh, w, hh * 2.0), col)
 
     # goals / nets coloured by the team defending them
     for t in 2:
@@ -28,40 +37,54 @@ func _draw() -> void:
         var col := _goal_colour(sim.cfg.kits[t], pd.color_pitch)
         var x0 := sx * hw
         var x1 := sx * (hw + pd.net_depth)
-        draw_rect(Rect2(minf(x0, x1), -pd.goal_half, pd.net_depth, pd.goal_half * 2.0), pd.color_pitch.darkened(0.2))
+        _pitch_layer.draw_rect(Rect2(minf(x0, x1), -pd.goal_half, pd.net_depth, pd.goal_half * 2.0), pd.color_pitch.darkened(0.2))
         var nc := Color(col, 0.55)
         var gx := 0.0
         while gx <= pd.net_depth:
             var xx := x0 + sx * gx
-            draw_line(Vector2(xx, -pd.goal_half), Vector2(xx, pd.goal_half), nc, 1.0)
+            _pitch_layer.draw_line(Vector2(xx, -pd.goal_half), Vector2(xx, pd.goal_half), nc, 1.0)
             gx += 10.0
         var gy := -pd.goal_half
         while gy <= pd.goal_half:
-            draw_line(Vector2(x0, gy), Vector2(x1, gy), nc, 1.0)
+            _pitch_layer.draw_line(Vector2(x0, gy), Vector2(x1, gy), nc, 1.0)
             gy += 10.0
         var frame := PackedVector2Array([Vector2(x0, -pd.goal_half), Vector2(x1, -pd.goal_half),
             Vector2(x1, pd.goal_half), Vector2(x0, pd.goal_half)])
         # dark outline under the team colour keeps the frame readable on any pitch colour
-        draw_polyline(frame, Color(0, 0, 0, 0.75), 6.5)
-        draw_line(Vector2(x0, -pd.goal_half), Vector2(x0, pd.goal_half), Color(0, 0, 0, 0.75), 7.5)
-        draw_polyline(frame, col, 3.0)
-        draw_line(Vector2(x0, -pd.goal_half), Vector2(x0, pd.goal_half), col, 4.0)
+        _pitch_layer.draw_polyline(frame, Color(0, 0, 0, 0.75), 6.5)
+        _pitch_layer.draw_line(Vector2(x0, -pd.goal_half), Vector2(x0, pd.goal_half), Color(0, 0, 0, 0.75), 7.5)
+        _pitch_layer.draw_polyline(frame, col, 3.0)
+        _pitch_layer.draw_line(Vector2(x0, -pd.goal_half), Vector2(x0, pd.goal_half), col, 4.0)
 
     # lines
     var lc := pd.color_line
-    draw_rect(Rect2(-hw, -hh, hw * 2.0, hh * 2.0), lc, false, 3.0)
-    draw_line(Vector2(0, -hh), Vector2(0, hh), lc, 3.0)
-    draw_arc(Vector2.ZERO, pd.center_r, 0.0, TAU, 72, lc, 3.0, true)
-    draw_circle(Vector2.ZERO, 4.0, lc)
+    _pitch_layer.draw_rect(Rect2(-hw, -hh, hw * 2.0, hh * 2.0), lc, false, 3.0)
+    _pitch_layer.draw_line(Vector2(0, -hh), Vector2(0, hh), lc, 3.0)
+    _pitch_layer.draw_arc(Vector2.ZERO, pd.center_r, 0.0, TAU, 72, lc, 3.0, true)
+    _pitch_layer.draw_circle(Vector2.ZERO, 4.0, lc)
     if pd.box_depth > 0.0:
         for sx: float in [-1.0, 1.0]:
             var bx := sx * hw - (pd.box_depth if sx > 0.0 else 0.0)
-            draw_rect(Rect2(bx, -pd.box_half, pd.box_depth, pd.box_half * 2.0), lc, false, 2.5)
+            _pitch_layer.draw_rect(Rect2(bx, -pd.box_half, pd.box_depth, pd.box_half * 2.0), lc, false, 2.5)
 
     # posts / obstacles
     for s in sim.statics:
-        draw_circle(s.pos, s.radius, Color("f2f2f2"), true, -1.0, true)
-        draw_arc(s.pos, s.radius, 0.0, TAU, 24, Color.BLACK, 2.0, true)
+        _pitch_layer.draw_circle(s.pos, s.radius, Color("f2f2f2"), true, -1.0, true)
+        _pitch_layer.draw_arc(s.pos, s.radius, 0.0, TAU, 24, Color.BLACK, 2.0, true)
+
+
+## Fills the area between two nested rectangles with four strips.
+func _fill_ring(outer: Rect2, inner: Rect2, col: Color) -> void:
+    _pitch_layer.draw_rect(Rect2(outer.position, Vector2(outer.size.x, inner.position.y - outer.position.y)), col)
+    _pitch_layer.draw_rect(Rect2(outer.position.x, inner.end.y, outer.size.x, outer.end.y - inner.end.y), col)
+    _pitch_layer.draw_rect(Rect2(outer.position.x, inner.position.y, inner.position.x - outer.position.x, inner.size.y), col)
+    _pitch_layer.draw_rect(Rect2(inner.end.x, inner.position.y, outer.end.x - inner.end.x, inner.size.y), col)
+
+
+func _draw() -> void:
+    if sim == null:
+        return
+    var font := ThemeDB.fallback_font
 
     # players
     for p in sim.players:

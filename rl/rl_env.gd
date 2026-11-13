@@ -62,6 +62,8 @@ var w_space := 0.0                # penalty per player and teammate closer than 
 var space_radius := 140.0
 var w_kick := 0.0                 # penalty for pressing kick while the ball is out of reach
 var kick_reach := 40.0
+var w_jitter := 0.0               # penalty per decision when the move direction turns by more than ~60 degrees (anti-twitch)
+var prev_dir: Dictionary = {}     # uid -> last non-zero input_dir
 var prev_pass := [0, 0, 0, 0, 0.0]  # team 0 totals: progressive, ok, failed, key passes, xA
 var opp_external := false         # team 1 is controlled from Python too (self-play): its players are extra agents
 var opp_net: MLP = null
@@ -114,6 +116,7 @@ func configure(c: Dictionary) -> void:
     w_space = float(c.get("w_space", w_space))
     space_radius = float(c.get("space_radius", space_radius))
     w_kick = float(c.get("w_kick", w_kick))
+    w_jitter = float(c.get("w_jitter", w_jitter))
     own_keeper = bool(c.get("own_keeper", opp != "none"))
     if c.has("seed"):
         rng.seed = int(c["seed"])
@@ -200,6 +203,7 @@ func reset() -> void:
     prev_playing = true
     prev_pass = _pass_totals()
     prev_ps.clear()
+    prev_dir.clear()
     for a in agents:
         prev_ps[a.uid] = _ps_vec(a)
 
@@ -336,7 +340,7 @@ func _individual() -> PackedFloat32Array:
     var out := PackedFloat32Array()
     out.resize(agents.size() + opp_agents.size())
     var credit := match_mode and pass_individual
-    if w_kick == 0.0 and w_space == 0.0 and not credit and w_open == 0.0 and w_keeper == 0.0:
+    if w_kick == 0.0 and w_space == 0.0 and not credit and w_open == 0.0 and w_keeper == 0.0 and w_jitter == 0.0:
         return out
     var bp := sim.ball.pos
     # the carrier: the learner agent that last touched the ball and is next to it
@@ -350,6 +354,13 @@ func _individual() -> PackedFloat32Array:
         var r := 0.0
         if w_kick > 0.0 and a.input_kick and da > kick_reach:
             r -= w_kick
+        if w_jitter > 0.0:
+            var dnow: Vector2 = a.input_dir
+            if dnow.length() > 0.1:
+                var dprev: Vector2 = prev_dir.get(a.uid, dnow)
+                if dprev.normalized().dot(dnow.normalized()) < 0.5:
+                    r -= w_jitter
+                prev_dir[a.uid] = dnow
         if w_space > 0.0 and da > 70.0:
             for j in agents.size():
                 if j != i:

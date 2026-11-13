@@ -8,7 +8,8 @@ import time
 
 import numpy as np
 
-GODOT = os.path.expanduser("~/godot/Godot_v4.6-stable_linux.x86_64")
+import platform
+GODOT = os.path.expanduser("~/godot/Godot_v4.6-stable_linux.%s" % ("arm64" if platform.machine() == "aarch64" else "x86_64"))
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 

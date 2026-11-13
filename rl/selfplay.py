@@ -38,7 +38,7 @@ def make_cfgs(args):
     base = {"pitch": "arena", "size": 5, "own_team": "owls", "n_active": 5, "with_keeper": True,
             "match_mode": True, "duration": 90.0, "max_steps": 3200,
             "w_pass_prog": args.w_pass_prog, "w_pass_ok": args.w_pass_ok, "w_pass_fail": args.w_pass_fail,
-            "pass_individual": bool(args.pass_individual), "w_recv": args.w_recv, "w_open": args.w_open, "w_key_pass": args.w_key_pass, "w_xa": args.w_xa, "w_space": args.w_space, "space_radius": args.space_radius, "w_kick": args.w_kick, "coop_cap": args.coop_cap, "random_start": args.random_start, "w_keeper": args.w_keeper, "keeper_free": args.keeper_free}
+            "pass_individual": bool(args.pass_individual), "w_recv": args.w_recv, "w_open": args.w_open, "w_key_pass": args.w_key_pass, "w_xa": args.w_xa, "w_space": args.w_space, "space_radius": args.space_radius, "w_kick": args.w_kick, "coop_cap": args.coop_cap, "random_start": args.random_start, "w_keeper": args.w_keeper, "w_jitter": args.w_jitter, "keeper_free": args.keeper_free}
     return {**base, "opp": pool}, {**base, "opp": "owls", "opp_external": True}
 
 
@@ -83,6 +83,7 @@ def main():
     ap.add_argument("--w_kick", type=float, default=0.01)
     ap.add_argument("--random_start", type=float, default=0.0, help="fraction of episodes that start from a fully random layout instead of a kickoff")
     ap.add_argument("--coop_cap", type=float, default=0.0, help="max cooperation reward per episode (anti reward-farming)")
+    ap.add_argument("--w_jitter", type=float, default=0.0)
     ap.add_argument("--w_keeper", type=float, default=0.0)
     ap.add_argument("--keeper_free", type=float, default=350.0)
     ap.add_argument("--snapshot_every", type=int, default=40)
@@ -159,7 +160,7 @@ def main():
             b_done = torch.zeros(T, E)
             b_val = torch.zeros(T, E, A)
             t0 = time.time()
-            torch.set_num_threads(4)
+            torch.set_num_threads(os.cpu_count())
             for t in range(T):
                 obs_L = torch.cat([obs_r, obs_s[:, :5]], 0)                    # [E, 5, D] learner observations
                 with torch.no_grad():
@@ -214,7 +215,7 @@ def main():
             f_adv = (f_adv - f_adv.mean()) / (f_adv.std() + 1e-8)
             n = f_obs.shape[0]
             t1 = time.time()
-            torch.set_num_threads(16)
+            torch.set_num_threads(os.cpu_count())
             for _ in range(args.epochs):
                 perm = torch.randperm(n)
                 for s in range(0, n, args.minibatch):
