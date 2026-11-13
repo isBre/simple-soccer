@@ -9,8 +9,11 @@ const Heatmap := preload("res://tools/heatmap.gd")
 ## Reward terms: key in the log, label, colour, team-wide (shared by all players) or personal.
 const TERMS := [["goals", "goals scored / conceded", "6fd08c", true], ["shaping", "ball shaping", "6ab0ff", true], ["time", "time cost", "8a93a3", true],
         ["pass_prog", "progressive passes", "ffd54a", false], ["pass_fail", "failed passes", "ff6b6b", false], ["coop", "cooperation bonus", "c792ea", false],
-        ["open", "standing open", "4dd0e1", false], ["space", "too close to teammate", "ff9e64", false], ["kick", "kick far from ball", "f78fb3", false],
-        ["keeper", "keeper far from goal", "b0bec5", false], ["jitter", "direction twitch", "ffffff", false]]
+        ["open", "standing open", "4dd0e1", false], ["space", "too close to teammate", "ff9e64", false], ["far", "too far from the ball", "ffcc80", false], ["kick", "kick far from ball", "f78fb3", false],
+        ["keeper", "keeper far from goal", "b0bec5", false], ["jitter", "direction twitch", "ffffff", false],
+        ["xg", "shot quality (xG)", "80cbc4", false], ["xga", "opponent chances (xGA)", "ef5350", true], ["result", "win / draw bonus", "aed581", true],
+        ["tackle", "tackles, interceptions", "90caf9", false], ["goalside", "goal-side defending", "ce93d8", false],
+        ["opp_half", "opponent in our half", "bcaaa4", true], ["compact", "team stretched", "fff59d", true]]
 var _heatmaps: Array = []
 
 var kind := ""
@@ -75,8 +78,8 @@ func setup(page_kind: String, training_data: Data) -> void:
                 _third.size_flags_horizontal = Control.SIZE_EXPAND_FILL
                 row.add_child(_third)
                 for label in [_text, _side, _third]:
-                    label.add_theme_font_size_override("normal_font_size", 14)
-                    label.add_theme_font_size_override("bold_font_size", 14)
+                    label.add_theme_font_size_override("normal_font_size", 13)
+                    label.add_theme_font_size_override("bold_font_size", 13)
                     label.size_flags_stretch_ratio = 1.0
                 row.add_theme_constant_override("separation", 14)
     refresh()
@@ -124,8 +127,8 @@ func _training_text() -> String:
     var per := data.seconds_per_update()
     t += "   [color=#%s][b]%s[/b][/color]\n" % [data.state_colour(), data.state_text()]
     t += "update [b]%d[/b]  ·  %.0f s/update  ·  %d decisions/s\n\n" % [l.upd, per, l.dec]
-    t += Data.section("POINTS PER MATCH (3 = win, recent matches)", [["[color=#%s]●[/color] vs rule-based teams" % Data.GOOD, Data.points(l.rules)],
-            ["[color=#%s]●[/color] vs RL Team 5 (start weights)" % Data.OK, Data.points(l.bench)], ["[color=#%s]●[/color] vs past snapshots" % Data.BLUE, Data.points(l.league)]])
+    t += Data.section("POINTS PER MATCH (3 = win, recent matches)", [["[color=#%s]●[/color] vs rule-based teams" % Data.GOOD, data.points_text("rules")],
+            ["[color=#%s]●[/color] vs RL Team 5 (start weights)" % Data.OK, data.points_text("bench")], ["[color=#%s]●[/color] vs past snapshots" % Data.BLUE, data.points_text("league")]])
     t += Data.section("LEARNING", [["reward / step", Data.num_text(l.rew, "%.4f")], ["entropy", Data.num_text(l.ent)], ["opponent pool", str(l.pool)],
             ["simulate / learn time", "%.1f s / %.1f s" % [l.sim, l.learn]]])
     var rows := [["playing", "[b]%s[/b]" % (data.playing if data.playing != "" else "-")], ["newest", data.newest_name()]]
@@ -205,7 +208,7 @@ func _recap_text(evs: Array) -> String:
     var t := "[b][font_size=20]RECAP  %s[/font_size][/b]\n\n" % data.tag
     var l := data.last()
     if not l.is_empty():
-        t += Data.section("THE RUN", [["updates", "[b]%d[/b]  ·  %s of training" % [l.upd, Data.hms(l.elapsed)]],
+        t += Data.section("THE RUN", [["updates", "[b]%d[/b]  ·  %s of training" % [l.upd, Data.hms(data.total_elapsed())]],
                 ["speed", "%.0f s/update  ·  %.0f updates/h" % [data.seconds_per_update(), 3600.0 / maxf(data.seconds_per_update(), 1.0)]],
                 ["started from", data.fallback.get_file().get_basename()],
                 ["status", "[color=#%s][b]%s[/b][/color]" % [data.state_colour(), data.state_text().to_lower()]]])
@@ -241,6 +244,11 @@ func _recap_text(evs: Array) -> String:
         prev = r
         t += "[cell][color=#%s]u%d   [/color][/cell][cell]%s [color=#%s]±%s[/color]%s  %s %s  [color=#%s]%s[/color][/cell]" % [Data.MUTED, r.update, Data.points(r.all), Data.MUTED, Data.num_text(r.all_se), mark, Data.points(r.rl4), Data.points(r.rl5), Data.MUTED, Data.num_text(r.dir, "%.1f")]
     t += "[/table]\n"
+    var changes := data.config_changes()
+    if not changes.is_empty():
+        t += "[color=#%s]REWARD CHANGES (at a restart)[/color]\n" % Data.MUTED
+        for ch in changes:
+            t += "u%d  %s\n" % [ch[0], ", ".join(ch[1])]
     var rec := ""
     for name in data.record:
         var w: Array = data.record[name]
@@ -259,26 +267,32 @@ func _setup() -> void:
     if c.is_empty():
         t += "[color=#%s]run settings not found (logs/%s_config.json): weights shown as ?[/color]\n" % [Data.MUTED, data.tag]
     t += "\n"
-    t += Data.section("REWARD, shared by the 5 players (every decision)", [
-            ["goal scored / conceded", "[b]+10 / -10[/b]"], ["time", "-0.0005"],
-            ["ball shaping", "[color=#%s]ball nearer the goal, teammate nearer the ball[/color]" % Data.MUTED]])
-    t += Data.section("REWARD, personal", [
-            ["progressive pass (passer)", _w(c, "w_pass_prog", "+")], ["failed pass (passer)", _w(c, "w_pass_fail", "-")],
+    t += Data.section("REWARD, shared by the 5 players", [
+            ["goal scored / conceded", "[b]+10 / -10[/b]"], ["time cost", "-0.0005"],
+            ["ball shaping", "[color=#%s]%s[/color]" % [Data.MUTED, "off" if float(c.get("shaping", 1.0)) == 0.0 else "on"]],
+            ["opponent xG (chances)", "%s per xG" % _w(c, "w_xga", "-")], ["opponent has ball, our half", _w(c, "w_opp_half", "-")],
+            ["team stretched", "%s  [color=#%s]%s x %s px[/color]" % [_w(c, "w_compact", "-"), Data.MUTED, _int(c, "compact_len"), _int(c, "compact_wid")]],
+            ["win / draw bonus", "%s / %s" % [_w(c, "w_win", "+"), _w(c, "w_draw", "+")]]])
+    t += Data.section("REWARD, personal: passing", [
+            ["progressive pass", _w(c, "w_pass_prog", "+")], ["failed pass", _w(c, "w_pass_fail", "-")],
             ["other completed pass", _w(c, "w_pass_ok", "+")], ["pass received", _w(c, "w_recv", "+")],
-            ["key pass (receiver shoots)", _w(c, "w_key_pass", "+")], ["expected assist", "%s x xA" % _w(c, "w_xa", "+")],
-            ["cooperation cap / match", _w(c, "coop_cap", "")], ["standing open", _w(c, "w_open", "+")],
-            ["teammate too close", _w(c, "w_space", "-")], ["kick away from ball", _w(c, "w_kick", "-")],
-            ["keeper far from goal", _w(c, "w_keeper", "-")], ["direction twitch", _w(c, "w_jitter", "-")]])
+            ["key pass", _w(c, "w_key_pass", "+")], ["expected assist", "%s x xA" % _w(c, "w_xa", "+")],
+            ["cooperation cap / match", _w(c, "coop_cap", "")]])
     _text.text = t
     var d := "\n\n"
+    d += Data.section("REWARD, personal: the rest", [
+            ["shot quality", "%s per xG  [color=#%s]cap %s[/color]" % [_w(c, "w_xg", "+"), Data.MUTED, str(c.get("xg_cap", "?"))]],
+            ["tackle / interception", "%s  [color=#%s]cap %s[/color]" % [_w(c, "w_tackle", "+"), Data.MUTED, str(c.get("def_cap", "?"))]],
+            ["goal-side defending", _w(c, "w_goalside", "+")], ["standing open", _w(c, "w_open", "+")],
+            ["teammate too close", _w(c, "w_space", "-")], ["too far from the ball", "%s  [color=#%s]> %s px[/color]" % [_w(c, "w_far", "-"), Data.MUTED, _int(c, "far_radius")]],
+            ["kick away from ball", _w(c, "w_kick", "-")], ["keeper far from goal", _w(c, "w_keeper", "-")], ["direction twitch", _w(c, "w_jitter", "-")]])
     d += Data.section("OBSERVATION  (%d numbers, 30 / s)" % int(c.get("obs_dim", 54)), [
             ["own position + speed", "4"], ["ball position + speed", "4"], ["4 teammates", "4 x 4 = 16"], ["5 opponents", "5 x 4 = 20"],
             ["ball relative to me", "3"], ["opp. goal relative to me", "2"], ["my slot (one-hot)", "5"]])
-    d += "[color=#%s]Seen from the own attacking side (mirrored); positions scaled by the pitch, speeds by 5.[/color]\n\n" % Data.MUTED
     d += Data.section("ACTIONS", [["move", "9: 8 directions or still"], ["kick", "pressed or not"], ["decision", "every 2 ticks (30 / s)"], ["choice", "sampled, not argmax"]])
-    d += Data.section("NETWORK  (shared by all 5 players)", [["actor", "54 - 128 - 128 - 10"], ["critic", "54 - 128 - 128 - 1"]])
     _side.text = d
     var tr := "\n\n"
+    tr += Data.section("NETWORK  (shared by all 5 players)", [["actor", "54 - 128 - 128 - 10"], ["critic", "54 - 128 - 128 - 1"]])
     tr += Data.section("TRAINING  (PPO)", [
             ["parallel matches", _matches(c)], ["steps / env / update", _int(c, "rollout")],
             ["epochs", _int(c, "epochs")], ["minibatch", _int(c, "minibatch")], ["learning rate", str(c.get("lr", "?"))],
@@ -295,7 +309,9 @@ static func _int(c: Dictionary, key: String) -> String:
 
 
 static func _w(c: Dictionary, key: String, sign: String) -> String:
-    return "[b]%s%s[/b]" % [sign, str(c[key])] if c.has(key) else "?"
+    if not c.has(key):
+        return "?"
+    return "[color=#%s]off[/color]" % Data.MUTED if float(c[key]) == 0.0 else "[b]%s%s[/b]" % [sign, str(c[key])]
 
 
 static func _matches(c: Dictionary) -> String:
@@ -316,9 +332,9 @@ func _build_insight(row: HBoxContainer) -> void:
     left.add_theme_constant_override("separation", 6)
     row.add_child(left)
     _text = _label(left, 14)
-    _text.custom_minimum_size = Vector2(0, 262)
-    for chart in [["TEAM REWARD TERMS over the run (per decision, smoothed)", ["goals", "shaping", "time"]],
-            ["PERSONAL REWARD TERMS", ["pass_prog", "pass_fail", "coop", "open", "space", "kick", "keeper", "jitter"]]]:
+    _text.custom_minimum_size = Vector2(0, 250)
+    for chart in [["TEAM REWARD TERMS over the run (per decision, smoothed)", ["goals", "xga", "result", "opp_half", "compact", "shaping", "time"]],
+            ["PERSONAL REWARD TERMS", ["xg", "tackle", "goalside", "pass_prog", "pass_fail", "coop", "open", "space", "far", "kick", "keeper", "jitter"]]]:
         var c := LineChart.new()
         c.title = chart[0]
         c.x_key = "upd"
@@ -344,7 +360,7 @@ func _build_insight(row: HBoxContainer) -> void:
     right.add_child(grid)
     for k in 6:
         var h := Heatmap.new()
-        h.custom_minimum_size = Vector2(150, 92)
+        h.custom_minimum_size = Vector2(150, 112)
         h.size_flags_horizontal = Control.SIZE_EXPAND_FILL
         grid.add_child(h)
         _heatmaps.append(h)
@@ -387,15 +403,21 @@ func _insight() -> void:
                 sum += float(row.get(term[0], 0.0))
             avg[term[0]] = sum / recent.size()
             total += absf(avg[term[0]])
-        t += "[color=#%s]WHAT THE REWARD IS MADE OF  (per 1000 decisions · share of total · last %d updates)[/color]\n[table=3]" % [Data.MUTED, recent.size()]
+        t += "[color=#%s]WHAT THE REWARD IS MADE OF  (per 1000 decisions · share of total · last %d updates)[/color]\n[table=6]" % [Data.MUTED, recent.size()]
         var warn := ""
+        var shown := 0
         for term in TERMS:
             var v: float = avg[term[0]]
+            if v == 0.0:                          # switched off in this run
+                continue
             var share: float = absf(v) / maxf(total, 1e-9) * 100.0
-            t += "[cell][color=#%s]■ %s   [/color][/cell][cell][color=#%s]%+.2f[/color]   [/cell][cell][color=#%s]%d%%[/color][/cell]" % [
+            t += "[cell][color=#%s]■ %s  [/color][/cell][cell][color=#%s]%+.1f[/color]  [/cell][cell][color=#%s]%d%%    [/color][/cell]" % [
                     term[2], term[1], Data.GOOD if v > 0.0 else Data.BAD, v * 1000.0, Data.MUTED, roundi(share)]
+            shown += 1
             if term[0] == "coop" and share > 35.0:
                 warn = "cooperation bonus is %d%% of the reward: check for farming (key passes, shots, keeper far from goal)" % roundi(share)
+        if shown % 2 == 1:                        # keep the two-column table rectangular
+            t += "[cell] [/cell][cell] [/cell][cell] [/cell]"
         t += "[/table]"
         if warn != "":
             t += "\n[color=#%s]%s[/color]" % [Data.OK, warn]

@@ -44,9 +44,9 @@ func refresh() -> void:
         _text.text = t + "\n[color=#%s]no training log yet[/color]\n\n" % Data.MUTED + _checkpoint_rows(0)
         return
     t += "   [color=#%s][b]%s[/b][/color]\n" % [data.state_colour(), data.state_text()]
-    t += "update [b]%d[/b]  ·  %s\n\n" % [l.upd, Data.hms(l.elapsed)]
-    t += Data.section("POINTS PER MATCH", [["[color=#%s]●[/color] rule-based" % Data.GOOD, Data.points(l.rules)],
-            ["[color=#%s]●[/color] RL Team 5" % Data.OK, Data.points(l.bench)], ["[color=#%s]●[/color] snapshots" % Data.BLUE, Data.points(l.league)]])
+    t += "update [b]%d[/b]  ·  %s\n\n" % [l.upd, Data.hms(data.total_elapsed())]
+    t += Data.section("POINTS PER MATCH", [["[color=#%s]●[/color] rule-based" % Data.GOOD, data.points_text("rules")],
+            ["[color=#%s]●[/color] RL Team 5" % Data.OK, data.points_text("bench")], ["[color=#%s]●[/color] snapshots" % Data.BLUE, data.points_text("league")]])
     t += _checkpoint_rows(l.upd)
     t += Data.section("SYSTEM", data.system_rows())
     _text.text = t

@@ -18,7 +18,7 @@ func _draw() -> void:
     var top := font_size + 6.0
     var plot := h - top - 2.0
     draw_rect(Rect2(0, top, w, plot), Color(1, 1, 1, 0.05))
-    if rows.size() < 2:
+    if rows.is_empty():
         return
     var lo := INF
     var hi := -INF

@@ -39,7 +39,11 @@ def make_cfgs(args):
     base = {"pitch": "arena", "size": 5, "own_team": "owls", "n_active": 5, "with_keeper": True,
             "match_mode": True, "duration": 90.0, "max_steps": 3200,
             "w_pass_prog": args.w_pass_prog, "w_pass_ok": args.w_pass_ok, "w_pass_fail": args.w_pass_fail,
-            "pass_individual": bool(args.pass_individual), "w_recv": args.w_recv, "w_open": args.w_open, "w_key_pass": args.w_key_pass, "w_xa": args.w_xa, "w_space": args.w_space, "space_radius": args.space_radius, "w_kick": args.w_kick, "coop_cap": args.coop_cap, "random_start": args.random_start, "w_keeper": args.w_keeper, "w_jitter": args.w_jitter, "keeper_free": args.keeper_free}
+            "pass_individual": bool(args.pass_individual), "w_recv": args.w_recv, "w_open": args.w_open, "w_key_pass": args.w_key_pass, "w_xa": args.w_xa, "w_space": args.w_space, "space_radius": args.space_radius, "w_kick": args.w_kick, "coop_cap": args.coop_cap, "random_start": args.random_start, "w_keeper": args.w_keeper, "w_jitter": args.w_jitter, "keeper_free": args.keeper_free,
+            "shaping": args.shaping, "w_far": args.w_far, "far_radius": args.far_radius,
+            "w_xg": args.w_xg, "xg_cap": args.xg_cap, "w_xga": args.w_xga, "w_win": args.w_win, "w_draw": args.w_draw, "w_tackle": args.w_tackle, "def_cap": args.def_cap,
+            "w_goalside": args.w_goalside, "goalside_lane": args.goalside_lane, "w_opp_half": args.w_opp_half, "w_compact": args.w_compact,
+            "compact_len": args.compact_len, "compact_wid": args.compact_wid}
     return {**base, "opp": pool}, {**base, "opp": "owls", "opp_external": True}
 
 
@@ -88,6 +92,22 @@ def main():
     ap.add_argument("--coop_cap", type=float, default=0.0, help="max cooperation reward per episode (anti reward-farming)")
     ap.add_argument("--w_jitter", type=float, default=0.0)
     ap.add_argument("--w_keeper", type=float, default=0.0)
+    ap.add_argument("--shaping", type=float, default=1.0, help="weight of the ball shaping (ball towards the goal, teammate towards the ball); 0 = off")
+    ap.add_argument("--w_far", type=float, default=0.0, help="penalty for an outfield player further than --far_radius px from the ball (the arena is 1280 x 600; full penalty at twice the radius)")
+    ap.add_argument("--far_radius", type=float, default=600.0)
+    ap.add_argument("--w_xg", type=float, default=0.0, help="reward per expected goal (xG) of the player's own shots (shot quality), at most --xg_cap per match")
+    ap.add_argument("--xg_cap", type=float, default=6.0)
+    ap.add_argument("--w_xga", type=float, default=0.0, help="team penalty per xG of the opponent's shots")
+    ap.add_argument("--w_win", type=float, default=0.0, help="team bonus at the end of a won match")
+    ap.add_argument("--w_draw", type=float, default=0.0, help="team bonus at the end of a drawn match")
+    ap.add_argument("--w_tackle", type=float, default=0.0, help="reward per tackle or interception, at most --def_cap per match")
+    ap.add_argument("--def_cap", type=float, default=2.0)
+    ap.add_argument("--w_goalside", type=float, default=0.0, help="per decision: outfield player between the ball and its own goal while the opponent has the ball")
+    ap.add_argument("--goalside_lane", type=float, default=120.0)
+    ap.add_argument("--w_opp_half", type=float, default=0.0, help="team penalty per decision while the opponent has the ball in our half")
+    ap.add_argument("--w_compact", type=float, default=0.0, help="team penalty per decision when the outfield players are stretched beyond --compact_len / --compact_wid px")
+    ap.add_argument("--compact_len", type=float, default=700.0)
+    ap.add_argument("--compact_wid", type=float, default=450.0)
     ap.add_argument("--keeper_free", type=float, default=350.0)
     ap.add_argument("--snapshot_every", type=int, default=40)
     ap.add_argument("--resample_every", type=int, default=20)
@@ -100,8 +120,11 @@ def main():
     ap.add_argument("--tag", default="sp")
     args = ap.parse_args()
     os.makedirs(os.path.join(ROOT, "logs"), exist_ok=True)
+    config = {**vars(args), "obs_dim": OBS_DIM, "started": int(time.time())}
     with open(os.path.join(ROOT, "logs", args.tag + "_config.json"), "w") as f:        # read by the live viewer's SETUP page
-        json.dump({**vars(args), "obs_dim": OBS_DIM, "started": int(time.time())}, f, indent=1)
+        json.dump(config, f, indent=1)
+    with open(os.path.join(ROOT, "logs", args.tag + "_config_history.jsonl"), "a") as f:   # every (re)start: what changed shows on the RECAP page
+        f.write(json.dumps(config) + "\n")
 
     torch.manual_seed(args.seed)
     np.random.seed(args.seed)

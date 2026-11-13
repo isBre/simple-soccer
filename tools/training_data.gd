@@ -26,8 +26,8 @@ var _terms_time := -1
 var _ppo_time := -1
 var _ppo: Array = []              # one Dictionary per update: upd, ev (critic explained variance), kl, clipfrac, vloss, pg, gradnorm, ent_move, ent_kick
 var _terms: Array = []            # one Dictionary per update: upd + the reward terms
-var _re := RegEx.create_from_string(
-    "upd (\\d+) \\| pts/m vs rules (\\S+) \\| vs frozen benchmark (\\S+) \\| vs league (\\S+) \\| rew/step (\\S+) \\| ent (\\S+) \\| pool (\\d+) \\| (\\d+) dec/s sim (\\S+)s learn (\\S+)s \\| (\\d+)s")
+var _re := RegEx.create_from_string(   # "pts/m vs rules 2.88(200)" = value (matches it averages) or "-" before any match finished
+    "upd (\\d+) \\| pts/m vs rules ([\\d.]+|-)(?:\\((\\d+)\\))? \\| vs frozen benchmark ([\\d.]+|-)(?:\\((\\d+)\\))? \\| vs league ([\\d.]+|-)(?:\\((\\d+)\\))? \\| rew/step (\\S+) \\| ent (\\S+) \\| pool (\\d+) \\| (\\d+) dec/s sim (\\S+)s learn (\\S+)s \\| (\\d+)s")
 
 
 func setup(run_tag: String, start_weights: String = FALLBACK) -> void:
@@ -82,9 +82,35 @@ func refresh() -> void:
     for line in FileAccess.get_file_as_string(path).split("\n"):
         var m := _re.search(line)
         if m != null:
-            history.append({"upd": int(m.get_string(1)), "rules": _num(m.get_string(2)), "bench": _num(m.get_string(3)),
-                    "league": _num(m.get_string(4)), "rew": _num(m.get_string(5)), "ent": _num(m.get_string(6)), "pool": int(m.get_string(7)),
-                    "dec": int(m.get_string(8)), "sim": _num(m.get_string(9)), "learn": _num(m.get_string(10)), "elapsed": int(m.get_string(11))})
+            history.append({"upd": int(m.get_string(1)), "rules": _num(m.get_string(2)), "rules_n": int(m.get_string(3)), "bench": _num(m.get_string(4)), "bench_n": int(m.get_string(5)),
+                    "league": _num(m.get_string(6)), "league_n": int(m.get_string(7)), "rew": _num(m.get_string(8)), "ent": _num(m.get_string(9)), "pool": int(m.get_string(10)),
+                    "dec": int(m.get_string(11)), "sim": _num(m.get_string(12)), "learn": _num(m.get_string(13)), "elapsed": int(m.get_string(14))})
+
+
+## Latest value of a points column ("rules", "bench" or "league") with the number of matches it averages and the update it is from:
+## after a restart the running averages start empty (a 90 s match needs about 21 updates to finish), so the last known one is shown meanwhile.
+func latest_points(key: String) -> Dictionary:
+    for i in range(history.size() - 1, -1, -1):
+        if not is_nan(history[i][key]):
+            return {"value": history[i][key], "n": history[i][key + "_n"], "upd": history[i].upd, "current": i == history.size() - 1}
+    return {}
+
+
+## "2.88" (+ " (u190)" when it is not from the latest update), coloured; "-" if there is none.
+func points_text(key: String) -> String:
+    var p := latest_points(key)
+    if p.is_empty():
+        return points(NAN)
+    return points(p.value) + ("" if p.current else " [color=#%s](u%d)[/color]" % [MUTED, p.upd])
+
+
+## Total training time: the log's elapsed counter restarts at every restart of the run, so add up the segments.
+func total_elapsed() -> int:
+    var total := 0
+    for i in history.size():
+        if i + 1 == history.size() or history[i + 1].elapsed < history[i].elapsed:
+            total += int(history[i].elapsed)
+    return total
 
 
 func last() -> Dictionary:
@@ -111,7 +137,12 @@ func seconds_per_update() -> float:
     var n := history.size()
     if n < 2:
         return 0.0
-    var a: Dictionary = history[maxi(n - 10, 0)]
+    var start := n - 1
+    while start > 0 and n - start < 10 and history[start - 1].elapsed <= history[start].elapsed:     # stay inside the latest segment
+        start -= 1
+    if start == n - 1:
+        return 0.0
+    var a: Dictionary = history[start]
     var b: Dictionary = history[n - 1]
     return float(b.elapsed - a.elapsed) / maxf(float(b.upd - a.upd), 1.0)
 
@@ -129,6 +160,28 @@ func run_config() -> Dictionary:
         return {}
     var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(path))
     return parsed if parsed is Dictionary else {}
+
+
+## Reward settings that changed between restarts of the run: [[start_update, ["w_jitter 0.004 -> 0", ...]], ...] (logs/<tag>_config_history.jsonl).
+func config_changes() -> Array:
+    var path := ProjectSettings.globalize_path("res://logs/%s_config_history.jsonl" % tag)
+    var out := []
+    if not FileAccess.file_exists(path):
+        return out
+    var prev: Dictionary = {}
+    for line in FileAccess.get_file_as_string(path).split("\n"):
+        var d: Variant = JSON.parse_string(line) if line.strip_edges() != "" else null
+        if not (d is Dictionary):
+            continue
+        if not prev.is_empty():
+            var diffs := []
+            for k in d:
+                if (k.begins_with("w_") or k in ["shaping", "coop_cap", "far_radius", "keeper_free", "space_radius", "random_start"]) and str(d[k]) != str(prev.get(k, "?")):
+                    diffs.append("%s %s -> %s" % [k, str(prev.get(k, "off")), str(d[k])])
+            if not diffs.is_empty():
+                out.append([int(d.get("start_update", 0)), diffs])
+        prev = d
+    return out
 
 
 ## What the reward was made of, per update (logs/<tag>_terms.jsonl, written by selfplay.py): {upd, term: mean reward per agent-decision}.

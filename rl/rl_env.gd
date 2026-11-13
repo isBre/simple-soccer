@@ -62,6 +62,25 @@ var w_space := 0.0                # penalty per player and teammate closer than 
 var space_radius := 140.0
 var w_kick := 0.0                 # penalty for pressing kick while the ball is out of reach
 var kick_reach := 40.0
+var w_xg := 0.0                  # per expected goal (xG) of the player's own shots; at most xg_cap per match (shot quality, not shot count)
+var xg_cap := 6.0
+var xg_used := 0.0
+var w_xga := 0.0                 # team: penalty per xG of the opponent's shots (dense version of goals conceded)
+var w_win := 0.0                 # team, once at the end of the match
+var w_draw := 0.0
+var w_tackle := 0.0              # per tackle or interception; at most def_cap per match
+var def_cap := 2.0
+var def_used := 0.0
+var w_goalside := 0.0            # per decision: outfield player between the ball and its own goal (within goalside_lane px of that line) while the opponent has the ball
+var goalside_lane := 120.0
+var w_opp_half := 0.0            # team, per decision: the opponent has the ball in our half
+var w_compact := 0.0             # team, per decision: the 4 outfield players are stretched longer than compact_len or wider than compact_wid px
+var compact_len := 700.0
+var compact_wid := 450.0
+var prev_def: Dictionary = {}    # uid -> [tackles + interceptions, xG] at the last decision
+var prev_opp_xg := 0.0
+var w_far := 0.0                 # penalty per decision for an outfield player further than far_radius px from the ball (full at 2 x far_radius)
+var far_radius := 600.0
 var w_jitter := 0.0               # penalty per decision when the move direction turns by more than ~60 degrees (anti-twitch)
 var prev_dir: Dictionary = {}     # uid -> last non-zero input_dir
 var term_sums: Dictionary = {}    # reward term -> summed per-agent mean contribution since the last read (rl_server command 'T')
@@ -119,6 +138,21 @@ func configure(c: Dictionary) -> void:
     space_radius = float(c.get("space_radius", space_radius))
     w_kick = float(c.get("w_kick", w_kick))
     w_jitter = float(c.get("w_jitter", w_jitter))
+    w_far = float(c.get("w_far", w_far))
+    w_xg = float(c.get("w_xg", w_xg))
+    xg_cap = float(c.get("xg_cap", xg_cap))
+    w_xga = float(c.get("w_xga", w_xga))
+    w_win = float(c.get("w_win", w_win))
+    w_draw = float(c.get("w_draw", w_draw))
+    w_tackle = float(c.get("w_tackle", w_tackle))
+    def_cap = float(c.get("def_cap", def_cap))
+    w_goalside = float(c.get("w_goalside", w_goalside))
+    goalside_lane = float(c.get("goalside_lane", goalside_lane))
+    w_opp_half = float(c.get("w_opp_half", w_opp_half))
+    w_compact = float(c.get("w_compact", w_compact))
+    compact_len = float(c.get("compact_len", compact_len))
+    compact_wid = float(c.get("compact_wid", compact_wid))
+    far_radius = float(c.get("far_radius", far_radius))
     own_keeper = bool(c.get("own_keeper", opp != "none"))
     if c.has("seed"):
         rng.seed = int(c["seed"])
@@ -135,6 +169,8 @@ func n_agents() -> int:
 
 func reset() -> void:
     coop_used = 0.0
+    xg_used = 0.0
+    def_used = 0.0
     var cfg := MatchConfig.new()
     cfg.pitch = Database.pitches[pitch_id]
     cfg.team_size = size
@@ -206,8 +242,11 @@ func reset() -> void:
     prev_pass = _pass_totals()
     prev_ps.clear()
     prev_dir.clear()
+    prev_def.clear()
+    prev_opp_xg = _team_xg(1)
     for a in agents:
         prev_ps[a.uid] = _ps_vec(a)
+        prev_def[a.uid] = _def_vec(a)
 
 
 ## Removes a player from the physics and the rule logic but keeps it in team_lists (observations).
@@ -336,6 +375,38 @@ static func _seg_dist(p: Vector2, a: Vector2, b: Vector2) -> float:
     return p.distance_to(a + ab * t)
 
 
+func _def_vec(a: SimPlayer) -> Array:
+    return [a.ps.tackles + a.ps.interceptions, a.ps.xg]
+
+
+func _team_xg(team: int) -> float:
+    var total := 0.0
+    for p: SimPlayer in sim.team_lists[team]:
+        total += p.ps.xg
+    return total
+
+
+func _opp_has_ball() -> bool:
+    return sim.last_touch != null and sim.last_touch.team == 1
+
+
+## 0..1: how far the 4 outfield players are stretched beyond compact_len (along the pitch) and compact_wid (across), averaged.
+func _stretch() -> float:
+    var lo := Vector2(1.0e9, 1.0e9)
+    var hi := Vector2(-1.0e9, -1.0e9)
+    var n := 0
+    for a in agents:
+        if a.role == "GK":
+            continue
+        var q := Vector2(a.pos.x * sim.attack_dir(0), a.pos.y)
+        lo = Vector2(minf(lo.x, q.x), minf(lo.y, q.y))
+        hi = Vector2(maxf(hi.x, q.x), maxf(hi.y, q.y))
+        n += 1
+    if n < 2:
+        return 0.0
+    return 0.5 * (clampf((hi.x - lo.x - compact_len) / compact_len, 0.0, 1.0) + clampf((hi.y - lo.y - compact_wid) / compact_wid, 0.0, 1.0))
+
+
 ## Adds `value` (already a per-agent mean) to a reward term's running total: lets the trainer log what the reward is made of.
 func _acc(term: String, value: float) -> void:
     if value != 0.0:
@@ -348,7 +419,8 @@ func _individual() -> PackedFloat32Array:
     var out := PackedFloat32Array()
     out.resize(agents.size() + opp_agents.size())
     var credit := match_mode and pass_individual
-    if w_kick == 0.0 and w_space == 0.0 and not credit and w_open == 0.0 and w_keeper == 0.0 and w_jitter == 0.0:
+    if w_kick == 0.0 and w_space == 0.0 and not credit and w_open == 0.0 and w_keeper == 0.0 and w_jitter == 0.0 and w_far == 0.0 \
+            and w_xg == 0.0 and w_tackle == 0.0 and w_goalside == 0.0:
         return out
     var bp := sim.ball.pos
     var n_learn := float(agents.size())
@@ -380,6 +452,29 @@ func _individual() -> PackedFloat32Array:
                     if d < space_radius and b.pos.distance_to(bp) > 70.0:
                         r -= w_space * (1.0 - d / space_radius)
                         _acc("space", -w_space * (1.0 - d / space_radius) / n_learn)
+        if w_far > 0.0 and a.role != "GK" and da > far_radius:       # an outfield player far away from the play (the keeper is meant to stay back)
+            var pen := w_far * minf((da - far_radius) / far_radius, 1.0)
+            r -= pen
+            _acc("far", -pen / n_learn)
+        if w_xg > 0.0 or w_tackle > 0.0:
+            var cd := _def_vec(a)
+            var pd: Array = prev_def.get(a.uid, cd)
+            if w_xg > 0.0:                                         # shot quality: a clear chance pays, a hopeful long shot hardly does
+                var gain_xg := minf(w_xg * (cd[1] - pd[1]), maxf(xg_cap - xg_used, 0.0))
+                xg_used += gain_xg
+                r += gain_xg
+                _acc("xg", gain_xg / n_learn)
+            if w_tackle > 0.0:
+                var gain_t := minf(w_tackle * float(cd[0] - pd[0]), maxf(def_cap - def_used, 0.0))
+                def_used += gain_t
+                r += gain_t
+                _acc("tackle", gain_t / n_learn)
+            prev_def[a.uid] = cd
+        if w_goalside > 0.0 and a.role != "GK" and _opp_has_ball():
+            var own_goal := Vector2(-sim.pitch.half_w * sim.attack_dir(0), 0.0)
+            if a.pos.distance_to(own_goal) < bp.distance_to(own_goal) and _seg_dist(a.pos, bp, own_goal) < goalside_lane:
+                r += w_goalside
+                _acc("goalside", w_goalside / n_learn)
         if credit:
             var cur := _ps_vec(a)
             var prev: Array = prev_ps.get(a.uid, cur)
@@ -459,10 +554,26 @@ func step(actions: PackedByteArray) -> Array:
         var goal_r := 10.0 * float(sim.scores[0] - prev_scores[0]) - 10.0 * float(sim.scores[1] - prev_scores[1])
         r += goal_r
         _acc("goals", goal_r)
+        if w_xga > 0.0:                                            # chances the opponent created, scored or not
+            var oxg := _team_xg(1)
+            r -= w_xga * (oxg - prev_opp_xg)
+            _acc("xga", -w_xga * (oxg - prev_opp_xg))
+            prev_opp_xg = oxg
+        if playing:
+            if w_opp_half > 0.0 and _opp_has_ball() and sim.ball.pos.x * sim.attack_dir(0) < 0.0:
+                r -= w_opp_half
+                _acc("opp_half", -w_opp_half)
+            if w_compact > 0.0:
+                var stretch := _stretch()
+                r -= w_compact * stretch
+                _acc("compact", -w_compact * stretch)
         prev_scores = [sim.scores[0], sim.scores[1]]
         if sim.state == MatchSim.State.ENDED or steps >= max_steps:
             done = true
             outcome = OUT_WIN if sim.scores[0] > sim.scores[1] else (OUT_LOSS if sim.scores[0] < sim.scores[1] else OUT_DRAW)
+            var bonus := w_win if outcome == OUT_WIN else (w_draw if outcome == OUT_DRAW else 0.0)
+            r += bonus
+            _acc("result", bonus)
     else:
         if sim.scores[0] > 0:
             r += 10.0
