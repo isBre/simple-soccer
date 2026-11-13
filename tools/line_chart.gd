@@ -47,7 +47,7 @@ func _draw() -> void:
                 pts.append(Vector2((float(row[x_key]) - x0) / span * w, top + plot * (1.0 - (row[sr[0]] - lo) / (hi - lo))))
         if pts.size() >= 2:
             draw_polyline(pts, Color(sr[1]), 1.5)
-        elif pts.size() == 1:
-            draw_circle(pts[0], 2.5, Color(sr[1]))
+        elif pts.size() == 1:                                  # a single value (e.g. one evaluation so far): a visible dot in the middle
+            draw_circle(Vector2(w * 0.5, pts[0].y), 4.0, Color(sr[1]))
     if fixed == null:
         draw_string(font, Vector2(0, font_size), "%s .. %s" % [snappedf(lo, 0.001), snappedf(hi, 0.001)], HORIZONTAL_ALIGNMENT_RIGHT, w, font_size, Color("8a93a3"))
