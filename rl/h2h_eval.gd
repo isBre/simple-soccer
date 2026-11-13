@@ -62,5 +62,7 @@ func _process(_d: float) -> void:
 		elif sc[side] == sc[1 - side]: d += 1
 		else: l += 1
 	var n := batch.results.size()
-	print("H2H %s: W %d D %d L %d | pts/m %.2f | GF/GA %.2f/%.2f | %d matches" % [opp_name, w, d, l, (3.0 * w + d) / n, float(gf) / n, float(ga) / n, n])
+	var mean := (3.0 * w + d) / n
+	var se := sqrt(maxf((9.0 * w + d) / n - mean * mean, 0.0) / n)
+	print("H2H %s: W %d D %d L %d | pts/m %.2f | GF/GA %.2f/%.2f | %d matches | se %.2f" % [opp_name, w, d, l, mean, float(gf) / n, float(ga) / n, n, se])
 	get_tree().quit()

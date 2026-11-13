@@ -6,7 +6,7 @@ extends CanvasLayer
 ## The match pauses while another page is shown.
 ##   Godot --path . res://tools/watch_training.tscn -- --tag jit7 --start res://out_5v5/ckpt/jit6_u50.json [--page training]
 ## The scene is a CanvasLayer above the App autoload's own full-screen background.
-## Needs the nets served by tools/net_server.py (ports 7301 = the run's newest checkpoint, 7302 = RL Team 4):
+## Needs the nets served by tools/net_server.py (ports 7301 = the run's newest checkpoint, 7302 = RL Team 4, 7303 = the run's best checkpoint):
 ## the GDScript MLP is too slow to play two net teams in real time on a Raspberry Pi.
 
 const Data := preload("res://tools/training_data.gd")
@@ -21,9 +21,11 @@ var data := Data.new()
 var _views: Dictionary = {}               # page name -> its Control
 var _buttons: Dictionary = {}
 var _status: Label
+var _best_ckpt := false                  # BEST CKPT button: play the best checkpoint of the run (port 7303) instead of the newest (7301)
 var _best_move := false                  # BEST MOVE button: the next matches play the net's best move instead of sampling
 @onready var nav_row: HBoxContainer = $Root/Nav/Row
 @onready var pages: Control = $Root/Pages
+@onready var banner: Label = $Root/Banner
 @onready var sidebar = $Root/Pages/Live/Sidebar
 @onready var match_area: Control = $Root/Pages/Live/MatchArea
 
@@ -61,11 +63,14 @@ func _ready() -> void:
 
 func _build_nav() -> void:
     $Root/Nav.add_theme_stylebox_override("panel", _flat(Color(0.03, 0.04, 0.06), 6))
+    banner.add_theme_stylebox_override("normal", _flat(Color("ffd54a"), 4))
+    banner.add_theme_color_override("font_color", Color.BLACK)
+    banner.add_theme_font_size_override("font_size", 16)
     for name in PAGES:
         var b := Button.new()
         b.text = name.to_upper()
         b.toggle_mode = true
-        b.custom_minimum_size = Vector2(108, 46)             # big enough for a finger
+        b.custom_minimum_size = Vector2(98, 46)              # big enough for a finger
         b.add_theme_font_size_override("font_size", 16)
         b.add_theme_stylebox_override("normal", _flat(Color(0.12, 0.14, 0.18), 4))
         b.add_theme_stylebox_override("hover", _flat(Color(0.17, 0.2, 0.26), 4))
@@ -78,21 +83,28 @@ func _build_nav() -> void:
     var spacer := Control.new()
     spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     nav_row.add_child(spacer)
-    var best := Button.new()                                 # what the net does when it does not sample: smooth, not twitchy (see INSIGHT)
-    best.text = "BEST MOVE"
-    best.toggle_mode = true
-    best.custom_minimum_size = Vector2(108, 46)
-    best.add_theme_font_size_override("font_size", 15)
-    best.add_theme_stylebox_override("normal", _flat(Color(0.12, 0.14, 0.18), 4))
-    best.add_theme_stylebox_override("pressed", _flat(Color(0.55, 0.42, 0.1), 4))
-    best.add_theme_stylebox_override("hover", _flat(Color(0.17, 0.2, 0.26), 4))
-    best.add_theme_stylebox_override("hover_pressed", _flat(Color(0.6, 0.46, 0.12), 4))
-    best.focus_mode = Control.FOCUS_NONE
-    best.toggled.connect(func(on: bool): _best_move = on)
+    nav_row.add_child(_toggle("BEST CKPT", func(on: bool): _best_ckpt = on))
+    var best := _toggle("BEST MOVE", func(on: bool): _best_move = on)
     nav_row.add_child(best)
     _status = Label.new()
     _status.add_theme_font_size_override("font_size", 13)
     nav_row.add_child(_status)
+
+
+## A toggle button of the navigation bar (not a page): BEST MOVE, BEST CKPT.
+func _toggle(label: String, on_toggled: Callable) -> Button:
+    var b := Button.new()
+    b.text = label
+    b.toggle_mode = true
+    b.custom_minimum_size = Vector2(94, 46)
+    b.add_theme_font_size_override("font_size", 13)
+    b.add_theme_stylebox_override("normal", _flat(Color(0.12, 0.14, 0.18), 4))
+    b.add_theme_stylebox_override("pressed", _flat(Color(0.55, 0.42, 0.1), 4))
+    b.add_theme_stylebox_override("hover", _flat(Color(0.17, 0.2, 0.26), 4))
+    b.add_theme_stylebox_override("hover_pressed", _flat(Color(0.6, 0.46, 0.12), 4))
+    b.focus_mode = Control.FOCUS_NONE
+    b.toggled.connect(on_toggled)
+    return b
 
 
 static func _flat(color: Color, margin: float) -> StyleBoxFlat:
@@ -116,8 +128,12 @@ func _show(name: String) -> void:
 func _refresh() -> void:
     data.refresh()
     var l := data.last()
-    _status.text = "%s  u%d  %s" % [tag, l.upd, "RUNNING" if data.is_running() else "STOPPED"] if not l.is_empty() else tag
-    _status.add_theme_color_override("font_color", Color(Data.GOOD) if data.is_running() else Color(Data.BAD))
+    _status.text = "%s  u%d  %s" % [tag, l.upd, data.state_text()] if not l.is_empty() else tag
+    _status.add_theme_color_override("font_color", Color(data.state_colour()))
+    var ev := data.eval_running()                      # banner on every page while an evaluation runs
+    banner.visible = not ev.is_empty()
+    if banner.visible:
+        banner.text = "EVALUATION RUNNING  ·  %s  ·  started %s ago%s" % [ev.checkpoint, Data.duration(int(Time.get_unix_time_from_system()) - int(ev.started)), "  ·  training is paused" if ev.get("paused", false) else ""]
     for key in _views:
         if _views[key].visible and _views[key].has_method("refresh"):
             _views[key].refresh()
@@ -129,10 +145,12 @@ func _refresh() -> void:
 func _next() -> void:
     for old in match_area.get_children():
         old.queue_free()
-    data.playing = Data.newest_checkpoint(tag, start_weights).get_file().get_basename()
+    var best := data.best_checkpoint()
+    var use_best := _best_ckpt and not best.is_empty()
+    data.playing = str(best.checkpoint) if use_best else Data.newest_checkpoint(tag, start_weights).get_file().get_basename()
     var cfg := Database.make_config("rl_team_5", "rl_team_4", "arena", 5, 90.0, rng.randi())
     cfg.control = MatchConfig.ControlMode.NONE
-    cfg.ml_models[0] = RemoteMLP.new(7301)
+    cfg.ml_models[0] = RemoteMLP.new(7303 if use_best else 7301)
     cfg.ml_models[1] = RemoteMLP.new(7302)
     cfg.ml_keeper = true
     if _best_move:

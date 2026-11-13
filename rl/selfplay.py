@@ -43,26 +43,23 @@ def make_cfgs(args):
     return {**base, "opp": pool}, {**base, "opp": "owls", "opp_external": True}
 
 
-_eval_proc = None
-
-
-def eval_async(model_path, tag, args, log):
-    """Complete evaluation of a snapshot (rl/eval_checkpoint.py: league, behaviour, head to head) in the background, at the
-    lowest priority, one at a time (a new one is skipped while the previous still runs). Result: logs/sp_eval/<tag>.txt"""
-    global _eval_proc
-    if _eval_proc is not None and _eval_proc.poll() is None:
-        log("evaluation of an earlier snapshot still running: skipped %s" % tag)
-        return
+def eval_blocking(model_path, tag, args, log):
+    """Complete evaluation of a snapshot (rl/eval_checkpoint.py: league, behaviour, head to head, ...) while training is PAUSED:
+    this call returns when it is done, the Godot workers just wait, so the evaluation gets the whole CPU (the viewer shows an
+    "evaluation running" banner meanwhile). Result: logs/sp_eval/<tag>.txt"""
     out = os.path.join(ROOT, "logs", "sp_eval", tag + ".txt")
-    cmd = ["nice", "-n", "19", sys.executable, os.path.join(ROOT, "rl", "eval_checkpoint.py"), "--model", model_path, "--out", out,
+    cmd = [sys.executable, os.path.join(ROOT, "rl", "eval_checkpoint.py"), "--model", model_path, "--out", out, "--paused",
            "--games", str(args.eval_games), "--duration", str(args.eval_duration), "--h2h_games", str(args.eval_h2h_games)]
-    _eval_proc = subprocess.Popen(cmd, cwd=os.path.join(ROOT, "rl"), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    log("background evaluation started for %s -> logs/sp_eval/%s.txt" % (tag, tag))
+    log("training paused: evaluating %s (logs/sp_eval/%s.txt)" % (tag, tag))
+    t0 = time.time()
+    subprocess.run(cmd, cwd=os.path.join(ROOT, "rl"), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    log("evaluation of %s finished in %.0f min, training continues" % (tag, (time.time() - t0) / 60.0))
 
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--updates", type=int, default=1500)
+    ap.add_argument("--updates", type=int, default=1500, help="final update number (absolute: with --start_update 200 and --updates 3000 it trains updates 201..3000)")
+    ap.add_argument("--start_update", type=int, default=0, help="continue numbering from a restart: the checkpoint --start was saved at this update")
     ap.add_argument("--workers_rule", type=int, default=8)
     ap.add_argument("--workers_self", type=int, default=8)
     ap.add_argument("--envs_per_worker", type=int, default=10)
@@ -95,7 +92,7 @@ def main():
     ap.add_argument("--snapshot_every", type=int, default=40)
     ap.add_argument("--resample_every", type=int, default=20)
     ap.add_argument("--ckpt_every", type=int, default=100)
-    ap.add_argument("--eval_every", type=int, default=100, help="complete evaluation of the checkpoint every N updates (multiple of --ckpt_every; 0 = never)")
+    ap.add_argument("--eval_every", type=int, default=100, help="complete evaluation of the checkpoint every N updates (multiple of --ckpt_every; 0 = never); training is paused meanwhile")
     ap.add_argument("--eval_games", type=int, default=1, help="league games per team and side (1 = 32 matches)")
     ap.add_argument("--eval_duration", type=float, default=90.0, help="seconds per evaluation match")
     ap.add_argument("--eval_h2h_games", type=int, default=3, help="head-to-head games per side against each reference net")
@@ -155,13 +152,13 @@ def main():
         stats = {"rule": deque(maxlen=200), "bench": deque(maxlen=120), "league": deque(maxlen=200)}
         t_start = time.time()
         ent = torch.tensor(0.0)
-        for upd in range(1, args.updates + 1):
+        for upd in range(args.start_update + 1, args.updates + 1):
             for g in opt.param_groups:                     # warm-up: a fresh Adam must not shake a converged policy
-                g["lr"] = args.lr * min(1.0, upd / 30.0)
+                g["lr"] = args.lr * min(1.0, (upd - args.start_update) / 30.0)
             if upd % args.snapshot_every == 0:
                 pool.append(copy.deepcopy(agent.actor.state_dict()))
                 pool = [pool[0]] + pool[1:][-8:]
-            if upd == 1 or upd % args.resample_every == 0:
+            if upd == args.start_update + 1 or upd % args.resample_every == 0:
                 assign_slots()
             b_obs = torch.zeros(T, E, A, D)
             b_m = torch.zeros(T, E, A, dtype=torch.long)
@@ -236,6 +233,9 @@ def main():
             n = f_obs.shape[0]
             t1 = time.time()
             torch.set_num_threads(os.cpu_count())
+            f_val = b_val.reshape(-1)
+            health = {"kl": [], "clipfrac": [], "vloss": [], "pg": [], "gradnorm": [], "ent_move": [], "ent_kick": []}
+            ev = 1.0 - float((f_ret - f_val).var() / (f_ret.var() + 1e-8))      # explained variance of the critic (before this update)
             for _ in range(args.epochs):
                 perm = torch.randperm(n)
                 for s in range(0, n, args.minibatch):
@@ -249,11 +249,20 @@ def main():
                     loss = pg + 0.5 * vl - args.ent * ent
                     opt.zero_grad()
                     loss.backward()
-                    nn.utils.clip_grad_norm_(agent.parameters(), 0.5)
+                    gn = nn.utils.clip_grad_norm_(agent.parameters(), 0.5)
                     opt.step()
+                    health["kl"].append(float((f_lp[idx] - lp).mean()))                  # approx KL(old || new)
+                    health["clipfrac"].append(float(((ratio - 1.0).abs() > 0.2).float().mean()))
+                    health["vloss"].append(float(vl))
+                    health["pg"].append(float(pg))
+                    health["gradnorm"].append(float(gn))
+                    health["ent_move"].append(float(dm.entropy().mean()))
+                    health["ent_kick"].append(float(dk.entropy().mean()))
             t_learn = time.time() - t1
+            with open(os.path.join(ROOT, "logs", args.tag + "_ppo.jsonl"), "a") as pf:      # PPO health, shown by the viewer's TRAINING page
+                pf.write(json.dumps({"upd": upd, "ev": ev, **{k: float(np.mean(v)) for k, v in health.items()}}) + "\n")
 
-            if upd % args.log_every == 0 or upd == 1:
+            if upd % args.log_every == 0 or upd == args.start_update + 1:
                 f = lambda d: ("%.2f(%d)" % (np.mean(d), len(d))) if d else "-"
                 log("sp upd %d | pts/m vs rules %s | vs frozen benchmark %s | vs league %s | rew/step %.4f | ent %.2f | pool %d | "
                     "%.0f dec/s sim %.1fs learn %.1fs | %.0fs" % (upd, f(stats["rule"]), f(stats["bench"]), f(stats["league"]),
@@ -265,7 +274,7 @@ def main():
                     json.dump(agent.to_game_dict(), fh)
                 torch.save(agent.state_dict(), os.path.join(CKPT, "%s_u%d.pt" % (args.tag, upd)))
                 if args.eval_every > 0 and upd % args.eval_every == 0:
-                    eval_async(path, "%s_u%d" % (args.tag, upd), args, log)
+                    eval_blocking(path, "%s_u%d" % (args.tag, upd), args, log)
         log("selfplay finished")
     finally:
         er.close()

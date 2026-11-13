@@ -43,8 +43,7 @@ func refresh() -> void:
     if l.is_empty():
         _text.text = t + "\n[color=#%s]no training log yet[/color]\n\n" % Data.MUTED + _checkpoint_rows(0)
         return
-    var running := data.is_running()
-    t += "   [color=#%s][b]%s[/b][/color]\n" % [Data.GOOD if running else Data.BAD, "RUNNING" if running else "STOPPED"]
+    t += "   [color=#%s][b]%s[/b][/color]\n" % [data.state_colour(), data.state_text()]
     t += "update [b]%d[/b]  ·  %s\n\n" % [l.upd, Data.hms(l.elapsed)]
     t += Data.section("POINTS PER MATCH", [["[color=#%s]●[/color] rule-based" % Data.GOOD, Data.points(l.rules)],
             ["[color=#%s]●[/color] RL Team 5" % Data.OK, Data.points(l.bench)], ["[color=#%s]●[/color] snapshots" % Data.BLUE, Data.points(l.league)]])

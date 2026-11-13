@@ -23,6 +23,8 @@ var record: Dictionary = {}       # checkpoint name -> [wins, draws, losses, goa
 var history: Array = []           # one Dictionary per log line: upd, rules, bench, league, rew, ent, pool, dec, sim, learn, elapsed
 var _log_time := -1
 var _terms_time := -1
+var _ppo_time := -1
+var _ppo: Array = []              # one Dictionary per update: upd, ev (critic explained variance), kl, clipfrac, vloss, pg, gradnorm, ent_move, ent_kick
 var _terms: Array = []            # one Dictionary per update: upd + the reward terms
 var _re := RegEx.create_from_string(
     "upd (\\d+) \\| pts/m vs rules (\\S+) \\| vs frozen benchmark (\\S+) \\| vs league (\\S+) \\| rew/step (\\S+) \\| ent (\\S+) \\| pool (\\d+) \\| (\\d+) dec/s sim (\\S+)s learn (\\S+)s \\| (\\d+)s")
@@ -93,6 +95,17 @@ func is_running() -> bool:
     return int(Time.get_unix_time_from_system()) - int(FileAccess.get_modified_time(_log_path())) < STALE_S
 
 
+## "RUNNING", "EVALUATING" (training paused for an evaluation) or "STOPPED".
+func state_text() -> String:
+    if not eval_running().is_empty():
+        return "EVALUATING"
+    return "RUNNING" if is_running() else "STOPPED"
+
+
+func state_colour() -> String:
+    return OK if state_text() == "EVALUATING" else (GOOD if is_running() else BAD)
+
+
 ## Seconds per update over the last ~10 log lines (0 until the log has two lines).
 func seconds_per_update() -> float:
     var n := history.size()
@@ -136,6 +149,44 @@ func terms_history() -> Array:
     return _terms
 
 
+## PPO health per update (logs/<tag>_ppo.jsonl, written by selfplay.py).
+func ppo_history() -> Array:
+    var path := ProjectSettings.globalize_path("res://logs/%s_ppo.jsonl" % tag)
+    var mod := int(FileAccess.get_modified_time(path))
+    if mod == _ppo_time or not FileAccess.file_exists(path):
+        return _ppo
+    _ppo_time = mod
+    _ppo.clear()
+    for line in FileAccess.get_file_as_string(path).split("\n"):
+        var d: Variant = JSON.parse_string(line) if line.strip_edges() != "" else null
+        if d is Dictionary:
+            var row := {}
+            for k in d:
+                row[k] = float(d[k])
+            _ppo.append(row)
+    return _ppo
+
+
+## {checkpoint, started, paused} while rl/eval_checkpoint.py runs for this run (its process must still be alive), else {}.
+func eval_running() -> Dictionary:
+    var path := ProjectSettings.globalize_path("res://logs/%s_eval_running.json" % tag)
+    if not FileAccess.file_exists(path):
+        return {}
+    var d: Variant = JSON.parse_string(FileAccess.get_file_as_string(path))
+    if d is Dictionary and DirAccess.dir_exists_absolute("/proc/%d" % int(d.get("pid", 0))):
+        return d
+    return {}
+
+
+## Best checkpoint of the run so far by league points ({checkpoint, update, pts, se, model}), or {}.
+func best_checkpoint() -> Dictionary:
+    var path := ProjectSettings.globalize_path("res://logs/%s_best.json" % tag)
+    if not FileAccess.file_exists(path):
+        return {}
+    var d: Variant = JSON.parse_string(FileAccess.get_file_as_string(path))
+    return d if d is Dictionary else {}
+
+
 ## Moving average over `window` rows of the given terms (missing terms count as 0), for charts.
 func smoothed_terms(keys: Array, window: int = 5) -> Array:
     var src := terms_history()
@@ -162,8 +213,8 @@ func evaluations() -> Array:
     var dir := DirAccess.open(EVAL_DIR)
     if dir == null:
         return out
-    var re_sum := RegEx.create_from_string("SUMMARY (\\w+)\\s*: pts/m (\\S+)\\s+GF (\\S+) GA (\\S+)\\s+\\((\\d+) matches\\)")
-    var re_h2h := RegEx.create_from_string("H2H (.+?): W (\\d+) D (\\d+) L (\\d+) \\| pts/m (\\S+) \\| GF/GA (\\S+)/(\\S+)")
+    var re_sum := RegEx.create_from_string("SUMMARY (\\w+)\\s*: pts/m (\\S+)\\s+GF (\\S+) GA (\\S+)\\s+\\((\\d+) matches\\)(?:\\s+se (\\S+))?")
+    var re_h2h := RegEx.create_from_string("H2H (.+?): W (\\d+) D (\\d+) L (\\d+) \\| pts/m (\\S+) \\| GF/GA (\\S+)/(\\S+)(?: \\| \\d+ matches \\| se (\\S+))?")
     var re_team := RegEx.create_from_string("^(\\w+)\\s+(weak|average|strong|elite)\\s+([\\d.]+)\\s+(yes\\s+)?(\\d+)\\s+(\\d+)\\s+(\\d+)\\s+([\\d.]+)\\s+([\\d.]+)/([\\d.]+)")
     for f in dir.get_files():
         if not (f.begins_with(tag + "_u") and f.ends_with(".txt")):
@@ -179,11 +230,11 @@ func evaluations() -> Array:
             var t: Dictionary = ev.greedy if is_greedy else ev
             var m := re_sum.search(line)
             if m != null:
-                t.league[m.get_string(1)] = [_num(m.get_string(2)), _num(m.get_string(3)), _num(m.get_string(4)), int(m.get_string(5))]
+                t.league[m.get_string(1)] = [_num(m.get_string(2)), _num(m.get_string(3)), _num(m.get_string(4)), int(m.get_string(5)), _num(m.get_string(6))]
                 continue
             m = re_h2h.search(line)
             if m != null:
-                ev.h2h[m.get_string(1)] = [int(m.get_string(2)), int(m.get_string(3)), int(m.get_string(4)), _num(m.get_string(5)), _num(m.get_string(6)), _num(m.get_string(7))]
+                ev.h2h[m.get_string(1)] = [int(m.get_string(2)), int(m.get_string(3)), int(m.get_string(4)), _num(m.get_string(5)), _num(m.get_string(6)), _num(m.get_string(7)), _num(m.get_string(8))]
                 continue
             m = re_team.search(line)
             if m != null:
@@ -210,7 +261,7 @@ func evaluations() -> Array:
 func evaluation_rows(evs: Array) -> Array:
     var rows := []
     for e in evs:
-        rows.append({"update": e.update, "all": e.league.get("all", [NAN])[0], "held": e.league.get("held", [NAN])[0],
+        rows.append({"update": e.update, "all": e.league.get("all", [NAN])[0], "all_se": e.league.get("all", [NAN, NAN, NAN, 0, NAN])[4], "held": e.league.get("held", [NAN])[0],
                 "rl4": e.h2h.get("RL Team 4", [0, 0, 0, NAN])[3], "rl5": e.h2h.get("RL Team 5", [0, 0, 0, NAN])[3],
                 "dir": e.rl.get("dir", NAN), "key": e.rl.get("key", NAN), "keeper": e.rl.get("keeper", NAN)})
     return rows
@@ -278,6 +329,22 @@ static func points(raw: Variant) -> String:
     if is_nan(v):
         return "[color=#%s]-[/color]" % MUTED
     return "[color=#%s][b]%.2f[/b][/color]" % [GOOD if v > 2.0 else (OK if v >= 1.0 else BAD), v]
+
+
+## "1.50 ±0.21" (standard error); just the number if there is no error estimate.
+static func with_se(v: float, se: float) -> String:
+    if is_nan(v):
+        return "-"
+    return "%.2f ±%.2f" % [v, se] if not is_nan(se) else "%.2f" % v
+
+
+## Is `a` different from `b` beyond noise? Compares two means with their standard errors (about 95%): +1 better, -1 worse, 0 same / unknown.
+static func significance(a: float, a_se: float, b: float, b_se: float) -> int:
+    if is_nan(a) or is_nan(b) or is_nan(a_se) or is_nan(b_se):
+        return 0
+    var d := a - b
+    var se := sqrt(a_se * a_se + b_se * b_se)
+    return 1 if d > 1.96 * se else (-1 if d < -1.96 * se else 0)
 
 
 static func num_text(v: float, fmt: String = "%.2f") -> String:
