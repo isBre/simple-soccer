@@ -208,6 +208,15 @@ def main():
                 obs_r = torch.from_numpy(nr[0].copy())
                 obs_s = torch.from_numpy(ns[0].copy())
             t_sim = time.time() - t0
+            sums, n_steps = {}, 0
+            for venv in (er, es):                               # what the reward was made of in this update (shown by the viewer's INSIGHT page)
+                got, n = venv.terms()
+                n_steps += n
+                for k, v in got.items():
+                    sums[k] = sums.get(k, 0.0) + v
+            if n_steps:
+                with open(os.path.join(ROOT, "logs", args.tag + "_terms.jsonl"), "a") as tf:
+                    tf.write(json.dumps({"upd": upd, "terms": {k: v / n_steps for k, v in sums.items()}}) + "\n")
 
             with torch.no_grad():
                 last_v = agent.value(torch.cat([obs_r, obs_s[:, :5]], 0))

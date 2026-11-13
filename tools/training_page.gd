@@ -1,9 +1,17 @@
 extends MarginContainer
-## Full-window pages of the training viewer (kind = "training", "evaluation", "recap" or "setup"): text on the left, charts on the right.
+## Full-window pages of the training viewer (kind = "training", "evaluation", "recap", "setup" or "insight"): text on the left, charts on the right.
 ## Built for a 1024x600 touch screen: large text, no scrolling. Refreshed by tools/watch_training.gd while visible.
 
 const Data := preload("res://tools/training_data.gd")
 const LineChart := preload("res://tools/line_chart.gd")
+const Heatmap := preload("res://tools/heatmap.gd")
+
+## Reward terms: key in the log, label, colour, team-wide (shared by all players) or personal.
+const TERMS := [["goals", "goals scored / conceded", "6fd08c", true], ["shaping", "ball shaping", "6ab0ff", true], ["time", "time cost", "8a93a3", true],
+        ["pass_prog", "progressive passes", "ffd54a", false], ["pass_fail", "failed passes", "ff6b6b", false], ["coop", "cooperation bonus", "c792ea", false],
+        ["open", "standing open", "4dd0e1", false], ["space", "too close to teammate", "ff9e64", false], ["kick", "kick far from ball", "f78fb3", false],
+        ["keeper", "keeper far from goal", "b0bec5", false], ["jitter", "direction twitch", "ffffff", false]]
+var _heatmaps: Array = []
 
 var kind := ""
 var data: Data
@@ -25,6 +33,10 @@ func setup(page_kind: String, training_data: Data) -> void:
     var row := HBoxContainer.new()
     row.add_theme_constant_override("separation", 20)
     add_child(row)
+    if kind == "insight":
+        _build_insight(row)
+        refresh()
+        return
     _text = RichTextLabel.new()
     _text.bbcode_enabled = true
     _text.scroll_active = false
@@ -90,6 +102,8 @@ func refresh() -> void:
             _evaluation()
         "setup":
             _setup()
+        "insight":
+            _insight()
         "recap":
             var evs := data.evaluations()
             for c in _chart_nodes:
@@ -258,3 +272,143 @@ static func _matches(c: Dictionary) -> String:
 
 static func _percent(v: Variant) -> String:
     return "?" if is_nan(float(v)) else "%d%%" % roundi(float(v) * 100.0)
+
+
+# ---------------------------------------------------------------- insight
+
+func _build_insight(row: HBoxContainer) -> void:
+    var left := VBoxContainer.new()
+    left.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    left.add_theme_constant_override("separation", 6)
+    row.add_child(left)
+    _text = _label(left, 14)
+    _text.custom_minimum_size = Vector2(0, 262)
+    for chart in [["TEAM REWARD TERMS over the run (per decision, smoothed)", ["goals", "shaping", "time"]],
+            ["PERSONAL REWARD TERMS", ["pass_prog", "pass_fail", "coop", "open", "space", "kick", "keeper", "jitter"]]]:
+        var c := LineChart.new()
+        c.title = chart[0]
+        c.x_key = "upd"
+        c.fixed = null
+        c.font_size = 11
+        c.size_flags_vertical = Control.SIZE_EXPAND_FILL
+        var series := []
+        for k in chart[1]:
+            series.append([k, _term_colour(k)])
+        c.series = series
+        left.add_child(c)
+        _chart_nodes.append(c)
+        c.set_meta("keys", chart[1])
+    var right := VBoxContainer.new()
+    right.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    right.add_theme_constant_override("separation", 6)
+    row.add_child(right)
+    _side = _label(right, 14)
+    var grid := GridContainer.new()
+    grid.columns = 3
+    grid.add_theme_constant_override("h_separation", 8)
+    grid.add_theme_constant_override("v_separation", 6)
+    right.add_child(grid)
+    for k in 6:
+        var h := Heatmap.new()
+        h.custom_minimum_size = Vector2(150, 92)
+        h.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+        grid.add_child(h)
+        _heatmaps.append(h)
+    _third = _label(right, 14)
+
+
+func _label(parent: Control, font_size: int) -> RichTextLabel:
+    var l := RichTextLabel.new()
+    l.bbcode_enabled = true
+    l.scroll_active = false
+    l.fit_content = true
+    l.add_theme_font_size_override("normal_font_size", font_size)
+    l.add_theme_font_size_override("bold_font_size", font_size)
+    parent.add_child(l)
+    return l
+
+
+static func _term_colour(key: String) -> String:
+    for t in TERMS:
+        if t[0] == key:
+            return t[2]
+    return "ffffff"
+
+
+func _insight() -> void:
+    var hist := data.terms_history()
+    for c in _chart_nodes:
+        c.rows = data.smoothed_terms(c.get_meta("keys"))
+    # --- reward breakdown (average of the last 10 updates)
+    var t := "[b][font_size=20]INSIGHT  %s[/font_size][/b]\n" % data.tag
+    if hist.is_empty():
+        t += "\n[color=#%s]No reward log yet (logs/%s_terms.jsonl).\nTraining writes it every update; runs started before this page existed don't have it.[/color]" % [Data.MUTED, data.tag]
+    else:
+        var avg := {}
+        var total := 0.0
+        var recent: Array = hist.slice(maxi(hist.size() - 10, 0))
+        for term in TERMS:
+            var sum := 0.0
+            for row in recent:
+                sum += float(row.get(term[0], 0.0))
+            avg[term[0]] = sum / recent.size()
+            total += absf(avg[term[0]])
+        t += "[color=#%s]WHAT THE REWARD IS MADE OF  (per 1000 decisions · share of total · last %d updates)[/color]\n[table=3]" % [Data.MUTED, recent.size()]
+        var warn := ""
+        for term in TERMS:
+            var v: float = avg[term[0]]
+            var share: float = absf(v) / maxf(total, 1e-9) * 100.0
+            t += "[cell][color=#%s]■ %s   [/color][/cell][cell][color=#%s]%+.2f[/color]   [/cell][cell][color=#%s]%d%%[/color][/cell]" % [
+                    term[2], term[1], Data.GOOD if v > 0.0 else Data.BAD, v * 1000.0, Data.MUTED, roundi(share)]
+            if term[0] == "coop" and share > 35.0:
+                warn = "cooperation bonus is %d%% of the reward: check for farming (key passes, shots, keeper far from goal)" % roundi(share)
+        t += "[/table]"
+        if warn != "":
+            t += "\n[color=#%s]%s[/color]" % [Data.OK, warn]
+    _text.text = t
+    # --- heatmaps and sampling vs best move, from the latest evaluation
+    var evs := data.evaluations()
+    if evs.is_empty():
+        _side.text = "\n[color=#%s]WHERE THE PLAYERS ARE\nneeds a finished evaluation (every %d updates)[/color]" % [Data.MUTED, Data.EVAL_EVERY]
+        _third.text = ""
+        for h in _heatmaps:
+            h.values = PackedFloat32Array()
+            h.queue_redraw()
+        return
+    var e: Dictionary = evs[-1]
+    _side.text = "\n[color=#%s]WHERE THE PLAYERS ARE  (%s, attacking to the right)[/color]" % [Data.MUTED, e.name.trim_prefix(data.tag + "_")]
+    var names := ["0", "1", "2", "3", "4", "ball"]
+    for k in 6:
+        var h: Heatmap = _heatmaps[k]
+        var hm: Dictionary = e.heat.get(names[k], {})
+        h.title = "ball" if k == 5 else "%s  (slot %d)" % [hm.get("role", "?"), k]
+        h.values = hm.get("v", PackedFloat32Array())
+        h.grid_w = hm.get("w", 14)
+        h.grid_h = hm.get("h", 8)
+        h.queue_redraw()
+    _third.text = _sampling_text(e)
+
+
+## The same net sampling its moves (as in training) vs always playing its best move.
+func _sampling_text(e: Dictionary) -> String:
+    var g: Dictionary = e.greedy
+    if g.teams.is_empty():
+        return "\n[color=#%s]SAMPLING vs BEST MOVE: not in this evaluation[/color]" % Data.MUTED
+    var ids := []
+    var gpts := 0.0
+    for team in g.teams:
+        ids.append(team.id)
+        gpts += team.pts
+    gpts /= g.teams.size()
+    var spts := 0.0
+    var n := 0
+    for team in e.teams:
+        if team.id in ids:
+            spts += team.pts
+            n += 1
+    spts /= maxf(n, 1)
+    var rows := [["league points (%d teams)" % ids.size(), "%s  /  %s" % [Data.points(spts), Data.points(gpts)]]]
+    for row in [["direction changes / s", "dir", "%.1f"], ["kick presses / s", "kick", "%.2f"], ["keeper from goal (px)", "keeper", "%.0f"], ["key passes / match", "key", "%.2f"]]:
+        if e.rl.has(row[1]) and g.rl.has(row[1]):
+            rows.append([row[0], "%s  /  %s" % [row[2] % e.rl[row[1]], row[2] % g.rl[row[1]]]])
+    return "\n" + Data.section("SAMPLING  /  BEST MOVE  (the same net)", rows)

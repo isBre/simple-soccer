@@ -2,7 +2,7 @@ extends CanvasLayer
 ## Live viewer of a training run, for a touch screen without keyboard. A navigation bar switches between pages:
 ##   LIVE        matches of the newest checkpoint against RL Team 4 next to a compact training sidebar
 ##   TRAINING    the training numbers and charts          EVALUATION  the latest complete evaluation
-##   RECAP       the whole run: progress between evaluations      SETUP  rewards, observations, actions, network, PPO settings
+##   RECAP       the whole run: progress between evaluations      INSIGHT  reward breakdown, heatmaps, sampling vs best move      SETUP  rewards, observations, actions, network, PPO settings
 ## The match pauses while another page is shown.
 ##   Godot --path . res://tools/watch_training.tscn -- --tag jit7 --start res://out_5v5/ckpt/jit6_u50.json [--page training]
 ## The scene is a CanvasLayer above the App autoload's own full-screen background.
@@ -11,7 +11,7 @@ extends CanvasLayer
 
 const Data := preload("res://tools/training_data.gd")
 const Page := preload("res://tools/training_page.gd")
-const PAGES := ["live", "training", "evaluation", "recap", "setup"]
+const PAGES := ["live", "training", "evaluation", "recap", "insight", "setup"]
 
 var tag := "sp"
 var start_weights := Data.FALLBACK        # played until the run saves its first checkpoint (= the net server's --model)
@@ -21,6 +21,7 @@ var data := Data.new()
 var _views: Dictionary = {}               # page name -> its Control
 var _buttons: Dictionary = {}
 var _status: Label
+var _best_move := false                  # BEST MOVE button: the next matches play the net's best move instead of sampling
 @onready var nav_row: HBoxContainer = $Root/Nav/Row
 @onready var pages: Control = $Root/Pages
 @onready var sidebar = $Root/Pages/Live/Sidebar
@@ -43,7 +44,7 @@ func _ready() -> void:
     sidebar.start(data)
     _build_nav()
     _views["live"] = $Root/Pages/Live
-    for kind in ["training", "evaluation", "recap", "setup"]:
+    for kind in ["training", "evaluation", "recap", "insight", "setup"]:
         var page := Page.new()
         page.setup(kind, data)
         pages.add_child(page)
@@ -64,7 +65,7 @@ func _build_nav() -> void:
         var b := Button.new()
         b.text = name.to_upper()
         b.toggle_mode = true
-        b.custom_minimum_size = Vector2(120, 46)             # big enough for a finger
+        b.custom_minimum_size = Vector2(108, 46)             # big enough for a finger
         b.add_theme_font_size_override("font_size", 16)
         b.add_theme_stylebox_override("normal", _flat(Color(0.12, 0.14, 0.18), 4))
         b.add_theme_stylebox_override("hover", _flat(Color(0.17, 0.2, 0.26), 4))
@@ -77,8 +78,20 @@ func _build_nav() -> void:
     var spacer := Control.new()
     spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     nav_row.add_child(spacer)
+    var best := Button.new()                                 # what the net does when it does not sample: smooth, not twitchy (see INSIGHT)
+    best.text = "BEST MOVE"
+    best.toggle_mode = true
+    best.custom_minimum_size = Vector2(108, 46)
+    best.add_theme_font_size_override("font_size", 15)
+    best.add_theme_stylebox_override("normal", _flat(Color(0.12, 0.14, 0.18), 4))
+    best.add_theme_stylebox_override("pressed", _flat(Color(0.55, 0.42, 0.1), 4))
+    best.add_theme_stylebox_override("hover", _flat(Color(0.17, 0.2, 0.26), 4))
+    best.add_theme_stylebox_override("hover_pressed", _flat(Color(0.6, 0.46, 0.12), 4))
+    best.focus_mode = Control.FOCUS_NONE
+    best.toggled.connect(func(on: bool): _best_move = on)
+    nav_row.add_child(best)
     _status = Label.new()
-    _status.add_theme_font_size_override("font_size", 14)
+    _status.add_theme_font_size_override("font_size", 13)
     nav_row.add_child(_status)
 
 
@@ -103,7 +116,7 @@ func _show(name: String) -> void:
 func _refresh() -> void:
     data.refresh()
     var l := data.last()
-    _status.text = "%s   update %d   %s" % [tag, l.upd, "RUNNING" if data.is_running() else "STOPPED"] if not l.is_empty() else tag
+    _status.text = "%s  u%d  %s" % [tag, l.upd, "RUNNING" if data.is_running() else "STOPPED"] if not l.is_empty() else tag
     _status.add_theme_color_override("font_color", Color(Data.GOOD) if data.is_running() else Color(Data.BAD))
     for key in _views:
         if _views[key].visible and _views[key].has_method("refresh"):
@@ -122,6 +135,8 @@ func _next() -> void:
     cfg.ml_models[0] = RemoteMLP.new(7301)
     cfg.ml_models[1] = RemoteMLP.new(7302)
     cfg.ml_keeper = true
+    if _best_move:
+        cfg.ml_temperature = 0.0                                   # argmax instead of sampling (applies from the next match)
     var ms := MatchScreen.new().setup(cfg)
     ms.finished.connect(func(_result): _next.call_deferred())
     ms.quit_requested.connect(get_tree().quit)

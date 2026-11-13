@@ -66,11 +66,15 @@ nice -n 15 ~/rl-venv/bin/python rl/selfplay.py --start out_5v5/ckpt/jit3_u50.pt 
 1. **League**: all 16 rule-based teams, both sides (`league_eval.gd`): pts/match and goals per team, per tier, trained-against vs held-out teams. `--eval_games` (default 1 = 32 matches), `--eval_duration` (default 90 s per match; the shipped league numbers used 180 s).
 2. **Behaviour** (`behaviour_stats.gd`): direction changes/s (the anti-twitch metric), kick presses, spacing, keeper distance, passes and pass accuracy, key passes, shots, next to the same numbers for the rule bots.
 3. **Head to head** (`h2h_eval.gd`) against RL Team 4 and RL Team 5 (the previous shipped nets), both sides, `--eval_h2h_games` games per side.
+4. **Sampling vs best move**: the same net playing its best move (`ml_temperature` 0, `--greedy` in the Godot scripts) instead of sampling, on every 2nd team (`--stride 2`, written with a `greedy ` prefix) plus the behaviour numbers. In the first test the net made about 2.4 direction changes/s when playing its best move against about 14 when sampling (rule bots about 2.2): the twitching comes from sampling, not from what the net has learned (short 10 s matches, to be confirmed on real evaluations).
+5. **Heatmaps**: where each player slot and the ball spend their time (`HEAT` lines from `behaviour_stats.gd`, team attacking to the right).
+A scene that hangs is killed after 3 hours (`TIMEOUT` line) so it cannot block later evaluations.
 
 All three run the nets in numpy servers (`--remote PORT` in the Godot scripts, `tools/net_server.py`, `RemoteMLP`): the GDScript MLP is too slow on a Raspberry Pi to evaluate a checkpoint in reasonable time.
 Cost on a Pi 4 next to training: about 25-30 minutes of background CPU per evaluation with the defaults (a quick test with 20 s matches took 6 minutes). Run it by hand on any checkpoint:
 `python3 rl/eval_checkpoint.py --model out_5v5/ckpt/x.json --out logs/sp_eval/x.txt [--games 1] [--duration 90] [--h2h_games 3]`.
-`selfplay.py` also writes `logs/<tag>_config.json` (all its settings) at start, which the viewer's SETUP page reads.
+`selfplay.py` also writes `logs/<tag>_config.json` (all its settings) at start, which the viewer's SETUP page reads, and `logs/<tag>_terms.jsonl` (one line per update:
+what the reward was made of, per reward term, mean per agent-decision). The terms are accumulated in `rl_env.gd` (`_acc`) and read from the workers with the `T` command (`VecEnv.terms()`).
 
 ## Watching training live (`tools/watch_training.tscn`, touch screen, no keyboard)
 
@@ -79,9 +83,12 @@ A window (needs a display) with a navigation bar of big touch buttons (nothing n
 - **TRAINING**: update, speed, points per match (vs rule-based teams / the start weights / past snapshots), reward, entropy, pool, sim/learn time, checkpoints (playing, newest, next checkpoint and next evaluation with estimated time), CPU load, temperature, memory, FPS, and charts of points, reward and entropy over the run.
 - **EVALUATION**: the latest complete evaluation: every team (held-out marked), league summary by tier, head to head, behaviour vs the rule bots.
 - **RECAP**: the whole run: updates, time, speed, first -> latest evaluation (league points, vs RL Team 4 / 5, direction changes, key passes, keeper distance), the best checkpoint, all evaluations, and charts across evaluations.
+- **INSIGHT**: what the reward is made of (each term per 1000 decisions and its share, with a warning when the cooperation bonus dominates: reward farming), charts of the team and personal terms over the run, heatmaps per slot and ball from the latest evaluation, and the same net sampling vs playing its best move (points, direction changes, kick presses, keeper distance, key passes).
 - **SETUP**: the rewards with their weights, the observation (54 numbers), actions, network, PPO settings, episodes and opponents (read from the run's config file).
 
-Code: `training_data.gd` (parsing of the log, checkpoints and evaluations, machine info; no UI), `training_page.gd` (full pages), `training_sidebar.gd` (compact panel), `line_chart.gd`, `watch_training.gd/.tscn` (navigation and the match). The numbers come from `logs/<tag>.out` and `logs/sp_eval/`, so it works while training runs in another process.
+The **BEST MOVE** button in the bar makes the next matches play the net's best move instead of sampling (smooth, not twitchy; training itself samples).
+
+Code: `training_data.gd` (parsing of the log, checkpoints and evaluations, machine info; no UI), `training_page.gd` (full pages), `heatmap.gd`, `training_sidebar.gd` (compact panel), `line_chart.gd`, `watch_training.gd/.tscn` (navigation and the match). The numbers come from `logs/<tag>.out` and `logs/sp_eval/`, so it works while training runs in another process.
 `CKPT_EVERY` / `EVAL_EVERY` in `training_data.gd` must match the run's `--ckpt_every` / `--eval_every` (only used for "next checkpoint / evaluation" estimates).
 
 Why a Python server: playing two net teams with the game's GDScript `MLP` ran at about 4 FPS on a Pi (about 300 forward passes per second of 25k multiply-adds each).

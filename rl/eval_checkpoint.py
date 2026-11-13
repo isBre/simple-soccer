@@ -4,6 +4,8 @@ Starts numpy net servers (tools/net_server.py) for the checkpoint and for the re
   1. league_eval      all 16 rule-based teams, both sides (pts/m, GF/GA per team, per tier, trained-against vs held-out teams)
   2. behaviour_stats  direction changes/s, kick presses, spacing, keeper distance, passes, key passes (RL net vs rule bots)
   3. h2h_eval         head to head against RL Team 4 and against the weights the run started from (RL Team 5)
+  and, to see what the net's sampling costs, the same net playing its BEST move (greedy): the league on every 2nd team and
+  the behaviour numbers, written with a "greedy " prefix. The behaviour pass also writes HEAT lines (position heatmaps per slot).
 and writes everything to --out (text, one block per part, last line "DONE <seconds>"). Run at low priority.
 
   python3 rl/eval_checkpoint.py --model out_5v5/ckpt/jit6_u100.json --out logs/sp_eval/jit6_u100.txt [--games 1] [--duration 90]
@@ -40,10 +42,14 @@ def start_server(model):
     raise RuntimeError("net server did not start for " + model)
 
 
-def godot(scene, args):
+def godot(scene, args, timeout=3 * 3600):
+    """Output lines of a headless eval scene. A hung scene is killed after `timeout` (otherwise it would block every later evaluation)."""
     cmd = [GODOT, "--headless", "--path", ROOT, "res://rl/%s.tscn" % scene, "--"] + args
-    out = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, env={**os.environ, "GODOT_SILENCE_ROOT_WARNING": "1"})
-    return out.stdout.splitlines()
+    try:
+        out = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, timeout=timeout, env={**os.environ, "GODOT_SILENCE_ROOT_WARNING": "1"})
+        return out.stdout.splitlines()
+    except subprocess.TimeoutExpired:
+        return ["TIMEOUT %s after %d s" % (scene, timeout)]
 
 
 def main():
@@ -64,7 +70,10 @@ def main():
         servers.append(proc)
         keep = re.compile(r"^(LEAGUE|team |SUMMARY|\S+\s+(weak|average|strong|elite)\s)")
         lines += ["# league"] + [l for l in godot("league_eval", ["--model", res_model, "--remote", str(port), "--games", str(a.games), "--duration", str(a.duration)]) if keep.match(l)]
-        lines += ["# behaviour"] + [l for l in godot("behaviour_stats", ["--remote", str(port)]) if re.match(r"^(RL Team|rule-based|scores)", l)]
+        lines += ["# behaviour"] + [l for l in godot("behaviour_stats", ["--remote", str(port)]) if re.match(r"^(RL Team|rule-based|scores|HEAT)", l)]
+        lines += ["# greedy (best move instead of sampling)"]
+        lines += ["greedy " + l for l in godot("league_eval", ["--model", res_model, "--remote", str(port), "--games", str(a.games), "--duration", str(a.duration), "--stride", "2", "--greedy"]) if keep.match(l)]
+        lines += ["greedy " + l for l in godot("behaviour_stats", ["--remote", str(port), "--greedy"]) if re.match(r"^(RL Team|rule-based)", l)]
         lines += ["# head to head"]
         for name, ref in REFERENCES:
             rproc, rport = start_server(ref)

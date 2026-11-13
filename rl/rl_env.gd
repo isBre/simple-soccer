@@ -64,6 +64,8 @@ var w_kick := 0.0                 # penalty for pressing kick while the ball is 
 var kick_reach := 40.0
 var w_jitter := 0.0               # penalty per decision when the move direction turns by more than ~60 degrees (anti-twitch)
 var prev_dir: Dictionary = {}     # uid -> last non-zero input_dir
+var term_sums: Dictionary = {}    # reward term -> summed per-agent mean contribution since the last read (rl_server command 'T')
+var term_steps := 0
 var prev_pass := [0, 0, 0, 0, 0.0]  # team 0 totals: progressive, ok, failed, key passes, xA
 var opp_external := false         # team 1 is controlled from Python too (self-play): its players are extra agents
 var opp_net: MLP = null
@@ -334,6 +336,12 @@ static func _seg_dist(p: Vector2, a: Vector2, b: Vector2) -> float:
     return p.distance_to(a + ab * t)
 
 
+## Adds `value` (already a per-agent mean) to a reward term's running total: lets the trainer log what the reward is made of.
+func _acc(term: String, value: float) -> void:
+    if value != 0.0:
+        term_sums[term] = float(term_sums.get(term, 0.0)) + value
+
+
 ## Individual reward terms, one per learner agent: kick discipline, spacing, pass credit (passer / receiver)
 ## and "standing open" for the ball carrier.
 func _individual() -> PackedFloat32Array:
@@ -343,6 +351,7 @@ func _individual() -> PackedFloat32Array:
     if w_kick == 0.0 and w_space == 0.0 and not credit and w_open == 0.0 and w_keeper == 0.0 and w_jitter == 0.0:
         return out
     var bp := sim.ball.pos
+    var n_learn := float(agents.size())
     # the carrier: the learner agent that last touched the ball and is next to it
     var carrier: SimPlayer = null
     if w_open > 0.0 and sim.last_touch != null and sim.last_touch.team == 0 and agents.has(sim.last_touch) \
@@ -354,12 +363,14 @@ func _individual() -> PackedFloat32Array:
         var r := 0.0
         if w_kick > 0.0 and a.input_kick and da > kick_reach:
             r -= w_kick
+            _acc("kick", -w_kick / n_learn)
         if w_jitter > 0.0:
             var dnow: Vector2 = a.input_dir
             if dnow.length() > 0.1:
                 var dprev: Vector2 = prev_dir.get(a.uid, dnow)
                 if dprev.normalized().dot(dnow.normalized()) < 0.5:
                     r -= w_jitter
+                    _acc("jitter", -w_jitter / n_learn)
                 prev_dir[a.uid] = dnow
         if w_space > 0.0 and da > 70.0:
             for j in agents.size():
@@ -368,6 +379,7 @@ func _individual() -> PackedFloat32Array:
                     var d := a.pos.distance_to(b.pos)
                     if d < space_radius and b.pos.distance_to(bp) > 70.0:
                         r -= w_space * (1.0 - d / space_radius)
+                        _acc("space", -w_space * (1.0 - d / space_radius) / n_learn)
         if credit:
             var cur := _ps_vec(a)
             var prev: Array = prev_ps.get(a.uid, cur)
@@ -378,16 +390,20 @@ func _individual() -> PackedFloat32Array:
             var d_xa: float = cur[4] - prev[4]
             var d_recv: int = cur[5] - prev[5]
             r += w_pass_prog * float(d_prog) - w_pass_fail * float(d_fail)
+            _acc("pass_prog", w_pass_prog * float(d_prog) / n_learn)
+            _acc("pass_fail", -w_pass_fail * float(d_fail) / n_learn)
             var coop := w_pass_ok * float(maxi(d_ok - d_prog, 0)) + w_key_pass * float(d_kp) + w_xa * d_xa + w_recv * float(d_recv)
             if coop_cap > 0.0 and coop > 0.0:
                 coop = minf(coop, maxf(coop_cap - coop_used, 0.0))
                 coop_used += coop
             r += coop
+            _acc("coop", coop / n_learn)
             prev_ps[a.uid] = cur
         if w_keeper > 0.0 and a.role == "GK":
             var dg := a.pos.distance_to(Vector2(-sim.pitch.half_w, 0.0))
             if dg > keeper_free:
                 r -= w_keeper * minf((dg - keeper_free) / keeper_free, 1.0)
+                _acc("keeper", -w_keeper * minf((dg - keeper_free) / keeper_free, 1.0) / n_learn)
         if carrier != null and a != carrier:
             var dc := a.pos.distance_to(carrier.pos)
             if dc >= open_min and dc <= open_max:
@@ -398,6 +414,7 @@ func _individual() -> PackedFloat32Array:
                         break
                 if clear:
                     r += w_open
+                    _acc("open", w_open / n_learn)
         out[i] = r
     return out
 
@@ -426,17 +443,22 @@ func step(actions: PackedByteArray) -> Array:
             break
     steps += 1
     var r := -0.0005
+    term_steps += 1
+    _acc("time", -0.0005)
     var done := false
     var outcome := OUT_NONE
     var playing := sim.state == MatchSim.State.PLAYING
     var pot := _potential()
     if playing and prev_playing:
         r += pot - prev_pot                       # no shaping across goals / kickoffs (the ball teleports)
+        _acc("shaping", pot - prev_pot)
     prev_pot = pot
     prev_playing = playing
 
     if match_mode:
-        r += 10.0 * float(sim.scores[0] - prev_scores[0]) - 10.0 * float(sim.scores[1] - prev_scores[1])
+        var goal_r := 10.0 * float(sim.scores[0] - prev_scores[0]) - 10.0 * float(sim.scores[1] - prev_scores[1])
+        r += goal_r
+        _acc("goals", goal_r)
         prev_scores = [sim.scores[0], sim.scores[1]]
         if sim.state == MatchSim.State.ENDED or steps >= max_steps:
             done = true
@@ -461,6 +483,8 @@ func step(actions: PackedByteArray) -> Array:
         # progressive passes are a subset of the completed ones: pay the bonus rate for those, the base rate for the rest
         r += w_pass_prog * float(d_prog) + w_pass_ok * float(maxi(d_ok - d_prog, 0)) - w_pass_fail * float(d_fail)
         r += w_key_pass * float(int(pt[3]) - int(prev_pass[3])) + w_xa * (float(pt[4]) - float(prev_pass[4]))
+        _acc("pass_team", w_pass_prog * float(d_prog) + w_pass_ok * float(maxi(d_ok - d_prog, 0)) - w_pass_fail * float(d_fail)
+                + w_key_pass * float(int(pt[3]) - int(prev_pass[3])) + w_xa * (float(pt[4]) - float(prev_pass[4])))
         prev_pass = pt
     ep_return += r
     return [r, done, outcome, _individual()]

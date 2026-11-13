@@ -88,6 +88,18 @@ class VecEnv:
         for w in self.workers:
             w.recv()
 
+    def terms(self):
+        """Reward terms accumulated since the last call (what the reward is made of): ({term: summed per-agent mean}, env steps)."""
+        for w in self.workers:
+            w.send(b"T")
+        sums, steps = {}, 0
+        for w in self.workers:
+            d = json.loads(w.recv())
+            steps += d["steps"]
+            for k, v in d["terms"].items():
+                sums[k] = sums.get(k, 0.0) + v
+        return sums, steps
+
     def step_async(self, actions):
         """Send the actions (int8 [E, A, 2]) to all workers; collect with step_wait()."""
         acts = np.ascontiguousarray(actions, dtype=np.int8).reshape(self.E, self.A * 2)

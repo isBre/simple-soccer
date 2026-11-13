@@ -22,6 +22,8 @@ var matches := 0                  # matches watched since the viewer started
 var record: Dictionary = {}       # checkpoint name -> [wins, draws, losses, goals for, goals against] of watched matches
 var history: Array = []           # one Dictionary per log line: upd, rules, bench, league, rew, ent, pool, dec, sim, learn, elapsed
 var _log_time := -1
+var _terms_time := -1
+var _terms: Array = []            # one Dictionary per update: upd + the reward terms
 var _re := RegEx.create_from_string(
     "upd (\\d+) \\| pts/m vs rules (\\S+) \\| vs frozen benchmark (\\S+) \\| vs league (\\S+) \\| rew/step (\\S+) \\| ent (\\S+) \\| pool (\\d+) \\| (\\d+) dec/s sim (\\S+)s learn (\\S+)s \\| (\\d+)s")
 
@@ -116,6 +118,41 @@ func run_config() -> Dictionary:
     return parsed if parsed is Dictionary else {}
 
 
+## What the reward was made of, per update (logs/<tag>_terms.jsonl, written by selfplay.py): {upd, term: mean reward per agent-decision}.
+func terms_history() -> Array:
+    var path := ProjectSettings.globalize_path("res://logs/%s_terms.jsonl" % tag)
+    var mod := int(FileAccess.get_modified_time(path))
+    if mod == _terms_time or not FileAccess.file_exists(path):
+        return _terms
+    _terms_time = mod
+    _terms.clear()
+    for line in FileAccess.get_file_as_string(path).split("\n"):
+        var d: Variant = JSON.parse_string(line) if line.strip_edges() != "" else null
+        if d is Dictionary:
+            var row := {"upd": int(d.upd)}
+            for k in d.terms:
+                row[k] = float(d.terms[k])
+            _terms.append(row)
+    return _terms
+
+
+## Moving average over `window` rows of the given terms (missing terms count as 0), for charts.
+func smoothed_terms(keys: Array, window: int = 5) -> Array:
+    var src := terms_history()
+    var out := []
+    for i in src.size():
+        var row := {"upd": src[i].upd}
+        for k in keys:
+            var sum := 0.0
+            var n := 0
+            for j in range(maxi(i - window + 1, 0), i + 1):
+                sum += float(src[j].get(k, 0.0))
+                n += 1
+            row[k] = sum / n
+        out.append(row)
+    return out
+
+
 # ---------------------------------------------------------------- evaluations
 
 ## Completed evaluations of this run, oldest first. Each Dictionary: name, update, age (s), league {key: [pts/m, GF, GA, matches]},
@@ -134,11 +171,15 @@ func evaluations() -> Array:
         var path := EVAL_DIR + "/" + f
         var ev := {"name": f.get_basename(), "update": int(f.get_basename().trim_prefix(tag + "_u")),
                 "age": int(Time.get_unix_time_from_system()) - int(FileAccess.get_modified_time(path)),
-                "league": {}, "teams": [], "h2h": {}, "rl": {}, "rule": {}}
-        for line in FileAccess.get_file_as_string(path).split("\n"):
+                "league": {}, "teams": [], "h2h": {}, "rl": {}, "rule": {}, "heat": {},
+                "greedy": {"league": {}, "teams": [], "rl": {}, "rule": {}}}
+        for raw in FileAccess.get_file_as_string(path).split("\n"):
+            var is_greedy := raw.begins_with("greedy ")                    # the same net playing its best move (see eval_checkpoint.py)
+            var line := raw.trim_prefix("greedy ")
+            var t: Dictionary = ev.greedy if is_greedy else ev
             var m := re_sum.search(line)
             if m != null:
-                ev.league[m.get_string(1)] = [_num(m.get_string(2)), _num(m.get_string(3)), _num(m.get_string(4)), int(m.get_string(5))]
+                t.league[m.get_string(1)] = [_num(m.get_string(2)), _num(m.get_string(3)), _num(m.get_string(4)), int(m.get_string(5))]
                 continue
             m = re_h2h.search(line)
             if m != null:
@@ -146,12 +187,20 @@ func evaluations() -> Array:
                 continue
             m = re_team.search(line)
             if m != null:
-                ev.teams.append({"id": m.get_string(1), "tier": m.get_string(2), "strength": m.get_string(3), "held": m.get_string(4) != "",
+                t.teams.append({"id": m.get_string(1), "tier": m.get_string(2), "strength": m.get_string(3), "held": m.get_string(4) != "",
                         "w": int(m.get_string(5)), "d": int(m.get_string(6)), "l": int(m.get_string(7)), "pts": _num(m.get_string(8)),
                         "gf": _num(m.get_string(9)), "ga": _num(m.get_string(10))})
                 continue
+            if line.begins_with("HEAT "):
+                var parts := line.split(" ")
+                if parts.size() > 5:
+                    var vals := PackedFloat32Array()
+                    for k in range(5, parts.size()):
+                        vals.append(float(parts[k]))
+                    ev.heat[parts[1]] = {"role": parts[2], "w": int(parts[3]), "h": int(parts[4]), "v": vals}
+                continue
             if line.begins_with("RL Team:") or line.begins_with("rule-based:"):
-                _parse_behaviour(line, ev.rl if line.begins_with("RL Team:") else ev.rule)
+                _parse_behaviour(line, t.rl if line.begins_with("RL Team:") else t.rule)
         out.append(ev)
     out.sort_custom(func(a, b): return a.update < b.update)
     return out

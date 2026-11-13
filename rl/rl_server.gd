@@ -7,6 +7,7 @@ extends Node
 ##   'S' step      : payload = int8[E*A*2] (move, kick)           -> f32 obs[E*A*D] | f32 reward[E*A] (shared team reward + individual terms)
 ##                                                                  | u8 done[E] | u8 outcome[E] | f32 ep_return[E] | u8 gf[E] | u8 ga[E]
 ##                   (a finished env is reset immediately; its obs is the first obs of the next episode)
+##   'T' reward terms : (no payload) -> JSON {terms: {name: summed per-agent mean reward}, steps}; resets the sums
 ##   'W' set opponent net : payload = JSON MLP dict (or {} to clear)  -> JSON {ok}
 ##   'Q' quit
 
@@ -68,6 +69,7 @@ func _loop() -> void:
             67: _configure(payload)          # 'C'
             83: _step(payload)               # 'S'
             87: _set_opp(payload)            # 'W'
+            84: _terms()                     # 'T'
             81: return                       # 'Q'
 
 
@@ -86,6 +88,18 @@ func _configure(payload: PackedByteArray) -> void:
         envs.append(e)
     var info := {"envs": n_envs, "agents": envs[0].n_agents(), "obs_dim": envs[0].obs_dim()}
     _send(JSON.stringify(info).to_utf8_buffer())
+
+
+func _terms() -> void:
+    var sums := {}
+    var steps := 0
+    for e in envs:
+        for k in e.term_sums:
+            sums[k] = float(sums.get(k, 0.0)) + float(e.term_sums[k])
+        steps += e.term_steps
+        e.term_sums = {}
+        e.term_steps = 0
+    _send(JSON.stringify({"terms": sums, "steps": steps}).to_utf8_buffer())
 
 
 func _set_opp(payload: PackedByteArray) -> void:

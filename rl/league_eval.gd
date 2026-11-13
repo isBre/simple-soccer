@@ -4,7 +4,7 @@ extends Node
 ## Also writes rl/teams_info.json (id, strength, style, tier, held_out) for the trainer.
 ##   godot --headless --path . res://rl/league_eval.tscn -- --model res://out_5v5/x.json --games 4 [--duration 180] [--remote PORT]
 ## --remote PORT: the net runs in tools/net_server.py on that port (numpy; the GDScript MLP is ~15x slower on a Raspberry Pi);
-## --model is then only a label.
+## --model is then only a label. --greedy: argmax play; --stride 2: every 2nd team only.
 ## Held-out teams (never trained against): sorted by strength, indices 1, 5, 9, 13 (one per tier).
 
 var batch := SimBatch.new()
@@ -13,6 +13,8 @@ var ids: Array = []
 var info: Dictionary = {}
 var model_path := ""
 var remote_port := 0
+var greedy := false          # --greedy: the net plays its best move instead of sampling (ml_temperature 0)
+var stride := 1              # --stride N: only every Nth team (sorted by strength), for a cheaper run
 var t0 := 0
 
 
@@ -25,6 +27,8 @@ func _ready() -> void:
 		if a[i] == "--games": games = int(a[i + 1])
 		if a[i] == "--duration": duration = float(a[i + 1])
 		if a[i] == "--remote": remote_port = int(a[i + 1])
+		if a[i] == "--stride": stride = int(a[i + 1])
+		if a[i] == "--greedy": greedy = true
 	var teams: Array = Database.teams.values().filter(func(t: TeamDef) -> bool: return t.ml_model == "")   # rule-based teams only
 	teams.sort_custom(func(x: TeamDef, y: TeamDef) -> bool: return x.strength() < y.strength())
 	var tiers := ["weak", "average", "strong", "elite"]
@@ -36,6 +40,8 @@ func _ready() -> void:
 			"tier": tiers[mini(i / 4, 3)], "held_out": i % 4 == 1}
 		list.append(info[t.id])
 	Database.write_json("res://rl/teams_info.json", list)
+	if stride > 1:
+		ids = ids.filter(func(id: String) -> bool: return ids.find(id) % stride == 0)
 	if model_path == "":
 		get_tree().quit()
 		return
@@ -56,6 +62,8 @@ func _ready() -> void:
 				c.resolve_kits()
 				c.ml_models[side] = RemoteMLP.new(remote_port) if remote_port > 0 else net      # one connection per match (matches run on threads)
 				c.ml_keeper = true
+				if greedy:
+					c.ml_temperature = 0.0
 				cfgs.append(c)
 				meta.append({"opp": id, "side": side})
 	t0 = Time.get_ticks_msec()
@@ -99,6 +107,8 @@ func _process(_d: float) -> void:
 			agg[key][2] += t["gf"]
 			agg[key][3] += t["ga"]
 	for key in ["weak", "average", "strong", "elite", "train", "held", "all"]:
+		if not agg.has(key):                      # e.g. --stride 2 leaves no held-out team
+			continue
 		var g: Array = agg[key]
 		lines.append("SUMMARY %s: pts/m %.2f  GF %.2f GA %.2f  (%d matches)" % [key.rpad(8), g[0] / g[1], g[2] / g[1], g[3] / g[1], g[1]])
 	var text := "\n".join(lines)
