@@ -95,7 +95,7 @@ def main():
     ap.add_argument("--eval_every", type=int, default=100, help="complete evaluation of the checkpoint every N updates (multiple of --ckpt_every; 0 = never); training is paused meanwhile")
     ap.add_argument("--eval_games", type=int, default=1, help="league games per team and side (1 = 32 matches)")
     ap.add_argument("--eval_duration", type=float, default=90.0, help="seconds per evaluation match")
-    ap.add_argument("--eval_h2h_games", type=int, default=3, help="head-to-head games per side against each reference net")
+    ap.add_argument("--eval_h2h_games", type=int, default=8, help="head-to-head games per side against each reference net")
     ap.add_argument("--log_every", type=int, default=5)
     ap.add_argument("--tag", default="sp")
     args = ap.parse_args()

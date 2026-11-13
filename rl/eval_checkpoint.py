@@ -88,7 +88,7 @@ def main():
     ap.add_argument("--out", required=True)
     ap.add_argument("--games", type=int, default=1, help="league games per team and side (1 = 32 matches)")
     ap.add_argument("--duration", type=float, default=90.0, help="seconds per match (the league metric of the shipped teams used 180)")
-    ap.add_argument("--h2h_games", type=int, default=3, help="head-to-head games per side and reference")
+    ap.add_argument("--h2h_games", type=int, default=8, help="head-to-head games per side and reference")
     ap.add_argument("--paused", action="store_true", help="training is paused while this runs (shown by the viewer's banner)")
     a = ap.parse_args()
     model = os.path.relpath(os.path.abspath(a.model), ROOT)
