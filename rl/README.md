@@ -1,8 +1,12 @@
 # RL training (Python PPO <-> headless Godot)
 
-The AI controls **all 5 players of a team, keeper included**, with one shared policy and a slot one-hot
-input (54 inputs), so roles and formation are learned, not scripted. The actor has the game's `MLP` layout
-(`[54, h, h, 10]`: 9 move logits + 1 kick logit) and is exported as game model JSON; `MLBot` plays it as is.
+The AI controls **all 5 players of a team, keeper included**, with one shared policy, so roles and formation are learned, not scripted.
+The actor has the game's `MLP` layout (`[n_in, h, h, 10]`: 9 move logits + 1 kick logit) and is exported as game model JSON; `MLBot` plays it as is.
+Two observation layouts exist (`selfplay.py --obs`, `rl_env.gd` config `obs`, chosen by the net's input size in `MLBot.features_for`):
+- **`team` (46 numbers, default for new runs, no player ID):** me (position and speed), my 4 teammates nearest first, the 5 opponents nearest first, the ball (position and speed),
+  kickoff on (0/1), goal celebration on (0/1). Positions are scaled by the pitch, speeds by 5, the pitch is mirrored so the team attacks to the right. Sorting by distance instead of by
+  slot keeps a player from knowing a "role": it acts on the situation (see `MLBot.features_team`).
+- **`legacy` (54 numbers):** me first, ball, the 4 teammates and 5 opponents in slot order, ball and opponent goal relative to me, and a one-hot of the player's slot. The first RL teams (RL Team 1-5) use it.
 
 - `rl_env.gd` / `rl_server.gd`: environment + TCP bridge (several envs per Godot process).
 - `client.py`: vector env over N Godot workers. `ppo.py`: PPO + curriculum + model export.
@@ -19,6 +23,14 @@ python3 -m venv ~/rl-venv && ~/rl-venv/bin/pip install torch numpy --index-url h
 ~/rl-venv/bin/python rl/ppo.py --stages s4_five_empty s5_vs_keeper s6_weak s7_average s8_strong
 godot --headless --path . res://rl/league_eval.tscn -- --model res://out_5v5/rl_s8_strong_last.json --games 2
 ```
+
+## New observation, warm start by imitation (`rl/distill.py`)
+
+A net with another observation cannot continue from an old checkpoint, so `distill.py` copies the old net into the new layout: the teacher plays (observation `both` from `rl_env.gd`
+gives both layouts of every state), the student learns its move distribution, kick probability and value estimate, then **DAgger rounds** let the student play and the teacher label the states
+the student really reaches (plain imitation alone gave a student that agreed 85% with the teacher but scored 0.9 instead of 2.9 league points per match).
+`python3 rl/distill.py --teacher out_5v5/ckpt/jit8_best.pt --out team46_start --rounds 4` writes `out_5v5/team46_start.pt/.json`; start the run with `selfplay.py --obs team --start out_5v5/team46_start.pt`.
+The net server announces the net's input size to `RemoteMLP` when a client connects, so nets of both layouts can play side by side (evaluation against RL Team 4 / 5 works unchanged).
 
 ## Self-play and cooperation fine-tuning
 

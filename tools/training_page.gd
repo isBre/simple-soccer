@@ -286,13 +286,12 @@ func _setup() -> void:
             ["goal-side defending", _w(c, "w_goalside", "+")], ["standing open", _w(c, "w_open", "+")],
             ["teammate too close", _w(c, "w_space", "-")], ["too far from the ball", "%s  [color=#%s]> %s px[/color]" % [_w(c, "w_far", "-"), Data.MUTED, _int(c, "far_radius")]],
             ["kick away from ball", _w(c, "w_kick", "-")], ["keeper far from goal", _w(c, "w_keeper", "-")], ["direction twitch", _w(c, "w_jitter", "-")]])
-    d += Data.section("OBSERVATION  (%d numbers, 30 / s)" % int(c.get("obs_dim", 54)), [
-            ["own position + speed", "4"], ["ball position + speed", "4"], ["4 teammates", "4 x 4 = 16"], ["5 opponents", "5 x 4 = 20"],
-            ["ball relative to me", "3"], ["opp. goal relative to me", "2"], ["my slot (one-hot)", "5"]])
+    d += _observation_text(c)
     d += Data.section("ACTIONS", [["move", "9: 8 directions or still"], ["kick", "pressed or not"], ["decision", "every 2 ticks (30 / s)"], ["choice", "sampled, not argmax"]])
     _side.text = d
     var tr := "\n\n"
-    tr += Data.section("NETWORK  (shared by all 5 players)", [["actor", "54 - 128 - 128 - 10"], ["critic", "54 - 128 - 128 - 1"]])
+    var n_in := int(c.get("obs_dim", 54))
+    tr += Data.section("NETWORK  (shared by all 5 players)", [["actor", "%d - 128 - 128 - 10" % n_in], ["critic", "%d - 128 - 128 - 1" % n_in]])
     tr += Data.section("TRAINING  (PPO)", [
             ["parallel matches", _matches(c)], ["steps / env / update", _int(c, "rollout")],
             ["epochs", _int(c, "epochs")], ["minibatch", _int(c, "minibatch")], ["learning rate", str(c.get("lr", "?"))],
@@ -302,6 +301,18 @@ func _setup() -> void:
             ["length", "90 s match, 5v5 arena"], ["random starts", "%s of episodes" % _percent(c.get("random_start", NAN))],
             ["started from", str(c.get("start", "?")).get_file()], ["opponents", "12 rule-based teams (4 held out), past snapshots, the start weights"]])
     _third.text = tr
+
+
+## What the net sees, as in the run's settings: "team" = the 46-number role-free observation, otherwise the older 54-number ego one.
+static func _observation_text(c: Dictionary) -> String:
+    if str(c.get("obs", "legacy")) == "team":
+        return Data.section("OBSERVATION  (46 numbers, 30 / s)", [
+                ["me: position + speed", "4"], ["4 teammates, nearest first", "4 x 4 = 16"], ["5 opponents, nearest first", "5 x 4 = 20"],
+                ["ball: position + speed", "4"], ["kickoff on", "1  (0 / 1)"], ["goal celebration on", "1  (0 / 1)"]]) \
+                + "[color=#%s]Everything is scaled (positions by the pitch, speeds by 5). The same net plays all 5 players with no player ID: roles come from the situation.[/color]\n\n" % Data.MUTED
+    return Data.section("OBSERVATION  (%d numbers, 30 / s)" % int(c.get("obs_dim", 54)), [
+            ["own position + speed", "4"], ["ball position + speed", "4"], ["4 teammates", "4 x 4 = 16"], ["5 opponents", "5 x 4 = 20"],
+            ["ball relative to me", "3"], ["opp. goal relative to me", "2"], ["my slot (one-hot)", "5"]])
 
 
 static func _int(c: Dictionary, key: String) -> String:

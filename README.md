@@ -84,7 +84,7 @@ Modes: single, styles, teams, sanity, strength, versus, human, keeper.
 *Two RL teams playing each other (RL Team 2 vs RL Team 4).*
 Everything is plain GDScript, no external dependencies:
 - `scripts/ml/mlp.gd` - small MLP (ReLU, Adam) with a 9-way move head and a kick head; saves/loads JSON.
-- `scripts/ai/ml_bot.gd` - `MLBot`, a policy that replaces StyleBot for outfield players (`MLBot.features(sim, p)` = raw observation + ball/goal relative to the player). Moves and kicks are sampled from the network output.
+- `scripts/ai/ml_bot.gd` - `MLBot`, a policy that replaces StyleBot for outfield players (`MLBot.features(sim, p)` = ego observation with ball/goal relative to the player; `MLBot.features_team` = the 46-number role-free team observation, see `rl/README.md`). Moves and kicks are sampled from the network output.
 - `scripts/ml/recording_bot.gd` + `ml_recorder.gd` - wrap a StyleBot and log (observation, action) pairs.
 - `MatchConfig.ml_models[team]` plugs a trained net into a team; `MatchConfig.recorders[team]` records one.
 - `experiments/ml_runner.tscn` (config: `experiments/ml_config.json`): collects data from a style, trains in a background thread, then plays the net against every style next to the teacher itself. Model saved to `data/models/imitate_<style>.json`.

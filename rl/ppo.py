@@ -99,12 +99,13 @@ class Agent(nn.Module):
 
 
 def load_padded(agent, path):
-    """Load a checkpoint; if it has fewer input features (49 -> 54), pad the first layers with zeros."""
+    """Load a checkpoint; if it has fewer input features than the agent (49 -> 54), pad the first layers with zeros."""
     sd = torch.load(path)
+    obs_dim = agent.sizes[0]
     for key in ("actor.0.weight", "critic.0.weight"):
         w = sd[key]
-        if w.shape[1] < OBS_DIM:
-            sd[key] = torch.cat([w, torch.zeros(w.shape[0], OBS_DIM - w.shape[1])], 1)
+        if w.shape[1] < obs_dim:
+            sd[key] = torch.cat([w, torch.zeros(w.shape[0], obs_dim - w.shape[1])], 1)
     agent.load_state_dict(sd)
 
 

@@ -31,8 +31,41 @@ static func features(sim: MatchSim, p: SimPlayer, with_slot: bool = false) -> Pa
     return f
 
 
+const TEAM_OBS := 46        # size of the role-free team observation (features_team)
+
+
+## Role-free observation (46 numbers, no player ID): the same picture for every player, from its own point of view (the pitch is
+## mirrored so the team always attacks to the right). Me, my 4 teammates NEAREST FIRST, the 5 opponents NEAREST FIRST (position and
+## speed each, scaled by the pitch and by 5), the ball (position and speed), kickoff on (0/1), goal celebration on (0/1).
+## Sorting by distance instead of by slot is what keeps a player from knowing which "role" it has: it acts on the situation.
+static func features_team(sim: MatchSim, p: SimPlayer) -> PackedFloat32Array:
+    var s := sim.attack_dir(p.team)
+    var f := PackedFloat32Array()
+    sim._push_disc(f, p, s)
+    var mates: Array = []
+    for m: SimPlayer in sim.team_lists[p.team]:
+        if m != p:
+            mates.append(m)
+    for group: Array in [mates, sim.team_lists[1 - p.team].duplicate()]:
+        group.sort_custom(func(a: SimPlayer, b: SimPlayer) -> bool:
+            var da := a.pos.distance_squared_to(p.pos)
+            var db := b.pos.distance_squared_to(p.pos)
+            return da < db or (da == db and a.uid < b.uid))
+        for d: SimPlayer in group:
+            sim._push_disc(f, d, s)
+    sim._push_disc(f, sim.ball, s)
+    f.append(1.0 if sim.kickoff_active else 0.0)
+    f.append(1.0 if sim.state == MatchSim.State.GOAL else 0.0)
+    return f
+
+
+## The observation a net of this input size expects (46 = team observation; 49 / 54 = the older ego layouts).
+static func features_for(sim: MatchSim, p: SimPlayer, n_in: int) -> PackedFloat32Array:
+    return features_team(sim, p) if n_in == TEAM_OBS else features(sim, p, n_in > 49)
+
+
 func decide(sim: MatchSim, p: SimPlayer) -> void:
-    var out := net.forward(features(sim, p, net.sizes[0] > 49))
+    var out := net.forward(features_for(sim, p, net.sizes[0]))
     var best := 0
     for k in range(1, 9):
         if out[k] > out[best]:

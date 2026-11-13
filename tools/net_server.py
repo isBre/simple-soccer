@@ -1,11 +1,11 @@
 """Tiny numpy inference server for the live viewer: the game's GDScript MLP is ~15x too slow for real time on a Pi.
-Protocol per request: 54 float32 in -> 10 float32 out. On every new connection the model is (re)loaded:
+Protocol: on connect the server sends the net's input size n_in (uint32); then per request n_in float32 in -> 10 float32 out. On every new connection the model is (re)loaded:
   --model FILE            fixed game-model JSON
   --tag TAG --ckpt DIR    newest DIR/TAG_u*.json (falls back to --model)
   --best-file FILE        the model named in logs/<tag>_best.json ("model": path relative to the project; written by
                           rl/eval_checkpoint.py), falls back to --model until the first evaluation has chosen one
 """
-import argparse, glob, json, os, re, socket, threading
+import argparse, glob, json, os, re, socket, struct, threading
 import numpy as np
 
 
@@ -28,16 +28,19 @@ def load(path):
 
 def serve(conn, path):
     W, B = load(path)
-    print("serving", path, flush=True)
+    n_in = W[0].shape[1]
+    print("serving", path, "(%d inputs)" % n_in, flush=True)
     conn.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+    conn.sendall(struct.pack("<I", n_in))                 # the client (RemoteMLP) needs it to pick the matching observation
+    size = 4 * n_in
     buf = b""
     while True:
-        while len(buf) < 216:
+        while len(buf) < size:
             c = conn.recv(4096)
             if not c:
                 return
             buf += c
-        x, buf = np.frombuffer(buf[:216], np.float32), buf[216:]
+        x, buf = np.frombuffer(buf[:size], np.float32), buf[size:]
         for i, (w, b) in enumerate(zip(W, B)):
             x = w @ x + b
             if i < len(W) - 1:

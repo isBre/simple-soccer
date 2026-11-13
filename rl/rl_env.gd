@@ -25,7 +25,7 @@ const OUT_CONCEDED := 4
 const OUT_WIN := 5
 const OUT_DRAW := 6
 const OUT_LOSS := 7
-const OBS_DIM := 54
+const OBS_LEGACY := 54           # ego observation with the slot one-hot (the first RL teams)
 
 var pitch_id := "arena"
 var size := 5
@@ -79,6 +79,7 @@ var compact_len := 700.0
 var compact_wid := 450.0
 var prev_def: Dictionary = {}    # uid -> [tackles + interceptions, xG] at the last decision
 var prev_opp_xg := 0.0
+var obs_mode := "legacy"
 var w_far := 0.0                 # penalty per decision for an outfield player further than far_radius px from the ball (full at 2 x far_radius)
 var far_radius := 600.0
 var w_jitter := 0.0               # penalty per decision when the move direction turns by more than ~60 degrees (anti-twitch)
@@ -139,6 +140,7 @@ func configure(c: Dictionary) -> void:
     w_kick = float(c.get("w_kick", w_kick))
     w_jitter = float(c.get("w_jitter", w_jitter))
     w_far = float(c.get("w_far", w_far))
+    obs_mode = str(c.get("obs", obs_mode))
     w_xg = float(c.get("w_xg", w_xg))
     xg_cap = float(c.get("xg_cap", xg_cap))
     w_xga = float(c.get("w_xga", w_xga))
@@ -158,8 +160,10 @@ func configure(c: Dictionary) -> void:
         rng.seed = int(c["seed"])
 
 
+## Observation layout (config "obs"): "legacy" = 54 numbers with slot, "team" = the 46-number role-free one (MLBot.features_team),
+## "both" = team then legacy (100 numbers; only for distilling an old net into a new one, rl/distill.py).
 func obs_dim() -> int:
-    return OBS_DIM
+    return {"legacy": OBS_LEGACY, "team": MLBot.TEAM_OBS, "both": MLBot.TEAM_OBS + OBS_LEGACY}[obs_mode]
 
 
 ## Learner agents first, then (self-play) the opponent team's players.
@@ -516,10 +520,11 @@ func _individual() -> PackedFloat32Array:
 
 func observe() -> PackedFloat32Array:
     var out := PackedFloat32Array()
-    for a in agents:
-        out.append_array(MLBot.features(sim, a, true))
-    for a in opp_agents:
-        out.append_array(MLBot.features(sim, a, true))
+    for a in agents + opp_agents:
+        if obs_mode != "legacy":
+            out.append_array(MLBot.features_team(sim, a))
+        if obs_mode != "team":
+            out.append_array(MLBot.features(sim, a, true))
     return out
 
 

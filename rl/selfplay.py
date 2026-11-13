@@ -24,9 +24,10 @@ import torch
 import torch.nn as nn
 
 from client import GODOT, ROOT, VecEnv
-from ppo import Agent, OBS_DIM, OUT, OUT_DRAW, OUT_LOSS, OUT_WIN, load_padded, save_model, team_pools
+from ppo import Agent, OUT, OUT_DRAW, OUT_LOSS, OUT_WIN, load_padded, save_model, team_pools
 
 CKPT = os.path.join(OUT, "ckpt")
+OBS_DIMS = {"legacy": 54, "team": 46}            # observation layouts (see MLBot.features_team): ego with player slot / role-free team observation
 
 
 def pts(o):
@@ -40,7 +41,7 @@ def make_cfgs(args):
             "match_mode": True, "duration": 90.0, "max_steps": 3200,
             "w_pass_prog": args.w_pass_prog, "w_pass_ok": args.w_pass_ok, "w_pass_fail": args.w_pass_fail,
             "pass_individual": bool(args.pass_individual), "w_recv": args.w_recv, "w_open": args.w_open, "w_key_pass": args.w_key_pass, "w_xa": args.w_xa, "w_space": args.w_space, "space_radius": args.space_radius, "w_kick": args.w_kick, "coop_cap": args.coop_cap, "random_start": args.random_start, "w_keeper": args.w_keeper, "w_jitter": args.w_jitter, "keeper_free": args.keeper_free,
-            "shaping": args.shaping, "w_far": args.w_far, "far_radius": args.far_radius,
+            "obs": args.obs, "shaping": args.shaping, "w_far": args.w_far, "far_radius": args.far_radius,
             "w_xg": args.w_xg, "xg_cap": args.xg_cap, "w_xga": args.w_xga, "w_win": args.w_win, "w_draw": args.w_draw, "w_tackle": args.w_tackle, "def_cap": args.def_cap,
             "w_goalside": args.w_goalside, "goalside_lane": args.goalside_lane, "w_opp_half": args.w_opp_half, "w_compact": args.w_compact,
             "compact_len": args.compact_len, "compact_wid": args.compact_wid}
@@ -63,6 +64,7 @@ def eval_blocking(model_path, tag, args, log):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--updates", type=int, default=1500, help="final update number (absolute: with --start_update 200 and --updates 3000 it trains updates 201..3000)")
+    ap.add_argument("--obs", choices=list(OBS_DIMS), default="team", help="observation layout: team = 46 numbers, no player ID (default); legacy = 54 numbers with the slot (the first RL teams)")
     ap.add_argument("--start_update", type=int, default=0, help="continue numbering from a restart: the checkpoint --start was saved at this update")
     ap.add_argument("--workers_rule", type=int, default=8)
     ap.add_argument("--workers_self", type=int, default=8)
@@ -120,7 +122,8 @@ def main():
     ap.add_argument("--tag", default="sp")
     args = ap.parse_args()
     os.makedirs(os.path.join(ROOT, "logs"), exist_ok=True)
-    config = {**vars(args), "obs_dim": OBS_DIM, "started": int(time.time())}
+    obs_dim = OBS_DIMS[args.obs]
+    config = {**vars(args), "obs_dim": obs_dim, "started": int(time.time())}
     with open(os.path.join(ROOT, "logs", args.tag + "_config.json"), "w") as f:        # read by the live viewer's SETUP page
         json.dump(config, f, indent=1)
     with open(os.path.join(ROOT, "logs", args.tag + "_config_history.jsonl"), "a") as f:   # every (re)start: what changed shows on the RECAP page
@@ -137,16 +140,16 @@ def main():
         logf.write(line + "\n")
         logf.flush()
 
-    agent = Agent()
+    agent = Agent(obs_dim)
     load_padded(agent, args.start)
     opt = torch.optim.Adam(agent.parameters(), lr=args.lr)
-    baseline = Agent()
+    baseline = Agent(obs_dim)
     load_padded(baseline, args.baseline or args.start)
     for p in baseline.parameters():
         p.requires_grad_(False)
     pool = [copy.deepcopy(baseline.actor.state_dict())]           # opponent pool: baseline first, then snapshots
     NSLOT = 4
-    opp_nets = [Agent().actor for _ in range(NSLOT)]
+    opp_nets = [Agent(obs_dim).actor for _ in range(NSLOT)]
     for n in opp_nets:
         for p in n.parameters():
             p.requires_grad_(False)
@@ -165,7 +168,7 @@ def main():
         er.configure(cfg_rule, seed=args.seed)
         es.configure(cfg_self, seed=args.seed + 1)
         Er, Es = er.E, es.E
-        E, A, D, T = Er + Es, 5, OBS_DIM, args.rollout
+        E, A, D, T = Er + Es, 5, obs_dim, args.rollout
         slot_of = np.arange(Es) * NSLOT // Es                      # envs of the self group -> opponent slot
         log("selfplay start | rule envs %d, self envs %d (opp slots %d, slot 0 = frozen benchmark) | lr %g | rewards pass %.2f/%.2f/-%.2f space %.3f kick %.3f" % (
             Er, Es, NSLOT, args.lr, args.w_pass_prog, args.w_pass_ok, args.w_pass_fail, args.w_space, args.w_kick))
