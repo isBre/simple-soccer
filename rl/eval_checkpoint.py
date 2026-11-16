@@ -89,12 +89,13 @@ def main():
     ap.add_argument("--games", type=int, default=1, help="league games per team and side (1 = 32 matches)")
     ap.add_argument("--duration", type=float, default=90.0, help="seconds per match (the league metric of the shipped teams used 180)")
     ap.add_argument("--h2h_games", type=int, default=8, help="head-to-head games per side and reference")
-    ap.add_argument("--mode", choices=["full", "fast"], default="full",
+    ap.add_argument("--mode", choices=["full", "fast", "scout"], default="full",
                     help="fast: 24 short matches vs every 3rd rule team (sampled moves only) + head to head vs the --ref nets, to catch a collapse in minutes; full: everything")
     ap.add_argument("--ref", action="append", default=[], metavar="NAME=MODEL", help="extra head-to-head opponent (game-model JSON), e.g. the net the run started from; repeatable")
     ap.add_argument("--paused", action="store_true", help="training is paused while this runs (shown by the viewer's banner)")
     a = ap.parse_args()
     fast = a.mode == "fast"
+    scout = a.mode == "scout"                   # behaviour + scouting only (8 matches of 60 s, ~2 min): style of any net
     if fast:                                    # fixed, small, comparable between checkpoints
         a.games, a.duration, a.h2h_games = 2, 60.0, 4
     refs = ([] if fast and a.ref else REFERENCES[:1] if fast else REFERENCES) + [tuple(r.split("=", 1)) for r in a.ref]
@@ -113,9 +114,14 @@ def main():
         proc, port = start_server(model)
         servers.append(proc)
         keep = re.compile(r"^(LEAGUE|team |SUMMARY|MATCH |\S+\s+(weak|average|strong|elite)\s)")
-        lines += ["# league"] + [l for l in godot("league_eval", ["--model", res_model, "--remote", str(port), "--games", str(a.games), "--duration", str(a.duration)] + (["--stride", "3"] if fast else [])) if keep.match(l)]
+        behaviour = re.compile(r"^(RL Team|rule-based|scores|HEAT|SCOUT)")
+        if scout:
+            refs = []
+        else:
+            lines += ["# league"] + [l for l in godot("league_eval", ["--model", res_model, "--remote", str(port), "--games", str(a.games), "--duration", str(a.duration)] + (["--stride", "3"] if fast else [])) if keep.match(l)]
         if not fast:
-            lines += ["# behaviour"] + [l for l in godot("behaviour_stats", ["--remote", str(port)]) if re.match(r"^(RL Team|rule-based|scores|HEAT)", l)]
+            lines += ["# behaviour"] + [l for l in godot("behaviour_stats", ["--remote", str(port)]) if behaviour.match(l)]
+        if not fast and not scout:
             lines += ["# greedy (best move instead of sampling)"]
             lines += ["greedy " + l for l in godot("league_eval", ["--model", res_model, "--remote", str(port), "--games", str(a.games), "--duration", str(a.duration), "--stride", "2", "--greedy"]) if keep.match(l)]
             lines += ["greedy " + l for l in godot("behaviour_stats", ["--remote", str(port), "--greedy"]) if re.match(r"^(RL Team|rule-based)", l)]
@@ -129,7 +135,7 @@ def main():
             p.terminate()
         if flag and os.path.exists(flag):
             os.remove(flag)
-    if not fast:
+    if a.mode == "full":
         update_best(model, lines)
     lines.append("DONE %d" % (time.time() - t0))
     os.makedirs(os.path.dirname(os.path.abspath(a.out)), exist_ok=True)

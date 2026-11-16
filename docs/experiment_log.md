@@ -50,6 +50,16 @@ Not proven that this was the cause: if it freezes again, read the last lines of 
 All from `t48_u100`, 300 updates, lr 5e-5, minimal set plus one term: 01 minimal (control), 02 win_draw, 03 xga, 04 goalside, 05 compact,
 06 far, 07 xg, 08 tackle. Baseline `start:t48_u100`: full 2.25 ± 0.20, fast 1.42 ± 0.24.
 
+## Changes on 2026-11-16 (evening)
+Four reviews of the pipeline (RL, scouting, UI, agent interface) led to: per-match evaluation records and paired comparisons within one
+protocol, provenance (git commit, checkpoint hash), faithful resumes (optimizer + opponent pool saved, frozen benchmark pinned to the
+start net), the agent CLI `rl/lab.py` + `/api/v1` + `AGENTS.md`, a redesigned dashboard with a scouting tab, and a new queue:
+- The RL review judged the one-term-at-a-time reward queue underpowered (300 updates at lr 5e-5 barely move the policy; a full evaluation
+  only detects differences of about 0.7 points). The reward arms are parked in `exp/parked/` (xga first when they come back).
+- New queue: `minimal` (running) -> `control_seed11` (noise floor) -> `kickstart` (KL to the jit8 teacher, decaying, lr 1e-4) ->
+  `strong_opponents` (jit8 / RL4 / RL5 in the self-play slots, PFSP) -> `control_long` (1000 updates).
+- Still to try: a wider net (256) distilled from jit8 (`distill.py --hidden 256`), then kickstarted.
+
 ## Reviews
 An automatic review runs every 2 hours while the agent's session is open: it checks the Pi and the runner, appends a review here for every
 finished experiment and adjusts the queue.

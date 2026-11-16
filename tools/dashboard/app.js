@@ -294,7 +294,7 @@ function viewRuns() {
 }
 
 // ---------- RUN ----------
-const TABS = ["summary", "training", "evaluation", "behaviour", "config"];
+const TABS = ["summary", "training", "evaluation", "behaviour", "scouting", "config"];
 function viewRun(name, tab) {
   const d = state.detail[name]; ensureDetail(name);
   if (!d) return '<div class="empty">Loading…</div>';
@@ -306,7 +306,7 @@ function viewRun(name, tab) {
       <div class="meta">${row.update != null ? `update <b>${row.update}</b>${row.target ? " / " + row.target : ""}<br>` : ""}${row.started ? "started " + ago(row.started) + "<br>" : ""}${row.finished ? "finished " + ago(row.finished) + "<br>" : ""}${st.git_commit ? `commit <span class="mono">${esc(st.git_commit)}</span>${st.git_dirty ? " (dirty)" : ""}<br>` : ""}${(st.restarts || []).length ? `${st.restarts.length} restart(s)<br>` : ""}
       <a href="/api/v1/run/${encodeURIComponent(name)}" target="_blank">JSON</a> · <button class="linkbtn" data-copy="${esc(name)}">copy summary</button></div></div>
     <nav class="tabs">${TABS.map((t) => `<a class="${t === tab ? "on" : ""}" href="#/run/${encodeURIComponent(name)}/${t}">${t[0].toUpperCase() + t.slice(1)}</a>`).join("")}</nav>`;
-  return head + ({ summary: runSummary, training: runTraining, evaluation: runEvaluation, behaviour: runBehaviour, config: runConfig }[tab])(d);
+  return head + ({ summary: runSummary, training: runTraining, evaluation: runEvaluation, behaviour: runBehaviour, scouting: runScouting, config: runConfig }[tab])(d);
 }
 const refEval = (d, protocol) => (d.reference?.evals || []).filter((e) => e.protocol === protocol).pop();
 function runSummary(d) {
@@ -396,6 +396,66 @@ function runConfig(d) {
     <details class="card"><summary>All ${Object.keys(c).length} settings</summary><dl class="kv">${kv(Object.keys(c).sort())}</dl></details>`;
 }
 
+// ---------- SCOUTING ----------
+const STYLE = [
+  ["possession_pct", "Possession %", 0], ["field_tilt_pct", "Field tilt % (our possession in the final third)", 0], ["ball_own_half_pct", "Ball in our half %", 0],
+  ["ppda", "PPDA (opp. passes per our defensive action, their build-up zone)", 1], ["press_d1_px", "Pressing: nearest player to the ball px", 0], ["press_d2_px", "Pressing: 2nd nearest px", 0],
+  ["goal_guarded_pct", "Goal guarded % (someone within 180 px)", 0], ["goal_empty_pct", "Goal empty % (nobody within 300 px)", 0], ["deepest_to_goal_px", "Deepest player to our goal px", 0],
+  ["passes_match", "Passes / match", 1], ["pass_ok_pct", "Pass completion %", 0], ["progressive_match", "Progressive passes / match", 1],
+];
+function styleTags(sc) {
+  const t = [], sh = sc.shape || {};
+  if (sc.possession_pct >= 56) t.push("possession"); else if (sc.possession_pct <= 44) t.push("counter-attacking");
+  if (sc.press_d1_px <= 110) t.push("high press"); else if (sc.press_d1_px >= 220) t.push("sits back");
+  if (sh.out && sh.out.back_line_px >= 520) t.push("high line"); else if (sh.out && sh.out.back_line_px <= 260) t.push("deep block");
+  if (sc.goal_guarded_pct <= 35) t.push("no fixed keeper"); else if (sc.goal_guarded_pct >= 75) t.push("keeper stays home");
+  if (sc.goal_empty_pct >= 15) t.push("empty goal often");
+  const pl = (sc.pass_len || []).slice().sort((a, b) => a - b), med = pl.length ? pl[Math.floor(pl.length / 2)] : null;
+  if (med !== null && med <= 40) t.push("short touches"); else if (med !== null && med >= 150) t.push("long balls");
+  if (sh.in && sh.in.width_px >= 380) t.push("wide"); else if (sh.in && sh.in.width_px <= 200) t.push("narrow");
+  return t;
+}
+function pitch(content, W = 640, H = 300) {
+  const X = (x) => ((x + 1) / 2) * W, Y = (y) => ((y + 1) / 2) * H;
+  let g = `<rect width="${W}" height="${H}" rx="6" fill="color-mix(in srgb, var(--c3) 9%, var(--panel-2))" stroke="var(--line)"/>`;
+  g += `<line x1="${W / 2}" x2="${W / 2}" y1="0" y2="${H}" stroke="var(--line)"/><circle cx="${W / 2}" cy="${H / 2}" r="${H * 0.2}" fill="none" stroke="var(--line)"/>`;
+  g += `<rect x="0" y="${Y(-0.63)}" width="${W * 0.13}" height="${Y(0.63) - Y(-0.63)}" fill="none" stroke="var(--line)"/><rect x="${W * 0.87}" y="${Y(-0.63)}" width="${W * 0.13}" height="${Y(0.63) - Y(-0.63)}" fill="none" stroke="var(--line)"/>`;
+  g += `<rect x="-5" y="${Y(-0.38)}" width="5" height="${Y(0.38) - Y(-0.38)}" fill="var(--muted)"/><rect x="${W}" y="${Y(-0.38)}" width="5" height="${Y(0.38) - Y(-0.38)}" fill="var(--bad)"/>`;
+  return `<svg viewBox="-6 -2 ${W + 12} ${H + 4}" class="pitchsvg">${g}${content(X, Y)}</svg>`;
+}
+const RANK = ["deepest", "2nd deepest", "middle", "2nd most advanced", "most advanced"];
+function runScouting(d) {
+  const sc = d.scout, ref = d.scout_ref;
+  if (!sc) return '<div class="empty">No scouting data yet: it comes with the next full evaluation (or a scout evaluation).</div>';
+  const c = runColor(d.run), tags = styleTags(sc);
+  const formation = pitch((X, Y) => ["out", "in"].map((ph) => (sc.avg_pos[ph] || []).map((p, i) => `<circle cx="${X(p[0])}" cy="${Y(p[1])}" r="14" fill="${ph === "in" ? c : "var(--panel)"}" stroke="${c}" stroke-width="2.5" ${ph === "out" ? 'stroke-dasharray="4 3"' : ""}><title>${RANK[i]} · ${ph === "in" ? "in" : "out of"} possession</title></circle><text x="${X(p[0])}" y="${Y(p[1]) + 4.5}" text-anchor="middle" class="pnum" style="fill:${ph === "in" ? "#0d1117" : "var(--ink)"}">${i + 1}</text>`).join("")).join(""));
+  const sh = sc.shape || {};
+  const shapeRows = [["Width", "width_px"], ["Depth", "depth_px"], ["Last man from goal line", "last_man_px"], ["Back line (2nd deepest)", "back_line_px"]].map(([l, k]) => `<tr><td>${l}</td><td class="r">${f(sh.in?.[k], 0)}</td><td class="r">${f(sh.out?.[k], 0)}</td></tr>`).join("");
+  const nm = sc.matches || 1, xgF = (sc.shots || []).reduce((a, s) => a + s[2], 0), xgA = (sc.shots_against || []).reduce((a, s) => a + s[2], 0);
+  const shots = pitch((X, Y) => (sc.shots_against || []).map((s) => `<circle cx="${X(s[0])}" cy="${Y(s[1])}" r="${4 + 20 * Math.sqrt(s[2])}" fill="${s[3] ? "var(--bad)" : "none"}" fill-opacity=".45" stroke="var(--bad)" stroke-width="1.5"><title>against · xG ${f(s[2])}${s[3] ? " · on target" : ""}</title></circle>`).join("") +
+    (sc.shots || []).map((s) => `<circle cx="${X(s[0])}" cy="${Y(s[1])}" r="${4 + 20 * Math.sqrt(s[2])}" fill="${s[3] ? c : "none"}" fill-opacity=".55" stroke="${c}" stroke-width="1.5"><title>for · xG ${f(s[2])}${s[3] ? " · on target" : ""}</title></circle>`).join(""));
+  // pass network: a slot sits where its depth ranks put it (role share x average position in possession)
+  const heatPos = (d.heat || []).filter((h) => h.slot !== "ball").map((h) => { let x = 0, y = 0, n = 0; h.v.forEach((v, i) => { x += v * (((i % h.w) + 0.5) / h.w * 2 - 1); y += v * ((Math.floor(i / h.w) + 0.5) / h.h * 2 - 1); n += v; }); return n ? [x / n, y / n] : null; });
+  const slotPos = heatPos.length === 5 && heatPos.every(Boolean) ? heatPos      // each slot at its mean position (heatmap of the same evaluation)
+    : (sc.role_share || []).map((row) => { let x = 0, y = 0; row.forEach((pct, r) => { const p = sc.avg_pos.in[r] || [0, 0]; x += (pct / 100) * p[0]; y += (pct / 100) * p[1]; }); return [x, y]; });
+  const maxE = Math.max(1, ...(sc.edges || []).map((e) => e[2]));
+  const net = pitch((X, Y) => (sc.edges || []).filter((e) => e[0] !== e[1]).map((e) => { const a = slotPos[e[0]], b = slotPos[e[1]]; return a && b ? `<line x1="${X(a[0])}" y1="${Y(a[1])}" x2="${X(b[0])}" y2="${Y(b[1])}" stroke="${c}" stroke-width="${1 + 7 * (e[2] / maxE)}" stroke-opacity=".55" stroke-linecap="round"><title>slot ${e[0] + 1} → ${e[1] + 1}: ${e[2]} passes</title></line>` : ""; }).join("") +
+    slotPos.map((p, i) => `<circle cx="${X(p[0])}" cy="${Y(p[1])}" r="13" fill="${c}"/><text x="${X(p[0])}" y="${Y(p[1]) + 4.5}" text-anchor="middle" class="pnum" style="fill:#0d1117">${i + 1}</text>`).join(""));
+  const recov = pitch((X, Y) => (sc.recoveries || []).map((r) => `<circle cx="${X(r[0])}" cy="${Y(r[1])}" r="4.5" fill="${r[2] === "t" ? "var(--c2)" : r[2] === "i" ? "var(--c1)" : "var(--c5)"}" fill-opacity=".8"><title>${{ t: "tackle", i: "interception", r: "loose ball" }[r[2]]}</title></circle>`).join(""));
+  const roleRows = (sc.role_share || []).map((row, i) => `<tr><td>slot ${i + 1}</td>${row.map((v) => `<td class="r rs" style="background:color-mix(in srgb, ${c} ${Math.round(v * 0.85)}%, transparent)">${f(v, 0)}</td>`).join("")}</tr>`).join("");
+  const nums = STYLE.map(([k, l, dec]) => `<tr><td>${l}</td><td class="r"><b>${f(sc[k], dec)}</b></td>${ref ? `<td class="r muted">${f(ref[k], dec)}</td>` : ""}</tr>`).join("");
+  return `<div class="tagrow">${tags.map((t) => `<span class="tag">${esc(t)}</span>`).join("") || '<span class="muted">no strong style signals</span>'}<span class="muted small">${esc(sc.kind)} evaluation u${sc.update} · ${nm} matches of 60 s vs 4 rule teams · sampled moves</span></div>
+    <div class="grid g2"><section class="card"><div class="card-h"><h2>Formation by depth rank</h2><span class="muted small">filled = in possession · dashed = out · attacking right</span></div>${formation}
+      <table class="mini"><thead><tr><th>Shape px</th><th class="r">in poss.</th><th class="r">out of poss.</th></tr></thead><tbody>${shapeRows}</tbody></table></section>
+      <section class="card"><div class="card-h"><h2>Shots</h2><span class="muted small">size = xG · filled = on target · red = against</span></div>${shots}
+      <div class="statline"><span>for <b>${f((sc.shots || []).length / nm, 1)}</b> shots · xG <b>${f(xgF / nm)}</b> / match · ${f(xgF / Math.max((sc.shots || []).length, 1))} per shot</span><span>against <b>${f((sc.shots_against || []).length / nm, 1)}</b> · xG <b>${f(xgA / nm)}</b></span></div></section></div>
+    <div class="grid g2"><section class="card"><div class="card-h"><h2>Pass network</h2><span class="muted small">completed passes between slots · node = the slot's mean position</span></div>${net}</section>
+      <section class="card"><div class="card-h"><h2>Where the ball is won</h2><span class="muted small"><i class="lgd" style="background:var(--c2)"></i>tackle <i class="lgd" style="background:var(--c1)"></i>interception <i class="lgd" style="background:var(--c5)"></i>loose ball</span></div>${recov}</section></div>
+    <div class="grid g2"><section class="card flush"><div class="card-h pad"><h2>Style numbers</h2>${ref ? `<span class="muted small">grey: ${esc(ref.name)}</span>` : ""}</div><div class="tbl-wrap"><table><tbody>${nums}</tbody></table></div></section>
+      <section class="card flush"><div class="card-h pad"><h2>Who plays where</h2><span class="muted small">% of time each slot is at each depth rank</span></div><div class="tbl-wrap"><table><thead><tr><th></th>${RANK.map((r) => `<th class="r small">${r}</th>`).join("")}</tr></thead><tbody>${roleRows}</tbody></table></div>
+      <p class="muted small pad">No fixed roles: a slot that is the deepest most of the time is the de-facto keeper.</p></section></div>`;
+}
+
 // ---------- COMPARE ----------
 function viewCompare(params) {
   const o = state.ov; if (!o) return '<div class="empty">Loading…</div>';
@@ -421,12 +481,14 @@ function viewCompare(params) {
   const metrics = [["League pts", (e) => e.pts, (e) => e.se], ["Goal difference", (e) => e.gd, (e) => e.gd_se], ["Conceded", (e) => e.ga], ["Best-move pts", (e) => e.greedy_pts], ["vs RL Team 4", (e) => e.h2h?.["RL Team 4"]?.pts], ["vs RL Team 5", (e) => e.h2h?.["RL Team 5"]?.pts], ["Direction changes/s", (e) => e.behaviour?.dir_changes_s], ["Idle %", (e) => e.behaviour?.idle_pct], ["Spacing px", (e) => e.behaviour?.spacing_px]];
   const r0 = latestOf(ref);
   const table = `<table><thead><tr><th>Latest ${kind}</th>${runs.map((n) => `<th class="r">${runLink(n)}</th>`).join("")}</tr></thead><tbody>${metrics.map(([lbl, g, s]) => `<tr><td>${lbl}</td>${runs.map((n, i) => { const e = latestOf(n), v = e ? g(e) : null, dv = i && v != null && r0 && g(r0) != null ? v - g(r0) : null; return `<td class="r">${f(v)}${s && e && s(e) != null ? `<span class="pm">±${f(s(e))}</span>` : ""}${dv != null ? `<div class="small ${dv > 0 ? "pos" : dv < 0 ? "neg" : "muted"}">${sgn(dv)}</div>` : ""}</td>`; }).join("")}</tr>`).join("")}</tbody></table>`;
+  const styleTable = runs.some((n) => state.detail[n]?.scout) ? `<section class="card flush" style="margin-bottom:14px"><div class="card-h pad"><h2>Style</h2><span class="muted small">latest scouting data of each run</span></div><div class="tbl-wrap"><table><thead><tr><th></th>${runs.map((n) => `<th class="r">${runLink(n)}</th>`).join("")}</tr></thead><tbody>${STYLE.map(([k, l, dec]) => `<tr><td>${l}</td>${runs.map((n) => `<td class="r">${f(state.detail[n]?.scout?.[k], dec)}</td>`).join("")}</tr>`).join("")}<tr><td>Tags</td>${runs.map((n) => `<td class="r small">${state.detail[n]?.scout ? esc(styleTags(state.detail[n].scout).join(", ")) : "–"}</td>`).join("")}</tr></tbody></table></div></section>` : "";
   const tr = runs.map((n) => ({ name: n, color: runColor(n), points: ema((state.detail[n]?.training || []).map((r) => ({ x: r.upd, y: r.rules })), state.smooth) }));
   const ev = runs.map((n) => ({ name: n, color: runColor(n), points: (state.detail[n]?.evals || []).filter((e) => e.kind === kind).map((e) => ({ x: e.update, y: e.pts, err: 1.96 * e.se })), dots: true, noLine: true }));
   return `<div class="head"><div><h1>Compare</h1><p>Each run against the first, on the same evaluation protocol only; paired over identical matches when possible.</p></div><div class="pills">${kinds}</div></div>
     <div class="rchips">${chipsR}${add}</div>${warn.length ? `<div class="flag warn">${warn.map(esc).join(" · ")}</div>` : ""}
     <div class="grid g2"><section class="card"><div class="card-h"><h2>Difference vs ${esc(ref || "")}</h2><span class="muted small">league pts, 95% interval</span></div>${forest(rows)}</section>
       <section class="card flush"><div class="tbl-wrap">${table}</div></section></div>
+    ${styleTable}
     <div class="grid g2"><section class="card"><div class="card-h"><h2>Training points vs rule bots</h2>${smoothControl()}</div>${lineChart(tr, { yMin: 0, yMax: 3, height: 220, key: "cmp-tr" })}</section>
       <section class="card"><div class="card-h"><h2>${kind === "full" ? "Full evaluations" : "Fast checks"}</h2><span class="muted small">95% interval</span></div>${lineChart(ev, { yMin: 0, yMax: 3, height: 220, xMin: 0, key: "cmp-ev" })}</section></div>`;
 }

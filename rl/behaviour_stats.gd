@@ -2,6 +2,9 @@ extends Node
 ## Behaviour statistics, RL Team vs rule-based opponents per decision: jitter, kick presses, clumping, keeper position.
 ##   godot --headless --path . res://rl/behaviour_stats.tscn [-- --model res://x.json | --remote PORT]
 ## --remote PORT: the measured net runs in tools/net_server.py (see league_eval.gd).
+## Also prints one "SCOUT {json}" line for the scouting page: team shape in and out of possession by depth rank (who is really the
+## deepest / most advanced player, whatever its slot), keeper presence, pressing, possession, territory and located events (shots
+## for and against, completed passes between slots, recoveries), positions normalised to [-1, 1] in the RL team's attacking frame.
 var results: Array = []
 var model_net: MLP = null          # optional --model <res:// json>: measure this net instead of the team's shipped one
 var remote_port := 0
@@ -36,6 +39,13 @@ func _run(i: int) -> void:
 		c.ml_models[0] = model_net
 		c.ml_keeper = true
 	var sim := MatchSim.new(c)
+	sim.log_events = true
+	var sc := {"role": [], "pos": {"in": [], "out": []}, "n_phase": {"in": 0, "out": 0}, "shape": {"in": [0.0, 0.0, 0.0, 0.0], "out": [0.0, 0.0, 0.0, 0.0]},
+		"press": [0.0, 0.0, 0], "guarded": 0, "empty": 0, "deep_dist": 0.0, "n": 0, "tilt": 0, "own_half_ball": 0}
+	for k in 5:
+		sc["role"].append([0, 0, 0, 0, 0])
+		sc["pos"]["in"].append([0.0, 0.0])
+		sc["pos"]["out"].append([0.0, 0.0])
 	var st := [{}, {}]
 	for t in 2:
 		st[t] = {"n": 0, "dir_change": 0, "kick_rise": 0, "kick_hold": 0, "idle": 0, "near_ball": 0.0, "spacing": 0.0, "gk_dist": 0.0, "gk_n": 0, "speed": 0.0, "turn180": 0, "near250": 0.0, "nn_dist": 0.0, "close_pairs": 0.0, "passes": 0.0, "passes_ok": 0.0, "key_passes": 0.0, "xa": 0.0, "shots": 0.0}
@@ -59,6 +69,7 @@ func _run(i: int) -> void:
 					roles[p.slot] = p.role
 					_bin(heat[p.slot], p.pos, sim, t)
 				_bin(heat[5], sim.ball.pos, sim, t)
+				_scout_tick(sc, sim, team)
 			var near := 0
 			for p: SimPlayer in team:
 				s["n"] += 1
@@ -104,6 +115,8 @@ func _run(i: int) -> void:
 			s["gk_dist"] += gk.pos.distance_to(own_goal)
 			s["gk_n"] += 1
 	var res := sim.make_result()
+	sc["events"] = sim.ev_log
+	sc["possession"] = res["team_stats"][0]["possession"]
 	for t in 2:
 		st[t]["passes"] = res["team_stats"][t]["passes"]
 		st[t]["passes_ok"] = res["team_stats"][t]["passes_ok"]
@@ -112,8 +125,165 @@ func _run(i: int) -> void:
 		st[int(pl["team"])]["key_passes"] += float(pl.get("key_passes", 0))
 		st[int(pl["team"])]["xa"] += float(pl.get("xa", 0.0))
 	mutex.lock()
-	results.append({"st": st, "score": sim.scores, "ticks": sim.tick, "heat": heat, "roles": roles})
+	results.append({"st": st, "score": sim.scores, "ticks": sim.tick, "heat": heat, "roles": roles, "scout": sc, "half": Vector2(sim.pitch.half_w, sim.pitch.half_h)})
 	mutex.unlock()
+
+## One sample of the RL team's shape (team 0, attacking frame, normalised): depth ranks, in / out of possession, pressing, keeper.
+func _scout_tick(sc: Dictionary, sim: MatchSim, team: Array) -> void:
+	var ax := sim.attack_dir(0)
+	var hw := sim.pitch.half_w
+	var hh := sim.pitch.half_h
+	var q: Array = []
+	for p: SimPlayer in team:
+		q.append([Vector2(p.pos.x * ax / hw, p.pos.y / hh), p.slot])
+	q.sort_custom(func(a, b): return a[0].x < b[0].x)          # rank 0 = the deepest player
+	var lt := sim.last_touch
+	var phase := ""
+	if lt != null:
+		phase = "in" if lt.team == 0 else "out"
+	sc["n"] += 1
+	var ball := Vector2(sim.ball.pos.x * ax / hw, sim.ball.pos.y / hh)
+	if ball.x < 0.0:
+		sc["own_half_ball"] += 1
+	for r in q.size():
+		sc["role"][q[r][1]][r] += 1
+	if phase != "":
+		sc["n_phase"][phase] += 1
+		var lo := Vector2(9, 9)
+		var hi := Vector2(-9, -9)
+		for r in q.size():
+			var v: Vector2 = q[r][0]
+			sc["pos"][phase][r][0] += v.x
+			sc["pos"][phase][r][1] += v.y
+			lo = Vector2(minf(lo.x, v.x), minf(lo.y, v.y))
+			hi = Vector2(maxf(hi.x, v.x), maxf(hi.y, v.y))
+		var sh: Array = sc["shape"][phase]
+		sh[0] += (hi.y - lo.y) * hh                            # width px
+		sh[1] += (hi.x - lo.x) * hw                            # depth px
+		sh[2] += (q[0][0].x + 1.0) * hw                        # last man: px from our goal line
+		sh[3] += (q[1][0].x + 1.0) * hw                        # second deepest (back line) px from our goal line
+		if phase == "in" and ball.x > 1.0 / 3.0:
+			sc["tilt"] += 1
+	if phase == "out":                                         # pressing: our two nearest players' distance to the ball
+		var ds: Array = []
+		for p: SimPlayer in team:
+			ds.append(p.pos.distance_to(sim.ball.pos))
+		ds.sort()
+		sc["press"][0] += ds[0]
+		sc["press"][1] += ds[1]
+		sc["press"][2] += 1
+	var own_goal := Vector2(-hw * ax, 0.0)
+	var dmin := 1.0e9
+	for p: SimPlayer in team:
+		dmin = minf(dmin, p.pos.distance_to(own_goal))
+	sc["deep_dist"] += dmin
+	if dmin < 180.0:
+		sc["guarded"] += 1
+	if dmin > 300.0:
+		sc["empty"] += 1
+
+
+## Merges the scouting samples and located events of every match into the SCOUT line.
+func _scout_summary() -> Dictionary:
+	var hw := 640.0
+	var hh := 300.0
+	if not results.is_empty() and results[0].has("half"):
+		hw = results[0]["half"].x
+		hh = results[0]["half"].y
+	var role := []
+	var pos := {"in": [], "out": []}
+	var nph := {"in": 0, "out": 0}
+	var shape := {"in": [0.0, 0.0, 0.0, 0.0], "out": [0.0, 0.0, 0.0, 0.0]}
+	var tot := {"n": 0, "guarded": 0, "empty": 0, "deep_dist": 0.0, "tilt": 0, "own_half_ball": 0, "possession": 0.0}
+	var press := [0.0, 0.0, 0]
+	for k in 5:
+		role.append([0, 0, 0, 0, 0])
+		pos["in"].append([0.0, 0.0])
+		pos["out"].append([0.0, 0.0])
+	var shots := []
+	var shots_against := []
+	var recov := []
+	var edges := {}
+	var pass_len := []
+	var prog := 0
+	var n_pass := 0
+	var n_ok := 0
+	var opp_build := 0                                         # opponent passes in their own 60% of the pitch (PPDA numerator)
+	var def_high := 0                                          # our tackles / interceptions in that zone (PPDA denominator)
+	for r in results:
+		var sc: Dictionary = r["scout"]
+		for k in 5:
+			for j in 5:
+				role[k][j] += sc["role"][k][j]
+			for ph in ["in", "out"]:
+				pos[ph][k][0] += sc["pos"][ph][k][0]
+				pos[ph][k][1] += sc["pos"][ph][k][1]
+		for ph in ["in", "out"]:
+			nph[ph] += sc["n_phase"][ph]
+			for j in 4:
+				shape[ph][j] += sc["shape"][ph][j]
+		for key in ["n", "guarded", "empty", "deep_dist", "tilt", "own_half_ball"]:
+			tot[key] += sc[key]
+		for j in 3:
+			press[j] += sc["press"][j]
+		tot["possession"] += sc["possession"] / float(results.size())
+		for e: Array in sc["events"]:
+			var kind: String = e[0]
+			var x: float = e[4] / hw
+			var y: float = e[5] / hh
+			if int(e[2]) == 0:
+				if kind.begins_with("shot"):
+					shots.append([snappedf(x, 0.01), snappedf(y, 0.01), e[8], 1 if kind == "shot_on" else 0])
+				elif kind == "pass_ok" or kind == "pass_fail":
+					n_pass += 1
+					if kind == "pass_ok":
+						n_ok += 1
+						var key := "%d-%d" % [int(e[3]) % 16, int(e[8]) % 16]
+						edges[key] = edges.get(key, 0) + 1
+						pass_len.append(roundf(Vector2(e[6] - e[4], e[7] - e[5]).length()))
+						if e[6] - e[4] >= hw * 0.2:
+							prog += 1
+				else:
+					recov.append([snappedf(x, 0.01), snappedf(y, 0.01), kind.substr(0, 1)])
+					if kind != "recovery" and x > -0.2:
+						def_high += 1
+			else:
+				if kind.begins_with("shot"):                       # opponent frame: mirror into ours
+					shots_against.append([snappedf(-x, 0.01), snappedf(-y, 0.01), e[8], 1 if kind == "shot_on" else 0])
+				elif (kind == "pass_ok" or kind == "pass_fail") and x < 0.2:
+					opp_build += 1
+	var avg := {"in": [], "out": []}
+	var shape_out := {}
+	for ph in ["in", "out"]:
+		var n := maxf(nph[ph], 1)
+		for k in 5:
+			avg[ph].append([snappedf(pos[ph][k][0] / n, 0.01), snappedf(pos[ph][k][1] / n, 0.01)])
+		shape_out[ph] = {"width_px": roundf(shape[ph][0] / n), "depth_px": roundf(shape[ph][1] / n),
+			"last_man_px": roundf(shape[ph][2] / n), "back_line_px": roundf(shape[ph][3] / n)}
+	var role_share := []
+	for k in 5:
+		var s := 0
+		for j in 5:
+			s += role[k][j]
+		var row := []
+		for j in 5:
+			row.append(snappedf(100.0 * role[k][j] / maxf(s, 1), 0.1))
+		role_share.append(row)
+	var edge_list := []
+	for key in edges:
+		var parts: PackedStringArray = key.split("-")
+		edge_list.append([int(parts[0]), int(parts[1]), edges[key]])
+	var n_t := maxf(tot["n"], 1)
+	var nm := maxf(results.size(), 1)
+	return {"matches": results.size(), "possession_pct": snappedf(tot["possession"], 0.1), "ball_own_half_pct": snappedf(100.0 * tot["own_half_ball"] / n_t, 0.1),
+		"field_tilt_pct": snappedf(100.0 * tot["tilt"] / maxf(nph["in"], 1), 0.1), "goal_guarded_pct": snappedf(100.0 * tot["guarded"] / n_t, 0.1),
+		"goal_empty_pct": snappedf(100.0 * tot["empty"] / n_t, 0.1), "deepest_to_goal_px": roundf(tot["deep_dist"] / n_t),
+		"press_d1_px": roundf(press[0] / maxf(press[2], 1)), "press_d2_px": roundf(press[1] / maxf(press[2], 1)),
+		"ppda": snappedf(opp_build / maxf(def_high, 1), 0.01), "passes_match": snappedf(n_pass / nm, 0.1),
+		"pass_ok_pct": snappedf(100.0 * n_ok / maxf(n_pass, 1), 0.1), "progressive_match": snappedf(prog / nm, 0.1),
+		"shape": shape_out, "avg_pos": avg, "role_share": role_share, "edges": edge_list, "pass_len": pass_len,
+		"shots": shots, "shots_against": shots_against, "recoveries": recov}
+
 
 func _ready() -> void:
 	var cli := OS.get_cmdline_user_args()
@@ -164,4 +334,5 @@ func _ready() -> void:
 	for r in results:
 		sc += str(r["score"]) + " "
 	print("scores (RL first): ", sc)
+	print("SCOUT " + JSON.stringify(_scout_summary()))
 	get_tree().quit()

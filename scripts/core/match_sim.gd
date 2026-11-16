@@ -88,6 +88,8 @@ var hist_idx := 0
 
 var stats := MatchStats.new()
 var events: Array = []
+var log_events := false          # analysis only (rl/behaviour_stats.gd): located, time-stamped events in ev_log; off in games and training
+var ev_log: Array = []           # [kind, tick, team, uid, x, y, x2, y2, value], positions in the acting team's attacking frame (x towards the opponent goal)
 var mom_uid := -1
 
 # human control (set by the view)
@@ -634,6 +636,7 @@ func _register_touch(p: SimPlayer, kicked: bool) -> void:
             if last_touch_kicked and last_touch_kind == "pass" and tick - last_touch_tick < 240:
                 lt.ps.passes_ok += 1
                 p.ps.passes_received += 1
+                _log_ev("pass_ok", lt.team, lt.uid, kick_pos, ball.pos, float(p.uid))
                 var gain := (ball.pos.x - kick_pos.x) * ax_lt
                 var prog_thr := half_w * 0.2
                 if gain >= prog_thr:
@@ -651,6 +654,7 @@ func _register_touch(p: SimPlayer, kicked: bool) -> void:
                 _end_carry()
             if last_touch_kicked and last_touch_kind == "pass":
                 lt.ps.passes_failed += 1
+                _log_ev("pass_fail", lt.team, lt.uid, kick_pos, ball.pos, float(p.uid))
                 lt.ps.pass_value += Rating.pass_value(false, 0.0, kick_dir.x * ax_lt > 0.5,
                     kick_pressed, kick_pos.x * ax_lt / half_w, half_w * 0.2)
             if pending_shot_team == lt.team and tick - pending_shot_tick < 150:
@@ -663,13 +667,16 @@ func _register_touch(p: SimPlayer, kicked: bool) -> void:
             elif was_dribbling:
                 p.ps.tackles += 1
                 p.rec_tick = tick
+                _log_ev("tackle", p.team, p.uid, ball.pos, ball.pos, 0.0)
             elif last_touch_kicked and (last_touch_kind == "pass" or last_touch_kind == "clear") \
                     and tick - last_touch_tick < 90 and tick - p.rec_tick >= 30:
                 p.ps.interceptions += 1
                 p.rec_tick = tick
+                _log_ev("intercept", p.team, p.uid, ball.pos, ball.pos, 0.0)
             elif tick - last_touch_tick >= 12 and tick - p.rec_tick >= 60:
                 p.ps.recoveries += 1
                 p.rec_tick = tick
+                _log_ev("recovery", p.team, p.uid, ball.pos, ball.pos, 0.0)
             assist_cand = null
     # a new possession by this player starts a carry (a kick ends it again straight away)
     if carry_p == p and last_touch == p and not kicked:
@@ -689,6 +696,13 @@ func _register_touch(p: SimPlayer, kicked: bool) -> void:
     team_touch_tick[p.team] = tick
     if kicked:
         _classify_kick(p)
+
+
+func _log_ev(kind: String, team: int, uid: int, a: Vector2, b: Vector2, v: float) -> void:
+    if not log_events:
+        return
+    var ax := attack_dir(team)
+    ev_log.append([kind, tick, team, uid, roundf(a.x * ax), roundf(a.y), roundf(b.x * ax), roundf(b.y), snappedf(v, 0.001)])
 
 
 func _classify_kick(p: SimPlayer) -> void:
@@ -718,6 +732,7 @@ func _classify_kick(p: SimPlayer) -> void:
                         and tick - assist_tick < 240:
                     assist_cand.ps.key_passes += 1
                     assist_cand.ps.xa += xg
+                _log_ev("shot_on" if absf(y_at) < pitch.goal_half - ball.radius else "shot", p.team, p.uid, ball.pos, ball.pos, xg)
                 if absf(y_at) < pitch.goal_half - ball.radius:
                     p.ps.shots_on_target += 1
                     pending_shot_team = p.team
@@ -731,6 +746,7 @@ func _classify_kick(p: SimPlayer) -> void:
         p.ps.shots += 1
         var xg_wide := Rating.shot_xg(ball.pos, gx, pitch.goal_half)
         p.ps.xg += xg_wide
+        _log_ev("shot", p.team, p.uid, ball.pos, ball.pos, xg_wide)
         if xg_wide >= 0.3:
             p.ps.big_chances += 1
     if kind == "pass" and (p.kick_intent == "clear" or p.kick_intent == "long"):

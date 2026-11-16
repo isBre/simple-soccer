@@ -201,6 +201,7 @@ def eval_row(r):
             "gd_se": a.get("gd_se"), "gf": a.get("gf"), "ga": a.get("ga"), "n": a.get("n"),
             "greedy_pts": g.get("pts"), "greedy_ga": g.get("ga"),
             "h2h": {k: {"pts": v["pts"], "se": v["se"], "gd": v["gd"], "n": v["n"]} for k, v in r.get("h2h", {}).items()},
+            "style": {k: v for k, v in (r.get("scout") or {}).items() if not isinstance(v, (list, dict))},
             "behaviour": r.get("behaviour", {}), "behaviour_rule_bots": r.get("behaviour_rule", {}), "paired_matches": len(r.get("matches", [])), "git_commit": r.get("git_commit"),
             "checkpoint": r.get("checkpoint"), "file": r.get("file"), "eval_seconds": r.get("seconds"), "time": iso(r.get("time"))}
 
@@ -219,7 +220,7 @@ def run_row(name, rows):
     fast = next((r for r in reversed(ev) if r["kind"] == "fast"), None)
     rewards = st.get("effective_rewards") or {}
     changed = {k: v for k, v in rewards.items() if tracker.MINIMAL.get(k) != v}
-    return {"name": name, "state": st.get("state", "imported" if name.startswith(("old_", "start:")) else "unknown"),
+    return {"name": name, "state": st.get("state", "imported" if name.startswith(("old_", "start:")) else "reference" if name.startswith("team:") else "unknown"),
             "notes": spec.get("notes", ""), "start": spec.get("start"), "control": spec.get("control"),
             "rewards_changed_vs_minimal": changed if rewards else spec.get("rewards", {}), "seed": st.get("seed"),
             "update": st.get("update"), "target": st.get("target_updates"), "stop_reason": st.get("stop_reason"),

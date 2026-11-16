@@ -84,7 +84,11 @@ def run_detail(run):
     last_full = next((r for r in reversed(rows) if r["run"] == run and r["kind"] == "full"), None)
     ref_name = (st.get("verdict") or {}).get("reference") or st.get("baseline_run")
     ref = [lab.eval_row(r) for r in rows if ref_name and r["run"] == ref_name]
-    return {"run": run, "tag": tag, "row": lab.run_row(run, rows), "status": st, "config": rj(os.path.join(LOGS, tag + "_config.json"), {}),
+    sc = next((r for r in reversed(rows) if r["run"] == run and r.get("scout")), None)
+    ref_sc = next((r for r in reversed(rows) if r["run"] == "team:RL Team 4" and r.get("scout")), None)
+    return {"run": run, "tag": tag, "row": lab.run_row(run, rows), "status": st,
+            "scout": {**sc["scout"], "update": sc["update"], "kind": sc["kind"]} if sc else None,
+            "scout_ref": {"name": "RL Team 4", **ref_sc["scout"]} if ref_sc and run != "team:RL Team 4" else None, "config": rj(os.path.join(LOGS, tag + "_config.json"), {}),
             "training": lab.thin(lab.training(tag), 500), "ppo": lab.thin(lab.latest_segment(lab.jl(os.path.join(LOGS, tag + "_ppo.jsonl"))), 400),
             "terms": lab.thin(lab.latest_segment([{"upd": t["upd"], **t["terms"]} for t in lab.jl(os.path.join(LOGS, tag + "_terms.jsonl"))]), 300),
             "evals": evals, "reference": {"name": ref_name, "evals": ref},

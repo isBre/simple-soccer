@@ -18,6 +18,10 @@ python3 rl/lab.py compare A B             # paired difference A - B with se, z, 
 python3 rl/lab.py ablation                # each finished run vs its reference, Holm-corrected over the batch
 python3 rl/lab.py events --since 2026-11-16T20:00   # what happened (starts, resumes, stops, evaluations, reboots)
 ```
+Style / tactics: every full evaluation (and `python3 rl/eval_checkpoint.py --model M --out F --mode scout`, ~2 min) stores a `scout`
+summary: possession, field tilt, PPDA, pressing distances, how often the goal is guarded or empty, shape by depth rank in and out of
+possession, who plays where (role shares per slot), shots for / against with xG, passes, recoveries. `evals` rows carry the scalar part as
+`style`; RL Team 4 and 5 are recorded as reference runs `team:RL Team 4` / `team:RL Team 5`.
 The dashboard serves the same data at `GET /api/v1/<command>` (e.g. `/api/v1/compare?a=minimal&b=start:t48_u100&kind=full`).
 Every response is `{"schema_version", "generated_at", "data"}`; errors are `{"error", "hint"}` with exit code 1 / HTTP 404.
 
