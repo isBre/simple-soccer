@@ -201,7 +201,7 @@ def eval_row(r):
             "gd_se": a.get("gd_se"), "gf": a.get("gf"), "ga": a.get("ga"), "n": a.get("n"),
             "greedy_pts": g.get("pts"), "greedy_ga": g.get("ga"),
             "h2h": {k: {"pts": v["pts"], "se": v["se"], "gd": v["gd"], "n": v["n"]} for k, v in r.get("h2h", {}).items()},
-            "behaviour": r.get("behaviour", {}), "paired_matches": len(r.get("matches", [])), "git_commit": r.get("git_commit"),
+            "behaviour": r.get("behaviour", {}), "behaviour_rule_bots": r.get("behaviour_rule", {}), "paired_matches": len(r.get("matches", [])), "git_commit": r.get("git_commit"),
             "checkpoint": r.get("checkpoint"), "file": r.get("file"), "eval_seconds": r.get("seconds"), "time": iso(r.get("time"))}
 
 

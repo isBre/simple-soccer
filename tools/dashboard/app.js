@@ -1,15 +1,22 @@
-// Soccer Lab: single-page dashboard of the experiment pipeline. Polls the JSON API of tools/dashboard.py every 10 s.
-// Views (hash routes): #/ overview, #/runs, #/run/<name>, #/compare?a=&b=, #/queue, #/pi. Charts are plain SVG, no libraries.
+// Soccer Lab: single-page dashboard of the experiment pipeline (tools/dashboard.py). Polls the JSON API every 10 s.
+// Routes: #/ now · #/live · #/runs · #/run/<name>[/<tab>] · #/compare?runs=a,b&kind=full · #/pi
+// Charts are plain SVG (no libraries, no internet). Run colours are hashed from the run name, so they never change.
 "use strict";
 
 const POLL_MS = 10000;
-const COLORS = ["--blue", "--orange", "--accent", "--purple", "--gold", "--teal", "--pink", "--slate"];
+const PALETTE = ["--c1", "--c2", "--c3", "--c4", "--c5", "--c6", "--c7", "--c8", "--c9", "--c10"];
 const TERM_LABEL = {
   goals: "goals", time: "time", pass_prog: "progressive pass", pass_fail: "failed pass", pass_team: "pass (team)", coop: "cooperation",
   open: "open for pass", space: "spacing", kick: "kick discipline", xg: "xG for", xga: "xG against", result: "win / draw", tackle: "tackles",
-  goalside: "goal-side", opp_half: "opponent in our half", compact: "compactness", far: "far from ball", keeper: "keeper", jitter: "twitching", shaping: "shaping",
+  goalside: "goal-side", opp_half: "opp. in our half", compact: "compactness", far: "far from ball", keeper: "keeper", jitter: "twitching", shaping: "shaping",
 };
-const state = { overview: null, detail: {}, health: null, sort: { key: "pts", dir: -1 }, lastOk: 0 };
+const BEHAVIOUR = [
+  ["dir_changes_s", "Direction changes / s", "lower", 1], ["idle_pct", "Idle %", "lower", 0], ["spacing_px", "Teammate spacing px", "", 0],
+  ["keeper_dist_px", "Slot-0 distance from goal px", "", 0], ["passes_match", "Passes / match", "higher", 1], ["key_passes_match", "Key passes / match", "higher", 2],
+  ["shots_match", "Shots / match", "higher", 1], ["xa_match", "xA / match", "higher", 2],
+];
+const DECISIONS_PER_MATCH = 2700;       // 30 decisions/s x 90 s: reward per agent-decision -> per player and match
+const state = { ov: null, detail: {}, health: null, lastOk: 0, firstFail: 0, sort: { key: "pts", dir: -1 }, filter: "", stateFilter: "all", selected: new Set(), smooth: 0.8, hidden: {}, piHours: 12, cmpCache: {}, evalPick: {} };
 
 // ---------- helpers ----------
 const $ = (s, el = document) => el.querySelector(s);
@@ -17,95 +24,104 @@ const css = (v) => getComputedStyle(document.documentElement).getPropertyValue(v
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const f = (v, d = 2) => (v === null || v === undefined || Number.isNaN(v) ? "–" : Number(v).toFixed(d));
 const sgn = (v, d = 2) => (v === null || v === undefined ? "–" : (v > 0 ? "+" : "") + Number(v).toFixed(d));
-const colorOf = (i) => css(COLORS[i % COLORS.length]);
+function hash(s) { let h = 2166136261; for (const c of String(s)) { h ^= c.charCodeAt(0); h = Math.imul(h, 16777619); } return h >>> 0; }
+const runColor = (name) => css(PALETTE[hash(name) % PALETTE.length]);
 function dur(s) {
-  if (s === null || s === undefined) return "–";
+  if (s === null || s === undefined || Number.isNaN(s)) return "–";
   s = Math.max(0, Math.round(s));
   const d = Math.floor(s / 86400), h = Math.floor((s % 86400) / 3600), m = Math.floor((s % 3600) / 60);
   return d ? `${d}d ${h}h` : h ? `${h}h ${String(m).padStart(2, "0")}m` : m ? `${m}m` : `${s}s`;
 }
-function ago(ts) { return ts ? dur(Date.now() / 1000 - ts) + " ago" : "–"; }
-function badge(stateName) {
-  const s = (stateName || "unknown").replace(/\s+/g, "");
-  return `<span class="badge ${esc(s)}">${esc(stateName || "unknown")}</span>`;
+const parseT = (iso) => (iso && iso.includes("T") ? new Date(iso).getTime() / 1000 : null);
+const ago = (iso) => { const t = typeof iso === "number" ? iso : parseT(iso); return t ? dur(Date.now() / 1000 - t) + " ago" : "–"; };
+const hhmm = (t) => { const d = new Date(t * 1000); return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`; };
+function badge(s) { const k = String(s || "unknown").replace(/\s+/g, ""); return `<span class="badge ${esc(k)}">${esc(s || "unknown")}</span>`; }
+async function getJSON(url) { const r = await fetch(url, { cache: "no-store" }); if (!r.ok) throw new Error(url + " " + r.status); return r.json(); }
+const runLink = (n) => `<a class="rl" href="#/run/${encodeURIComponent(n)}"><i class="dot" style="background:${runColor(n)}"></i>${esc(n)}</a>`;
+function chips(row) {
+  const out = [];
+  for (const [k, v] of Object.entries(row.rewards_changed_vs_minimal || {})) out.push(`<span class="chip rw">${esc(k)}=${esc(v)}</span>`);
+  for (const [k, v] of Object.entries(row.args || {})) {
+    const short = String(v).split(",").map((x) => x.split("/").pop().replace(/\.(pt|json)$/, "").replace(/^rl_5v5_arena_v/, "RL")).join(", ");
+    out.push(`<span class="chip" title="${esc(k)}=${esc(v)}">${esc(k)}=${esc(short)}</span>`);
+  }
+  return out.join("") || '<span class="muted small">minimal</span>';
 }
-async function getJSON(url) {
-  const r = await fetch(url, { cache: "no-store" });
-  if (!r.ok) throw new Error(url + " " + r.status);
-  return r.json();
-}
-function setPulse(ok, text) {
-  const p = $("#pulse");
-  p.className = "pulse " + (ok ? "ok" : "err");
-  $("span", p).textContent = text;
-}
-function zOf(a, ase, b, bse) {
-  if (a == null || b == null) return null;
-  const se = Math.sqrt((ase || 0) ** 2 + (bse || 0) ** 2);
-  return se > 0 ? (a - b) / se : null;
-}
-function verdictFromZ(z) {
-  if (z === null) return "";
-  return z > 1.96 ? "better" : z < -1.96 ? "worse" : "no difference";
-}
-function runColor(name) {
-  const runs = (state.overview?.runs || []).map((r) => r.run);
-  const i = runs.indexOf(name);
-  return colorOf(i < 0 ? 0 : i);
-}
-function throttleText(hex) {
+function throttle(hex) {
   if (!hex) return { text: "–", cls: "" };
   const v = parseInt(hex, 16);
-  const now = [], past = [];
-  if (v & 0x1) now.push("under-voltage"); if (v & 0x2) now.push("frequency capped"); if (v & 0x4) now.push("throttled"); if (v & 0x8) now.push("soft temp limit");
-  if (v & 0x10000) past.push("under-voltage"); if (v & 0x20000) past.push("freq. capped"); if (v & 0x40000) past.push("throttled"); if (v & 0x80000) past.push("soft temp limit");
   if (!v) return { text: "OK", cls: "pos", sub: "no throttling since boot" };
-  return { text: now.length ? now.join(", ") : "OK now", cls: now.length ? "neg" : "", sub: past.length ? "since boot: " + past.join(", ") : "" };
+  const now = v & 0xf, past = v >> 16, names = ["under-voltage", "freq. capped", "throttled", "soft temp limit"];
+  const list = (bits) => names.filter((_, i) => bits & (1 << i)).join(", ");
+  return { text: now ? list(now) : "OK now", cls: now ? "neg" : "warn", sub: past ? "since boot: " + list(past) : "" };
+}
+function ema(points, a) {
+  if (!a) return points;
+  let m = null;
+  return points.map((p) => { if (p.y == null) return p; m = m === null ? p.y : a * m + (1 - a) * p.y; return { ...p, y: m }; });
 }
 
 // ---------- charts ----------
-// series: [{name, color, points: [{x, y, err?, label?}], dashed?, dots?, width?}]
+// series: [{name, color, points: [{x, y, err?, hollow?, label?}], dashed?, dots?, noLine?, faint?, noLegend?, width?}]
+// opt: {height, width, yMin, yMax, xMin, zero, refs: [{y, label}], bands: [{y0, y1, label, color}], vlines: [{x, label}], time, fmt, xLabel, key, gap}
+const chartData = {};
 function lineChart(series, opt = {}) {
-  const W = opt.width || 640, H = opt.height || 230, L = 46, R = 14, T = 12, B = 28;
-  const pts = series.flatMap((s) => s.points.filter((p) => p.y !== null && p.y !== undefined && !Number.isNaN(p.y)));
-  if (!pts.length) return `<div class="empty">${esc(opt.emptyText || "No data yet")}</div>`;
-  let x0 = opt.xMin ?? Math.min(...pts.map((p) => p.x)), x1 = opt.xMax ?? Math.max(...pts.map((p) => p.x));
+  const W = opt.width || 640, H = opt.height || 220, L = 44, R = 12, T = 10, B = 24;
+  const key = opt.key || "", hidden = state.hidden[key] || new Set();
+  const vis = series.filter((s) => !hidden.has(s.name));
+  const valid = (p) => p.y != null && !Number.isNaN(p.y);
+  if (!series.some((s) => s.points.some(valid))) return `<div class="empty">${esc(opt.emptyText || "No data yet")}</div>`;
+  const pts = vis.flatMap((s) => s.points.filter(valid));
+  const all = pts.length ? pts : series.flatMap((s) => s.points.filter(valid));
+  let x0 = opt.xMin ?? Math.min(...all.map((p) => p.x)), x1 = opt.xMax ?? Math.max(...all.map((p) => p.x));
   if (x1 === x0) { x0 -= 1; x1 += 1; }
-  let y0 = opt.yMin ?? Math.min(...pts.map((p) => p.y - (p.err || 0)), ...(opt.refs || []).map((r) => r.y));
-  let y1 = opt.yMax ?? Math.max(...pts.map((p) => p.y + (p.err || 0)), ...(opt.refs || []).map((r) => r.y));
+  const extra = [...(opt.refs || []).map((r) => r.y), ...(opt.bands || []).flatMap((b) => [b.y0, b.y1])];
+  let y0 = opt.yMin ?? Math.min(...all.map((p) => p.y - (p.err || 0)), ...extra);
+  let y1 = opt.yMax ?? Math.max(...all.map((p) => p.y + (p.err || 0)), ...extra);
   if (opt.zero) { y0 = Math.min(y0, 0); y1 = Math.max(y1, 0); }
   if (y1 === y0) { y0 -= 0.5; y1 += 0.5; }
   const pad = (y1 - y0) * 0.08; if (opt.yMin === undefined) y0 -= pad; if (opt.yMax === undefined) y1 += pad;
   const X = (x) => L + ((x - x0) / (x1 - x0)) * (W - L - R), Y = (y) => T + ((y1 - y) / (y1 - y0)) * (H - T - B);
-  const ticks = niceTicks(y0, y1, 5), xt = niceTicks(x0, x1, 6);
+  const cy = (y) => Math.max(T, Math.min(H - B, Y(y)));
   let g = "";
-  for (const t of ticks) g += `<line class="gl" x1="${L}" x2="${W - R}" y1="${Y(t)}" y2="${Y(t)}"/><text class="ax" x="${L - 7}" y="${Y(t) + 4}" text-anchor="end">${fmtTick(t)}</text>`;
-  for (const t of xt) if (t >= x0 && t <= x1) g += `<text class="ax" x="${X(t)}" y="${H - 8}" text-anchor="middle">${fmtTick(t)}</text>`;
+  for (const b of opt.bands || []) g += `<rect x="${L}" width="${W - L - R}" y="${cy(Math.max(b.y0, b.y1))}" height="${Math.abs(cy(b.y0) - cy(b.y1))}" fill="${b.color || "var(--muted)"}" opacity=".14"/>${b.label ? `<text class="reft" x="${L + 4}" y="${cy(Math.max(b.y0, b.y1)) + 11}">${esc(b.label)}</text>` : ""}`;
+  for (const t of niceTicks(y0, y1, 4)) g += `<line class="gl" x1="${L}" x2="${W - R}" y1="${Y(t)}" y2="${Y(t)}"/><text class="ax" x="${L - 6}" y="${Y(t) + 4}" text-anchor="end">${fmtTick(t)}</text>`;
+  const xt = opt.time ? timeTicks(x0, x1) : niceTicks(x0, x1, 6);
+  for (const t of xt) if (t >= x0 && t <= x1) g += `<text class="ax" x="${X(t)}" y="${H - 6}" text-anchor="middle">${opt.time ? hhmm(t) : fmtTick(t)}</text>`;
   for (const r of opt.refs || []) g += `<line class="ref" x1="${L}" x2="${W - R}" y1="${Y(r.y)}" y2="${Y(r.y)}"/><text class="reft" x="${W - R}" y="${Y(r.y) - 4}" text-anchor="end">${esc(r.label)}</text>`;
-  for (const s of series) {
-    const p = s.points.filter((q) => q.y !== null && q.y !== undefined && !Number.isNaN(q.y)).sort((a, b) => a.x - b.x);
+  for (const v of opt.vlines || []) if (v.x >= x0 && v.x <= x1) g += `<line x1="${X(v.x)}" x2="${X(v.x)}" y1="${T}" y2="${H - B}" stroke="var(--bad)" stroke-dasharray="3 3"/><text class="reft" x="${X(v.x) + 3}" y="${T + 10}" style="fill:var(--bad)">${esc(v.label)}</text>`;
+  for (const s of vis) {
+    const p = s.points.filter(valid).sort((a, b) => a.x - b.x);
     if (!p.length) continue;
-    if (s.band) {
-      const up = p.map((q) => `${X(q.x)},${Y(q.y + (q.err || 0))}`), dn = p.slice().reverse().map((q) => `${X(q.x)},${Y(q.y - (q.err || 0))}`);
-      g += `<polygon points="${up.concat(dn).join(" ")}" fill="${s.color}" opacity=".12"/>`;
+    if (p.length > 1 && !s.noLine) {
+      const gap = opt.gap ?? medianGap(p) * 4;
+      let d = "";
+      p.forEach((q, i) => { d += (i === 0 || (gap && q.x - p[i - 1].x > gap) ? "M" : "L") + X(q.x).toFixed(1) + "," + Y(q.y).toFixed(1); });
+      g += `<path d="${d}" fill="none" stroke="${s.color}" stroke-width="${s.width || 2}" stroke-linejoin="round" stroke-linecap="round" ${s.dashed ? 'stroke-dasharray="6 5"' : ""} ${s.faint ? 'opacity=".28"' : ""}/>`;
     }
-    if (p.length > 1 && !s.noLine) g += `<polyline points="${p.map((q) => `${X(q.x)},${Y(q.y)}`).join(" ")}" fill="none" stroke="${s.color}" stroke-width="${s.width || 2}" stroke-linejoin="round" stroke-linecap="round" ${s.dashed ? 'stroke-dasharray="6 5"' : ""}/>`;
     for (const q of p) {
-      if (q.err && !s.band) g += `<line x1="${X(q.x)}" x2="${X(q.x)}" y1="${Y(q.y - q.err)}" y2="${Y(q.y + q.err)}" stroke="${s.color}" stroke-width="2" opacity=".55"/>`;
-      if (s.dots || p.length === 1 || q.big) g += `<circle cx="${X(q.x)}" cy="${Y(q.y)}" r="${q.big ? 5 : 3.5}" fill="${q.hollow ? "var(--panel)" : s.color}" stroke="${s.color}" stroke-width="2"/>`;
+      if (q.err) g += `<line x1="${X(q.x)}" x2="${X(q.x)}" y1="${cy(q.y - q.err)}" y2="${cy(q.y + q.err)}" stroke="${s.color}" stroke-width="2.2" opacity=".6"/>`;
+      if (s.dots || p.length === 1) g += `<circle cx="${X(q.x)}" cy="${Y(q.y)}" r="4" fill="${q.hollow ? "var(--panel)" : s.color}" stroke="${s.color}" stroke-width="2"/>`;
     }
   }
   const id = "c" + Math.random().toString(36).slice(2);
-  chartData[id] = { series, X, Y, x0, x1, L, R, T, B, W, H, xLabel: opt.xLabel || "update", fmt: opt.fmt || ((v) => f(v, 2)) };
-  const legend = series.length > 1 || opt.legend ? `<div class="legend">${series.filter((s) => s.points.length).map((s) => `<span><i class="${s.dashed ? "d" : ""}" style="background:${s.color};color:${s.color}"></i>${esc(s.name)}</span>`).join("")}</div>` : "";
+  chartData[id] = { series: vis, X, Y, x0, x1, L, R, T, B, W, H, time: opt.time, xLabel: opt.xLabel || "update", fmt: opt.fmt || ((v) => f(v, 2)) };
+  const named = series.filter((s) => s.points.length && !s.noLegend);
+  const legend = named.length > 1 || opt.legend ? `<div class="legend">${named.map((s) => `<button class="lg ${hidden.has(s.name) ? "off" : ""}" data-key="${esc(key)}" data-series="${esc(s.name)}"><i class="${s.dashed ? "d" : ""}" style="background:${s.color};color:${s.color}"></i>${esc(s.name)}</button>`).join("")}</div>` : "";
   return `<div class="chart" data-chart="${id}"><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(opt.title || "chart")}">${g}<line class="hover-line" x1="0" x2="0" y1="${T}" y2="${H - B}" visibility="hidden"/></svg>${legend}</div>`;
 }
-const chartData = {};
+function medianGap(p) { if (p.length < 3) return 0; const d = p.slice(1).map((q, i) => q.x - p[i].x).sort((a, b) => a - b); return d[Math.floor(d.length / 2)]; }
 function niceTicks(a, b, n) {
-  const span = b - a, step0 = span / n, mag = Math.pow(10, Math.floor(Math.log10(step0)));
+  const span = b - a, mag = Math.pow(10, Math.floor(Math.log10(span / n)));
   const step = [1, 2, 2.5, 5, 10].map((m) => m * mag).find((s) => span / s <= n) || 10 * mag;
   const out = [];
   for (let v = Math.ceil(a / step) * step; v <= b + 1e-9; v += step) out.push(+v.toFixed(10));
+  return out;
+}
+function timeTicks(a, b) {
+  const span = b - a, steps = [300, 600, 1800, 3600, 7200, 10800, 21600, 43200, 86400];
+  const step = steps.find((s) => span / s <= 6) || 86400, out = [], off = new Date().getTimezoneOffset() * 60;
+  for (let v = Math.ceil((a - off) / step) * step + off; v <= b; v += step) out.push(v);
   return out;
 }
 function fmtTick(v) {
@@ -115,334 +131,342 @@ function fmtTick(v) {
 function attachCharts(root) {
   for (const el of root.querySelectorAll("[data-chart]")) {
     const d = chartData[el.dataset.chart];
+    if (!d) continue;
     const svg = $("svg", el), line = $(".hover-line", el), tip = $("#tip");
-    const move = (ev) => {
+    const hide = () => { line.setAttribute("visibility", "hidden"); tip.hidden = true; };
+    const show = (ev) => {
       const box = svg.getBoundingClientRect(), sx = ((ev.clientX - box.left) / box.width) * d.W;
-      if (sx < d.L || sx > d.W - d.R) return leave();
+      if (sx < d.L || sx > d.W - d.R) return hide();
       const xv = d.x0 + ((sx - d.L) / (d.W - d.L - d.R)) * (d.x1 - d.x0);
       let best = null;
       for (const s of d.series) for (const p of s.points) if (p.y != null && (best === null || Math.abs(p.x - xv) < Math.abs(best - xv))) best = p.x;
-      if (best === null) return leave();
+      if (best === null) return hide();
       line.setAttribute("x1", d.X(best)); line.setAttribute("x2", d.X(best)); line.setAttribute("visibility", "visible");
-      let html = `<b>${esc(d.xLabel)} ${esc(fmtTick(best))}</b>`;
+      let html = `<b>${d.time ? new Date(best * 1000).toLocaleString() : esc(d.xLabel) + " " + esc(fmtTick(best))}</b>`;
       for (const s of d.series) {
         const p = s.points.find((q) => q.x === best && q.y != null);
-        if (p) html += `<br><span class="k" style="background:${s.color}"></span>${esc(s.name)}: <b>${d.fmt(p.y)}</b>${p.err ? ` ± ${d.fmt(p.err)}` : ""}${p.label ? ` <span style="opacity:.7">${esc(p.label)}</span>` : ""}`;
+        if (p && !s.faint) html += `<br><span class="k" style="background:${s.color}"></span>${esc(s.name)}: <b>${d.fmt(p.y)}</b>${p.err ? ` ± ${d.fmt(p.err)}` : ""}${p.label ? ` <span style="opacity:.7">${esc(p.label)}</span>` : ""}`;
       }
       tip.innerHTML = html; tip.hidden = false;
-      const tx = Math.min(ev.clientX + 14, window.innerWidth - tip.offsetWidth - 8);
-      tip.style.left = tx + "px"; tip.style.top = ev.clientY + 14 + "px";
+      tip.style.left = Math.min(ev.clientX + 14, window.innerWidth - tip.offsetWidth - 8) + "px";
+      tip.style.top = Math.min(ev.clientY + 14, window.innerHeight - tip.offsetHeight - 8) + "px";
     };
-    const leave = () => { line.setAttribute("visibility", "hidden"); tip.hidden = true; };
-    svg.addEventListener("pointermove", move);
-    svg.addEventListener("pointerleave", leave);
+    svg.addEventListener("pointermove", show);
+    svg.addEventListener("pointerdown", show);                // touch: a tap shows the values
+    svg.addEventListener("pointerleave", hide);
   }
 }
-function sparkline(vals, color, w = 110, h = 26) {
-  if (!vals || vals.length < 2) return '<span class="muted">–</span>';
-  const lo = Math.min(...vals), hi = Math.max(...vals), sp = hi - lo || 1;
-  const pts = vals.map((v, i) => `${(i / (vals.length - 1)) * (w - 4) + 2},${h - 3 - ((v - lo) / sp) * (h - 6)}`).join(" ");
-  return `<svg class="spark" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}"><polyline points="${pts}" fill="none" stroke="${color}" stroke-width="1.6" stroke-linejoin="round"/></svg>`;
+function sparkline(pts, color, w = 110, h = 26, lo = 0, hi = 3) {
+  if (!pts || pts.length < 2) return '<span class="muted">–</span>';
+  const xs = pts.map((p) => p[0]), x0 = Math.min(...xs), x1 = Math.max(...xs);
+  const Y = (v) => h - 2 - ((Math.max(lo, Math.min(hi, v)) - lo) / (hi - lo)) * (h - 4);
+  const P = pts.map((p) => `${(2 + ((p[0] - x0) / (x1 - x0 || 1)) * (w - 4)).toFixed(1)},${Y(p[1]).toFixed(1)}`).join(" ");
+  return `<svg class="spark" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}"><polyline points="${P}" fill="none" stroke="${color}" stroke-width="1.6" stroke-linejoin="round"/></svg>`;
+}
+// forest plot: rows [{label, d, se, sig, sub}] -> differences with 95% intervals around zero
+function forest(rows, unit = "pts") {
+  const ok = rows.filter((r) => r.d != null && r.se != null);
+  if (!ok.length) return '<div class="empty">Nothing to compare (needs evaluations of the same protocol)</div>';
+  const m = Math.max(0.5, ...ok.map((r) => Math.abs(r.d) + 1.96 * r.se)) * 1.1, W = 640, rowH = 30, L = 170, R = 96, H = ok.length * rowH + 26;
+  const X = (v) => L + ((v + m) / (2 * m)) * (W - L - R);
+  let g = `<line x1="${X(0)}" x2="${X(0)}" y1="4" y2="${H - 20}" stroke="var(--muted)" stroke-dasharray="3 3"/>`;
+  for (const t of niceTicks(-m, m, 6)) g += `<text class="ax" x="${X(t)}" y="${H - 4}" text-anchor="middle">${t > 0 ? "+" : ""}${fmtTick(t)}</text>`;
+  ok.forEach((r, i) => {
+    const y = 16 + i * rowH, c = r.sig === null ? "var(--muted)" : r.sig ? (r.d > 0 ? "var(--good)" : "var(--bad)") : "var(--slate)";
+    g += `<text class="fl" x="${L - 10}" y="${y + 4}" text-anchor="end">${esc(r.label)}</text>`;
+    g += `<line x1="${X(r.d - 1.96 * r.se)}" x2="${X(r.d + 1.96 * r.se)}" y1="${y}" y2="${y}" stroke="${c}" stroke-width="3" stroke-linecap="round" opacity=".55"/>`;
+    g += `<circle cx="${X(r.d)}" cy="${y}" r="5.5" fill="${c}"/><text class="fv" x="${W - R + 8}" y="${y + 4}">${sgn(r.d)} ${esc(r.sub || "")}</text>`;
+  });
+  return `<div class="chart"><svg viewBox="0 0 ${W} ${H}">${g}</svg><div class="legend"><span>difference in ${esc(unit)}, bar = 95% interval · green / red = significant</span></div></div>`;
 }
 function heatmap(hm, title) {
-  const w = hm.w, h = hm.h, cw = 14, ch = 14, W = w * cw, H = h * ch;
-  const mx = Math.max(...hm.v, 1);
-  const base = css("--accent");
-  let g = `<rect x="0" y="0" width="${W}" height="${H}" fill="var(--panel-2)"/>`;
-  hm.v.forEach((v, i) => {
-    const x = (i % w) * cw, y = Math.floor(i / w) * ch, a = Math.sqrt(v / mx);
-    if (v > 0) g += `<rect x="${x}" y="${y}" width="${cw}" height="${ch}" fill="${base}" opacity="${(0.08 + 0.92 * a).toFixed(3)}"><title>${(v / 10).toFixed(1)}% of the time</title></rect>`;
-  });
-  g += `<rect x=".5" y=".5" width="${W - 1}" height="${H - 1}" fill="none" stroke="var(--line)"/>`;
-  g += `<line x1="${W / 2}" x2="${W / 2}" y1="0" y2="${H}" stroke="var(--line)"/><circle cx="${W / 2}" cy="${H / 2}" r="${ch * 1.3}" fill="none" stroke="var(--line)"/>`;
-  g += `<rect x="0" y="${H / 2 - ch * 1.5}" width="4" height="${ch * 3}" fill="var(--muted)" opacity=".6"/><rect x="${W - 4}" y="${H / 2 - ch * 1.5}" width="4" height="${ch * 3}" fill="var(--bad)" opacity=".6"/>`;
-  return `<figure class="heat"><figcaption><span>${esc(title)}</span><span>${esc(hm.role !== "-" ? hm.role : "")}</span></figcaption><svg viewBox="0 0 ${W} ${H}">${g}</svg></figure>`;
+  const w = hm.w, h = hm.h, c = 16, W = w * c, H = h * c, mx = Math.max(...hm.v, 1), base = css("--c3");
+  let g = `<rect width="${W}" height="${H}" fill="var(--panel-2)"/>`;
+  hm.v.forEach((v, i) => { if (v > 0) g += `<rect x="${(i % w) * c}" y="${Math.floor(i / w) * c}" width="${c}" height="${c}" fill="${base}" opacity="${(0.06 + 0.94 * Math.sqrt(v / mx)).toFixed(3)}"><title>${(v / 10).toFixed(1)}% of the time</title></rect>`; });
+  g += `<rect x=".5" y=".5" width="${W - 1}" height="${H - 1}" fill="none" stroke="var(--line)"/><line x1="${W / 2}" x2="${W / 2}" y1="0" y2="${H}" stroke="var(--line)"/><circle cx="${W / 2}" cy="${H / 2}" r="${c * 1.4}" fill="none" stroke="var(--line)"/>`;
+  g += `<rect x="0" y="${H / 2 - c * 1.6}" width="4" height="${c * 3.2}" fill="var(--muted)"/><rect x="${W - 4}" y="${H / 2 - c * 1.6}" width="4" height="${c * 3.2}" fill="var(--bad)"/>`;
+  return `<figure class="heat"><figcaption><span>${esc(title)}</span><span class="muted">${esc(hm.role !== "-" ? "slot " + hm.role : "")}</span></figcaption><svg viewBox="0 0 ${W} ${H}">${g}</svg></figure>`;
 }
-function hbars(items) {
-  const mx = Math.max(...items.map((i) => Math.abs(i.v)), 1e-12);
-  return items.map((i) => {
-    const wv = (Math.abs(i.v) / mx) * 50;
-    const left = i.v >= 0 ? 50 : 50 - wv;
-    return `<div class="hbar"><span title="${esc(i.k)}">${esc(i.label)}</span><div class="tr"><div class="mid"></div><i style="left:${left}%;width:${wv}%;background:${i.v >= 0 ? "var(--good)" : "var(--bad)"}"></i></div><span class="v">${i.v >= 0 ? "+" : ""}${i.v.toExponential(1)}</span></div>`;
-  }).join("");
-}
-function kpi(label, value, sub = "", cls = "") {
-  return `<div class="kpi"><div class="l">${label}</div><div class="v ${cls}">${value}</div>${sub ? `<div class="s">${sub}</div>` : ""}</div>`;
-}
+function kpi(label, value, sub = "", cls = "") { return `<div class="kpi"><div class="l">${label}</div><div class="v ${cls}">${value}</div>${sub ? `<div class="s">${sub}</div>` : ""}</div>`; }
+const smoothControl = () => `<label class="smooth">smoothing <input type="range" min="0" max="0.97" step="0.01" value="${state.smooth}" data-smooth> <b>${f(state.smooth, 2)}</b></label>`;
 
-// ---------- views ----------
-function viewOverview() {
-  const o = state.overview;
-  if (!o) return '<div class="empty">Loading…</div>';
-  const sys = o.system, now = o.now;
+// ---------- NOW ----------
+function viewNow() {
+  const o = state.ov; if (!o) return '<div class="empty">Loading…</div>';
+  const st = o.status, run = st.runner.running, pi = st.pi;
   let hero;
-  if (now) {
-    const pct = now.target ? Math.min(100, (100 * (now.update || 0)) / now.target) : 0;
-    const stale = now.log_age_s !== null && now.log_age_s > 600 && !now.eval;
-    const mode = now.eval ? "eval" : stale ? "stale" : "";
-    const label = now.eval ? `<span class="badge evaluating">evaluating ${esc(now.eval.checkpoint || "")}</span>` : stale ? '<span class="badge failed">no progress for ' + dur(now.log_age_s) + "</span>" : '<span class="badge running">training</span>';
-    const delta = now.train_pts != null && now.base_train != null ? now.train_pts - now.base_train : null;
-    hero = `<section class="hero ${mode}">
-      <div class="hero-top"><div><h3>Running experiment</h3><h1><a href="#/run/${encodeURIComponent(now.run)}">${esc(now.run)}</a></h1>
-      <p class="notes">${esc(now.notes)}</p><div>${Object.entries(now.rewards || {}).map(([k, v]) => `<span class="chip">${esc(k)} = ${esc(v)}</span>`).join("") || '<span class="chip">minimal rewards</span>'}</div></div>${label}</div>
+  if (run) {
+    const row = o.runs.find((r) => r.name === run.run) || {};
+    const spec = (o.queue.queued.find((q) => q.name === run.run) || {});
+    const pct = run.target ? Math.min(100, (100 * (run.update || 0)) / run.target) : 0;
+    const mode = run.evaluating ? "eval" : run.stalled ? "stale" : "";
+    const lbl = run.evaluating ? badge("evaluating") : run.stalled ? `<span class="badge failed">no progress for ${dur(run.log_age_s)}</span>` : badge("running");
+    const delta = run.train_pts_vs_rules != null && run.train_pts_at_start != null ? run.train_pts_vs_rules - run.train_pts_at_start : null;
+    const lf = row.latest_fast;
+    hero = `<section class="hero ${mode}"><div class="hero-top"><div class="min0"><div class="eyebrow">Running experiment</div><h1>${runLink(run.run)}</h1>
+        <div class="notes">${esc(row.notes || "")}</div><div class="chips">${chips({ rewards_changed_vs_minimal: row.rewards_changed_vs_minimal, args: (state.detail[run.run]?.status?.spec?.args) || spec.args || {} })}</div></div><div>${lbl}</div></div>
       <div class="progress"><i style="width:${pct}%"></i></div>
-      <div class="hero-stats">
-        <div><b>${now.update ?? 0} / ${now.target ?? "?"}</b><span>updates</span></div>
-        <div><b>${now.eta_s ? dur(now.eta_s) : "–"}</b><span>time left (training only)</span></div>
-        <div><b>${now.sec_per_update ? f(now.sec_per_update, 0) + " s" : "–"}</b><span>per update</span></div>
-        <div><b>${f(now.train_pts)} <span class="${delta > 0 ? "pos" : delta < 0 ? "neg" : ""}" style="font-size:13px">${delta != null ? sgn(delta) : ""}</span></b><span>training pts vs rule bots (start ${f(now.base_train)})</span></div>
-        <div><b>${now.last ? now.last.dps : "–"}</b><span>decisions / s</span></div>
-        <div><b>${now.started ? ago(now.started) : "–"}</b><span>started</span></div>
-      </div></section>`;
+      <div class="hero-stats"><div><b>${run.update ?? 0}<small> / ${run.target ?? "?"}</small></b><span>updates</span></div>
+        <div><b>${run.eta_hours != null ? dur(run.eta_hours * 3600) : "–"}</b><span>training left</span></div>
+        <div><b>${run.sec_per_update ? f(run.sec_per_update, 0) + " s" : "–"}</b><span>per update</span></div>
+        <div><b>${f(run.train_pts_vs_rules)} <small class="${delta > 0 ? "pos" : delta < 0 ? "neg" : ""}">${delta != null ? sgn(delta) : ""}</small></b><span>training pts vs rules</span></div>
+        <div><b>${lf ? f(lf.pts) : "–"}<small>${lf ? " u" + lf.update : ""}</small></b><span>last fast check</span></div>
+        <div><b>${run.restarts.length}</b><span>restarts</span></div></div></section>`;
   } else {
-    hero = `<section class="hero idle"><div class="hero-top"><div><h3>Runner</h3><h1>Idle</h1><p class="notes">Nothing is training. The runner starts the next spec in exp/queue/ (${o.queue.length} waiting).</p></div><span class="badge queued">idle</span></div></section>`;
+    const nxt = o.queue.queued[0];
+    hero = `<section class="hero idle"><div class="hero-top"><div><div class="eyebrow">Runner ${esc(st.runner.service || "")}</div><h1>Idle</h1><div class="notes">${nxt ? "Next: " + esc(nxt.name) : "The queue is empty."}</div></div>${badge("idle")}</div></section>`;
   }
-  const full = o.runs.filter((r) => r.latest && r.latest.kind === "full" && r.latest.league.all);
-  const best = full.slice().sort((a, b) => b.latest.league.all.pts - a.latest.league.all.pts)[0];
-  const th = throttleText(sys.throttled);
-  const done = o.runs.filter((r) => ["done", "diverged", "regressed", "failed"].includes(r.state)).length;
-  const kpis = `<div class="kpis">
-    ${kpi("Best league result", best ? `${f(best.latest.league.all.pts)}<small>± ${f(best.latest.league.all.se)}</small>` : "–", best ? `${esc(best.run)} · u${best.latest.update}` : "")}
-    ${kpi("Experiments", `${done}<small>done</small> ${o.queue.length}<small>queued</small>`, `${o.runs.length} runs tracked`)}
-    ${kpi("Pi temperature", sys.temp != null ? `${f(sys.temp, 1)}<small>°C</small>` : "–", "", sys.temp > 75 ? "neg" : "")}
-    ${kpi("CPU load", sys.load.length ? `${f(sys.load[0], 1)}<small>/ 4 cores</small>` : "–", sys.load.length ? `5 min ${f(sys.load[1], 1)} · 15 min ${f(sys.load[2], 1)}` : "")}
-    ${kpi("Free memory", `${(sys.mem_avail_mb / 1024).toFixed(1)}<small>of ${(sys.mem_total_mb / 1024).toFixed(1)} GB</small>`, "", sys.mem_avail_mb < 500 ? "neg" : "")}
-    ${kpi("Power", th.text, th.sub || `up ${dur(sys.uptime_s)}`, th.cls)}
-  </div>`;
-  const lb = leaderboard(o.runs);
-  let curve = "";
-  if (now) {
-    const d = state.detail[now.run];
-    curve = d ? trainingChart(d, { height: 220 }) : '<div class="empty">Loading…</div>';
-    ensureDetail(now.run);
-  }
-  const events = o.events.length ? `<ul class="events">${o.events.map((e) => { const m = e.match(/^\[(.+?)\] (.*)$/); return `<li>${m ? `<time>${esc(m[1].slice(5, 16))}</time>${esc(m[2])}` : esc(e)}</li>`; }).join("")}</ul>` : '<div class="empty">No events yet</div>';
-  const q = o.queue.slice(0, 5).map((s, i) => `<div class="qcard"><div class="n">${i + 1}</div><div><b>${esc(s.name)}</b><p>${esc(s.notes)}</p>${Object.entries(s.rewards).map(([k, v]) => `<span class="chip">${esc(k)} = ${esc(v)}</span>`).join("") || '<span class="chip">minimal rewards</span>'}</div></div>`).join("");
-  return `${hero}${kpis}
-    <div class="grid g2">
-      <div class="card"><h2>League strength by run</h2><div class="sub">Latest full evaluation: points per match against all 16 rule teams, bar = ± 2 standard errors. Dashed line = the start net.</div>${lb}</div>
-      <div class="card"><h2>${now ? "Training progress · " + esc(now.run) : "Training progress"}</h2><div class="sub">Points per match during training (sampled moves, last 200 matches).</div>${curve || '<div class="empty">Nothing training</div>'}</div>
-    </div>
-    <div class="grid g2">
-      <div class="card"><h2>Runner events</h2>${events}</div>
-      <div class="card flush"><h2>Up next</h2>${q || '<div class="empty">Queue empty</div>'}${o.queue.length > 5 ? `<div style="padding:10px 16px"><a href="#/queue">All ${o.queue.length} queued →</a></div>` : ""}</div>
-    </div>`;
+  const th = throttle(pi.throttled);
+  const hl = (o.health || []).filter((r) => r.t && r.t.includes("T"));
+  const vit = (k, color, lo, hi) => sparkline(hl.map((r) => [parseT(r.t), r[k]]).filter((p) => p[1] != null), color, 110, 26, lo, hi);
+  const rb = st.last_reboot;
+  const vitals = `<section class="card vitals"><div class="card-h"><h2>Raspberry Pi</h2><a href="#/pi">details →</a></div>
+    <div class="vrow"><span>Temperature</span><b class="${pi.temp_c > 75 ? "neg" : ""}">${f(pi.temp_c, 1)} °C</b>${vit("temp", css("--c2"), 30, 85)}</div>
+    <div class="vrow"><span>CPU load</span><b>${f(pi.load_1m, 1)} <small>/ 4</small></b>${vit("load", css("--c1"), 0, 12)}</div>
+    <div class="vrow"><span>Free memory</span><b class="${pi.mem_free_mb < 500 ? "neg" : ""}">${f(pi.mem_free_mb / 1024, 1)} GB</b>${vit("mem_mb", css("--c3"), 0, 3800)}</div>
+    <div class="vrow"><span>Power</span><b class="${th.cls}">${esc(th.text)}</b><span class="muted small">up ${f(pi.uptime_hours, 1)} h</span></div>
+    ${rb ? `<div class="vnote">Last reboot ${esc(ago(rb.back))} · last sample before it ${esc(rb.last_seen.replace("T", " "))}: load ${f(rb.last_sample.load, 1)}, ${f(rb.last_sample.mem_mb, 0)} MB free, ${f(rb.last_sample.temp, 0)} °C</div>` : ""}</section>`;
+  let curve = '<div class="empty">Nothing training</div>';
+  if (run) { const d = state.detail[run.run]; ensureDetail(run.run); curve = d && !d.error ? trainingChart(d, 200, "now") : '<div class="empty">Loading…</div>'; }
+  const ev = o.events.slice(0, 9).map((e) => `<li class="ev ${esc(e.kind)}"><time>${esc((e.t || "").slice(11, 16))}</time><span>${esc(e.text)}</span></li>`).join("");
+  const q = o.queue.queued.slice(0, 5).map((s, i) => `<li><span class="qn">${i + 1}</span><b>${esc(s.name)}</b><span class="chips">${chips({ rewards_changed_vs_minimal: s.rewards_changed_vs_minimal, args: s.args })}</span></li>`).join("");
+  return `<div class="grid now-top">${hero}${vitals}</div>
+    <div class="grid g2"><section class="card"><div class="card-h"><h2>League strength</h2><span class="muted small">latest full evaluation · 95% interval</span></div>${leaderboard(o.runs)}</section>
+      <section class="card"><div class="card-h"><h2>Training${run ? " · " + esc(run.run) : ""}</h2>${smoothControl()}</div>${curve}</section></div>
+    <div class="grid g2"><section class="card"><div class="card-h"><h2>Events</h2><span class="muted small">last 24 h</span></div><ul class="events">${ev || '<li class="muted">nothing yet</li>'}</ul></section>
+      <section class="card"><div class="card-h"><h2>Up next</h2><a href="#/runs">all runs →</a></div><ol class="queue">${q || '<li class="muted">queue empty</li>'}</ol></section></div>`;
 }
-
 function leaderboard(runs) {
-  const rows = runs.filter((r) => r.latest && r.latest.kind === "full" && r.latest.league.all).sort((a, b) => b.latest.league.all.pts - a.latest.league.all.pts);
+  const rows = runs.filter((r) => r.latest_full && r.latest_full.protocol === "full/g1/d90" && r.latest_full.pts != null).sort((a, b) => b.latest_full.pts - a.latest_full.pts);
   if (!rows.length) return '<div class="empty">No full evaluations yet</div>';
-  const lo = 0, hi = 3;
-  const P = (v) => (100 * (Math.max(lo, Math.min(hi, v)) - lo)) / (hi - lo);
-  const base = runs.find((r) => r.run.startsWith("start:") && r.latest)?.latest?.league?.all?.pts;
-  return rows.map((r) => {
-    const a = r.latest.league.all, c = runColor(r.run);
-    return `<div class="lb-row"><a class="name" href="#/run/${encodeURIComponent(r.run)}" title="${esc(r.run)}"><span class="dot" style="background:${c}"></span>${esc(r.run)}</a>
-      <div class="lb-track"><div class="axis"></div>${base != null ? `<div class="base" style="left:${P(base)}%"></div>` : ""}<div class="err" style="left:${P(a.pts - 2 * a.se)}%;width:${P(a.pts + 2 * a.se) - P(a.pts - 2 * a.se)}%;background:${c}"></div><div class="pt" style="left:${P(a.pts)}%;background:${c}"></div></div>
+  const P = (v) => Math.max(0, Math.min(100, (100 * v) / 3));
+  const base = runs.find((r) => r.name.startsWith("start:") && r.latest_full)?.latest_full;
+  return `<div class="lb">${rows.map((r) => {
+    const a = r.latest_full, c = runColor(r.name);
+    return `<div class="lb-row"><div class="name">${runLink(r.name)}</div><div class="lb-track"><div class="axis"></div>${base ? `<div class="base" style="left:${P(base.pts - 1.96 * base.se)}%;width:${P(base.pts + 1.96 * base.se) - P(base.pts - 1.96 * base.se)}%"></div>` : ""}
+      <div class="err" style="left:${P(a.pts - 1.96 * a.se)}%;width:${P(a.pts + 1.96 * a.se) - P(a.pts - 1.96 * a.se)}%;background:${c}"></div><div class="pt" style="left:${P(a.pts)}%;background:${c}"></div></div>
       <div class="val">${f(a.pts)} <span class="pm">±${f(a.se)}</span></div></div>`;
-  }).join("") + `<div class="lb-row muted" style="font-size:11px"><span></span><div style="display:flex;justify-content:space-between"><span>0</span><span>1</span><span>2</span><span>3 pts</span></div><span></span></div>`;
+  }).join("")}<div class="lb-row axisrow"><div></div><div class="ticks"><span>0</span><span>1</span><span>2</span><span>3 pts</span></div><div></div></div>
+  ${base ? '<div class="muted small">grey band: the start net t48_u100 (95% interval)</div>' : ""}</div>`;
 }
-
-function trainingChart(d, opt = {}) {
-  const t = d.training || [];
+function trainingChart(d, height, key, width) {
+  const t = d.training || [], a = state.smooth, mk = (k) => t.map((r) => ({ x: r.upd, y: r[k] }));
   return lineChart([
-    { name: "vs rule bots", color: css("--blue"), points: t.map((r) => ({ x: r.upd, y: r.rules })) },
-    { name: "vs frozen start net", color: css("--orange"), points: t.map((r) => ({ x: r.upd, y: r.bench })) },
-    { name: "vs own snapshots", color: css("--purple"), points: t.map((r) => ({ x: r.upd, y: r.league })), dashed: true },
-  ], { height: opt.height || 240, yMin: 0, yMax: 3, title: "training points" });
+    { name: "vs rule bots (raw)", color: css("--c1"), points: mk("rules"), faint: true, noLegend: true },
+    { name: "vs rule bots", color: css("--c1"), points: ema(mk("rules"), a) },
+    { name: "vs frozen start net", color: css("--c2"), points: ema(mk("bench"), a), dashed: true },
+    { name: "vs own snapshots", color: css("--c4"), points: ema(mk("league"), a), dashed: true },
+  ], { height, width, yMin: 0, yMax: 3, key: "train-" + key, title: "training points" });
 }
 
+// ---------- RUNS ----------
 function viewRuns() {
-  const o = state.overview;
-  if (!o) return '<div class="empty">Loading…</div>';
-  const key = state.sort.key, dir = state.sort.dir;
-  const val = (r) => {
-    const a = r.latest?.league?.all || {};
-    return { run: r.run, state: r.state, upd: r.latest?.update ?? -1, pts: a.pts ?? -9, gd: a.gd ?? -9, ga: a.ga ?? 9, rl4: r.latest?.h2h?.["RL Team 4"]?.pts ?? -9, rl5: r.latest?.h2h?.["RL Team 5"]?.pts ?? -9, dir: r.latest?.behaviour?.dir_changes_s ?? 99 }[key];
-  };
-  const rows = o.runs.slice().sort((a, b) => (val(a) > val(b) ? 1 : val(a) < val(b) ? -1 : 0) * dir);
-  const th = (k, l, cls = "") => `<th class="sort ${cls}" data-sort="${k}">${l}${key === k ? (dir > 0 ? " ↑" : " ↓") : ""}</th>`;
+  const o = state.ov; if (!o) return '<div class="empty">Loading…</div>';
+  const queued = o.queue.queued.map((s) => ({ name: s.name, state: "queued", notes: s.notes, rewards_changed_vs_minimal: s.rewards_changed_vs_minimal, args: s.args, target: s.updates, queued: true }));
+  let rows = o.runs.concat(queued);
+  const flt = state.filter.toLowerCase();
+  if (flt) rows = rows.filter((r) => (r.name + " " + (r.notes || "") + " " + JSON.stringify(r.rewards_changed_vs_minimal || {})).toLowerCase().includes(flt));
+  if (state.stateFilter !== "all") rows = rows.filter((r) => (state.stateFilter === "finished" ? ["done", "diverged", "regressed", "cancelled", "failed"].includes(r.state) : r.state === state.stateFilter));
+  const k = state.sort.key, dir = state.sort.dir;
+  const val = (r) => { const a = r.latest_full || {}; return { name: r.name, state: r.state, pts: a.pts ?? -9, gd: a.gd ?? -9, ga: a.ga ?? 9, rl4: a.h2h?.["RL Team 4"]?.pts ?? -9, rl5: a.h2h?.["RL Team 5"]?.pts ?? -9, fin: r.finished || r.started || "" }[k]; };
+  rows.sort((x, y) => (val(x) > val(y) ? 1 : val(x) < val(y) ? -1 : 0) * dir);
+  const th = (key, l, cls = "") => `<th class="sort ${cls}" data-sort="${key}">${l}${k === key ? (dir > 0 ? " ↑" : " ↓") : ""}</th>`;
+  const states = ["all", "running", "queued", "finished", "imported"].map((s) => `<button class="pill ${state.stateFilter === s ? "on" : ""}" data-state="${s}">${s}</button>`).join("");
   const body = rows.map((r) => {
-    const a = r.latest?.league?.all, h = r.latest?.h2h || {}, b = r.latest?.behaviour || {};
-    const v = r.verdict?.verdict;
-    return `<tr class="link" data-run="${esc(r.run)}"><td><span class="dot" style="background:${runColor(r.run)}"></span><b>${esc(r.run)}</b></td><td>${badge(r.state)}</td>
-      <td class="r">${r.update ?? "–"}${r.target ? `<span class="pm">/${r.target}</span>` : ""}</td><td>${sparkline(r.spark, runColor(r.run))}</td>
+    const a = r.latest_full, v = r.verdict, sel = state.selected.has(r.name);
+    const args = r.queued ? r.args : (state.detail[r.name]?.status?.spec?.args) || r.spec_args || {};
+    return `<tr class="${r.queued ? "queued" : "link"}" data-run="${r.queued ? "" : esc(r.name)}"><td>${r.queued ? "" : `<input type="checkbox" data-pick="${esc(r.name)}" ${sel ? "checked" : ""} aria-label="select ${esc(r.name)}">`}</td>
+      <td>${r.queued ? `<span class="rl"><i class="dot" style="background:var(--line)"></i>${esc(r.name)}</span>` : runLink(r.name)}<div class="muted small clip" title="${esc(r.notes || "")}">${esc(r.notes || "")}</div></td>
+      <td>${badge(r.state)}${r.stop_reason && r.stop_reason !== "budget" ? `<div class="muted small">${esc(r.stop_reason)}</div>` : ""}</td>
+      <td>${r.state === "imported" ? '<span class="muted small">older run</span>' : `<div class="chips">${chips({ rewards_changed_vs_minimal: r.rewards_changed_vs_minimal, args })}</div>`}</td>
+      <td class="r">${r.update ?? (r.queued ? "" : "–")}${r.target ? `<span class="pm">/${r.target}</span>` : ""}</td>
+      <td>${r.queued ? "" : sparkline(r.spark, runColor(r.name))}</td>
       <td class="r">${a ? `${f(a.pts)}<span class="pm">±${f(a.se)}</span>` : "–"}</td><td class="r ${a && a.gd > 0 ? "pos" : a && a.gd < 0 ? "neg" : ""}">${a ? sgn(a.gd) : "–"}</td><td class="r">${a ? f(a.ga) : "–"}</td>
-      <td class="r">${f(h["RL Team 4"]?.pts)}</td><td class="r">${f(h["RL Team 5"]?.pts)}</td><td class="r">${f(b.dir_changes_s, 1)}</td>
-      <td>${r.latest ? `<span class="muted">${r.latest.kind} · u${r.latest.update}</span>` : ""}</td><td>${v ? badge(v) + ` <span class="pm">${sgn(r.verdict.pts)} ± ${f(r.verdict.pts_se)}</span>` : ""}</td></tr>`;
+      <td class="r">${f(a?.h2h?.["RL Team 4"]?.pts)}</td><td class="r">${f(a?.h2h?.["RL Team 5"]?.pts)}</td>
+      <td>${v && v.verdict ? `${badge(v.verdict)}<div class="muted small">${sgn(v.pts)} ± ${f(v.pts_se)} vs ${esc(v.reference || "")}</div>` : ""}</td>
+      <td class="r small">${r.cost_hours ? f((r.cost_hours.train || 0) + (r.cost_hours.eval || 0), 1) + " h" : ""}</td><td class="small muted">${r.finished ? ago(r.finished) : r.started ? "since " + ago(r.started).replace(" ago", "") : ""}</td></tr>`;
   }).join("");
-  return `<div class="head"><div><h1>Runs</h1><p>Every experiment and imported run with its latest evaluation. Click a run for details; sort by any column.</p></div><a href="#/compare">Compare two runs →</a></div>
-    <div class="card flush"><div class="tbl-wrap"><table><thead><tr>${th("run", "Run")}${th("state", "State")}${th("upd", "Update", "r")}<th>Training</th>${th("pts", "League pts", "r")}${th("gd", "Goal diff", "r")}${th("ga", "Conceded", "r")}${th("rl4", "vs RL4", "r")}${th("rl5", "vs RL5", "r")}${th("dir", "Dir. chg/s", "r")}<th>Eval</th><th>Verdict vs start</th></tr></thead><tbody>${body}</tbody></table></div></div>`;
+  const n = state.selected.size;
+  return `<div class="head"><div><h1>Runs</h1><p>Experiments, imported runs and the queue. Tick runs to compare them; click a row for details.</p></div>
+      <div class="tools"><input class="search" placeholder="Filter…" value="${esc(state.filter)}" data-filter><a class="btn ${n ? "" : "disabled"}" href="#/compare?runs=${[...state.selected].map(encodeURIComponent).join(",")}">Compare ${n ? "(" + n + ")" : ""}</a></div></div>
+    <div class="pills">${states}</div>
+    <div class="card flush"><div class="tbl-wrap"><table class="runs"><thead><tr><th></th>${th("name", "Run")}${th("state", "State")}<th>Changes</th><th class="r">Update</th><th>Training 0–3</th>${th("pts", "League pts", "r")}${th("gd", "GD", "r")}${th("ga", "GA", "r")}${th("rl4", "vs RL4", "r")}${th("rl5", "vs RL5", "r")}<th>Verdict</th><th class="r">Cost</th>${th("fin", "When")}</tr></thead><tbody>${body || '<tr><td colspan="14" class="muted">No runs match</td></tr>'}</tbody></table></div></div>`;
 }
 
-function viewRun(name) {
-  const d = state.detail[name];
-  ensureDetail(name);
+// ---------- RUN ----------
+const TABS = ["summary", "training", "evaluation", "behaviour", "config"];
+function viewRun(name, tab) {
+  const d = state.detail[name]; ensureDetail(name);
   if (!d) return '<div class="empty">Loading…</div>';
-  const st = d.status || {}, spec = st.spec || {};
+  if (d.error) return `<div class="empty">${esc(d.error)}</div>`;
+  tab = TABS.includes(tab) ? tab : "summary";
+  const st = d.status || {}, row = d.row || {}, spec = st.spec || {};
+  const head = `<div class="crumbs"><a href="#/runs">Runs</a> / ${esc(name)}</div>
+    <div class="head"><div class="min0"><h1>${runLink(name)} ${badge(row.state)}</h1><p>${esc(row.notes || (row.state === "imported" ? "Imported from an older run (no spec)." : ""))}</p>${row.state === "imported" ? "" : `<div class="chips">${chips({ rewards_changed_vs_minimal: row.rewards_changed_vs_minimal, args: spec.args || {} })}</div>`}</div>
+      <div class="meta">${row.update != null ? `update <b>${row.update}</b>${row.target ? " / " + row.target : ""}<br>` : ""}${row.started ? "started " + ago(row.started) + "<br>" : ""}${row.finished ? "finished " + ago(row.finished) + "<br>" : ""}${st.git_commit ? `commit <span class="mono">${esc(st.git_commit)}</span>${st.git_dirty ? " (dirty)" : ""}<br>` : ""}${(st.restarts || []).length ? `${st.restarts.length} restart(s)<br>` : ""}
+      <a href="/api/v1/run/${encodeURIComponent(name)}" target="_blank">JSON</a> · <button class="linkbtn" data-copy="${esc(name)}">copy summary</button></div></div>
+    <nav class="tabs">${TABS.map((t) => `<a class="${t === tab ? "on" : ""}" href="#/run/${encodeURIComponent(name)}/${t}">${t[0].toUpperCase() + t.slice(1)}</a>`).join("")}</nav>`;
+  return head + ({ summary: runSummary, training: runTraining, evaluation: runEvaluation, behaviour: runBehaviour, config: runConfig }[tab])(d);
+}
+const refEval = (d, protocol) => (d.reference?.evals || []).filter((e) => e.protocol === protocol).pop();
+function runSummary(d) {
   const fulls = d.evals.filter((e) => e.kind === "full"), fasts = d.evals.filter((e) => e.kind === "fast");
-  const last = fulls[fulls.length - 1] || fasts[fasts.length - 1];
-  const a = last?.league?.all;
-  const baseFull = (d.baseline?.evals || []).filter((e) => e.kind === "full").pop();
-  const baseFast = (d.baseline?.evals || []).filter((e) => e.kind === "fast").pop();
-  const ba = baseFull?.league?.all;
-  const z = a && ba && last.kind === "full" ? zOf(a.pts, a.se, ba.pts, ba.se) : null;
-  const h = last?.h2h || {};
+  const last = fulls[fulls.length - 1], v = d.status.verdict, h = last?.h2h || {};
   const kp = `<div class="kpis">
-    ${kpi(`League pts <span class="muted">(${last ? last.kind + " · u" + last.update : "–"})</span>`, a ? `${f(a.pts)}<small>± ${f(a.se)}</small>` : "–", ba ? `start ${f(ba.pts)} ± ${f(ba.se)}` : "")}
-    ${kpi("Goal difference", a ? sgn(a.gd) : "–", a ? `GF ${f(a.gf)} · GA ${f(a.ga)}` : "", a && a.gd > 0 ? "pos" : a && a.gd < 0 ? "neg" : "")}
-    ${kpi("vs RL Team 4", f(h["RL Team 4"]?.pts), h["RL Team 4"] ? `W${h["RL Team 4"].w} D${h["RL Team 4"].d} L${h["RL Team 4"].l}` : "")}
-    ${kpi("vs RL Team 5", f(h["RL Team 5"]?.pts), h["RL Team 5"] ? `W${h["RL Team 5"].w} D${h["RL Team 5"].d} L${h["RL Team 5"].l}` : "")}
-    ${kpi("vs start net", f(h["start"]?.pts), h["start"] ? `GD ${sgn(h["start"].gd)}` : "")}
-    ${kpi("Verdict vs start", z === null ? "–" : verdictFromZ(z), z === null ? "needs a full evaluation" : `${sgn(a.pts - ba.pts)} pts, z = ${f(z, 1)}`, z > 1.96 ? "pos" : z < -1.96 ? "neg" : "")}
-  </div>`;
-  const evalPts = [
-    { name: "full", color: runColor(name), points: fulls.filter((e) => e.league.all).map((e) => ({ x: e.update, y: e.league.all.pts, err: e.league.all.se, big: true })), dots: true },
-    { name: "fast check", color: runColor(name), points: fasts.filter((e) => e.league.all).map((e) => ({ x: e.update, y: e.league.all.pts, err: e.league.all.se, hollow: true })), dots: true, dashed: true },
-  ];
-  const refs = [];
-  if (ba) refs.push({ y: ba.pts, label: "start (full) " + f(ba.pts) });
-  if (baseFast?.league?.all) refs.push({ y: baseFast.league.all.pts, label: "start (fast) " + f(baseFast.league.all.pts) });
-  const ppo = d.ppo || [];
+    ${kpi(`League pts <span class="muted">${last ? "u" + last.update : ""}</span>`, last ? `${f(last.pts)}<small>± ${f(last.se)}</small>` : "–", last ? esc(last.protocol) : "no full evaluation yet")}
+    ${kpi("Goal difference", last ? sgn(last.gd) : "–", last ? `GF ${f(last.gf)} · GA ${f(last.ga)}` : "", last && last.gd > 0 ? "pos" : last && last.gd < 0 ? "neg" : "")}
+    ${kpi("Best move", last && last.greedy_pts != null ? f(last.greedy_pts) : "–", last && last.greedy_ga != null ? `GA ${f(last.greedy_ga)}` : "")}
+    ${kpi("vs RL Team 4", f(h["RL Team 4"]?.pts), h["RL Team 4"] ? `n ${h["RL Team 4"].n} · GD ${sgn(h["RL Team 4"].gd)}` : "")}
+    ${kpi("vs RL Team 5", f(h["RL Team 5"]?.pts), h["RL Team 5"] ? `n ${h["RL Team 5"].n} · GD ${sgn(h["RL Team 5"].gd)}` : "")}
+    ${kpi("Verdict", v && v.verdict ? esc(v.verdict) : "–", v && v.verdict ? `${sgn(v.pts)} ± ${f(v.pts_se)} vs ${esc(v.reference)}${v.paired ? " · paired" : ""}` : "after the full evaluation", v?.verdict === "better" ? "pos" : v?.verdict === "worse" ? "neg" : "")}</div>`;
+  const xMax = Math.max(100, d.row?.target || 0, ...d.evals.map((e) => e.update));
+  const evChart = (list, protocol, title) => {
+    const ref = refEval(d, protocol);
+    return `<section class="card"><div class="card-h"><h2>${title}</h2><span class="muted small">${esc(protocol)} · 95% interval</span></div>${lineChart([{ name: d.run, color: runColor(d.run), points: list.map((e) => ({ x: e.update, y: e.pts, err: 1.96 * e.se, hollow: e.kind === "fast" })), dots: true, noLine: true }],
+      { yMin: 0, yMax: 3, height: 200, xMin: 0, xMax, bands: ref ? [{ y0: ref.pts - 1.96 * ref.se, y1: ref.pts + 1.96 * ref.se, label: "reference " + (d.reference.name || "") }] : [], emptyText: "none yet", key: "ev" + protocol })}</section>`;
+  };
+  return `${kp}<div class="grid g2">${evChart(fulls, "full/g1/d90", "Full evaluations")}${evChart(fasts, "fast/g2/d60", "Fast checks")}</div>
+    <section class="card"><div class="card-h"><h2>Training points</h2>${smoothControl()}</div>${trainingChart(d, 250, "run", 1240)}</section>`;
+}
+function runTraining(d) {
+  const p = d.ppo || [], t = d.training || [], a = state.smooth;
+  const small = (title, sub, series, opt = {}) => `<section class="card"><div class="card-h"><h3>${title}</h3></div>${sub ? `<div class="sub">${sub}</div>` : ""}${lineChart(series, { height: 170, width: 420, ...opt })}</section>`;
+  const s = (k, c, name, extra = {}) => ({ name, color: css(c), points: ema(p.map((r) => ({ x: r.upd, y: r[k] })), a), ...extra });
+  const hasTeacher = p.some((r) => r.kl_teacher != null);
   const terms = d.terms || [];
-  const tkeys = [...new Set(terms.flatMap((t) => Object.keys(t).filter((k) => k !== "upd")))];
+  const keys = [...new Set(terms.flatMap((r) => Object.keys(r).filter((k) => k !== "upd")))];
   const recent = terms.slice(-20);
-  const means = tkeys.map((k) => ({ k, label: TERM_LABEL[k] || k, v: recent.reduce((s, t) => s + (t[k] || 0), 0) / Math.max(recent.length, 1) })).filter((x) => x.v !== 0).sort((x, y) => Math.abs(y.v) - Math.abs(x.v));
-  const smooth = (rows, k, n = 5) => rows.map((r, i) => { const w = rows.slice(Math.max(0, i - n + 1), i + 1); return { x: r.upd, y: w.reduce((s, q) => s + (q[k] || 0), 0) / w.length }; });
-  const termSeries = means.slice(0, 7).map((m, i) => ({ name: m.label, color: colorOf(i), points: smooth(terms, m.k) }));
-  const heats = last && fulls.length ? (fulls[fulls.length - 1].heat || []) : [];
-  const tierRows = ["weak", "average", "strong", "elite", "held", "all"].filter((t) => last?.league?.[t]).map((t) => {
-    const s = last.league[t], g = last.greedy?.[t];
-    return `<tr><td>${t === "held" ? "held-out teams" : t === "all" ? "<b>all 16 teams</b>" : t}</td><td class="r">${f(s.pts)}<span class="pm">±${f(s.se)}</span></td><td class="r ${s.gd > 0 ? "pos" : s.gd < 0 ? "neg" : ""}">${sgn(s.gd)}</td><td class="r">${f(s.ga)}</td><td class="r">${s.n}</td><td class="r">${g ? `${f(g.pts)}<span class="pm">±${f(g.se)}</span>` : "–"}</td><td class="r">${g ? f(g.ga) : "–"}</td></tr>`;
+  const means = keys.map((k) => ({ k, v: recent.reduce((acc, r) => acc + (r[k] || 0), 0) / Math.max(recent.length, 1) })).filter((m) => m.v).sort((x, y) => Math.abs(y.v) - Math.abs(x.v));
+  const tot = means.reduce((acc, m) => acc + Math.abs(m.v), 0) || 1;
+  const shareSeries = means.slice(0, 8).map((m, i) => ({ name: TERM_LABEL[m.k] || m.k, color: css(PALETTE[i % PALETTE.length]), points: ema(terms.map((r) => { const tt = keys.reduce((acc, kk) => acc + Math.abs(r[kk] || 0), 0) || 1; return { x: r.upd, y: (100 * Math.abs(r[m.k] || 0)) / tt }; }), a) }));
+  const table = means.map((m) => `<tr><td>${esc(TERM_LABEL[m.k] || m.k)}</td><td class="r ${m.v > 0 ? "pos" : "neg"}">${sgn(m.v * DECISIONS_PER_MATCH, 2)}</td><td class="r">${f((100 * Math.abs(m.v)) / tot, 0)}%</td></tr>`).join("");
+  return `<div class="toolbar">${smoothControl()}</div><div class="grid g3">
+    ${small("Approx. KL per update", "healthy band 0.001–0.02", [s("kl", "--c1", "KL")], { bands: [{ y0: 0.001, y1: 0.02, color: "var(--good)" }], fmt: (v) => f(v, 4), key: "kl" })}
+    ${small("Clip fraction", "share of samples clipped by PPO", [s("clipfrac", "--c2", "clip fraction")], { fmt: (v) => f(v, 3), key: "cf" })}
+    ${small("Critic explained variance", "1 = perfect value predictions", [s("ev", "--c3", "explained variance")], { yMax: 1, key: "evr" })}
+    ${small("Move entropy", "randomness of the moves", [s("ent_move", "--c4", "move")], { key: "em" })}
+    ${small("Kick entropy", "", [s("ent_kick", "--c5", "kick")], { fmt: (v) => f(v, 3), key: "ek" })}
+    ${hasTeacher ? small("Teacher KL", "distance to the teacher's moves, and its weight", [s("kl_teacher", "--c6", "KL to teacher"), s("kl_w", "--c7", "weight", { dashed: true })], { key: "klt" })
+      : small("Decisions / s", "simulation speed", [{ name: "dec/s", color: css("--c6"), points: t.map((r) => ({ x: r.upd, y: r.dps })) }], { key: "dps", yMin: 0 })}
+  </div><div class="grid g2"><section class="card"><div class="card-h"><h2>Reward composition</h2><span class="muted small">share of |reward| per term, %</span></div>${lineChart(shareSeries, { height: 240, yMin: 0, key: "terms", fmt: (v) => f(v, 1) + "%" })}</section>
+  <section class="card flush"><div class="card-h pad"><h2>Reward per player and match</h2><span class="muted small">mean of the last 20 updates</span></div><div class="tbl-wrap"><table><thead><tr><th>Term</th><th class="r">per match</th><th class="r">share</th></tr></thead><tbody>${table || '<tr><td colspan="3" class="muted">no data</td></tr>'}</tbody></table></div></section></div>`;
+}
+function runEvaluation(d) {
+  const evs = d.evals;
+  if (!evs.length) return '<div class="empty">No evaluation yet</div>';
+  const e = evs.find((x) => x.id && x.id === state.evalPick[d.run]) || evs.filter((x) => x.kind === "full").pop() || evs[evs.length - 1];
+  const sel = `<select data-evalpick="${esc(d.run)}">${evs.map((x) => `<option value="${esc(x.id || "")}" ${x === e ? "selected" : ""}>${x.kind} · u${x.update} · ${esc(x.protocol)}</option>`).join("")}</select>`;
+  const ref = refEval(d, e.protocol);
+  const L = e.league_all || {}, G = e.greedy_all || {}, R = ref || null;
+  const tiers = ["weak", "average", "strong", "elite", "held", "train", "all"].filter((t) => L[t]);
+  const tierRows = tiers.map((t) => `<tr><td>${t === "held" ? "held-out teams" : t === "train" ? "trained-against" : t === "all" ? "<b>all 16</b>" : t}</td><td class="r">${f(L[t].pts)}<span class="pm">±${f(L[t].se)}</span></td><td class="r ${L[t].gd > 0 ? "pos" : L[t].gd < 0 ? "neg" : ""}">${sgn(L[t].gd)}</td><td class="r">${f(L[t].ga)}</td><td class="r">${L[t].n}</td><td class="r">${G[t] ? f(G[t].pts) : "–"}</td><td class="r">${G[t] ? f(G[t].ga) : "–"}</td></tr>`).join("");
+  const h2h = Object.entries(e.h2h_full || {}).map(([k, v]) => `<tr><td>${esc(k)}</td><td class="r">${f(v.pts)}<span class="pm">±${f(v.se)}</span></td><td class="r">${v.w}/${v.d}/${v.l}</td><td class="r ${v.gd > 0 ? "pos" : v.gd < 0 ? "neg" : ""}">${sgn(v.gd)}</td><td class="r">${v.n}</td></tr>`).join("");
+  let fr;
+  if (R && R.league_all && d.reference.name !== d.run) {
+    const floor = (x) => Math.max(x.se, 0.5 / Math.sqrt(Math.max(x.n, 1)));
+    const rowsF = tiers.filter((t) => R.league_all[t] && t !== "all").map((t) => { const dd = L[t].pts - R.league_all[t].pts, se = Math.hypot(floor(L[t]), floor(R.league_all[t])); return { label: t, d: dd, se, sig: Math.abs(dd / se) > 1.96 }; });
+    const key = `${d.run}|${e.update}|${e.kind}`, c = state.cmpCache[key];
+    if (c && c.pts != null) rowsF.unshift({ label: "all 16" + (c.paired ? " · paired" : ""), d: c.pts, se: c.pts_se, sig: Math.abs(c.z) > 1.96, sub: `z ${f(c.z, 1)}` });
+    else fetchCompare(d.run, e, d.reference.name, R.update, key);
+    fr = `<section class="card"><div class="card-h"><h2>Difference vs ${esc(d.reference.name)}</h2><span class="muted small">${esc(e.protocol)}</span></div>${forest(rowsF)}</section>`;
+  } else fr = `<section class="card"><div class="card-h"><h2>Difference vs reference</h2></div><div class="empty">No reference evaluation with protocol ${esc(e.protocol)}</div></section>`;
+  return `<div class="toolbar">Evaluation ${sel} <span class="muted small">${e.eval_seconds ? "took " + dur(e.eval_seconds) : ""}${e.paired_matches ? " · " + e.paired_matches + " matches stored" : ""}</span></div>
+    <div class="grid g2"><section class="card flush"><div class="card-h pad"><h2>League by opponent tier</h2></div><div class="tbl-wrap"><table><thead><tr><th>Opponents</th><th class="r">Pts</th><th class="r">GD</th><th class="r">GA</th><th class="r">N</th><th class="r">Best move</th><th class="r">GA</th></tr></thead><tbody>${tierRows}</tbody></table></div></section>
+    ${fr}</div><section class="card flush"><div class="card-h pad"><h2>Head to head</h2></div><div class="tbl-wrap"><table><thead><tr><th>Opponent</th><th class="r">Pts</th><th class="r">W/D/L</th><th class="r">GD</th><th class="r">N</th></tr></thead><tbody>${h2h || '<tr><td colspan="5" class="muted">none</td></tr>'}</tbody></table></div></section>`;
+}
+function runBehaviour(d) {
+  const e = d.evals.filter((x) => x.kind === "full").pop();
+  if (!e) return '<div class="empty">Behaviour is measured in full evaluations: none yet</div>';
+  const b = e.behaviour || {}, rb = e.behaviour_rule_bots || {};
+  const bars = BEHAVIOUR.filter(([k]) => b[k] != null).map(([k, label, , dec]) => {
+    const v = b[k], r = rb[k], mx = Math.max(v, r || 0) * 1.15 || 1;
+    return `<div class="bh"><div class="bl">${label}</div><div class="bt"><i style="width:${(100 * v) / mx}%;background:${runColor(d.run)}"></i>${r != null ? `<span class="rf" style="left:${(100 * r) / mx}%" title="rule bots ${f(r, dec)}"></span>` : ""}</div><div class="bv">${f(v, dec)}${r != null ? `<span class="pm"> rules ${f(r, dec)}</span>` : ""}</div></div>`;
   }).join("");
-  const h2hRows = Object.entries(h).map(([k, v]) => `<tr><td>${esc(k)}</td><td class="r">${f(v.pts)}<span class="pm">±${f(v.se)}</span></td><td class="r">${v.w} / ${v.d} / ${v.l}</td><td class="r ${v.gd > 0 ? "pos" : v.gd < 0 ? "neg" : ""}">${sgn(v.gd)}</td><td class="r">${f(v.gf)} – ${f(v.ga)}</td></tr>`).join("");
-  const b = last?.behaviour || {};
-  const cfg = d.config || {};
-  const rewardKeys = Object.keys(cfg).filter((k) => k.startsWith("w_") || ["shaping", "pass_individual", "coop_cap", "random_start", "xg_cap", "def_cap", "far_radius"].includes(k));
-  const cfgRows = rewardKeys.map((k) => `<dt>${esc(k)}</dt><dd class="${cfg[k] && k in (spec.rewards || {}) ? "hl" : ""}">${esc(cfg[k])}</dd>`).join("");
-  const runKeys = ["lr", "updates", "start_update", "rollout", "minibatch", "epochs", "ent", "gamma", "lam", "workers_rule", "workers_self", "envs_per_worker", "learn_threads", "fast_every", "start"].filter((k) => k in cfg);
-  const runRows = runKeys.map((k) => `<dt>${esc(k)}</dt><dd>${esc(cfg[k])}</dd>`).join("");
-  return `<div class="head"><div><h3>Run</h3><h1><span class="dot" style="background:${runColor(name)}"></span>${esc(name)} ${badge(st.state || (name.startsWith("old_") || name.startsWith("start:") ? "imported" : ""))}</h1>
-      <p>${esc(spec.notes || "")}</p><div>${Object.entries(spec.rewards || {}).map(([k, v]) => `<span class="chip">${esc(k)} = ${esc(v)}</span>`).join("")}</div></div>
-      <div class="muted" style="text-align:right">${st.update != null ? `update ${st.update}${st.target_updates ? " / " + st.target_updates : ""}<br>` : ""}${st.started ? "started " + ago(st.started) : ""}${st.finished ? "<br>finished " + ago(st.finished) : ""}</div></div>
-    ${kp}
-    <div class="grid g2">
-      <div class="card"><h2>League points at each evaluation</h2><div class="sub">Filled = full evaluation (32 matches), hollow = fast check (24 short matches). Bars ± 1 standard error.</div>${lineChart(evalPts, { refs, yMin: 0, yMax: 3, height: 230, legend: true })}</div>
-      <div class="card"><h2>Training points</h2><div class="sub">During training, sampled moves, rolling window.</div>${trainingChart(d, { height: 230 })}</div>
-    </div>
-    <div class="grid g3">
-      <div class="card"><h2>PPO: approx. KL</h2><div class="sub">How far each update moves the policy. Healthy here: 0.001–0.02.</div>${lineChart([{ name: "KL", color: css("--blue"), points: ppo.map((p) => ({ x: p.upd, y: p.kl })) }, { name: "clip fraction", color: css("--orange"), points: ppo.map((p) => ({ x: p.upd, y: p.clipfrac })), dashed: true }], { height: 220, width: 400, fmt: (v) => f(v, 4) })}</div>
-      <div class="card"><h2>Critic explained variance</h2><div class="sub">1 = the value net predicts returns perfectly.</div>${lineChart([{ name: "explained variance", color: css("--accent"), points: ppo.map((p) => ({ x: p.upd, y: p.ev })) }], { height: 220, width: 400, yMax: 1 })}</div>
-      <div class="card"><h2>Policy entropy</h2><div class="sub">Randomness of the moves; a rise means the net is less sure.</div>${lineChart([{ name: "move", color: css("--purple"), points: ppo.map((p) => ({ x: p.upd, y: p.ent_move })) }, { name: "kick", color: css("--gold"), points: ppo.map((p) => ({ x: p.upd, y: p.ent_kick })), dashed: true }], { height: 220, width: 400 })}</div>
-    </div>
-    <div class="grid g2">
-      <div class="card"><h2>Reward terms over training</h2><div class="sub">Mean reward per agent decision, smoothed over 5 updates (largest 7 terms).</div>${lineChart(termSeries, { height: 240, zero: true, fmt: (v) => v.toExponential(2) })}</div>
-      <div class="card"><h2>What the reward is made of</h2><div class="sub">Mean of the last 20 updates per term (green pays, red costs).</div>${means.length ? hbars(means) : '<div class="empty">No reward data</div>'}</div>
-    </div>
-    <div class="grid g2">
-      <div class="card flush"><h2>League by tier ${last ? `<span class="muted">· ${last.kind} u${last.update}</span>` : ""}</h2><div class="tbl-wrap"><table><thead><tr><th>Opponents</th><th class="r">Pts</th><th class="r">GD</th><th class="r">GA</th><th class="r">N</th><th class="r" title="the net playing its best move instead of sampling">Pts best move</th><th class="r">GA</th></tr></thead><tbody>${tierRows || '<tr><td colspan="7" class="muted">No evaluation yet</td></tr>'}</tbody></table></div></div>
-      <div class="card flush"><h2>Head to head</h2><div class="tbl-wrap"><table><thead><tr><th>Opponent</th><th class="r">Pts</th><th class="r">W / D / L</th><th class="r">Goal diff</th><th class="r">Score</th></tr></thead><tbody>${h2hRows || '<tr><td colspan="5" class="muted">No head-to-head yet</td></tr>'}</tbody></table></div>
-        <div style="padding:12px 16px"><h3>Behaviour vs rule bots</h3><dl class="kv"><dt>direction changes / s</dt><dd>${f(b.dir_changes_s, 2)} <span class="muted">(rule bots ≈ 2.2)</span></dd><dt>idle</dt><dd>${f(b.idle_pct, 0)} %</dd><dt>teammate spacing</dt><dd>${f(b.spacing_px, 0)} px <span class="muted">(rule bots ≈ 270)</span></dd><dt>passes / match</dt><dd>${f(b.passes_match, 1)}</dd><dt>shots / match</dt><dd>${f(b.shots_match, 1)}</dd><dt>xA / match</dt><dd>${f(b.xa_match, 2)}</dd></dl></div></div>
-    </div>
-    ${heats.length ? `<div class="card" style="margin-bottom:14px"><h2>Where the players are</h2><div class="sub">Share of time per area, latest full evaluation, attacking to the right (red goal = opponent).</div><div class="heats">${heats.map((hm) => heatmap(hm, hm.slot === "ball" ? "Ball" : "Player " + (Number(hm.slot) + 1))).join("")}</div></div>` : ""}
-    <div class="grid g2">
-      <div class="card"><h2>Reward settings</h2><div class="sub">Highlighted = changed by this experiment.</div><dl class="kv">${cfgRows || '<dt class="muted">no config file</dt><dd></dd>'}</dl></div>
-      <div class="card"><h2>Training settings</h2><dl class="kv">${runRows || '<dt class="muted">no config file</dt><dd></dd>'}</dl></div>
-    </div>`;
+  const heats = (d.heat || []).map((hm) => heatmap(hm, hm.slot === "ball" ? "Ball" : "Player slot " + (Number(hm.slot) + 1))).join("");
+  return `<div class="grid g2"><section class="card"><div class="card-h"><h2>Behaviour vs the rule bots</h2><span class="muted small">u${e.update} · tick = rule bots</span></div>${bars}</section>
+    <section class="card"><div class="card-h"><h2>Where the players are</h2><span class="muted small">share of time · attacking right</span></div><div class="heats">${heats || '<div class="empty">no heatmaps</div>'}</div>
+    <div class="hlegend"><span>rare</span><i></i><span>often</span></div><p class="muted small">Per player slot: with no fixed roles a slot is not a position. Role-based views come with the scouting page.</p></section></div>`;
+}
+function runConfig(d) {
+  const c = d.config || {}, m = d.minimal || {}, df = d.defaults || {};
+  const changed = Object.keys(c).filter((k) => (k in m && m[k] != c[k]) || (k in df && df[k] != c[k] && !["updates", "start_update"].includes(k)) || ["teacher", "opp_models", "kl_coef", "hidden"].includes(k) && c[k] && c[k] !== 128);
+  const kv = (keys) => keys.map((k) => `<dt>${esc(k)}</dt><dd class="${changed.includes(k) ? "hl" : ""}">${esc(typeof c[k] === "object" ? JSON.stringify(c[k]) : c[k])}</dd>`).join("");
+  return `<div class="grid g2"><section class="card"><div class="card-h"><h2>Changed vs the defaults</h2></div><dl class="kv">${kv(changed) || '<dt class="muted">nothing: minimal rewards, default settings</dt><dd></dd>'}</dl></section>
+    <section class="card"><div class="card-h"><h2>Spec</h2></div><pre>${esc(JSON.stringify(d.status.spec || {}, null, 1))}</pre></section></div>
+    <details class="card"><summary>All ${Object.keys(c).length} settings</summary><dl class="kv">${kv(Object.keys(c).sort())}</dl></details>`;
 }
 
+// ---------- COMPARE ----------
 function viewCompare(params) {
-  const o = state.overview;
-  if (!o) return '<div class="empty">Loading…</div>';
-  const names = o.runs.map((r) => r.run);
-  const A = params.get("a") || names.find((n) => n.startsWith("start:")) || names[0], B = params.get("b") || names[names.length - 1];
-  const sel = (id, v) => `<select data-pick="${id}">${names.map((n) => `<option ${n === v ? "selected" : ""}>${esc(n)}</option>`).join("")}</select>`;
-  const da = state.detail[A], db = state.detail[B];
-  ensureDetail(A); ensureDetail(B);
-  const ra = o.runs.find((r) => r.run === A), rb = o.runs.find((r) => r.run === B);
-  const pick = (r, path) => path.reduce((x, k) => (x == null ? null : x[k]), r?.latest);
-  const metrics = [
-    ["League pts (all)", ["league", "all", "pts"], ["league", "all", "se"], 1],
-    ["Goal difference", ["league", "all", "gd"], ["league", "all", "gd_se"], 1],
-    ["Conceded / match", ["league", "all", "ga"], null, -1],
-    ["Scored / match", ["league", "all", "gf"], null, 1],
-    ["Elite teams pts", ["league", "elite", "pts"], ["league", "elite", "se"], 1],
-    ["Held-out teams pts", ["league", "held", "pts"], ["league", "held", "se"], 1],
-    ["Best-move pts", ["greedy", "all", "pts"], ["greedy", "all", "se"], 1],
-    ["vs RL Team 4", ["h2h", "RL Team 4", "pts"], ["h2h", "RL Team 4", "se"], 1],
-    ["vs RL Team 5", ["h2h", "RL Team 5", "pts"], ["h2h", "RL Team 5", "se"], 1],
-    ["Direction changes / s", ["behaviour", "dir_changes_s"], null, -1],
-    ["Idle %", ["behaviour", "idle_pct"], null, -1],
-    ["Spacing px", ["behaviour", "spacing_px"], null, 0],
-  ];
-  const rows = metrics.map(([label, p, se, better]) => {
-    const va = pick(ra, p), vb = pick(rb, p), sa = se ? pick(ra, se) : null, sb = se ? pick(rb, se) : null;
-    const diff = va != null && vb != null ? vb - va : null;
-    const z = se ? zOf(vb, sb, va, sa) : null;
-    const good = diff == null || better === 0 ? "" : diff * better > 0 ? "pos" : diff * better < 0 ? "neg" : "";
-    return `<tr><td>${label}</td><td class="r">${f(va)}${sa != null ? `<span class="pm">±${f(sa)}</span>` : ""}</td><td class="r">${f(vb)}${sb != null ? `<span class="pm">±${f(sb)}</span>` : ""}</td><td class="r ${good}">${sgn(diff)}</td><td>${z !== null ? badge(verdictFromZ(z * (better || 1))) + ` <span class="pm">z ${f(z, 1)}</span>` : '<span class="muted">no error bar</span>'}</td></tr>`;
-  }).join("");
-  const ser = [];
-  if (da) ser.push({ name: A + " · rule bots", color: runColor(A), points: (da.training || []).map((r) => ({ x: r.upd, y: r.rules })) });
-  if (db) ser.push({ name: B + " · rule bots", color: runColor(B), points: (db.training || []).map((r) => ({ x: r.upd, y: r.rules })), dashed: true });
-  const ev = [];
-  for (const [n, d] of [[A, da], [B, db]]) if (d) ev.push({ name: n, color: runColor(n), points: d.evals.filter((e) => e.league.all).map((e) => ({ x: e.update, y: e.league.all.pts, err: e.league.all.se, hollow: e.kind === "fast", label: e.kind })), dots: true });
-  return `<div class="head"><div><h1>Compare</h1><p>Second run minus first. A verdict needs a difference larger than 1.96 combined standard errors; smaller differences are noise.</p></div></div>
-    <div class="pick">${sel("a", A)}<span class="muted">vs</span>${sel("b", B)}</div>
-    <div class="card flush" style="margin-bottom:14px"><div class="tbl-wrap"><table><thead><tr><th>Metric (latest evaluation)</th><th class="r">${esc(A)}</th><th class="r">${esc(B)}</th><th class="r">Difference</th><th>Verdict</th></tr></thead><tbody>${rows}</tbody></table></div></div>
-    <div class="grid g2"><div class="card"><h2>Training points vs rule bots</h2>${lineChart(ser, { yMin: 0, yMax: 3, height: 230 })}</div>
-    <div class="card"><h2>League points at each evaluation</h2>${lineChart(ev, { yMin: 0, yMax: 3, height: 230 })}</div></div>`;
+  const o = state.ov; if (!o) return '<div class="empty">Loading…</div>';
+  const names = o.runs.map((r) => r.name);
+  let runs = (params.get("runs") || "").split(",").filter((n) => names.includes(n));
+  if (!runs.length) runs = [names.find((n) => n.startsWith("start:")), o.status.runner.running?.run].filter(Boolean);
+  const kind = params.get("kind") || "full";
+  runs.forEach(ensureDetail);
+  const ref = runs[0];
+  const add = `<select data-addrun><option value="">+ add run…</option>${names.filter((n) => !runs.includes(n)).map((n) => `<option>${esc(n)}</option>`).join("")}</select>`;
+  const chipsR = runs.map((n, i) => `<span class="rchip">${runLink(n)}${i === 0 ? ' <span class="muted small">reference</span>' : ""}<button data-rmrun="${esc(n)}" aria-label="remove">×</button></span>`).join("");
+  const kinds = ["full", "fast"].map((k) => `<button class="pill ${kind === k ? "on" : ""}" data-kind="${k}">${k === "full" ? "full evaluations" : "fast checks"}</button>`).join("");
+  const latestOf = (n) => (state.detail[n]?.evals || []).filter((e) => e.kind === kind).pop();
+  const rows = [], warn = [];
+  for (const n of runs.slice(1)) {
+    const a = latestOf(n), b = latestOf(ref);
+    if (!a || !b) { if (state.detail[n] && state.detail[ref]) warn.push(`${n}: no ${kind} evaluation`); continue; }
+    if (a.protocol !== b.protocol) { warn.push(`${n}: protocol ${a.protocol} ≠ ${b.protocol}`); continue; }
+    const key = `${n}|${a.update}|${kind}|${ref}`, c = state.cmpCache[key];
+    if (!c) fetchCompare(n, a, ref, b.update, key);
+    rows.push({ label: n, d: c && c.pts != null ? c.pts : a.pts - b.pts, se: c && c.pts != null ? c.pts_se : Math.hypot(a.se, b.se), sig: c && c.z != null ? Math.abs(c.z) > 1.96 : null, sub: c && c.z != null ? `z ${f(c.z, 1)}${c.paired ? " paired" : ""}` : "…" });
+  }
+  const metrics = [["League pts", (e) => e.pts, (e) => e.se], ["Goal difference", (e) => e.gd, (e) => e.gd_se], ["Conceded", (e) => e.ga], ["Best-move pts", (e) => e.greedy_pts], ["vs RL Team 4", (e) => e.h2h?.["RL Team 4"]?.pts], ["vs RL Team 5", (e) => e.h2h?.["RL Team 5"]?.pts], ["Direction changes/s", (e) => e.behaviour?.dir_changes_s], ["Idle %", (e) => e.behaviour?.idle_pct], ["Spacing px", (e) => e.behaviour?.spacing_px]];
+  const r0 = latestOf(ref);
+  const table = `<table><thead><tr><th>Latest ${kind}</th>${runs.map((n) => `<th class="r">${runLink(n)}</th>`).join("")}</tr></thead><tbody>${metrics.map(([lbl, g, s]) => `<tr><td>${lbl}</td>${runs.map((n, i) => { const e = latestOf(n), v = e ? g(e) : null, dv = i && v != null && r0 && g(r0) != null ? v - g(r0) : null; return `<td class="r">${f(v)}${s && e && s(e) != null ? `<span class="pm">±${f(s(e))}</span>` : ""}${dv != null ? `<div class="small ${dv > 0 ? "pos" : dv < 0 ? "neg" : "muted"}">${sgn(dv)}</div>` : ""}</td>`; }).join("")}</tr>`).join("")}</tbody></table>`;
+  const tr = runs.map((n) => ({ name: n, color: runColor(n), points: ema((state.detail[n]?.training || []).map((r) => ({ x: r.upd, y: r.rules })), state.smooth) }));
+  const ev = runs.map((n) => ({ name: n, color: runColor(n), points: (state.detail[n]?.evals || []).filter((e) => e.kind === kind).map((e) => ({ x: e.update, y: e.pts, err: 1.96 * e.se })), dots: true, noLine: true }));
+  return `<div class="head"><div><h1>Compare</h1><p>Each run against the first, on the same evaluation protocol only; paired over identical matches when possible.</p></div><div class="pills">${kinds}</div></div>
+    <div class="rchips">${chipsR}${add}</div>${warn.length ? `<div class="flag warn">${warn.map(esc).join(" · ")}</div>` : ""}
+    <div class="grid g2"><section class="card"><div class="card-h"><h2>Difference vs ${esc(ref || "")}</h2><span class="muted small">league pts, 95% interval</span></div>${forest(rows)}</section>
+      <section class="card flush"><div class="tbl-wrap">${table}</div></section></div>
+    <div class="grid g2"><section class="card"><div class="card-h"><h2>Training points vs rule bots</h2>${smoothControl()}</div>${lineChart(tr, { yMin: 0, yMax: 3, height: 220, key: "cmp-tr" })}</section>
+      <section class="card"><div class="card-h"><h2>${kind === "full" ? "Full evaluations" : "Fast checks"}</h2><span class="muted small">95% interval</span></div>${lineChart(ev, { yMin: 0, yMax: 3, height: 220, xMin: 0, key: "cmp-ev" })}</section></div>`;
 }
 
-function viewQueue() {
-  const o = state.overview;
-  if (!o) return '<div class="empty">Loading…</div>';
-  const q = o.queue.map((s, i) => `<div class="qcard"><div class="n">${i + 1}</div><div><b>${esc(s.name)}</b> <span class="muted mono">${esc(s.file)}</span><p>${esc(s.notes)}</p>
-    ${Object.entries(s.rewards).map(([k, v]) => `<span class="chip">${esc(k)} = ${esc(v)}</span>`).join("") || '<span class="chip">minimal rewards</span>'}<span class="chip">updates ${esc(s.updates ?? 300)}</span><span class="chip">lr ${esc(s.lr ?? "5e-5")}</span><span class="chip">from ${esc((s.start || "").split("/").pop())}</span></div></div>`).join("");
-  const fin = o.runs.filter((r) => !r.run.startsWith("old_") && !r.run.startsWith("start:") && r.state !== "running");
-  const done = fin.map((r) => `<tr class="link" data-run="${esc(r.run)}"><td><b>${esc(r.run)}</b></td><td>${badge(r.state)}</td><td>${r.verdict?.verdict ? badge(r.verdict.verdict) : ""}</td><td class="muted">${r.finished ? ago(r.finished) : ""}</td></tr>`).join("");
-  return `<div class="head"><div><h1>Queue</h1><p>Specs in <span class="mono">exp/queue/</span> run in file-name order, one at a time. Add a JSON file there (or ask the agent) to queue an experiment.</p></div></div>
-    <div class="grid g2"><div class="card flush"><h2>Waiting (${o.queue.length})</h2>${q || '<div class="empty">Queue empty</div>'}</div>
-    <div class="card flush"><h2>Finished</h2><div class="tbl-wrap"><table><thead><tr><th>Run</th><th>State</th><th>Verdict</th><th>Finished</th></tr></thead><tbody>${done || '<tr><td colspan="4" class="muted">None yet</td></tr>'}</tbody></table></div></div></div>`;
-}
-
+// ---------- PI ----------
 function viewPi() {
-  const o = state.overview, hl = state.health;
-  if (!o) return '<div class="empty">Loading…</div>';
-  if (!hl) { loadHealth(); }
-  const sys = o.system, th = throttleText(sys.throttled);
-  const rows = hl || [];
-  const X = (r, i) => i;
-  const lbl = (r) => r.t;
-  const mk = (k) => rows.map((r, i) => ({ x: i, y: r[k], label: r.t }));
-  const opts = { height: 210, xLabel: "sample" };
-  return `<div class="head"><div><h1>Raspberry Pi</h1><p>From <span class="mono">logs/pi_health.log</span> (one sample every 10 s, last 12 hours). After a freeze the last samples show what the Pi was doing.</p></div></div>
-    <div class="kpis">${kpi("Temperature", sys.temp != null ? `${f(sys.temp, 1)}<small>°C</small>` : "–")}${kpi("CPU load", `${f(sys.load[0], 1)}<small>/ 4</small>`, `5 min ${f(sys.load[1], 1)} · 15 min ${f(sys.load[2], 1)}`)}${kpi("Free memory", `${(sys.mem_avail_mb / 1024).toFixed(2)}<small>GB</small>`, `of ${(sys.mem_total_mb / 1024).toFixed(1)} GB`)}${kpi("Power / throttling", th.text, th.sub, th.cls)}${kpi("Uptime", dur(sys.uptime_s), "hardware watchdog on (15 s)")}</div>
+  const o = state.ov; if (!o) return '<div class="empty">Loading…</div>';
+  if (!state.health || state.health.hours !== state.piHours) loadHealth();
+  const pi = o.status.pi, th = throttle(pi.throttled), H = state.health;
+  const rows = (H?.rows || []).filter((r) => r.t && r.t.includes("T"));
+  const vl = (H?.reboots || []).map((r) => ({ x: parseT(r.back), label: "reboot (last seen " + r.last_seen.slice(11, 16) + ")" }));
+  const mk = (k) => rows.map((r) => ({ x: parseT(r.t), y: r[k] }));
+  const opt = { height: 180, time: true, vlines: vl, gap: 120 };
+  const win = [3, 12, 48].map((h) => `<button class="pill ${state.piHours === h ? "on" : ""}" data-hours="${h}">${h} h</button>`).join("");
+  const last = rows[rows.length - 1];
+  return `<div class="head"><div><h1>Raspberry Pi</h1><p>One sample every 10 s (<span class="mono">logs/pi_health.log</span>). Red lines mark reboots; the last sample before one shows what the Pi was doing.</p></div><div class="pills">${win}</div></div>
+    <div class="kpis">${kpi("Temperature", `${f(pi.temp_c, 1)}<small>°C</small>`)}${kpi("CPU load", `${f(pi.load_1m, 1)}<small>/ 4</small>`)}${kpi("Free memory", `${f(pi.mem_free_mb / 1024, 2)}<small>GB</small>`)}${kpi("Power", esc(th.text), esc(th.sub || ""), th.cls)}${kpi("Uptime", dur(pi.uptime_hours * 3600), "boot " + esc(pi.boot_id || ""))}${kpi("Last sample", last ? ago(last.t) : "–", "watchdog: reboot after 15 s frozen")}</div>
     <div class="grid g2">
-      <div class="card"><h2>Temperature °C</h2>${lineChart([{ name: "temperature", color: css("--orange"), points: mk("temp") }], { ...opts, refs: [{ y: 80, label: "throttles at 80" }] })}</div>
-      <div class="card"><h2>CPU load (1 min)</h2>${lineChart([{ name: "load", color: css("--blue"), points: mk("load") }], { ...opts, yMin: 0, refs: [{ y: 4, label: "4 cores" }] })}</div>
-      <div class="card"><h2>Free memory MB</h2>${lineChart([{ name: "free", color: css("--accent"), points: mk("mem") }], { ...opts, yMin: 0 })}</div>
-      <div class="card"><h2>CPU clock MHz</h2>${lineChart([{ name: "clock", color: css("--purple"), points: mk("clock") }], { ...opts, yMin: 0 })}</div>
+      <section class="card"><div class="card-h"><h3>Temperature °C</h3></div>${lineChart([{ name: "temperature", color: css("--c2"), points: mk("temp") }], { ...opt, refs: [{ y: 80, label: "throttles at 80" }], key: "pt", emptyText: "no dated samples yet" })}</section>
+      <section class="card"><div class="card-h"><h3>CPU load (1 min)</h3></div>${lineChart([{ name: "load", color: css("--c1"), points: mk("load") }], { ...opt, yMin: 0, refs: [{ y: 4, label: "4 cores" }], key: "pl", emptyText: "no dated samples yet" })}</section>
+      <section class="card"><div class="card-h"><h3>Free memory MB</h3></div>${lineChart([{ name: "free", color: css("--c3"), points: mk("mem_mb") }], { ...opt, yMin: 0, key: "pm", emptyText: "no dated samples yet" })}</section>
+      <section class="card"><div class="card-h"><h3>CPU clock MHz</h3></div>${lineChart([{ name: "clock", color: css("--c4"), points: mk("clock_mhz") }], { ...opt, yMin: 0, key: "pc", emptyText: "no dated samples yet" })}</section>
     </div>`;
 }
 
-
-// ---------- live match (streamed from the Pi's viewer, drawn here) ----------
-const live = { es: null, meta: null, frames: [], trail: [], raf: 0, recv: [], idleAge: null, lastFrameAt: 0, sideAt: 0, cam: null,
+// ---------- LIVE (streamed from the Pi's match, drawn here) ----------
+const live = { es: null, meta: null, frames: [], trail: [], raf: 0, recv: [], lastFrameAt: 0, sideAt: 0, cam: null,
   follow: (() => { try { return localStorage.getItem("liveFollow") !== "0"; } catch (e) { return true; } })() };
 function viewLive() {
-  return `<div class="head live-head"><div><h1>Live match</h1><p>The match the Pi's viewer is playing, drawn in your browser from a stream of positions (about 30 per second). The Pi does not encode video, so this costs training almost nothing.</p></div></div>
-    <div class="live-wrap">
-      <div class="card live-main"><div class="scorebar" id="lv-sb"><div class="tm"><i class="kit"></i><span>–</span></div><div class="mid"><div class="score">– : –</div><div class="clock">–</div></div><div class="tm r"><span>–</span><i class="kit"></i></div></div>
-        <canvas id="lv-c" width="1400" height="710"></canvas><div class="lv-over" id="lv-over">Waiting for the Pi's viewer…</div></div>
-      <div class="card live-side"><div id="lv-prog"></div><div class="seg" id="lv-cam"><button data-cam="1">Follow ball</button><button data-cam="0">Whole pitch</button></div><dl class="kv" id="lv-side"><dt>stream</dt><dd>connecting…</dd></dl></div>
+  return `<div class="live-wrap">
+      <div class="live-main"><div class="scorebar" id="lv-sb"><div class="tm"><i class="kit"></i><span>–</span></div><div class="mid"><div class="score">– : –</div><div class="clock">–</div></div><div class="tm r"><span>–</span><i class="kit"></i></div></div>
+        <canvas id="lv-c" width="1400" height="710"></canvas><div class="lv-over" id="lv-over">Waiting for the Pi's match…</div></div>
+      <div class="card live-side"><div id="lv-prog"></div><div class="seg" id="lv-cam"><button data-cam="1">Follow ball</button><button data-cam="0">Whole pitch</button></div>
+        <details class="lv-more"><summary>Details</summary><dl class="kv" id="lv-side"></dl></details></div>
     </div>`;
 }
 function startLive() {
   if (!live.es) {
     live.es = new EventSource("/api/live");
     live.es.addEventListener("meta", (e) => { live.meta = JSON.parse(e.data); liveSide(); });
-    live.es.addEventListener("idle", (e) => { live.idleAge = +e.data; liveSide(); });
     live.es.onmessage = (e) => {
       const fr = JSON.parse(e.data), now = performance.now();
       fr.at = now;
@@ -452,9 +476,8 @@ function startLive() {
       if (live.frames.length > 12) live.frames.shift();
       live.recv.push(now);
       while (live.recv.length && now - live.recv[0] > 2000) live.recv.shift();
-      live.idleAge = 0; live.lastFrameAt = now;
+      live.lastFrameAt = now;
     };
-    live.es.onerror = () => { live.idleAge = null; };
   }
   if (!live.raf) live.raf = requestAnimationFrame(liveDraw);
   liveSide();
@@ -462,64 +485,63 @@ function startLive() {
 function stopLive() {
   if (live.es) { live.es.close(); live.es = null; }
   if (live.raf) { cancelAnimationFrame(live.raf); live.raf = 0; }
-  live.frames = []; live.trail = [];
+  live.frames = []; live.trail = []; live.cam = null;
 }
 function clockText(s) { s = Math.max(0, Math.ceil(s)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`; }
 function liveSide() {
-  const pr = $("#lv-prog"), now = state.overview?.now;
-  if (pr) pr.innerHTML = now ? `<div class="live-prog"><div class="row"><span>${esc(now.run)}${now.eval ? " · evaluating" : ""}</span><b>${now.update ?? 0} / ${now.target ?? "?"}</b></div>
-      <div class="progress"><i style="width:${now.target ? Math.min(100, (100 * (now.update || 0)) / now.target) : 0}%"></i></div>
-      <div class="row" style="margin-top:6px"><span>training pts vs rules</span><b>${f(now.train_pts)}</b></div><div class="row"><span>time left</span><b>${now.eta_s ? dur(now.eta_s) : "–"}</b></div></div>` : "";
+  const run = state.ov?.status?.runner?.running, pr = $("#lv-prog");
+  if (pr) pr.innerHTML = run ? `<div class="big3"><div><b>${run.update ?? 0}<small>/${run.target ?? "?"}</small></b><span>${esc(run.run)}</span></div>
+      <div><b>${run.eta_hours != null ? dur(run.eta_hours * 3600) : "–"}</b><span>${run.evaluating ? "evaluating…" : "training left"}</span></div>
+      <div><b>${f(run.train_pts_vs_rules)}</b><span>training pts</span></div></div><div class="progress"><i style="width:${run.target ? Math.min(100, (100 * (run.update || 0)) / run.target) : 0}%"></i></div>` : '<div class="muted">nothing training</div>';
   for (const bt of document.querySelectorAll("#lv-cam button")) bt.classList.toggle("on", (bt.dataset.cam === "1") === live.follow);
   const el = $("#lv-side"); if (!el) return;
-  const m = live.meta, fps = live.recv.length / 2;
-  const fresh = live.lastFrameAt && performance.now() - live.lastFrameAt < 3000;
-  const last = live.frames[live.frames.length - 1];
-  let rows = `<dt>stream</dt><dd class="${fresh ? "pos" : "neg"}">${fresh ? `live · ${fps.toFixed(0)} frames/s` : live.es ? "no frames from the Pi" : "closed"}</dd>`;
-  if (m) {
-    const runName = m.tag && m.tag.startsWith("x_") ? m.tag.slice(2) : m.tag;
-    rows += `<dt>run</dt><dd><a href="#/run/${encodeURIComponent(runName)}">${esc(runName)}</a></dd><dt>net playing</dt><dd class="mono">${esc(m.playing || "–")}</dd><dt>training update</dt><dd>${esc(m.upd)}</dd>
-      <dt>moves</dt><dd>${m.best_move ? "best move (greedy)" : "sampled (as in training)"}</dd><dt>checkpoint</dt><dd>${m.best_ckpt ? "best of the run" : "newest"}</dd>
-      <dt>left team</dt><dd>${m.teams[0].net ? "the run's net" : "rule bot"} <span class="muted">(kit of ${esc(m.teams[0].name)})</span></dd><dt>right team</dt><dd>${esc(m.teams[1].name)}</dd>`;
-  }
-  if (last && last.paused) rows += `<dt>note</dt><dd class="neg">paused: the Pi's viewer is on another page</dd>`;
+  const m = live.meta, fps = live.recv.length / 2, fresh = live.lastFrameAt && performance.now() - live.lastFrameAt < 3000;
+  let rows = `<dt>stream</dt><dd class="${fresh ? "pos" : "neg"}">${fresh ? `live · ${fps.toFixed(0)} fps` : "no frames"}</dd>`;
+  if (m) rows += `<dt>net</dt><dd class="mono">${esc(m.playing || "–")}</dd><dt>moves</dt><dd>${m.best_move ? "best move" : "sampled"}</dd><dt>opponent</dt><dd>${esc(m.teams[1].name)}</dd>`;
   el.innerHTML = rows;
 }
-function liveDraw() {
+const KIOSK_FRAME_MS = 66;              // the Pi's own screen draws at ~15 fps: drawing costs the CPU that training needs
+function liveDraw(ts) {
   live.raf = requestAnimationFrame(liveDraw);
+  if (document.body.classList.contains("kiosk")) {
+    if (ts - (live.drawnAt || 0) < KIOSK_FRAME_MS) return;
+    live.drawnAt = ts;
+  }
   const cv = $("#lv-c"), m = live.meta;
   if (!cv) return;
   const over = $("#lv-over");
-  if (!m || !live.frames.length) { over.hidden = false; over.innerHTML = live.es ? "Waiting for the Pi's viewer…<small>the Godot viewer must be running on the Pi</small>" : "Stream closed"; return; }
-  const P = m.pitch, dpr = window.devicePixelRatio || 1, cssW = cv.clientWidth || 800, cssH = cssW * P.out_y / P.out_x;
-  if (cv.width !== Math.round(cssW * dpr) || cv.height !== Math.round(cssH * dpr)) { cv.width = Math.round(cssW * dpr); cv.height = Math.round(cssH * dpr); }
+  if (performance.now() - live.sideAt > 1000) { live.sideAt = performance.now(); liveSide(); }
+  if (!m || !live.frames.length) { over.hidden = false; over.innerHTML = "Waiting for the Pi's match…<small>it plays while an experiment trains</small>"; return; }
+  const P = m.pitch, dpr = window.devicePixelRatio || 1, aspect = P.out_x / P.out_y;
+  const box = cv.parentElement.getBoundingClientRect(), sbH = $("#lv-sb")?.offsetHeight || 0;
+  const kiosk = document.body.classList.contains("kiosk");
+  const availH = window.innerHeight - box.top - sbH - (kiosk ? ($(".live-side")?.offsetHeight || 0) + 18 : 24);
+  const cssW = Math.round(Math.max(200, Math.min(box.width, availH * aspect))), cssH = Math.round(cssW / aspect);
+  if (cv.style.width !== cssW + "px") { cv.style.width = cssW + "px"; cv.style.height = cssH + "px"; }
+  if (cv.width !== Math.round(cssW * dpr)) { cv.width = Math.round(cssW * dpr); cv.height = Math.round(cssH * dpr); }
   const ctx = cv.getContext("2d");
-  // state at "now - 70 ms", interpolated between the two frames around it
   const rt = performance.now() - 70, fr = live.frames;
   let a = fr[fr.length - 1], b = a, u = 0;
   for (let i = fr.length - 1; i > 0; i--) if (fr[i - 1].at <= rt) { a = fr[i - 1]; b = fr[i]; u = Math.min(1, Math.max(0, (rt - a.at) / Math.max(b.at - a.at, 1))); break; }
   if (a.p.length !== b.p.length) { a = b; u = 0; }
-  const L = (x, y) => x + (y - x) * u;
-  const ball = [L(a.b[0], b.b[0]), L(a.b[1], b.b[1])];
-  // camera: the whole pitch, or zoomed in and following the ball (smoothed, kept inside the pitch's outer area)
-  const zoom = live.follow ? 1.9 : 1, k = (cv.width / (2 * P.out_x)) * zoom;
-  const vx = P.out_x / zoom, vy = P.out_y / zoom;
+  const Lp = (x, y) => x + (y - x) * u;
+  const ball = [Lp(a.b[0], b.b[0]), Lp(a.b[1], b.b[1])];
+  const zoom = live.follow ? 1.9 : 1, k = (cv.width / (2 * P.out_x)) * zoom, vx = P.out_x / zoom, vy = P.out_y / zoom;
   const target = live.follow ? [Math.max(-P.out_x + vx, Math.min(P.out_x - vx, ball[0])), Math.max(-P.out_y + vy, Math.min(P.out_y - vy, ball[1]))] : [0, 0];
   if (!live.cam) live.cam = target.slice();
   live.cam[0] += (target[0] - live.cam[0]) * 0.12; live.cam[1] += (target[1] - live.cam[1]) * 0.12;
   ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.fillStyle = shade("#" + P.outer, -0.25); ctx.fillRect(0, 0, cv.width, cv.height);
   ctx.setTransform(k, 0, 0, k, cv.width / 2 - live.cam[0] * k, cv.height / 2 - live.cam[1] * k);
-  // pitch
   const hw = P.half_w, hh = P.half_h;
   ctx.fillStyle = "#" + P.outer; ctx.fillRect(-P.out_x, -P.out_y, 2 * P.out_x, 2 * P.out_y);
   const n = Math.max(P.stripes, 1), sw = (2 * hw) / n;
   for (let i = 0; i < n; i++) { ctx.fillStyle = P.stripes > 0 && i % 2 === 0 ? shade("#" + P.pitch, -0.07) : "#" + P.pitch; ctx.fillRect(-hw + i * sw, -hh, sw + 0.5, 2 * hh); }
-  for (let t = 0; t < 2; t++) {                       // nets, in the colour of the team defending them
+  for (let t = 0; t < 2; t++) {
     const sx = t === 0 ? -1 : 1, x0 = sx * hw, x1 = sx * (hw + P.net_depth), col = "#" + m.teams[t].primary;
     ctx.fillStyle = shade("#" + P.pitch, -0.2); ctx.fillRect(Math.min(x0, x1), -P.goal_half, P.net_depth, 2 * P.goal_half);
     ctx.strokeStyle = col; ctx.globalAlpha = 0.45; ctx.lineWidth = 1; ctx.beginPath();
-    for (let g = 0; g <= P.net_depth; g += 10) { ctx.moveTo(x0 + sx * g, -P.goal_half); ctx.lineTo(x0 + sx * g, P.goal_half); }
-    for (let g = -P.goal_half; g <= P.goal_half; g += 10) { ctx.moveTo(x0, g); ctx.lineTo(x1, g); }
+    for (let gg = 0; gg <= P.net_depth; gg += 10) { ctx.moveTo(x0 + sx * gg, -P.goal_half); ctx.lineTo(x0 + sx * gg, P.goal_half); }
+    for (let gg = -P.goal_half; gg <= P.goal_half; gg += 10) { ctx.moveTo(x0, gg); ctx.lineTo(x1, gg); }
     ctx.stroke(); ctx.globalAlpha = 1;
     ctx.lineWidth = 6; ctx.strokeStyle = "rgba(0,0,0,.7)"; ctx.strokeRect(Math.min(x0, x1), -P.goal_half, P.net_depth, 2 * P.goal_half);
     ctx.lineWidth = 3; ctx.strokeStyle = col; ctx.strokeRect(Math.min(x0, x1), -P.goal_half, P.net_depth, 2 * P.goal_half);
@@ -531,15 +553,13 @@ function liveDraw() {
   ctx.fillStyle = "#" + P.line; ctx.beginPath(); ctx.arc(0, 0, 4, 0, 2 * Math.PI); ctx.fill();
   if (P.box_depth > 0) { ctx.lineWidth = 2.5; ctx.strokeRect(-hw, -P.box_half, P.box_depth, 2 * P.box_half); ctx.strokeRect(hw - P.box_depth, -P.box_half, P.box_depth, 2 * P.box_half); }
   for (const px of [-hw, hw]) for (const py of [-P.goal_half, P.goal_half]) disc(ctx, px, py, P.post_r, "#f2f2f2", "#000", 2);
-  // ball trail
   live.trail.push(ball); if (live.trail.length > 14) live.trail.shift();
   for (let i = 0; i < live.trail.length - 1; i++) { ctx.globalAlpha = (i / live.trail.length) * 0.35; disc(ctx, live.trail[i][0], live.trail[i][1], m.ball_r * (0.4 + 0.5 * i / live.trail.length), "#fff"); }
   ctx.globalAlpha = 1;
-  // players
-  ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  ctx.textAlign = "center";
   m.players.forEach((pl, i) => {
     if (2 * i + 1 >= a.p.length) return;
-    const x = L(a.p[2 * i], b.p[2 * i]), y = L(a.p[2 * i + 1], b.p[2 * i + 1]), tm = m.teams[pl.team], r = pl.r;
+    const x = Lp(a.p[2 * i], b.p[2 * i]), y = Lp(a.p[2 * i + 1], b.p[2 * i + 1]), tm = m.teams[pl.team], r = pl.r;
     ctx.save(); ctx.beginPath(); ctx.arc(x, y, r, 0, 2 * Math.PI); ctx.clip();
     ctx.fillStyle = "#" + tm.primary; ctx.fillRect(x - r, y - r, 2 * r, 2 * r);
     ctx.fillStyle = "#" + tm.secondary;
@@ -549,14 +569,11 @@ function liveDraw() {
     else if (tm.pattern === "band") ctx.fillRect(x - 0.3 * r, y - r, 0.6 * r, 2 * r);
     ctx.restore();
     ctx.lineWidth = 2.5; ctx.strokeStyle = "#000"; ctx.beginPath(); ctx.arc(x, y, r - 1, 0, 2 * Math.PI); ctx.stroke();
-    // centre the digits on their real ink height ("middle" uses the font's em box, which puts digits a bit low)
-    ctx.font = `700 ${Math.round(r * 0.95)}px system-ui, sans-serif`; ctx.lineWidth = 4; ctx.strokeStyle = "rgba(0,0,0,.85)";
-    ctx.textBaseline = "alphabetic";
-    const txt = String(pl.n), mt = ctx.measureText(txt), ty = y + (mt.actualBoundingBoxAscent - mt.actualBoundingBoxDescent) / 2;
+    ctx.font = `700 ${Math.round(r * 0.95)}px system-ui, sans-serif`; ctx.lineWidth = 4; ctx.strokeStyle = "rgba(0,0,0,.85)"; ctx.textBaseline = "alphabetic";
+    const txt = String(pl.n), mt = ctx.measureText(txt), ty = y + (mt.actualBoundingBoxAscent - mt.actualBoundingBoxDescent) / 2;   // centred on the digits' ink
     ctx.strokeText(txt, x, ty); ctx.fillStyle = "#fff"; ctx.fillText(txt, x, ty);
   });
   disc(ctx, ball[0], ball[1], m.ball_r, "#fff", "#000", 2);
-  // scoreboard and banners
   const sb = $("#lv-sb");
   if (sb) {
     const runName = m.tag && m.tag.startsWith("x_") ? m.tag.slice(2) : m.tag;
@@ -570,105 +587,146 @@ function liveDraw() {
   const stale = performance.now() - live.lastFrameAt > 3000;
   if (b.st === 1) { over.hidden = false; over.innerHTML = `GOAL<small>${esc(m.teams[b.gt]?.name || "")}</small>`; }
   else if (b.st === 2) { over.hidden = false; over.innerHTML = `FULL TIME<small>${b.sc[0]} : ${b.sc[1]}</small>`; }
-  else if (b.paused) { over.hidden = false; over.innerHTML = "PAUSED<small>the Pi's viewer is on another page</small>"; }
-  else if (stale) { over.hidden = false; over.innerHTML = "NO SIGNAL<small>waiting for the Pi's viewer</small>"; }
+  else if (stale) { over.hidden = false; over.innerHTML = "NO SIGNAL<small>waiting for the Pi's match</small>"; }
   else over.hidden = true;
-  if (performance.now() - live.sideAt > 1000) { live.sideAt = performance.now(); liveSide(); }
 }
-function disc(ctx, x, y, r, fill, stroke, lw) {
-  ctx.beginPath(); ctx.arc(x, y, r, 0, 2 * Math.PI); ctx.fillStyle = fill; ctx.fill();
-  if (stroke) { ctx.lineWidth = lw || 2; ctx.strokeStyle = stroke; ctx.stroke(); }
-}
-function shade(hex, amt) {
-  const v = parseInt(hex.slice(1), 16), f2 = (c) => Math.max(0, Math.min(255, Math.round(c * (1 + amt))));
-  return `rgb(${f2(v >> 16)},${f2((v >> 8) & 255)},${f2(v & 255)})`;
-}
+function disc(ctx, x, y, r, fill, stroke, lw) { ctx.beginPath(); ctx.arc(x, y, r, 0, 2 * Math.PI); ctx.fillStyle = fill; ctx.fill(); if (stroke) { ctx.lineWidth = lw || 2; ctx.strokeStyle = stroke; ctx.stroke(); } }
+function shade(hex, amt) { const v = parseInt(hex.slice(1), 16), g = (c) => Math.max(0, Math.min(255, Math.round(c * (1 + amt)))); return `rgb(${g(v >> 16)},${g((v >> 8) & 255)},${g(v & 255)})`; }
 
-// ---------- data loading ----------
+// ---------- data ----------
 const pending = {};
 function ensureDetail(name) {
-  if (pending[name] || (state.detail[name] && Date.now() - state.detail[name]._t < POLL_MS)) return;
+  if (!name || pending[name] || (state.detail[name] && Date.now() - state.detail[name]._t < POLL_MS)) return;
   pending[name] = true;
-  getJSON("/api/run/" + encodeURIComponent(name)).then((d) => { d._t = Date.now(); state.detail[name] = d; render(); }).catch(() => {}).finally(() => { delete pending[name]; });
+  getJSON("/api/run/" + encodeURIComponent(name)).then((d) => { d._t = Date.now(); state.detail[name] = d; render(); })
+    .catch(() => { state.detail[name] = { error: "Unknown run " + name, _t: Date.now() }; render(); }).finally(() => { delete pending[name]; });
+}
+function fetchCompare(run, e, ref, refUpdate, key) {
+  if (!ref || pending["c" + key]) return;
+  pending["c" + key] = true;
+  getJSON(`/api/v1/compare?a=${encodeURIComponent(run)}&b=${encodeURIComponent(ref)}&kind=${e.kind}&ua=${e.update}${refUpdate != null ? "&ub=" + refUpdate : ""}`)
+    .then((d) => { state.cmpCache[key] = d.data.difference_a_minus_b; rerender(); }).catch(() => { state.cmpCache[key] = {}; }).finally(() => { delete pending["c" + key]; });
 }
 function loadHealth() {
   if (pending._h) return;
   pending._h = true;
-  getJSON("/api/health").then((d) => { state.health = d; render(); }).catch(() => {}).finally(() => { delete pending._h; });
+  getJSON("/api/health?hours=" + state.piHours).then((d) => { state.health = d; render(); }).catch(() => {}).finally(() => { delete pending._h; });
 }
 async function poll() {
   try {
-    state.overview = await getJSON("/api/overview");
-    state.lastOk = Date.now();
-    setPulse(true, "live");
+    state.ov = await getJSON("/api/overview");
+    state.lastOk = Date.now(); state.firstFail = 0;
     const r = route();
-    if (r.view === "run") state.detail[r.arg] && (state.detail[r.arg]._t = 0);
+    if (r.view === "run" && state.detail[r.arg]) state.detail[r.arg]._t = 0;
     if (r.view === "pi") state.health = null;
-    if (r.view === "compare") for (const k of ["a", "b"]) { const n = r.params.get(k); if (n && state.detail[n]) state.detail[n]._t = 0; }
-    if (state.overview.now && state.detail[state.overview.now.run]) state.detail[state.overview.now.run]._t = 0;
+    if (r.view === "compare") for (const n of (r.params.get("runs") || "").split(",")) if (state.detail[n]) state.detail[n]._t = 0;
+    const run = state.ov.status.runner.running;
+    if (run && state.detail[run.run]) state.detail[run.run]._t = 0;
+    setPulse(true);
     render();
   } catch (e) {
-    setPulse(false, state.lastOk ? "offline · " + dur((Date.now() - state.lastOk) / 1000) : "offline");
+    if (!state.firstFail) state.firstFail = Date.now();
+    setPulse(false);
   }
 }
+function setPulse(ok) {
+  const p = $("#pulse"), off = $("#offline"), pi = $("#pichip"), s = state.ov?.status?.pi;
+  p.className = "pulse " + (ok ? "ok" : "err");
+  if (pi && s) pi.innerHTML = `<i class="${s.temp_c > 75 || (s.throttled && s.throttled !== "0x0") ? "warn" : "ok"}"></i>${f(s.temp_c, 0)}°C · load ${f(s.load_1m, 1)}`;
+  const down = !ok && state.firstFail && Date.now() - state.firstFail > 25000;
+  off.hidden = !down;
+  if (down) off.innerHTML = `<b>The Pi stopped answering</b>${state.lastOk ? " · last data " + new Date(state.lastOk).toLocaleTimeString() + " (" + dur((Date.now() - state.lastOk) / 1000) + " ago)" : ""} · if it froze, the watchdog reboots it and the runner resumes`;
+}
 
-// ---------- routing ----------
+// ---------- routing and events ----------
 function route() {
-  const h = location.hash.replace(/^#\/?/, "");
-  const [path, qs] = h.split("?");
-  const parts = path.split("/");
-  const params = new URLSearchParams(qs || "");
-  if (parts[0] === "run" && parts[1]) return { view: "run", arg: decodeURIComponent(parts.slice(1).join("/")), params };
-  return { view: ["runs", "compare", "queue", "pi", "live"].includes(parts[0]) ? parts[0] : "overview", params };
+  const h = location.hash.replace(/^#\/?/, ""), [path, qs] = h.split("?"), parts = path.split("/"), params = new URLSearchParams(qs || "");
+  if (parts[0] === "run" && parts[1]) return { view: "run", arg: decodeURIComponent(parts[1]), tab: parts[2], params };
+  return { view: ["runs", "compare", "pi", "live"].includes(parts[0]) ? parts[0] : "now", params };
 }
 let lastHTML = "";
 function render() {
   const r = route();
-  for (const a of document.querySelectorAll("#nav a")) a.classList.toggle("on", a.dataset.v === (r.view === "run" ? "runs" : r.view));
-  const before = new Set(Object.keys(chartData));
+  for (const a of document.querySelectorAll("[data-v]")) a.classList.toggle("on", a.dataset.v === (r.view === "run" ? "runs" : r.view));
   if (r.view !== "live") stopLive();
-  const html = r.view === "live" ? viewLive() : r.view === "runs" ? viewRuns() : r.view === "run" ? viewRun(r.arg) : r.view === "compare" ? viewCompare(r.params) : r.view === "queue" ? viewQueue() : r.view === "pi" ? viewPi() : viewOverview();
+  const before = new Set(Object.keys(chartData));
+  const html = r.view === "live" ? viewLive() : r.view === "runs" ? viewRuns() : r.view === "run" ? viewRun(r.arg, r.tab) : r.view === "compare" ? viewCompare(r.params) : r.view === "pi" ? viewPi() : viewNow();
   const cleaned = html.replace(/data-chart="c[a-z0-9]+"/g, "");
   const drop = (keep) => { for (const k of Object.keys(chartData)) if (before.has(k) !== keep) delete chartData[k]; };
-  if (cleaned === lastHTML) { drop(true); return; }      // nothing changed: keep scroll, selection and hover (and the old charts' data)
+  if (cleaned === lastHTML) { drop(true); return; }
   drop(false);
   lastHTML = cleaned;
-  const view = $("#view");
+  const view = $("#view"), active = document.activeElement, focus = active && active.dataset && active.dataset.filter !== undefined, caret = focus ? active.selectionStart : 0;
   view.innerHTML = html;
   attachCharts(view);
-  if (r.view === "live") { live.raf && cancelAnimationFrame(live.raf); live.raf = 0; startLive(); }
+  if (focus) { const i = $("[data-filter]"); if (i) { i.focus(); i.setSelectionRange(caret, caret); } }
+  if (r.view === "live") { if (live.raf) cancelAnimationFrame(live.raf); live.raf = 0; startLive(); }
   document.title = (r.view === "run" ? r.arg + " · " : "") + "Soccer Lab";
+  const dl = $("#runlist");
+  if (dl && state.ov) dl.innerHTML = state.ov.runs.map((x) => `<option value="${esc(x.name)}">`).join("");
 }
+function rerender() { lastHTML = ""; render(); }
 document.addEventListener("click", (e) => {
-  const cam = e.target.closest("button[data-cam]");
-  if (cam) { live.follow = cam.dataset.cam === "1"; try { localStorage.setItem("liveFollow", live.follow ? "1" : "0"); } catch (err) {} liveSide(); }
-  const tr = e.target.closest("tr[data-run]");
-  if (tr && !e.target.closest("a")) location.hash = "#/run/" + encodeURIComponent(tr.dataset.run);
-  const th = e.target.closest("th[data-sort]");
-  if (th) {
-    const k = th.dataset.sort;
-    state.sort = { key: k, dir: state.sort.key === k ? -state.sort.dir : k === "run" || k === "state" ? 1 : -1 };
-    render();
-  }
+  const t = e.target;
+  const cam = t.closest("button[data-cam]");
+  if (cam) { live.follow = cam.dataset.cam === "1"; try { localStorage.setItem("liveFollow", live.follow ? "1" : "0"); } catch (err) {} liveSide(); return; }
+  const lg = t.closest("button.lg");
+  if (lg) { const k = lg.dataset.key, s = lg.dataset.series; state.hidden[k] = state.hidden[k] || new Set(); if (state.hidden[k].has(s)) state.hidden[k].delete(s); else state.hidden[k].add(s); rerender(); return; }
+  const th = t.closest("th[data-sort]");
+  if (th) { const k = th.dataset.sort; state.sort = { key: k, dir: state.sort.key === k ? -state.sort.dir : k === "name" || k === "state" ? 1 : -1 }; rerender(); return; }
+  const pill = t.closest("[data-state]");
+  if (pill) { state.stateFilter = pill.dataset.state; rerender(); return; }
+  const kd = t.closest("[data-kind]");
+  if (kd) { const p = route().params; p.set("kind", kd.dataset.kind); location.hash = "#/compare?" + p.toString(); return; }
+  const hrs = t.closest("[data-hours]");
+  if (hrs) { state.piHours = +hrs.dataset.hours; state.health = null; rerender(); return; }
+  const rm = t.closest("[data-rmrun]");
+  if (rm) { const p = route().params; p.set("runs", (p.get("runs") || "").split(",").filter((n) => n && n !== rm.dataset.rmrun).join(",")); location.hash = "#/compare?" + p.toString(); return; }
+  const cp = t.closest("[data-copy]");
+  if (cp) { copySummary(cp.dataset.copy, cp); return; }
+  if (t.closest("input")) return;
+  const tr = t.closest("tr[data-run]");
+  if (tr && tr.dataset.run && !t.closest("a")) location.hash = "#/run/" + encodeURIComponent(tr.dataset.run);
 });
 document.addEventListener("change", (e) => {
-  const s = e.target.closest("select[data-pick]");
-  if (!s) return;
-  const p = route().params;
-  p.set(s.dataset.pick, s.value);
-  location.hash = "#/compare?" + p.toString();
+  const t = e.target;
+  if (t.dataset.pick !== undefined) { if (t.checked) state.selected.add(t.dataset.pick); else state.selected.delete(t.dataset.pick); rerender(); }
+  if (t.dataset.addrun !== undefined && t.value) { const p = route().params; const runs = (p.get("runs") || "").split(",").filter(Boolean); runs.push(t.value); p.set("runs", runs.join(",")); location.hash = "#/compare?" + p.toString(); }
+  if (t.dataset.evalpick !== undefined) { state.evalPick[t.dataset.evalpick] = t.value; rerender(); }
+  if (t.id === "picker" && t.value) { location.hash = "#/run/" + encodeURIComponent(t.value); t.value = ""; t.blur(); }
 });
+document.addEventListener("input", (e) => {
+  const t = e.target;
+  if (t.dataset.filter !== undefined) { state.filter = t.value; rerender(); }
+  if (t.dataset.smooth !== undefined) { state.smooth = +t.value; rerender(); }
+});
+document.addEventListener("keydown", (e) => {
+  if ((e.key === "/" || (e.key === "k" && (e.metaKey || e.ctrlKey))) && document.activeElement?.tagName !== "INPUT") { e.preventDefault(); $("#picker")?.focus(); }
+});
+async function copySummary(name, btn) {
+  try {
+    const d = await getJSON("/api/v1/run/" + encodeURIComponent(name) + "?tail=5"), r = d.data, lf = r.latest_full;
+    const md = `**${r.name}** (${r.state}${r.stop_reason ? ", " + r.stop_reason : ""}) · update ${r.update}/${r.target}\nchanges: ${JSON.stringify(r.rewards_changed_vs_minimal)}\n` +
+      (lf ? `full u${lf.update}: ${lf.pts} ± ${lf.se} pts, GD ${lf.gd}, GA ${lf.ga}, vs RL4 ${lf.h2h["RL Team 4"]?.pts}, vs RL5 ${lf.h2h["RL Team 5"]?.pts}\n` : "") +
+      (r.verdict ? `verdict vs ${r.verdict.reference}: ${r.verdict.verdict} (${r.verdict.pts} ± ${r.verdict.pts_se}, z ${r.verdict.z})\n` : "");
+    await navigator.clipboard.writeText(md);
+    btn.textContent = "copied";
+  } catch (err) { btn.textContent = "copy failed"; }
+  setTimeout(() => (btn.textContent = "copy summary"), 1500);
+}
 window.addEventListener("hashchange", () => { lastHTML = ""; window.scrollTo(0, 0); render(); });
-if (new URLSearchParams(location.search).has("kiosk")) {                                      // the Pi's touch screen: opens on the live match
+
+// kiosk: the Pi's 1024x600 touch screen opens on the live match; theme: dark unless the user picked light
+if (new URLSearchParams(location.search).has("kiosk")) {
   document.body.classList.add("kiosk");
-  history.replaceState(null, "", location.pathname + location.search + "#/live");             // always start on Live (also after a restore)
+  history.replaceState(null, "", location.pathname + location.search + "#/live");
 }
 function setThemeButton() { $("#theme").textContent = document.documentElement.dataset.theme === "light" ? "☾" : "☀"; }
 $("#theme").addEventListener("click", () => {
   const light = document.documentElement.dataset.theme !== "light";
   if (light) document.documentElement.dataset.theme = "light"; else delete document.documentElement.dataset.theme;
   try { localStorage.setItem("theme", light ? "light" : "dark"); } catch (e) {}
-  setThemeButton(); lastHTML = ""; render();
+  setThemeButton(); rerender();
 });
 setThemeButton();
 poll();

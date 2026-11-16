@@ -109,11 +109,14 @@ After a reboot (the Pi's hardware watchdog reboots a frozen Pi) the runner resum
 Everything is plain files: `exp/results.jsonl` (one record per evaluation, kind fast|full, league points / goal difference / head to head / behaviour, each with standard errors), `exp/results.md` (table, rewritten after every evaluation),
 `exp/runs/<name>/status.json`, `exp/runner.log`; finished specs move to `exp/done/`, broken ones to `exp/failed/`. `EXP_MLFLOW=1` also mirrors every evaluation to MLflow (`pip install mlflow-skinny`, no server;
 copy `exp/mlruns/` to another computer and run `mlflow ui` there).
-`tools/dashboard.py` (service `soccer-dashboard`, port 8080, read-only, **no login: local network only**) serves "Soccer Lab", a single-page app (`tools/dashboard/`) that polls a JSON API every 10 s:
-**Live** (the match the Pi's viewer is playing, drawn in the browser from a stream of positions: the viewer sends JSON over local UDP port 7310, the dashboard relays it as server-sent events at about 25 frames/s; follow-the-ball or whole-pitch camera; no video encoding on the Pi),
-**Overview** (running experiment with progress and ETA, league strength of every run with error bars, training curve, runner events, queue, Pi state), **Runs** (sortable table with training sparklines and verdicts),
-**Run** pages (evaluations over updates, training points, PPO health, reward terms over time and their composition, league per tier, head to head, behaviour, player heatmaps, all settings),
-**Compare** (two runs side by side with differences and significance), **Queue** and **Raspberry Pi** (temperature, load, memory, clock, throttling). Open `http://<pi-address>:8080` from any computer on the network. `tools/pi_health_log.sh` (service `soccer-health`) logs throttle flags, temperature, load and memory every 10 s to `logs/pi_health.log`.
+`tools/dashboard.py` (service `soccer-dashboard`, port 8080, read-only, **no login: local network only**) serves "Soccer Lab", a single-page app (`tools/dashboard/`, dark by default) that polls every 10 s:
+**Now** (the running experiment with progress / ETA / last fast check, Pi vitals and the last reboot, league strength of every run with 95% intervals, the smoothed training curve, events, queue),
+**Live** (the match the Pi plays, drawn in the browser from a stream of positions: the headless viewer sends JSON over local UDP 7310, the dashboard relays it as server-sent events), **Runs** (experiments, imported runs and the
+queue in one sortable / filterable table with what each run changed, training sparklines on one scale, verdicts and cost; tick runs to compare), **Run** pages with tabs (Summary: evaluations with intervals and the
+reference band; Training: PPO health small multiples, reward composition; Evaluation: tiers, head to head, forest plot vs the reference, paired; Behaviour: vs the rule bots, heatmaps; Config: what differs from the defaults),
+**Compare** (any number of runs against the first, same protocol only, paired forest plot, metric table, overlaid curves) and **Pi** (temperature, load, memory, clock on a time axis with reboot markers; an offline banner
+appears on every page when the Pi stops answering). Run colours are hashed from the run name. On the Pi's 1024x600 touch screen the kiosk layout (`?kiosk=1`) uses a side rail and draws the live match at 15 fps.
+Open `http://<pi-address>:8080` from any computer on the network.
 Safety against the freezes seen on the Pi: the learning step uses 2 torch threads (`--learn_threads`), `tools/net_server.py` pins numpy/OpenBLAS to one thread (with the venv's OpenBLAS a net server spun 28 threads and starved the simulation: evaluations took 3x longer), and `tools/systemd/watchdog.conf` turns on the hardware watchdog (15 s).
 
 ## Watching training live (`tools/watch_training.tscn`, touch screen, no keyboard)

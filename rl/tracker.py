@@ -114,6 +114,14 @@ def parse_eval(path):
             opp = m.group(2)
             group = "h2h" if opp.startswith("h2h:") else ("greedy" if m.group(1) else "league")
             r["matches"].append([group, opp[4:].replace("_", " ") if group == "h2h" else opp, int(m.group(3)), int(m.group(4)), int(m.group(5)), int(m.group(6))])
+        m = re.match(r"^rule-based: (.*)", line)                # the rule bots' numbers in the same matches: the reference
+        if m:
+            t = m.group(1)
+            r.setdefault("behaviour_rule", {}).update({k: v for k, v in {
+                "dir_changes_s": _num(r"dir changes/s ([\d.]+)", t), "idle_pct": _num(r"idle (\d+)%", t), "spacing_px": _num(r"teammates spacing (\d+) px", t),
+                "keeper_dist_px": _num(r"keeper dist from own goal (\d+) px", t), "passes_match": _num(r"passes/match ([\d.]+)", t),
+                "shots_match": _num(r"shots/match ([\d.]+)", t), "key_passes_match": _num(r"key passes/match ([\d.]+)", t),
+                "xa_match": _num(r"xA/match ([\d.]+)", t)}.items() if v is not None})
         m = re.match(r"^(greedy )?RL Team: (.*)", line)
         if m and not m.group(1):
             t = m.group(2)
