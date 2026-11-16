@@ -8,7 +8,7 @@ const PALETTE = ["--c1", "--c2", "--c3", "--c4", "--c5", "--c6", "--c7", "--c8",
 const TERM_LABEL = {
   goals: "goals", time: "time", pass_prog: "progressive pass", pass_fail: "failed pass", pass_team: "pass (team)", coop: "cooperation",
   open: "open for pass", space: "spacing", kick: "kick discipline", xg: "xG for", xga: "xG against", result: "win / draw", tackle: "tackles",
-  goalside: "goal-side", opp_half: "opp. in our half", compact: "compactness", far: "far from ball", keeper: "keeper", jitter: "twitching", shaping: "shaping",
+  goalside: "goal-side", opp_half: "opp. in our half", wall: "at the wall", compact: "compactness", far: "far from ball", keeper: "keeper", jitter: "twitching", shaping: "shaping",
 };
 const BEHAVIOUR = [
   ["dir_changes_s", "Direction changes / s", "lower", 1], ["idle_pct", "Idle %", "lower", 0], ["spacing_px", "Teammate spacing px", "", 0],
@@ -275,22 +275,22 @@ function viewRuns() {
   const body = rows.map((r) => {
     const a = r.latest_full, v = r.verdict, sel = state.selected.has(r.name);
     const args = r.queued ? r.args : (state.detail[r.name]?.status?.spec?.args) || r.spec_args || {};
-    return `<tr class="${r.queued ? "queued" : "link"}" data-run="${r.queued ? "" : esc(r.name)}"><td>${r.queued ? "" : `<input type="checkbox" data-pick="${esc(r.name)}" ${sel ? "checked" : ""} aria-label="select ${esc(r.name)}">`}</td>
-      <td>${r.queued ? `<span class="rl"><i class="dot" style="background:var(--line)"></i>${esc(r.name)}</span>` : runLink(r.name)}<div class="muted small clip" title="${esc(r.notes || "")}">${esc(r.notes || "")}</div></td>
+    return `<tr class="${r.queued ? "queued" : "link"}" data-run="${r.queued ? "" : esc(r.name)}"><td class="k-hide">${r.queued ? "" : `<input type="checkbox" data-pick="${esc(r.name)}" ${sel ? "checked" : ""} aria-label="select ${esc(r.name)}">`}</td>
+      <td>${r.queued ? `<span class="rl"><i class="dot" style="background:var(--line)"></i>${esc(r.name)}</span>` : runLink(r.name)}<div class="muted small clip k-hide" title="${esc(r.notes || "")}">${esc(r.notes || "")}</div></td>
       <td>${badge(r.state)}${r.stop_reason && r.stop_reason !== "budget" ? `<div class="muted small">${esc(r.stop_reason)}</div>` : ""}</td>
-      <td>${r.state === "imported" ? '<span class="muted small">older run</span>' : `<div class="chips">${chips({ rewards_changed_vs_minimal: r.rewards_changed_vs_minimal, args })}</div>`}</td>
+      <td class="k-hide">${r.state === "imported" ? '<span class="muted small">older run</span>' : r.state === "reference" ? '<span class="muted small">shipped team</span>' : `<div class="chips">${chips({ rewards_changed_vs_minimal: r.rewards_changed_vs_minimal, args })}</div>`}</td>
       <td class="r">${r.update ?? (r.queued ? "" : "–")}${r.target ? `<span class="pm">/${r.target}</span>` : ""}</td>
-      <td>${r.queued ? "" : sparkline(r.spark, runColor(r.name))}</td>
+      <td class="k-hide">${r.queued ? "" : sparkline(r.spark, runColor(r.name))}</td>
       <td class="r">${a ? `${f(a.pts)}<span class="pm">±${f(a.se)}</span>` : "–"}</td><td class="r ${a && a.gd > 0 ? "pos" : a && a.gd < 0 ? "neg" : ""}">${a ? sgn(a.gd) : "–"}</td><td class="r">${a ? f(a.ga) : "–"}</td>
       <td class="r">${f(a?.h2h?.["RL Team 4"]?.pts)}</td><td class="r">${f(a?.h2h?.["RL Team 5"]?.pts)}</td>
       <td>${v && v.verdict ? `${badge(v.verdict)}<div class="muted small">${sgn(v.pts)} ± ${f(v.pts_se)} vs ${esc(v.reference || "")}</div>` : ""}</td>
-      <td class="r small">${r.cost_hours ? f((r.cost_hours.train || 0) + (r.cost_hours.eval || 0), 1) + " h" : ""}</td><td class="small muted">${r.finished ? ago(r.finished) : r.started ? "since " + ago(r.started).replace(" ago", "") : ""}</td></tr>`;
+      <td class="r small k-hide">${r.cost_hours ? f((r.cost_hours.train || 0) + (r.cost_hours.eval || 0), 1) + " h" : ""}</td><td class="small muted k-hide">${r.finished ? ago(r.finished) : r.started ? "since " + ago(r.started).replace(" ago", "") : ""}</td></tr>`;
   }).join("");
   const n = state.selected.size;
   return `<div class="head"><div><h1>Runs</h1><p>Experiments, imported runs and the queue. Tick runs to compare them; click a row for details.</p></div>
       <div class="tools"><input class="search" placeholder="Filter…" value="${esc(state.filter)}" data-filter><a class="btn ${n ? "" : "disabled"}" href="#/compare?runs=${[...state.selected].map(encodeURIComponent).join(",")}">Compare ${n ? "(" + n + ")" : ""}</a></div></div>
     <div class="pills">${states}</div>
-    <div class="card flush"><div class="tbl-wrap"><table class="runs"><thead><tr><th></th>${th("name", "Run")}${th("state", "State")}<th>Changes</th><th class="r">Update</th><th>Training 0–3</th>${th("pts", "League pts", "r")}${th("gd", "GD", "r")}${th("ga", "GA", "r")}${th("rl4", "vs RL4", "r")}${th("rl5", "vs RL5", "r")}<th>Verdict</th><th class="r">Cost</th>${th("fin", "When")}</tr></thead><tbody>${body || '<tr><td colspan="14" class="muted">No runs match</td></tr>'}</tbody></table></div></div>`;
+    <div class="card flush"><div class="tbl-wrap"><table class="runs"><thead><tr><th class="k-hide"></th>${th("name", "Run")}${th("state", "State")}<th class="k-hide">Changes</th><th class="r">Update</th><th class="k-hide">Training 0–3</th>${th("pts", "League pts", "r")}${th("gd", "GD", "r")}${th("ga", "GA", "r")}${th("rl4", "vs RL4", "r")}${th("rl5", "vs RL5", "r")}<th>Verdict</th><th class="r k-hide">Cost</th>${th("fin", "When", "k-hide")}</tr></thead><tbody>${body || '<tr><td colspan="14" class="muted">No runs match</td></tr>'}</tbody></table></div></div>`;
 }
 
 // ---------- RUN ----------
@@ -400,7 +400,7 @@ function runConfig(d) {
 const STYLE = [
   ["possession_pct", "Possession %", 0], ["field_tilt_pct", "Field tilt % (our possession in the final third)", 0], ["ball_own_half_pct", "Ball in our half %", 0],
   ["ppda", "PPDA (opp. passes per our defensive action, their build-up zone)", 1], ["press_d1_px", "Pressing: nearest player to the ball px", 0], ["press_d2_px", "Pressing: 2nd nearest px", 0],
-  ["goal_guarded_pct", "Goal guarded % (someone within 180 px)", 0], ["goal_empty_pct", "Goal empty % (nobody within 300 px)", 0], ["deepest_to_goal_px", "Deepest player to our goal px", 0],
+  ["at_wall_pct", "Time pressed against the wall % (per player)", 1], ["goal_guarded_pct", "Goal guarded % (someone within 180 px)", 0], ["goal_empty_pct", "Goal empty % (nobody within 300 px)", 0], ["deepest_to_goal_px", "Deepest player to our goal px", 0],
   ["passes_match", "Passes / match", 1], ["pass_ok_pct", "Pass completion %", 0], ["progressive_match", "Progressive passes / match", 1],
 ];
 function styleTags(sc) {
@@ -515,12 +515,16 @@ function viewPi() {
 }
 
 // ---------- LIVE (streamed from the Pi's match, drawn here) ----------
+const FS_ICON = [   // enter / leave full screen, drawn (the Pi's fonts have no such symbols)
+  '<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>',
+  '<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5"/></svg>'];
 const live = { es: null, meta: null, frames: [], trail: [], raf: 0, recv: [], lastFrameAt: 0, sideAt: 0, cam: null,
   follow: (() => { try { return localStorage.getItem("liveFollow") !== "0"; } catch (e) { return true; } })() };
 function viewLive() {
   return `<div class="live-wrap">
       <div class="live-main"><div class="scorebar" id="lv-sb"><div class="tm"><i class="kit"></i><span>–</span></div><div class="mid"><div class="score">– : –</div><div class="clock">–</div></div><div class="tm r"><span>–</span><i class="kit"></i></div></div>
-        <canvas id="lv-c" width="1400" height="710"></canvas><div class="lv-over" id="lv-over">Waiting for the Pi's match…</div></div>
+        <canvas id="lv-c" width="1400" height="710"></canvas><div class="lv-over" id="lv-over">Waiting for the Pi's match…</div>
+        <button class="fs-btn" data-fs title="Full screen" aria-label="Full screen">${FS_ICON[document.body.classList.contains("live-fs") ? 1 : 0]}</button></div>
       <div class="card live-side"><div id="lv-prog"></div><div class="seg" id="lv-cam"><button data-cam="1">Follow ball</button><button data-cam="0">Whole pitch</button></div>
         <details class="lv-more"><summary>Details</summary><dl class="kv" id="lv-side"></dl></details></div>
     </div>`;
@@ -576,8 +580,8 @@ function liveDraw(ts) {
   if (!m || !live.frames.length) { over.hidden = false; over.innerHTML = "Waiting for the Pi's match…<small>it plays while an experiment trains</small>"; return; }
   const P = m.pitch, dpr = window.devicePixelRatio || 1, aspect = P.out_x / P.out_y;
   const box = cv.parentElement.getBoundingClientRect(), sbH = $("#lv-sb")?.offsetHeight || 0;
-  const kiosk = document.body.classList.contains("kiosk");
-  const availH = window.innerHeight - box.top - sbH - (kiosk ? ($(".live-side")?.offsetHeight || 0) + 18 : 24);
+  const kiosk = document.body.classList.contains("kiosk"), fs = document.body.classList.contains("live-fs");
+  const availH = fs ? window.innerHeight - sbH : window.innerHeight - box.top - sbH - (kiosk ? ($(".live-side")?.offsetHeight || 0) + 18 : 24);
   const cssW = Math.round(Math.max(200, Math.min(box.width, availH * aspect))), cssH = Math.round(cssW / aspect);
   if (cv.style.width !== cssW + "px") { cv.style.width = cssW + "px"; cv.style.height = cssH + "px"; }
   if (cv.width !== Math.round(cssW * dpr)) { cv.width = Math.round(cssW * dpr); cv.height = Math.round(cssH * dpr); }
@@ -730,6 +734,7 @@ function render() {
 function rerender() { lastHTML = ""; render(); }
 document.addEventListener("click", (e) => {
   const t = e.target;
+  if (t.closest("[data-fs]")) { toggleFullscreen(); return; }
   const cam = t.closest("button[data-cam]");
   if (cam) { live.follow = cam.dataset.cam === "1"; try { localStorage.setItem("liveFollow", live.follow ? "1" : "0"); } catch (err) {} liveSide(); return; }
   const lg = t.closest("button.lg");
@@ -776,11 +781,25 @@ async function copySummary(name, btn) {
   } catch (err) { btn.textContent = "copy failed"; }
   setTimeout(() => (btn.textContent = "copy summary"), 1500);
 }
-window.addEventListener("hashchange", () => { lastHTML = ""; window.scrollTo(0, 0); render(); });
+window.addEventListener("hashchange", () => { if (document.body.classList.contains("live-fs") && route().view !== "live") toggleFullscreen(false); lastHTML = ""; window.scrollTo(0, 0); render(); });
+// full screen live match (like a video player): the page shows only the pitch and the score; the browser goes full screen too when it
+// can (on the Pi's kiosk it already is). A tap on the button or Esc leaves it.
+function toggleFullscreen(on) {
+  on = on ?? !document.body.classList.contains("live-fs");
+  document.body.classList.toggle("live-fs", on);
+  try {
+    if (on && !document.fullscreenElement && document.documentElement.requestFullscreen) document.documentElement.requestFullscreen().catch(() => {});
+    if (!on && document.fullscreenElement) document.exitFullscreen().catch(() => {});
+  } catch (e) {}
+  const b = $("[data-fs]"); if (b) { b.innerHTML = FS_ICON[on ? 1 : 0]; b.title = on ? "Exit full screen" : "Full screen"; }
+}
+document.addEventListener("fullscreenchange", () => { if (!document.fullscreenElement && document.body.classList.contains("live-fs") && !document.body.classList.contains("kiosk")) toggleFullscreen(false); });
+document.addEventListener("keydown", (e) => { if (e.key === "Escape" && document.body.classList.contains("live-fs")) toggleFullscreen(false); });
 
 // kiosk: the Pi's 1024x600 touch screen opens on the live match; theme: dark unless the user picked light
 if (new URLSearchParams(location.search).has("kiosk")) {
   document.body.classList.add("kiosk");
+  document.documentElement.classList.add("kiosk");
   history.replaceState(null, "", location.pathname + location.search + "#/live");
 }
 function setThemeButton() { $("#theme").textContent = document.documentElement.dataset.theme === "light" ? "☾" : "☀"; }

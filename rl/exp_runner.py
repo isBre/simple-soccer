@@ -141,9 +141,12 @@ def ensure_kiosk():
     it stays open between experiments and is started again if it was closed."""
     if subprocess.run(["pgrep", "-f", "user-data-dir=" + KIOSK_PROFILE], stdout=subprocess.DEVNULL).returncode == 0:
         return
-    env = {**os.environ, "DISPLAY": ":0", "XAUTHORITY": os.path.expanduser("~/.Xauthority")}
+    # native Wayland (the Pi's desktop is labwc): under X11 compatibility the touch screen arrives as a mouse and a finger drag selects
+    # instead of scrolling
+    env = {**os.environ, "WAYLAND_DISPLAY": "wayland-0", "XDG_RUNTIME_DIR": "/run/user/%d" % os.getuid(), "DISPLAY": ":0",
+           "XAUTHORITY": os.path.expanduser("~/.Xauthority")}
     env.pop("DBUS_SESSION_BUS_ADDRESS", None)
-    subprocess.Popen(["chromium", "--kiosk", "--app=" + KIOSK_URL, "--user-data-dir=" + KIOSK_PROFILE, "--password-store=basic",
+    subprocess.Popen(["chromium", "--ozone-platform=wayland", "--kiosk", "--app=" + KIOSK_URL, "--user-data-dir=" + KIOSK_PROFILE, "--password-store=basic",
                       "--no-first-run", "--noerrdialogs", "--disable-infobars", "--disable-session-crashed-bubble", "--disable-translate",
                       "--disable-features=Translate,TranslateUI", "--overscroll-history-navigation=0", "--disable-pinch", "--touch-events=enabled",
                       "--check-for-update-interval=31536000"], env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)

@@ -83,6 +83,8 @@ var obs_mode := "legacy"
 var w_far := 0.0                 # penalty per decision for an outfield player further than far_radius px from the ball (full at 2 x far_radius)
 var far_radius := 600.0
 var w_jitter := 0.0               # penalty per decision when the move direction turns by more than ~60 degrees (anti-twitch)
+var w_wall := 0.0                # penalty per decision for a player pressed against the outer wall for 2+ decisions in a row (no reason to be there)
+var wall_streak: Dictionary = {}  # uid -> consecutive decisions at the wall
 var prev_dir: Dictionary = {}     # uid -> last non-zero input_dir
 var term_sums: Dictionary = {}    # reward term -> summed per-agent mean contribution since the last read (rl_server command 'T')
 var term_steps := 0
@@ -140,6 +142,7 @@ func configure(c: Dictionary) -> void:
     w_kick = float(c.get("w_kick", w_kick))
     w_jitter = float(c.get("w_jitter", w_jitter))
     w_far = float(c.get("w_far", w_far))
+    w_wall = float(c.get("w_wall", w_wall))
     obs_mode = str(c.get("obs", obs_mode))
     w_xg = float(c.get("w_xg", w_xg))
     xg_cap = float(c.get("xg_cap", xg_cap))
@@ -246,6 +249,7 @@ func reset() -> void:
     prev_pass = _pass_totals()
     prev_ps.clear()
     prev_dir.clear()
+    wall_streak.clear()
     prev_def.clear()
     prev_opp_xg = _team_xg(1)
     for a in agents:
@@ -428,7 +432,7 @@ func _individual() -> PackedFloat32Array:
     out.resize(agents.size() + opp_agents.size())
     var credit := match_mode and pass_individual
     if w_kick == 0.0 and w_space == 0.0 and not credit and w_open == 0.0 and w_keeper == 0.0 and w_jitter == 0.0 and w_far == 0.0 \
-            and w_xg == 0.0 and w_tackle == 0.0 and w_goalside == 0.0:
+            and w_xg == 0.0 and w_tackle == 0.0 and w_goalside == 0.0 and w_wall == 0.0:
         return out
     var bp := sim.ball.pos
     var n_learn := float(agents.size())
@@ -464,6 +468,13 @@ func _individual() -> PackedFloat32Array:
             var pen := w_far * minf((da - far_radius) / far_radius, 1.0)
             r -= pen
             _acc("far", -pen / n_learn)
+        if w_wall > 0.0:                                           # pressed against the outer wall (the edge of the arena)
+            var at_wall := absf(a.pos.x) >= sim.pitch.out_x - a.radius - 3.0 or absf(a.pos.y) >= sim.pitch.out_y - a.radius - 3.0
+            var streak: int = int(wall_streak.get(a.uid, 0)) + 1 if at_wall else 0
+            wall_streak[a.uid] = streak
+            if streak >= 2:
+                r -= w_wall
+                _acc("wall", -w_wall / n_learn)
         if w_xg > 0.0 or w_tackle > 0.0:
             var cd := _def_vec(a)
             var pd: Array = prev_def.get(a.uid, cd)

@@ -1,0 +1,11 @@
+{
+ "name": "wall",
+ "start": "out_5v5/ckpt/t48_u100.pt",
+ "updates": 300,
+ "lr": 5e-05,
+ "rewards": {
+  "w_wall": 0.005
+ },
+ "control": "minimal",
+ "notes": "Minimal set + penalty for a player pressed against the outer wall 2+ decisions in a row (0.005 per decision). The start net spends 20.8% of player time at the wall (scouting). Judged against the 'minimal' control at the same update; also watch at_wall_pct."
+}

@@ -13,12 +13,13 @@
  "tag": "x_minimal",
  "target_updates": 300,
  "name": "minimal",
- "updated": 1794866128,
- "update": 100,
+ "updated": 1794866642,
+ "update": 110,
  "train_pts": 1.84,
  "base_train": null,
  "recorded": [
-  50
+  50,
+  100
  ],
  "effective_rewards": {
   "pass_individual": 1,
@@ -67,5 +68,5 @@
  ],
  "control": null,
  "bad_checks": 0,
- "train_s": 1057
+ "train_s": 1511
 }

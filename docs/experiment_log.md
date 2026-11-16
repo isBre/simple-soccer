@@ -60,6 +60,11 @@ start net), the agent CLI `rl/lab.py` + `/api/v1` + `AGENTS.md`, a redesigned da
   `strong_opponents` (jit8 / RL4 / RL5 in the self-play slots, PFSP) -> `control_long` (1000 updates).
 - Still to try: a wider net (256) distilled from jit8 (`distill.py --hidden 256`), then kickstarted.
 
+## Wall term (2026-11-16, requested by the user)
+Players were seen pressed against the arena's outer wall. Measured with the new scouting number `at_wall_pct`: the start net (t48_u100)
+spends **20.8%** of each player's time pressed against the wall. New term `w_wall` (rl_env.gd): a penalty per decision for a player at the
+wall for 2+ decisions in a row. Queued first as experiment `wall` (0.005, minimal set, 300 updates, judged against the `minimal` control).
+
 ## Reviews
 An automatic review runs every 2 hours while the agent's session is open: it checks the Pi and the runner, appends a review here for every
 finished experiment and adjusts the queue.
