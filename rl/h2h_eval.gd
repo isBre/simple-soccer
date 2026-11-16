@@ -6,6 +6,7 @@ extends Node
 
 var batch := SimBatch.new()
 var meta: Array = []
+var seeds: Array = []
 var opp_name := "opponent"
 
 
@@ -41,6 +42,7 @@ func _ready() -> void:
 			c.ml_keeper = true
 			cfgs.append(c)
 			meta.append(side)
+			seeds.append(c.match_seed)
 	batch.start(cfgs)
 
 
@@ -59,6 +61,7 @@ func _process(_d: float) -> void:
 		var sc: Array = batch.results[i]["scores"]
 		gf += sc[side]
 		ga += sc[1 - side]
+		print("MATCH h2h:%s %d %d %d %d" % [opp_name.replace(" ", "_"), side, seeds[i], sc[side], sc[1 - side]])
 		gd2 += float((sc[side] - sc[1 - side]) * (sc[side] - sc[1 - side]))
 		if sc[side] > sc[1 - side]: w += 1
 		elif sc[side] == sc[1 - side]: d += 1

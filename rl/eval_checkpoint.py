@@ -112,7 +112,7 @@ def main():
     try:
         proc, port = start_server(model)
         servers.append(proc)
-        keep = re.compile(r"^(LEAGUE|team |SUMMARY|\S+\s+(weak|average|strong|elite)\s)")
+        keep = re.compile(r"^(LEAGUE|team |SUMMARY|MATCH |\S+\s+(weak|average|strong|elite)\s)")
         lines += ["# league"] + [l for l in godot("league_eval", ["--model", res_model, "--remote", str(port), "--games", str(a.games), "--duration", str(a.duration)] + (["--stride", "3"] if fast else [])) if keep.match(l)]
         if not fast:
             lines += ["# behaviour"] + [l for l in godot("behaviour_stats", ["--remote", str(port)]) if re.match(r"^(RL Team|rule-based|scores|HEAT)", l)]
@@ -123,7 +123,7 @@ def main():
         for name, ref in refs:
             rproc, rport = start_server(ref)
             servers.append(rproc)
-            lines += [l for l in godot("h2h_eval", ["--a", str(port), "--b", str(rport), "--name", name, "--games", str(a.h2h_games), "--duration", str(a.duration)]) if l.startswith("H2H")]
+            lines += [l for l in godot("h2h_eval", ["--a", str(port), "--b", str(rport), "--name", name, "--games", str(a.h2h_games), "--duration", str(a.duration)]) if l.startswith(("H2H", "MATCH "))]
     finally:
         for p in servers:
             p.terminate()

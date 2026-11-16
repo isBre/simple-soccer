@@ -6,6 +6,8 @@ The page (tools/dashboard/: index.html, app.js, style.css) is a small single-pag
   /api/health         Pi health log (throttling, temperature, load, memory) of the last hours
   /api/live           server-sent events: the match the Pi's viewer is showing (relayed from UDP 127.0.0.1:7310, see tools/watch_training.gd)
   /results.md         the tracker's table as text
+  /api/v1/<command>   the agent interface (rl/lab.py, read-only): status, runs, run/<name>, evals, best, compare?a=&b=, ablation, events?since=,
+                      queue, schema; query parameters = the CLI options (e.g. /api/v1/evals?run=minimal&kind=full). See AGENTS.md.
 Standard library only and no internet needed (the charts are drawn in the browser as SVG). It reads exp/ and logs/, never writes.
 There is NO login: use it on a trusted network only.
 
@@ -24,6 +26,9 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import unquote
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+import sys  # noqa: E402
+sys.path.insert(0, os.path.join(ROOT, "rl"))
+import lab  # noqa: E402  (rl/lab.py: the agent CLI; /api/v1 serves the same functions)
 EXP = os.path.join(ROOT, "exp")
 LOGS = os.path.join(ROOT, "logs")
 STATIC = os.path.join(ROOT, "tools", "dashboard")
@@ -286,6 +291,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send(json.dumps(overview()).encode(), "application/json")
             if path.startswith("/api/run/"):
                 return self.send(json.dumps(run_detail(path[len("/api/run/"):])).encode(), "application/json")
+            if path.startswith("/api/v1/") or path == "/api/v1":
+                return self.api_v1(path, self.path.split("?", 1)[1] if "?" in self.path else "")
             if path == "/api/live":
                 return self.live()
             if path == "/api/health":
@@ -299,6 +306,31 @@ class Handler(BaseHTTPRequestHandler):
             return self.send(open(full, "rb").read(), (mimetypes.guess_type(full)[0] or "application/octet-stream") + "; charset=utf-8")
         except Exception as e:                                 # a half-written log must not kill the server
             return self.send(json.dumps({"error": repr(e)}).encode(), "application/json", 500)
+
+    def api_v1(self, path, qs):
+        """/api/v1/<command>[/<positional>...]?option=value -> rl/lab.py <command> ... (read-only commands only)."""
+        from urllib.parse import parse_qsl
+        parts = [p for p in path[len("/api/v1"):].split("/") if p]
+        if not parts:
+            body = {"commands": ["status", "runs", "run/<name>", "evals", "best", "compare?a=&b=", "ablation", "events?since=", "queue", "schema"],
+                    "docs": "AGENTS.md, exp/schema.json", "cli": "python3 rl/lab.py -h"}
+            return self.send(json.dumps(lab.envelope(body)).encode(), "application/json")
+        cmd, pos = parts[0], parts[1:]
+        q = dict(parse_qsl(qs))
+        if cmd not in lab.COMMANDS or cmd == "queue" and q.get("action", "list") != "list":
+            return self.send(json.dumps({"error": "unknown or not allowed: %s" % cmd, "hint": "GET /api/v1 lists the commands (read-only)"}).encode(), "application/json", 404)
+        argv = [cmd] + ([q.pop("a", ""), q.pop("b", "")] if cmd == "compare" else ["list"] if cmd == "queue" else pos)
+        q.pop("action", None)
+        for k, v in q.items():
+            argv += ["--" + k, v]
+        try:
+            a = lab.parser().parse_args(argv)
+            body, code = lab.envelope(lab.COMMANDS[cmd](a)), 200
+        except SystemExit:
+            body, code = {"error": "bad parameters", "hint": "same options as: python3 rl/lab.py %s -h" % cmd}, 400
+        except lab.LabError as e:
+            body, code = {"error": e.error, "hint": e.hint}, 404
+        return self.send(json.dumps(body, default=str).encode(), "application/json", code)
 
     def live(self):
         """Server-sent events: the latest meta (when it changes) and every frame, at most 30 per second."""

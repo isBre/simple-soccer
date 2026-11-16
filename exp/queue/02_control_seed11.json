@@ -1,0 +1,2 @@
+{"name": "control_seed11", "start": "out_5v5/ckpt/t48_u100.pt", "updates": 300, "lr": 5e-5, "rewards": {}, "args": {"seed": 11},
+ "notes": "Second seed of the minimal control (same settings as 'minimal', seed 11). The two together give the run-to-run noise floor."}

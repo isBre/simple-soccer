@@ -154,6 +154,13 @@ def main():
     for p in baseline.parameters():
         p.requires_grad_(False)
     pool = [copy.deepcopy(baseline.actor.state_dict())]           # opponent pool: baseline first, then snapshots
+    warm = 30                                                      # lr warm-up (updates) for a fresh optimizer
+    state_path = args.start[:-3] + ".train_state" if args.start.endswith(".pt") else ""
+    if args.start_update > 0 and state_path and os.path.exists(state_path):     # faithful resume: same Adam moments and opponent pool
+        saved = torch.load(state_path, weights_only=False)
+        opt.load_state_dict(saved["opt"])
+        pool = [pool[0]] + saved.get("pool", [])[1:]
+        warm = 0
     NSLOT = 4
     opp_nets = [Agent(obs_dim).actor for _ in range(NSLOT)]
     for n in opp_nets:
@@ -186,7 +193,7 @@ def main():
         ent = torch.tensor(0.0)
         for upd in range(args.start_update + 1, args.updates + 1):
             for g in opt.param_groups:                     # warm-up: a fresh Adam must not shake a converged policy
-                g["lr"] = args.lr * min(1.0, (upd - args.start_update) / 30.0)
+                g["lr"] = args.lr * (min(1.0, (upd - args.start_update) / warm) if warm else 1.0)
             if upd % args.snapshot_every == 0:
                 pool.append(copy.deepcopy(agent.actor.state_dict()))
                 pool = [pool[0]] + pool[1:][-8:]
@@ -305,6 +312,7 @@ def main():
                 with open(path, "w") as fh:
                     json.dump(agent.to_game_dict(), fh)
                 torch.save(agent.state_dict(), os.path.join(CKPT, "%s_u%d.pt" % (args.tag, upd)))
+                torch.save({"opt": opt.state_dict(), "pool": pool}, os.path.join(CKPT, "%s_u%d.train_state" % (args.tag, upd)))  # for a faithful resume
                 if args.eval_every > 0 and upd % args.eval_every == 0:
                     eval_blocking(path, "%s_u%d" % (args.tag, upd), args, log)
                 elif args.fast_every > 0 and upd % args.fast_every == 0:

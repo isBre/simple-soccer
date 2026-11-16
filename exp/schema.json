@@ -1,0 +1,33 @@
+{
+ "schema_version": 2,
+ "protocols": {
+  "full/g1/d90": "Full evaluation: 1 game per rule team and side = 32 matches of 90 s against all 16 rule-based teams (fixed seeds 50001..), plus best-move (greedy) play on every 2nd team, behaviour stats and head to head vs RL Team 4 / RL Team 5 / the start net. About 30-60 min on the Pi.",
+  "fast/g2/d60": "Fast check: 2 games per team and side against every 3rd rule team (6 teams) = 24 matches of 60 s, plus head to head vs the start net. About 3-5 min. Only comparable with other fast checks."
+ },
+ "rules": [
+  "Never compare numbers of different protocols (fast vs full, or different match lengths).",
+  "Matches use fixed seeds, so two evaluations of one protocol play the same opponents, sides and kickoffs: compare them PAIRED (tracker.compare does when both records have 'matches').",
+  "A difference is real only if |z| > 1.96; with several arms against one reference use the Holm-corrected 'ablation' verdicts.",
+  "Sampled play (the default) twitches and concedes more than best-move (greedy) play; report both when judging a final team."
+ ],
+ "metrics": {
+  "pts": {"unit": "league points per match (win 3, draw 1, loss 0)", "range": [0, 3], "better": "higher", "definition": "mean over the protocol's league matches"},
+  "se": {"unit": "points", "definition": "standard error of pts (sd / sqrt(n))"},
+  "lcb95": {"unit": "points", "better": "higher", "definition": "pts - 1.96 se: what 'best' ranks by"},
+  "gd": {"unit": "goals per match", "better": "higher", "definition": "goals for minus goals against, mean per match"},
+  "gd_se": {"unit": "goals", "definition": "standard error of gd (null in old records)"},
+  "gf": {"unit": "goals per match", "better": "higher"},
+  "ga": {"unit": "goals per match", "better": "lower", "definition": "goals conceded"},
+  "greedy_pts": {"unit": "points per match", "better": "higher", "definition": "same league, the net playing its best move instead of sampling (every 2nd team)"},
+  "h2h.<opponent>.pts": {"unit": "points per match", "better": "higher", "definition": "head to head vs another net, both sides; opponents: RL Team 4, RL Team 5, start (the net the run started from)"},
+  "behaviour.dir_changes_s": {"unit": "direction changes per second per player", "better": "lower (rule bots about 2.2)", "definition": "twitchiness"},
+  "behaviour.idle_pct": {"unit": "% of time standing still", "better": "lower"},
+  "behaviour.spacing_px": {"unit": "px, mean distance between teammates", "better": "about 250-300 (rule bots 270)"},
+  "behaviour.keeper_dist_px": {"unit": "px from own goal of player slot 0 (not necessarily the de-facto keeper)"},
+  "train_pts_vs_rules": {"unit": "points per match", "definition": "during training, last 200 matches vs the rule bots, sampled moves, 60% random starting layouts: a trend signal, not an evaluation"},
+  "compare.pts / compare.gd": {"definition": "difference a - b; paired over identical matches when possible"},
+  "compare.mde": {"unit": "points", "definition": "smallest difference detectable at 5% two-sided with 80% power (2.8 x se of the difference)"},
+  "cost_hours": {"definition": "train = wall time training, eval = wall time of all evaluations of the run"}
+ },
+ "states": {"running": "training or evaluating", "done": "trained the full budget and evaluated", "diverged": "stopped: training points fell under 70% of the start", "regressed": "stopped: two fast checks in a row worse than the start by > 2 se", "cancelled": "stopped on request (lab.py queue cancel)", "failed": "error or invalid spec", "imported": "older run imported from logs (no spec)"}
+}

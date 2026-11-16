@@ -13,8 +13,11 @@
  "tag": "x_minimal",
  "target_updates": 300,
  "name": "minimal",
- "updated": 1794861861,
- "update": 10,
+ "updated": 1794864057,
+ "update": 64,
  "train_pts": null,
- "base_train": null
+ "base_train": null,
+ "recorded": [
+  50
+ ]
 }

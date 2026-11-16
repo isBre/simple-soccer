@@ -65,7 +65,7 @@ func _ready() -> void:
 				if greedy:
 					c.ml_temperature = 0.0
 				cfgs.append(c)
-				meta.append({"opp": id, "side": side})
+				meta.append({"opp": id, "side": side, "seed": c.match_seed})
 	t0 = Time.get_ticks_msec()
 	print("[league] %d matches vs %d teams, model %s" % [cfgs.size(), ids.size(), model_path])
 	batch.start(cfgs)
@@ -81,6 +81,7 @@ func _process(_d: float) -> void:
 		var m: Dictionary = meta[i]
 		var gf: int = r["scores"][m["side"]]
 		var ga: int = r["scores"][1 - int(m["side"])]
+		print("MATCH %s %d %d %d %d" % [m["opp"], m["side"], m["seed"], gf, ga])     # one line per match: paired comparisons between checkpoints
 		if not tab.has(m["opp"]):
 			tab[m["opp"]] = {"p": 0, "w": 0, "d": 0, "l": 0, "gf": 0, "ga": 0}
 		var t: Dictionary = tab[m["opp"]]

@@ -31,11 +31,7 @@ from client import GODOT, ROOT
 
 EXP = tracker.EXP
 CKPT = os.path.join(ROOT, "out_5v5", "ckpt")
-MINIMAL = {"pass_individual": 1, "w_recv": 0.1, "w_open": 0.003, "w_key_pass": 0.25, "w_xa": 2.5, "coop_cap": 8, "random_start": 0.6,
-           "shaping": 0, "w_keeper": 0, "w_jitter": 0, "w_far": 0, "w_xg": 0, "w_xga": 0, "w_win": 0, "w_draw": 0, "w_tackle": 0,
-           "w_goalside": 0, "w_opp_half": 0, "w_compact": 0}
-DEFAULTS = {"lr": 5e-5, "updates": 300, "workers_rule": 2, "workers_self": 1, "envs_per_worker": 16, "rollout": 128, "minibatch": 4096,
-            "ckpt_every": 25, "fast_every": 50, "learn_threads": 2}
+MINIMAL, DEFAULTS = tracker.MINIMAL, tracker.DEFAULTS
 DIVERGE_FRACTION = 0.7          # training points vs the rule bots below this share of their starting value: stop
 REGRESS_SE = 2.0                # fast check worse than the baseline by more than this many standard errors, twice in a row: stop
 
@@ -90,11 +86,11 @@ def baseline(start_json):
 
 
 def selfplay_cmd(spec, tag, start, start_update):
-    rewards = {**MINIMAL, **spec.get("rewards", {})}
-    opts = {**DEFAULTS, **{k: spec[k] for k in ("lr", "updates") if k in spec}, **spec.get("args", {}), **rewards}
+    rewards, args = tracker.effective(spec)
     cmd = [sys.executable, os.path.join(ROOT, "rl", "selfplay.py"), "--obs", spec.get("obs", "team"), "--start", start, "--start_update", str(start_update),
-           "--tag", tag, "--eval_every", "0", "--log_every", "2", "--fast_ref", json_of(spec["start"])]
-    for k, v in opts.items():
+           "--tag", tag, "--eval_every", "0", "--log_every", "2", "--fast_ref", json_of(spec["start"]),
+           "--baseline", os.path.join(ROOT, spec["start"])]          # the frozen benchmark is always the net the experiment started from (also after a resume)
+    for k, v in {**args, **rewards}.items():
         cmd += ["--" + k, str(v)]
     return cmd
 
@@ -153,35 +149,73 @@ def ensure_kiosk():
                       "--check-for-update-interval=31536000"], env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
 
 
+def reference_for(spec, base_name, rows):
+    """(name, record) a finished run is judged against: the control run's full evaluation at the closest update (same protocol)
+    when the spec names a "control", otherwise the start net's full evaluation."""
+    ctrl = spec.get("control")
+    if ctrl:
+        cands = [r for r in rows if r["run"] == ctrl and r["kind"] == "full"]
+        if cands:
+            target = int(spec.get("updates", DEFAULTS["updates"]))
+            return ctrl, min(cands, key=lambda r: abs(r["update"] - target))
+    return base_name, tracker.latest(base_name, "full", rows=rows)
+
+
 def run_experiment(spec_path, viewer=False):
     spec = json.load(open(spec_path))
     name = spec["name"]
     tag = "x_" + name
     st = tracker.run_status(name)
+    if os.path.dirname(spec_path) != os.path.join(EXP, "running"):          # a new experiment: check it, then it owns exp/running/
+        errs = tracker.validate_spec(spec)
+        if errs:
+            log("refusing %s: %s" % (os.path.basename(spec_path), "; ".join(errs)))
+            shutil.move(spec_path, os.path.join(EXP, "failed", os.path.basename(spec_path)))
+            if not st:
+                tracker.set_status(name, state="failed", stop_reason="invalid spec", error="; ".join(errs))
+            return
+        dest = os.path.join(EXP, "running", os.path.basename(spec_path))
+        shutil.move(spec_path, dest)
+        spec_path = dest
+    rewards, args = tracker.effective(spec)
     start_json = json_of(spec["start"])
     base_name = baseline(start_json)
     base_fast = tracker.latest(base_name, "fast")
     upd_end = int(spec.get("updates", DEFAULTS["updates"]))
     start_update, ckpt = last_checkpoint(tag)
-    if ckpt:
-        log("resuming %s from update %d" % (name, start_update))
+    restarts = st.get("restarts", [])
+    boot = tracker.boot_id()
+    if ckpt and st.get("state") == "running":
+        reason = "reboot" if st.get("boot_id") and st.get("boot_id") != boot else "runner restart"
+        restarts.append({"at": int(time.time()), "update": start_update, "reason": reason})
+        log("resuming %s from update %d (%s)" % (name, start_update, reason))
         start = os.path.relpath(ckpt, ROOT)
     else:
         start, start_update = spec["start"], 0
-    tracker.set_status(name, state="running", spec=spec, baseline_run=base_name, started=st.get("started", int(time.time())), tag=tag, target_updates=upd_end)
+    commit, dirty = tracker.git_commit()
+    tracker.set_status(name, state="running", spec=spec, baseline_run=base_name, started=st.get("started", int(time.time())), tag=tag,
+                       target_updates=upd_end, effective_rewards=rewards, effective_args=args, seed=args.get("seed"), git_commit=commit,
+                       git_dirty=dirty, boot_id=boot, restarts=restarts, control=spec.get("control"))
     done = set(st.get("recorded", []))
     base_train = st.get("base_train")
-    bad_checks = 0
-    verdict_state = "done"
+    bad_checks = st.get("bad_checks", 0)
+    train_s = st.get("train_s", 0.0)
+    stop_reason = "budget"
     procs = []
+    cancel_flag = os.path.join(EXP, "running", name + ".cancel")
     if start_update < upd_end:
         if viewer:
             procs += start_viewer(tag, start_json)
         out = open(os.path.join(ROOT, "logs", tag + ".out"), "a")
         proc = subprocess.Popen(selfplay_cmd(spec, tag, os.path.join(ROOT, start), start_update), cwd=ROOT, stdout=out, stderr=subprocess.STDOUT)
         log("started %s (pid %d)" % (name, proc.pid))
+        last = time.time()
         while proc.poll() is None:
             time.sleep(30)
+            now = time.time()
+            if not os.path.exists(os.path.join(ROOT, "logs", tag + "_eval_running.json")):
+                train_s += now - last                                    # wall time spent training (fast checks excluded)
+            last = now
             if viewer and procs and procs[-1].poll() is not None:
                 log("viewer closed (exit %s): starting it again" % procs[-1].returncode)
                 procs[-1] = viewer_window(tag, start_json)
@@ -190,25 +224,26 @@ def run_experiment(spec_path, viewer=False):
             upd, pts, n = progress(tag)
             if pts is not None and n >= 96 and base_train is None:
                 base_train = pts
-            tracker.set_status(name, update=upd, train_pts=pts, base_train=base_train)
             for path in sorted(glob.glob(os.path.join(ROOT, "logs", "sp_eval", tag + "_u*_fast.txt"))):
                 u = int(re.search(r"_u(\d+)_fast", path).group(1))
                 if u in done:
                     continue
                 done.add(u)
                 rec = tracker.add_result(name, u, "fast", path)
-                tracker.set_status(name, recorded=sorted(done))
-                a, b = rec["league"].get("all"), (base_fast or {}).get("league", {}).get("all")
-                if a and b:
-                    z = (a["pts"] - b["pts"]) / max((a["se"] ** 2 + b["se"] ** 2) ** 0.5, 1e-9)
-                    bad_checks = bad_checks + 1 if z < -REGRESS_SE else 0
-                    log("%s u%d fast: pts %.2f (baseline %.2f), z %.1f" % (name, u, a["pts"], b["pts"], z))
-            if bad_checks >= 2:
-                verdict_state = "regressed"
+                c = tracker.compare(rec, base_fast)
+                if c.get("z") is not None:
+                    bad_checks = bad_checks + 1 if c["z"] < -REGRESS_SE else 0
+                    log("%s u%d fast: pts %.2f, vs start %+.2f ± %.2f (%s, z %.1f)" % (name, u, rec["league"]["all"]["pts"], c["pts"], c["pts_se"],
+                                                                                     "paired" if c["paired"] else "unpaired", c["z"]))
+            tracker.set_status(name, update=upd, train_pts=pts, base_train=base_train, bad_checks=bad_checks, recorded=sorted(done), train_s=round(train_s))
+            if os.path.exists(cancel_flag):
+                stop_reason = "cancelled"
+            elif bad_checks >= 2:
+                stop_reason = "regressed"
             elif pts is not None and base_train and upd >= start_update + 60 and n >= 96 and pts < DIVERGE_FRACTION * base_train:
-                verdict_state = "diverged"
-            if verdict_state != "done":
-                log("%s: %s at update %d (training points %.2f, start %.2f) - stopping" % (name, verdict_state, upd, pts or 0, base_train or 0))
+                stop_reason = "diverged"
+            if stop_reason != "budget":
+                log("%s: %s at update %d (training points %.2f, start %.2f) - stopping" % (name, stop_reason, upd, pts or 0, base_train or 0))
                 proc.send_signal(signal.SIGINT)                        # lets selfplay close its Godot workers
                 try:
                     proc.wait(60)
@@ -216,42 +251,66 @@ def run_experiment(spec_path, viewer=False):
                     proc.kill()
                 break
         out.close()
-    for p in procs:
+        if proc.returncode not in (0, None) and stop_reason == "budget" and last_checkpoint(tag)[0] < upd_end:
+            stop_reason = "error"
+            log("%s: trainer exited with code %s before the end" % (name, proc.returncode))
+    for p in procs:                                                    # the nets and the match (the kiosk stays open)
         p.terminate()
     stop_stale_workers()
     final_update, final_ckpt = last_checkpoint(tag)
-    final = None
-    if verdict_state == "done" and final_ckpt:
-        model = os.path.relpath(final_ckpt[:-3] + ".json", ROOT)
-        out = "logs/sp_eval/%s_u%d.txt" % (tag, final_update)
-        log("%s: full evaluation of update %d" % (name, final_update))
-        if evaluate(model, out, "full", refs=[("start", start_json)]):
-            final = tracker.add_result(name, final_update, "full", os.path.join(ROOT, out))
+    full_evals = []
+    if stop_reason == "budget" and final_ckpt:
+        cands = {final_update}
+        rows = tracker.load_results()
+        fasts = [r for r in rows if r["run"] == name and r["kind"] == "fast" and r["league"].get("all")]
+        if fasts:                                                      # also the best fast check, if it is another checkpoint
+            best = max(fasts, key=lambda r: r["league"]["all"]["pts"])
+            if os.path.exists(os.path.join(CKPT, "%s_u%d.json" % (tag, best["update"]))):
+                cands.add(best["update"])
+        for u in sorted(cands):
+            model = "out_5v5/ckpt/%s_u%d.json" % (tag, u)
+            out = "logs/sp_eval/%s_u%d.txt" % (tag, u)
+            log("%s: full evaluation of update %d" % (name, u))
+            if evaluate(model, out, "full", refs=[("start", start_json)]):
+                full_evals.append(tracker.add_result(name, u, "full", os.path.join(ROOT, out)))
     verdict = None
-    base_full = tracker.latest(base_name, "full")
-    if final and base_full:
-        verdict = tracker.compare(final, base_full)
-    tracker.set_status(name, state=verdict_state, finished=int(time.time()), final_update=final_update, verdict=verdict)
-    os.makedirs(os.path.join(EXP, "done"), exist_ok=True)
-    shutil.move(spec_path, os.path.join(EXP, "done", os.path.basename(spec_path)))
-    log("%s finished: %s %s" % (name, verdict_state, json.dumps(verdict) if verdict else ""))
+    final = next((r for r in full_evals if r["update"] == final_update), None)
+    if final:
+        ref_name, ref = reference_for(spec, base_name, tracker.load_results())
+        verdict = {**tracker.compare(final, ref), "reference": ref_name, "update": final_update}
+    eval_s = sum(r.get("seconds") or 0 for r in tracker.load_results() if r["run"] == name)
+    state = {"budget": "done", "error": "failed"}.get(stop_reason, stop_reason)
+    tracker.set_status(name, state=state, stop_reason=stop_reason, finished=int(time.time()), final_update=final_update, verdict=verdict,
+                       cost_hours={"train": round(train_s / 3600, 2), "eval": round(eval_s / 3600, 2)})
+    shutil.move(spec_path, os.path.join(EXP, "failed" if state == "failed" else "done", os.path.basename(spec_path)))
+    if os.path.exists(cancel_flag):
+        os.remove(cancel_flag)
+    log("%s finished: %s %s" % (name, state, json.dumps(verdict) if verdict else ""))
 
 
 def next_spec():
     """The running experiment first (resume after a reboot), else the first spec of the queue."""
+    running = sorted(glob.glob(os.path.join(EXP, "running", "*.json")))
+    if running:
+        return running[0]
     queue = sorted(glob.glob(os.path.join(EXP, "queue", "*.json")))
-    for p in queue:
-        if tracker.run_status(json.load(open(p))["name"]).get("state") == "running":
-            return p
+    for p in queue:                                                    # older layout: the running spec stayed in the queue
+        try:
+            if tracker.run_status(json.load(open(p)).get("name", "")).get("state") == "running":
+                dest = os.path.join(EXP, "running", os.path.basename(p))
+                shutil.move(p, dest)
+                return dest
+        except ValueError:
+            pass
     return queue[0] if queue else None
 
 
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--loop", action="store_true", help="keep waiting for new specs (the service); default: run the queue once and exit")
-    ap.add_argument("--viewer", action="store_true", help="show the live viewer on the Pi's screen while an experiment runs")
+    ap.add_argument("--viewer", action="store_true", help="play the live match (headless) and show the dashboard on the Pi's screen")
     a = ap.parse_args()
-    for d in ("queue", "runs", "done", "failed"):
+    for d in ("queue", "running", "runs", "done", "failed", "parked"):
         os.makedirs(os.path.join(EXP, d), exist_ok=True)
     tracker.write_markdown()
     stop_stale_workers()
@@ -266,9 +325,15 @@ def main():
             run_experiment(spec, a.viewer)
         except Exception as e:                                 # a broken spec must not stop the queue
             log("ERROR in %s: %r" % (spec, e))
-            tracker.set_status(json.load(open(spec))["name"], state="failed", error=repr(e))
-            shutil.move(spec, os.path.join(EXP, "failed", os.path.basename(spec)))
+            try:
+                name = json.load(open(spec)).get("name", os.path.basename(spec))
+            except (OSError, ValueError):
+                name = os.path.basename(spec)[:-5]
+            tracker.set_status(name, state="failed", stop_reason="error", error=repr(e))
+            if os.path.exists(spec):
+                shutil.move(spec, os.path.join(EXP, "failed", os.path.basename(spec)))
             stop_stale_workers()
+            time.sleep(30)
 
 
 if __name__ == "__main__":
