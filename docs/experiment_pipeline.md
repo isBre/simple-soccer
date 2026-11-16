@@ -57,6 +57,7 @@ with verdicts, charts of strength over updates (inline SVG, no internet needed),
 login: use it on a trusted network only.
 
 ## Agent loop
+History, conclusions and the review of every finished experiment: [experiment_log.md](experiment_log.md).
 Every ~hour the agent reads `exp/results.md`, compares the finished run with its baseline (using the standard errors), then
 adds the next spec. The default plan is one reward term at a time on top of the minimal set: win/draw bonus, xG against,
 goal-side positioning, compactness, too-far-from-ball, xG for, tackles. If the Pi is down, the agent notes it and waits.
