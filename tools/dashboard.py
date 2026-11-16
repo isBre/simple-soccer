@@ -4,6 +4,7 @@ The page (tools/dashboard/: index.html, app.js, style.css) is a small single-pag
   /api/overview       Pi state, the running experiment (progress, ETA), queue, every run with its latest evaluation, Pi health
   /api/run/<name>     one run: spec and settings, training curve, PPO health, reward terms, every evaluation, heatmaps
   /api/health         Pi health log (throttling, temperature, load, memory) of the last hours
+  /api/live           server-sent events: the match the Pi's viewer is showing (relayed from UDP 127.0.0.1:7310, see tools/watch_training.gd)
   /results.md         the tracker's table as text
 Standard library only and no internet needed (the charts are drawn in the browser as SVG). It reads exp/ and logs/, never writes.
 There is NO login: use it on a trusted network only.
@@ -16,6 +17,8 @@ import json
 import mimetypes
 import os
 import re
+import socket
+import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import unquote
@@ -232,6 +235,36 @@ def run_detail(run):
             "evals": evals, "baseline": base}
 
 
+class Live:
+    """Latest match state from the viewer (UDP JSON packets): 'meta' (pitch, kits, players) and 'frame' (positions)."""
+    cond = threading.Condition()
+    meta = None
+    frame = None
+    seq = 0
+    meta_seq = 0
+    received = 0.0
+
+    @classmethod
+    def listen(cls, port=7310):
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        sock.bind(("127.0.0.1", port))
+        while True:
+            data = sock.recv(65535)
+            try:
+                kind = json.loads(data).get("k")
+            except ValueError:
+                continue
+            with cls.cond:
+                if kind == "m":
+                    cls.meta = data
+                    cls.meta_seq += 1
+                else:
+                    cls.frame = data
+                    cls.seq += 1
+                cls.received = time.time()
+                cls.cond.notify_all()
+
+
 class Handler(BaseHTTPRequestHandler):
     def send(self, body, ctype, code=200):
         self.send_response(code)
@@ -248,6 +281,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send(json.dumps(overview()).encode(), "application/json")
             if path.startswith("/api/run/"):
                 return self.send(json.dumps(run_detail(path[len("/api/run/"):])).encode(), "application/json")
+            if path == "/api/live":
+                return self.live()
             if path == "/api/health":
                 return self.send(json.dumps(health(12.0)).encode(), "application/json")
             if path == "/results.md":
@@ -260,6 +295,36 @@ class Handler(BaseHTTPRequestHandler):
         except Exception as e:                                 # a half-written log must not kill the server
             return self.send(json.dumps({"error": repr(e)}).encode(), "application/json", 500)
 
+    def live(self):
+        """Server-sent events: the latest meta (when it changes) and every frame, at most 30 per second."""
+        self.send_response(200)
+        self.send_header("Content-Type", "text/event-stream")
+        self.send_header("Cache-Control", "no-store")
+        self.send_header("X-Accel-Buffering", "no")
+        self.end_headers()
+        seen, seen_meta, last_beat = -1, -1, time.time()
+        try:
+            while True:
+                with Live.cond:
+                    Live.cond.wait_for(lambda: Live.seq != seen or Live.meta_seq != seen_meta, timeout=2.0)
+                    meta, frame, mseq, fseq, rec = Live.meta, Live.frame, Live.meta_seq, Live.seq, Live.received
+                out = b""
+                if meta is not None and mseq != seen_meta:
+                    out += b"event: meta\ndata: " + meta + b"\n\n"
+                    seen_meta = mseq
+                if frame is not None and fseq != seen:
+                    out += b"data: " + frame + b"\n\n"
+                    seen = fseq
+                if not out and time.time() - last_beat > 2.0:
+                    out = b"event: idle\ndata: %d\n\n" % int(time.time() - rec if rec else -1)       # also tells the page how old the last frame is
+                if out:
+                    self.wfile.write(out)
+                    self.wfile.flush()
+                    last_beat = time.time()
+                time.sleep(1 / 30)
+        except (BrokenPipeError, ConnectionResetError, OSError):
+            return
+
     def log_message(self, *args):
         pass
 
@@ -268,4 +333,7 @@ if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("--port", type=int, default=8080)
     a = ap.parse_args()
-    ThreadingHTTPServer(("0.0.0.0", a.port), Handler).serve_forever()
+    threading.Thread(target=Live.listen, daemon=True).start()
+    server = ThreadingHTTPServer(("0.0.0.0", a.port), Handler)
+    server.daemon_threads = True
+    server.serve_forever()

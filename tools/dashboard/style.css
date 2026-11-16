@@ -168,3 +168,24 @@ select { font: inherit; padding: 7px 10px; border-radius: 8px; border: 1px solid
   .lb-row { grid-template-columns: 100px 1fr 76px; }
   .hero-stats { gap: 16px; }
 }
+
+/* live match */
+.live-wrap { display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: 14px; align-items: start; }
+@media (max-width: 960px) { .live-wrap { grid-template-columns: minmax(0, 1fr); } }
+.live-main { padding: 0; overflow: hidden; position: relative; background: #1d2a18; border-color: transparent; }
+.scorebar { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 14px; padding: 12px 18px; background: #0f1512; color: #f1f5ee; }
+.scorebar .tm { display: flex; align-items: center; gap: 10px; min-width: 0; font-weight: 650; font-size: 16px; }
+.scorebar .tm span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.scorebar .tm.r { justify-content: flex-end; text-align: right; }
+.scorebar .kit { width: 18px; height: 18px; border-radius: 50%; flex: none; box-shadow: 0 0 0 2px rgba(0,0,0,.6); }
+.scorebar .mid { text-align: center; }
+.scorebar .score { font-size: 28px; font-weight: 750; font-variant-numeric: tabular-nums; letter-spacing: .02em; line-height: 1.1; }
+.scorebar .clock { font-size: 13px; color: #ffd54a; font-variant-numeric: tabular-nums; }
+.live-main canvas { display: block; width: 100%; height: auto; }
+.lv-over { position: absolute; left: 50%; top: 55%; transform: translate(-50%, -50%); padding: 10px 22px; border-radius: 12px; background: rgba(10, 14, 12, .78);
+  color: #fff; font-weight: 750; font-size: 22px; letter-spacing: .06em; pointer-events: none; text-align: center; }
+.lv-over small { display: block; font-size: 12px; font-weight: 500; letter-spacing: 0; color: #cfd8cc; margin-top: 2px; }
+.lv-over[hidden] { display: none; }
+.seg { display: inline-flex; background: var(--panel-2); border: 1px solid var(--line); border-radius: 9px; padding: 3px; margin-bottom: 12px; }
+.seg button { font: inherit; font-size: 13px; border: 0; background: transparent; color: var(--muted); padding: 5px 11px; border-radius: 7px; cursor: pointer; }
+.seg button.on { background: var(--panel); color: var(--ink); box-shadow: var(--shadow); font-weight: 600; }

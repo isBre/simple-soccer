@@ -426,6 +426,157 @@ function viewPi() {
     </div>`;
 }
 
+
+// ---------- live match (streamed from the Pi's viewer, drawn here) ----------
+const live = { es: null, meta: null, frames: [], trail: [], raf: 0, recv: [], idleAge: null, lastFrameAt: 0, sideAt: 0, cam: null,
+  follow: (() => { try { return localStorage.getItem("liveFollow") !== "0"; } catch (e) { return true; } })() };
+function viewLive() {
+  return `<div class="head"><div><h1>Live match</h1><p>The match the Pi's viewer is playing, drawn in your browser from a stream of positions (about 30 per second). The Pi does not encode video, so this costs training almost nothing.</p></div></div>
+    <div class="live-wrap">
+      <div class="card live-main"><div class="scorebar" id="lv-sb"><div class="tm"><i class="kit"></i><span>–</span></div><div class="mid"><div class="score">– : –</div><div class="clock">–</div></div><div class="tm r"><span>–</span><i class="kit"></i></div></div>
+        <canvas id="lv-c" width="1400" height="710"></canvas><div class="lv-over" id="lv-over">Waiting for the Pi's viewer…</div></div>
+      <div class="card"><h2>On the pitch</h2><div class="seg" id="lv-cam"><button data-cam="1">Follow ball</button><button data-cam="0">Whole pitch</button></div><dl class="kv" id="lv-side"><dt>stream</dt><dd>connecting…</dd></dl></div>
+    </div>`;
+}
+function startLive() {
+  if (!live.es) {
+    live.es = new EventSource("/api/live");
+    live.es.addEventListener("meta", (e) => { live.meta = JSON.parse(e.data); liveSide(); });
+    live.es.addEventListener("idle", (e) => { live.idleAge = +e.data; liveSide(); });
+    live.es.onmessage = (e) => {
+      const fr = JSON.parse(e.data), now = performance.now();
+      fr.at = now;
+      const last = live.frames[live.frames.length - 1];
+      if (last && (last.id !== fr.id || fr.t < last.t)) { live.frames = []; live.trail = []; }
+      live.frames.push(fr);
+      if (live.frames.length > 12) live.frames.shift();
+      live.recv.push(now);
+      while (live.recv.length && now - live.recv[0] > 2000) live.recv.shift();
+      live.idleAge = 0; live.lastFrameAt = now;
+    };
+    live.es.onerror = () => { live.idleAge = null; };
+  }
+  if (!live.raf) live.raf = requestAnimationFrame(liveDraw);
+  liveSide();
+}
+function stopLive() {
+  if (live.es) { live.es.close(); live.es = null; }
+  if (live.raf) { cancelAnimationFrame(live.raf); live.raf = 0; }
+  live.frames = []; live.trail = [];
+}
+function clockText(s) { s = Math.max(0, Math.ceil(s)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`; }
+function liveSide() {
+  for (const bt of document.querySelectorAll("#lv-cam button")) bt.classList.toggle("on", (bt.dataset.cam === "1") === live.follow);
+  const el = $("#lv-side"); if (!el) return;
+  const m = live.meta, fps = live.recv.length / 2;
+  const fresh = live.lastFrameAt && performance.now() - live.lastFrameAt < 3000;
+  const last = live.frames[live.frames.length - 1];
+  let rows = `<dt>stream</dt><dd class="${fresh ? "pos" : "neg"}">${fresh ? `live · ${fps.toFixed(0)} frames/s` : live.es ? "no frames from the Pi" : "closed"}</dd>`;
+  if (m) {
+    const runName = m.tag && m.tag.startsWith("x_") ? m.tag.slice(2) : m.tag;
+    rows += `<dt>run</dt><dd><a href="#/run/${encodeURIComponent(runName)}">${esc(runName)}</a></dd><dt>net playing</dt><dd class="mono">${esc(m.playing || "–")}</dd><dt>training update</dt><dd>${esc(m.upd)}</dd>
+      <dt>moves</dt><dd>${m.best_move ? "best move (greedy)" : "sampled (as in training)"}</dd><dt>checkpoint</dt><dd>${m.best_ckpt ? "best of the run" : "newest"}</dd>
+      <dt>left team</dt><dd>${m.teams[0].net ? "the run's net" : "rule bot"} <span class="muted">(kit of ${esc(m.teams[0].name)})</span></dd><dt>right team</dt><dd>${esc(m.teams[1].name)}</dd>`;
+  }
+  if (last && last.paused) rows += `<dt>note</dt><dd class="neg">paused: the Pi's viewer is on another page</dd>`;
+  el.innerHTML = rows;
+}
+function liveDraw() {
+  live.raf = requestAnimationFrame(liveDraw);
+  const cv = $("#lv-c"), m = live.meta;
+  if (!cv) return;
+  const over = $("#lv-over");
+  if (!m || !live.frames.length) { over.hidden = false; over.innerHTML = live.es ? "Waiting for the Pi's viewer…<small>the Godot viewer must be running on the Pi</small>" : "Stream closed"; return; }
+  const P = m.pitch, dpr = window.devicePixelRatio || 1, cssW = cv.clientWidth || 800, cssH = cssW * P.out_y / P.out_x;
+  if (cv.width !== Math.round(cssW * dpr) || cv.height !== Math.round(cssH * dpr)) { cv.width = Math.round(cssW * dpr); cv.height = Math.round(cssH * dpr); }
+  const ctx = cv.getContext("2d");
+  // state at "now - 70 ms", interpolated between the two frames around it
+  const rt = performance.now() - 70, fr = live.frames;
+  let a = fr[fr.length - 1], b = a, u = 0;
+  for (let i = fr.length - 1; i > 0; i--) if (fr[i - 1].at <= rt) { a = fr[i - 1]; b = fr[i]; u = Math.min(1, Math.max(0, (rt - a.at) / Math.max(b.at - a.at, 1))); break; }
+  if (a.p.length !== b.p.length) { a = b; u = 0; }
+  const L = (x, y) => x + (y - x) * u;
+  const ball = [L(a.b[0], b.b[0]), L(a.b[1], b.b[1])];
+  // camera: the whole pitch, or zoomed in and following the ball (smoothed, kept inside the pitch's outer area)
+  const zoom = live.follow ? 1.9 : 1, k = (cv.width / (2 * P.out_x)) * zoom;
+  const vx = P.out_x / zoom, vy = P.out_y / zoom;
+  const target = live.follow ? [Math.max(-P.out_x + vx, Math.min(P.out_x - vx, ball[0])), Math.max(-P.out_y + vy, Math.min(P.out_y - vy, ball[1]))] : [0, 0];
+  if (!live.cam) live.cam = target.slice();
+  live.cam[0] += (target[0] - live.cam[0]) * 0.12; live.cam[1] += (target[1] - live.cam[1]) * 0.12;
+  ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.fillStyle = shade("#" + P.outer, -0.25); ctx.fillRect(0, 0, cv.width, cv.height);
+  ctx.setTransform(k, 0, 0, k, cv.width / 2 - live.cam[0] * k, cv.height / 2 - live.cam[1] * k);
+  // pitch
+  const hw = P.half_w, hh = P.half_h;
+  ctx.fillStyle = "#" + P.outer; ctx.fillRect(-P.out_x, -P.out_y, 2 * P.out_x, 2 * P.out_y);
+  const n = Math.max(P.stripes, 1), sw = (2 * hw) / n;
+  for (let i = 0; i < n; i++) { ctx.fillStyle = P.stripes > 0 && i % 2 === 0 ? shade("#" + P.pitch, -0.07) : "#" + P.pitch; ctx.fillRect(-hw + i * sw, -hh, sw + 0.5, 2 * hh); }
+  for (let t = 0; t < 2; t++) {                       // nets, in the colour of the team defending them
+    const sx = t === 0 ? -1 : 1, x0 = sx * hw, x1 = sx * (hw + P.net_depth), col = "#" + m.teams[t].primary;
+    ctx.fillStyle = shade("#" + P.pitch, -0.2); ctx.fillRect(Math.min(x0, x1), -P.goal_half, P.net_depth, 2 * P.goal_half);
+    ctx.strokeStyle = col; ctx.globalAlpha = 0.45; ctx.lineWidth = 1; ctx.beginPath();
+    for (let g = 0; g <= P.net_depth; g += 10) { ctx.moveTo(x0 + sx * g, -P.goal_half); ctx.lineTo(x0 + sx * g, P.goal_half); }
+    for (let g = -P.goal_half; g <= P.goal_half; g += 10) { ctx.moveTo(x0, g); ctx.lineTo(x1, g); }
+    ctx.stroke(); ctx.globalAlpha = 1;
+    ctx.lineWidth = 6; ctx.strokeStyle = "rgba(0,0,0,.7)"; ctx.strokeRect(Math.min(x0, x1), -P.goal_half, P.net_depth, 2 * P.goal_half);
+    ctx.lineWidth = 3; ctx.strokeStyle = col; ctx.strokeRect(Math.min(x0, x1), -P.goal_half, P.net_depth, 2 * P.goal_half);
+  }
+  ctx.strokeStyle = "#" + P.line; ctx.lineWidth = 3;
+  ctx.strokeRect(-hw, -hh, 2 * hw, 2 * hh);
+  ctx.beginPath(); ctx.moveTo(0, -hh); ctx.lineTo(0, hh); ctx.stroke();
+  ctx.beginPath(); ctx.arc(0, 0, P.center_r, 0, 2 * Math.PI); ctx.stroke();
+  ctx.fillStyle = "#" + P.line; ctx.beginPath(); ctx.arc(0, 0, 4, 0, 2 * Math.PI); ctx.fill();
+  if (P.box_depth > 0) { ctx.lineWidth = 2.5; ctx.strokeRect(-hw, -P.box_half, P.box_depth, 2 * P.box_half); ctx.strokeRect(hw - P.box_depth, -P.box_half, P.box_depth, 2 * P.box_half); }
+  for (const px of [-hw, hw]) for (const py of [-P.goal_half, P.goal_half]) disc(ctx, px, py, P.post_r, "#f2f2f2", "#000", 2);
+  // ball trail
+  live.trail.push(ball); if (live.trail.length > 14) live.trail.shift();
+  for (let i = 0; i < live.trail.length - 1; i++) { ctx.globalAlpha = (i / live.trail.length) * 0.35; disc(ctx, live.trail[i][0], live.trail[i][1], m.ball_r * (0.4 + 0.5 * i / live.trail.length), "#fff"); }
+  ctx.globalAlpha = 1;
+  // players
+  ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  m.players.forEach((pl, i) => {
+    if (2 * i + 1 >= a.p.length) return;
+    const x = L(a.p[2 * i], b.p[2 * i]), y = L(a.p[2 * i + 1], b.p[2 * i + 1]), tm = m.teams[pl.team], r = pl.r;
+    ctx.save(); ctx.beginPath(); ctx.arc(x, y, r, 0, 2 * Math.PI); ctx.clip();
+    ctx.fillStyle = "#" + tm.primary; ctx.fillRect(x - r, y - r, 2 * r, 2 * r);
+    ctx.fillStyle = "#" + tm.secondary;
+    if (tm.pattern === "stripes") { ctx.fillRect(x - 0.55 * r, y - r, 0.35 * r, 2 * r); ctx.fillRect(x + 0.2 * r, y - r, 0.35 * r, 2 * r); }
+    else if (tm.pattern === "halves") ctx.fillRect(x, y - r, r, 2 * r);
+    else if (tm.pattern === "hoops") { ctx.fillRect(x - r, y - 0.55 * r, 2 * r, 0.35 * r); ctx.fillRect(x - r, y + 0.2 * r, 2 * r, 0.35 * r); }
+    else if (tm.pattern === "band") ctx.fillRect(x - 0.3 * r, y - r, 0.6 * r, 2 * r);
+    ctx.restore();
+    ctx.lineWidth = 2.5; ctx.strokeStyle = "#000"; ctx.beginPath(); ctx.arc(x, y, r - 1, 0, 2 * Math.PI); ctx.stroke();
+    ctx.font = `700 ${Math.round(r * 0.95)}px system-ui, sans-serif`; ctx.lineWidth = 4; ctx.strokeStyle = "rgba(0,0,0,.85)";
+    ctx.strokeText(String(pl.n), x, y + 1); ctx.fillStyle = "#fff"; ctx.fillText(String(pl.n), x, y + 1);
+  });
+  disc(ctx, ball[0], ball[1], m.ball_r, "#fff", "#000", 2);
+  // scoreboard and banners
+  const sb = $("#lv-sb");
+  if (sb) {
+    const runName = m.tag && m.tag.startsWith("x_") ? m.tag.slice(2) : m.tag;
+    const t0 = { ...m.teams[0], name: m.teams[0].net && runName ? `${runName} · ${(m.playing || "").replace(/^.*_u/, "u")}` : m.teams[0].name }, t1 = m.teams[1];
+    const key = `${t0.name}|${t1.name}|${b.sc}|${Math.ceil(b.tl)}|${b.st}`;
+    if (sb.dataset.key !== key) {
+      sb.dataset.key = key;
+      sb.innerHTML = `<div class="tm"><i class="kit" style="background:#${t0.primary}"></i><span>${esc(t0.name)}</span></div><div class="mid"><div class="score">${b.sc[0]} : ${b.sc[1]}</div><div class="clock">${b.st === 2 ? "full time" : clockText(b.tl)}</div></div><div class="tm r"><span>${esc(t1.name)}</span><i class="kit" style="background:#${t1.primary}"></i></div>`;
+    }
+  }
+  const stale = performance.now() - live.lastFrameAt > 3000;
+  if (b.st === 1) { over.hidden = false; over.innerHTML = `GOAL<small>${esc(m.teams[b.gt]?.name || "")}</small>`; }
+  else if (b.st === 2) { over.hidden = false; over.innerHTML = `FULL TIME<small>${b.sc[0]} : ${b.sc[1]}</small>`; }
+  else if (b.paused) { over.hidden = false; over.innerHTML = "PAUSED<small>the Pi's viewer is on another page</small>"; }
+  else if (stale) { over.hidden = false; over.innerHTML = "NO SIGNAL<small>waiting for the Pi's viewer</small>"; }
+  else over.hidden = true;
+  if (performance.now() - live.sideAt > 1000) { live.sideAt = performance.now(); liveSide(); }
+}
+function disc(ctx, x, y, r, fill, stroke, lw) {
+  ctx.beginPath(); ctx.arc(x, y, r, 0, 2 * Math.PI); ctx.fillStyle = fill; ctx.fill();
+  if (stroke) { ctx.lineWidth = lw || 2; ctx.strokeStyle = stroke; ctx.stroke(); }
+}
+function shade(hex, amt) {
+  const v = parseInt(hex.slice(1), 16), f2 = (c) => Math.max(0, Math.min(255, Math.round(c * (1 + amt))));
+  return `rgb(${f2(v >> 16)},${f2((v >> 8) & 255)},${f2(v & 255)})`;
+}
+
 // ---------- data loading ----------
 const pending = {};
 function ensureDetail(name) {
@@ -461,14 +612,15 @@ function route() {
   const parts = path.split("/");
   const params = new URLSearchParams(qs || "");
   if (parts[0] === "run" && parts[1]) return { view: "run", arg: decodeURIComponent(parts.slice(1).join("/")), params };
-  return { view: ["runs", "compare", "queue", "pi"].includes(parts[0]) ? parts[0] : "overview", params };
+  return { view: ["runs", "compare", "queue", "pi", "live"].includes(parts[0]) ? parts[0] : "overview", params };
 }
 let lastHTML = "";
 function render() {
   const r = route();
   for (const a of document.querySelectorAll("#nav a")) a.classList.toggle("on", a.dataset.v === (r.view === "run" ? "runs" : r.view));
   const before = new Set(Object.keys(chartData));
-  const html = r.view === "runs" ? viewRuns() : r.view === "run" ? viewRun(r.arg) : r.view === "compare" ? viewCompare(r.params) : r.view === "queue" ? viewQueue() : r.view === "pi" ? viewPi() : viewOverview();
+  if (r.view !== "live") stopLive();
+  const html = r.view === "live" ? viewLive() : r.view === "runs" ? viewRuns() : r.view === "run" ? viewRun(r.arg) : r.view === "compare" ? viewCompare(r.params) : r.view === "queue" ? viewQueue() : r.view === "pi" ? viewPi() : viewOverview();
   const cleaned = html.replace(/data-chart="c[a-z0-9]+"/g, "");
   const drop = (keep) => { for (const k of Object.keys(chartData)) if (before.has(k) !== keep) delete chartData[k]; };
   if (cleaned === lastHTML) { drop(true); return; }      // nothing changed: keep scroll, selection and hover (and the old charts' data)
@@ -477,9 +629,12 @@ function render() {
   const view = $("#view");
   view.innerHTML = html;
   attachCharts(view);
+  if (r.view === "live") { live.raf && cancelAnimationFrame(live.raf); live.raf = 0; startLive(); }
   document.title = (r.view === "run" ? r.arg + " · " : "") + "Soccer Lab";
 }
 document.addEventListener("click", (e) => {
+  const cam = e.target.closest("button[data-cam]");
+  if (cam) { live.follow = cam.dataset.cam === "1"; try { localStorage.setItem("liveFollow", live.follow ? "1" : "0"); } catch (err) {} liveSide(); }
   const tr = e.target.closest("tr[data-run]");
   if (tr && !e.target.closest("a")) location.hash = "#/run/" + encodeURIComponent(tr.dataset.run);
   const th = e.target.closest("th[data-sort]");

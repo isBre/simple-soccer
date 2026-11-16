@@ -8,6 +8,7 @@ extends CanvasLayer
 ## The scene is a CanvasLayer above the App autoload's own full-screen background.
 ## Needs the nets served by tools/net_server.py (ports 7301 = the run's newest checkpoint, 7302 = RL Team 4, 7303 = the run's best checkpoint):
 ## the GDScript MLP is too slow to play two net teams in real time on a Raspberry Pi.
+## The match is also streamed (UDP to 127.0.0.1:7310, JSON) to tools/dashboard.py, which shows it live in the browser (#/live).
 
 const Data := preload("res://tools/training_data.gd")
 const Page := preload("res://tools/training_page.gd")
@@ -23,6 +24,10 @@ var _buttons: Dictionary = {}
 var _status: Label
 var _best_ckpt := false                  # BEST CKPT button: play the best checkpoint of the run (port 7303) instead of the newest (7301)
 var _best_move := false                  # BEST MOVE button: the next matches play the net's best move instead of sampling
+var _ms: MatchScreen = null              # the match being shown (streamed to the web dashboard)
+var _udp := PacketPeerUDP.new()
+var _frames := 0
+const STREAM_PORT := 7310
 @onready var nav_row: HBoxContainer = $Root/Nav/Row
 @onready var pages: Control = $Root/Pages
 @onready var banner: Label = $Root/Banner
@@ -58,6 +63,7 @@ func _ready() -> void:
     timer.timeout.connect(_refresh)
     add_child(timer)
     _show(start_page if start_page in PAGES else "live")
+    _udp.connect_to_host("127.0.0.1", STREAM_PORT)
     _next()
 
 
@@ -159,6 +165,7 @@ func _next() -> void:
     ms.finished.connect(func(_result): _next.call_deferred())
     ms.quit_requested.connect(get_tree().quit)
     match_area.add_child(ms)
+    _ms = ms
     ms.set_effects(false)                                          # no confetti: cheaper on the Pi
     ms.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)    # a screen added after the first match would stay 0x0
     _auto_continue(ms)
@@ -174,3 +181,39 @@ func _auto_continue(ms: MatchScreen) -> void:
     await get_tree().create_timer(4.0).timeout
     if is_instance_valid(ms):
         ms.finished.emit(ms.sim.make_result())
+
+
+## Streams the shown match to the web dashboard: a "meta" packet (pitch, kits, players) once a second and a frame with
+## the positions every drawn frame (30/s). Small JSON over local UDP: nothing waits if the dashboard is not running.
+func _process(_delta: float) -> void:
+    if _ms == null or not is_instance_valid(_ms) or _ms.sim == null:
+        return
+    var sim: MatchSim = _ms.sim
+    _frames += 1
+    if _frames % 30 == 1:
+        _udp.put_packet(JSON.stringify(_stream_meta(sim)).to_utf8_buffer())
+    var pl: Array = []
+    for p in sim.players:
+        pl.append(snappedf(p.pos.x, 0.1))
+        pl.append(snappedf(p.pos.y, 0.1))
+    _udp.put_packet(JSON.stringify({"k": "f", "id": sim.cfg.match_seed, "t": sim.tick, "st": int(sim.state), "tl": snappedf(sim.time_left, 0.1),
+        "sc": sim.scores, "b": [snappedf(sim.ball.pos.x, 0.1), snappedf(sim.ball.pos.y, 0.1)], "p": pl, "ko": sim.kickoff_active,
+        "gt": sim.goal_team, "paused": not _views["live"].visible}).to_utf8_buffer())
+
+
+func _stream_meta(sim: MatchSim) -> Dictionary:
+    var pd := sim.pitch
+    var teams: Array = []
+    for t in 2:
+        var td: TeamDef = sim.cfg.teams[t]
+        teams.append({"name": td.name, "short": td.short, "primary": sim.cfg.kits[t][0].to_html(false), "secondary": sim.cfg.kits[t][1].to_html(false),
+            "pattern": td.kit_pattern, "net": "remote" if sim.cfg.ml_models[t] != null else ""})
+    var players: Array = []
+    for p in sim.players:
+        players.append({"team": p.team, "n": p.def.number, "r": p.radius, "role": p.role})
+    var l := data.last()
+    return {"k": "m", "id": sim.cfg.match_seed, "tag": tag, "playing": data.playing, "upd": l.get("upd", 0), "best_move": sim.cfg.ml_temperature == 0.0,
+        "best_ckpt": _best_ckpt, "duration": sim.cfg.duration, "ball_r": sim.ball.radius, "teams": teams, "players": players,
+        "pitch": {"half_w": pd.half_w, "half_h": pd.half_h, "goal_half": pd.goal_half, "net_depth": pd.net_depth, "out_x": pd.out_x, "out_y": pd.out_y,
+            "center_r": pd.center_r, "box_depth": pd.box_depth, "box_half": pd.box_half, "stripes": pd.stripes, "post_r": pd.post_r,
+            "pitch": pd.color_pitch.to_html(false), "outer": pd.color_outer.to_html(false), "line": pd.color_line.to_html(false)}}

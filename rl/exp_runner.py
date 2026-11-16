@@ -123,10 +123,15 @@ def start_viewer(tag, model):
     for port, extra in ((7302, ["--model", "data/models/rl_5v5_arena_v4.json"]), (7301, ["--tag", tag, "--model", model]),
                         (7303, ["--best-file", "logs/%s_best.json" % tag, "--model", model])):
         procs.append(subprocess.Popen([sys.executable, sv, "--port", str(port)] + extra, cwd=ROOT, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL))
-    env = {**os.environ, "DISPLAY": ":0", "GODOT_SILENCE_ROOT_WARNING": "1"}
-    procs.append(subprocess.Popen([GODOT, "--path", ROOT, "res://tools/watch_training.tscn", "--", "--tag", tag, "--start", "res://" + model],
-                                  env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL))
+    procs.append(viewer_window(tag, model))
     return procs
+
+
+def viewer_window(tag, model):
+    """The Godot viewer itself (restarted by the runner if it closes or crashes, e.g. after an update of its scripts)."""
+    env = {**os.environ, "DISPLAY": ":0", "GODOT_SILENCE_ROOT_WARNING": "1"}
+    return subprocess.Popen([GODOT, "--path", ROOT, "res://tools/watch_training.tscn", "--", "--tag", tag, "--start", "res://" + model],
+                            env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 
 def run_experiment(spec_path, viewer=False):
@@ -158,6 +163,9 @@ def run_experiment(spec_path, viewer=False):
         log("started %s (pid %d)" % (name, proc.pid))
         while proc.poll() is None:
             time.sleep(30)
+            if viewer and procs and procs[-1].poll() is not None:
+                log("viewer closed (exit %s): starting it again" % procs[-1].returncode)
+                procs[-1] = viewer_window(tag, start_json)
             upd, pts, n = progress(tag)
             if pts is not None and n >= 96 and base_train is None:
                 base_train = pts
