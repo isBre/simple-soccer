@@ -431,11 +431,11 @@ function viewPi() {
 const live = { es: null, meta: null, frames: [], trail: [], raf: 0, recv: [], idleAge: null, lastFrameAt: 0, sideAt: 0, cam: null,
   follow: (() => { try { return localStorage.getItem("liveFollow") !== "0"; } catch (e) { return true; } })() };
 function viewLive() {
-  return `<div class="head"><div><h1>Live match</h1><p>The match the Pi's viewer is playing, drawn in your browser from a stream of positions (about 30 per second). The Pi does not encode video, so this costs training almost nothing.</p></div></div>
+  return `<div class="head live-head"><div><h1>Live match</h1><p>The match the Pi's viewer is playing, drawn in your browser from a stream of positions (about 30 per second). The Pi does not encode video, so this costs training almost nothing.</p></div></div>
     <div class="live-wrap">
       <div class="card live-main"><div class="scorebar" id="lv-sb"><div class="tm"><i class="kit"></i><span>–</span></div><div class="mid"><div class="score">– : –</div><div class="clock">–</div></div><div class="tm r"><span>–</span><i class="kit"></i></div></div>
         <canvas id="lv-c" width="1400" height="710"></canvas><div class="lv-over" id="lv-over">Waiting for the Pi's viewer…</div></div>
-      <div class="card"><h2>On the pitch</h2><div class="seg" id="lv-cam"><button data-cam="1">Follow ball</button><button data-cam="0">Whole pitch</button></div><dl class="kv" id="lv-side"><dt>stream</dt><dd>connecting…</dd></dl></div>
+      <div class="card live-side"><div id="lv-prog"></div><div class="seg" id="lv-cam"><button data-cam="1">Follow ball</button><button data-cam="0">Whole pitch</button></div><dl class="kv" id="lv-side"><dt>stream</dt><dd>connecting…</dd></dl></div>
     </div>`;
 }
 function startLive() {
@@ -466,6 +466,10 @@ function stopLive() {
 }
 function clockText(s) { s = Math.max(0, Math.ceil(s)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`; }
 function liveSide() {
+  const pr = $("#lv-prog"), now = state.overview?.now;
+  if (pr) pr.innerHTML = now ? `<div class="live-prog"><div class="row"><span>${esc(now.run)}${now.eval ? " · evaluating" : ""}</span><b>${now.update ?? 0} / ${now.target ?? "?"}</b></div>
+      <div class="progress"><i style="width:${now.target ? Math.min(100, (100 * (now.update || 0)) / now.target) : 0}%"></i></div>
+      <div class="row" style="margin-top:6px"><span>training pts vs rules</span><b>${f(now.train_pts)}</b></div><div class="row"><span>time left</span><b>${now.eta_s ? dur(now.eta_s) : "–"}</b></div></div>` : "";
   for (const bt of document.querySelectorAll("#lv-cam button")) bt.classList.toggle("on", (bt.dataset.cam === "1") === live.follow);
   const el = $("#lv-side"); if (!el) return;
   const m = live.meta, fps = live.recv.length / 2;
@@ -545,8 +549,11 @@ function liveDraw() {
     else if (tm.pattern === "band") ctx.fillRect(x - 0.3 * r, y - r, 0.6 * r, 2 * r);
     ctx.restore();
     ctx.lineWidth = 2.5; ctx.strokeStyle = "#000"; ctx.beginPath(); ctx.arc(x, y, r - 1, 0, 2 * Math.PI); ctx.stroke();
+    // centre the digits on their real ink height ("middle" uses the font's em box, which puts digits a bit low)
     ctx.font = `700 ${Math.round(r * 0.95)}px system-ui, sans-serif`; ctx.lineWidth = 4; ctx.strokeStyle = "rgba(0,0,0,.85)";
-    ctx.strokeText(String(pl.n), x, y + 1); ctx.fillStyle = "#fff"; ctx.fillText(String(pl.n), x, y + 1);
+    ctx.textBaseline = "alphabetic";
+    const txt = String(pl.n), mt = ctx.measureText(txt), ty = y + (mt.actualBoundingBoxAscent - mt.actualBoundingBoxDescent) / 2;
+    ctx.strokeText(txt, x, ty); ctx.fillStyle = "#fff"; ctx.fillText(txt, x, ty);
   });
   disc(ctx, ball[0], ball[1], m.ball_r, "#fff", "#000", 2);
   // scoreboard and banners
@@ -652,6 +659,17 @@ document.addEventListener("change", (e) => {
   location.hash = "#/compare?" + p.toString();
 });
 window.addEventListener("hashchange", () => { lastHTML = ""; window.scrollTo(0, 0); render(); });
-window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => { lastHTML = ""; render(); });
+if (new URLSearchParams(location.search).has("kiosk")) {                                      // the Pi's touch screen: opens on the live match
+  document.body.classList.add("kiosk");
+  history.replaceState(null, "", location.pathname + location.search + "#/live");             // always start on Live (also after a restore)
+}
+function setThemeButton() { $("#theme").textContent = document.documentElement.dataset.theme === "light" ? "☾" : "☀"; }
+$("#theme").addEventListener("click", () => {
+  const light = document.documentElement.dataset.theme !== "light";
+  if (light) document.documentElement.dataset.theme = "light"; else delete document.documentElement.dataset.theme;
+  try { localStorage.setItem("theme", light ? "light" : "dark"); } catch (e) {}
+  setThemeButton(); lastHTML = ""; render();
+});
+setThemeButton();
 poll();
 setInterval(poll, POLL_MS);

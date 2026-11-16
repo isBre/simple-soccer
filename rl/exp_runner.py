@@ -116,22 +116,41 @@ def progress(tag):
     return 0, None, 0
 
 
+KIOSK_PROFILE = os.path.expanduser("~/.config/soccer-kiosk")          # own Chromium profile: no keyring prompt, no restore bubble
+KIOSK_URL = "http://127.0.0.1:8080/?kiosk=1#/live"
+
+
 def start_viewer(tag, model):
-    """Optional: nets on ports 7301-7303 and the live viewer on the Pi's screen (about 900 MB and a core: off by default)."""
+    """--viewer: nets on ports 7301-7303, the match (headless Godot: plays the newest checkpoint vs RL Team 4 and streams it to the
+    dashboard) and the dashboard full screen on the Pi's touch screen (Chromium kiosk)."""
     procs = []
     sv = os.path.join(ROOT, "tools", "net_server.py")
     for port, extra in ((7302, ["--model", "data/models/rl_5v5_arena_v4.json"]), (7301, ["--tag", tag, "--model", model]),
                         (7303, ["--best-file", "logs/%s_best.json" % tag, "--model", model])):
         procs.append(subprocess.Popen([sys.executable, sv, "--port", str(port)] + extra, cwd=ROOT, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL))
     procs.append(viewer_window(tag, model))
+    ensure_kiosk()
     return procs
 
 
 def viewer_window(tag, model):
-    """The Godot viewer itself (restarted by the runner if it closes or crashes, e.g. after an update of its scripts)."""
-    env = {**os.environ, "DISPLAY": ":0", "GODOT_SILENCE_ROOT_WARNING": "1"}
-    return subprocess.Popen([GODOT, "--path", ROOT, "res://tools/watch_training.tscn", "--", "--tag", tag, "--start", "res://" + model],
+    """The match shown live: tools/watch_training.tscn without a window (restarted by the runner if it stops, e.g. after an update of its scripts)."""
+    env = {**os.environ, "GODOT_SILENCE_ROOT_WARNING": "1"}
+    return subprocess.Popen([GODOT, "--headless", "--path", ROOT, "res://tools/watch_training.tscn", "--", "--tag", tag, "--start", "res://" + model],
                             env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+
+def ensure_kiosk():
+    """The web dashboard full screen on the Pi's screen (1024x600 touch screen, layout ?kiosk=1). It is not tied to an experiment:
+    it stays open between experiments and is started again if it was closed."""
+    if subprocess.run(["pgrep", "-f", "user-data-dir=" + KIOSK_PROFILE], stdout=subprocess.DEVNULL).returncode == 0:
+        return
+    env = {**os.environ, "DISPLAY": ":0", "XAUTHORITY": os.path.expanduser("~/.Xauthority")}
+    env.pop("DBUS_SESSION_BUS_ADDRESS", None)
+    subprocess.Popen(["chromium", "--kiosk", "--app=" + KIOSK_URL, "--user-data-dir=" + KIOSK_PROFILE, "--password-store=basic",
+                      "--no-first-run", "--noerrdialogs", "--disable-infobars", "--disable-session-crashed-bubble", "--disable-translate",
+                      "--disable-features=Translate,TranslateUI", "--overscroll-history-navigation=0", "--disable-pinch", "--touch-events=enabled",
+                      "--check-for-update-interval=31536000"], env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
 
 
 def run_experiment(spec_path, viewer=False):
@@ -166,6 +185,8 @@ def run_experiment(spec_path, viewer=False):
             if viewer and procs and procs[-1].poll() is not None:
                 log("viewer closed (exit %s): starting it again" % procs[-1].returncode)
                 procs[-1] = viewer_window(tag, start_json)
+            if viewer:
+                ensure_kiosk()
             upd, pts, n = progress(tag)
             if pts is not None and n >= 96 and base_train is None:
                 base_train = pts
