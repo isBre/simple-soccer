@@ -1,0 +1,13 @@
+{
+ "name": "kickstart",
+ "start": "out_5v5/ckpt/t48_u100.pt",
+ "updates": 600,
+ "lr": 0.0001,
+ "rewards": {},
+ "args": {
+  "teacher": "out_5v5/ckpt/jit8_best.pt",
+  "kl_coef": 0.5,
+  "kl_decay": 600
+ },
+ "notes": "Kickstarting: minimal rewards plus KL(jit8 teacher || learner) with weight 0.5 decaying to 0 by update 600, lr 1e-4. Can the role-free 46-input net close the gap to the 54-input jit8 (2.94) when it is pulled towards it while learning?"
+}

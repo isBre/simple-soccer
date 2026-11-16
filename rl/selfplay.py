@@ -22,12 +22,38 @@ from collections import deque
 import numpy as np
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
+from torch.distributions import Bernoulli, Categorical
 
 from client import GODOT, ROOT, VecEnv
 from ppo import Agent, OUT, OUT_DRAW, OUT_LOSS, OUT_WIN, load_padded, save_model, team_pools
 
 CKPT = os.path.join(OUT, "ckpt")
 OBS_DIMS = {"legacy": 54, "team": 46}            # observation layouts (see MLBot.features_team): ego with player slot / role-free team observation
+
+
+N_TEAM, N_LEGACY = 46, 54                       # env obs "both" = the team observation followed by the legacy one
+
+
+def load_net(path):
+    """An Agent from a torch checkpoint (.pt) or a game-model JSON (sizes, W, B), whatever its input size and width."""
+    if path.endswith(".json"):
+        d = json.load(open(path))
+        a = Agent(d["sizes"][0], d["sizes"][1])
+        with torch.no_grad():
+            for lin, w, b in zip([l for l in a.actor if isinstance(l, nn.Linear)], d["W"], d["B"]):
+                lin.weight.copy_(torch.tensor(w, dtype=torch.float32).view(lin.weight.shape))
+                lin.bias.copy_(torch.tensor(b, dtype=torch.float32))
+        return a
+    sd = torch.load(path)
+    a = Agent(sd["actor.0.weight"].shape[1], sd["actor.0.weight"].shape[0])
+    a.load_state_dict(sd)
+    return a
+
+
+def obs_cols(in_dim):
+    """Columns of the 'both' observation a net with this input size reads."""
+    return slice(0, N_TEAM) if in_dim == N_TEAM else slice(N_TEAM, N_TEAM + N_LEGACY)
 
 
 def pts(o):
@@ -121,6 +147,13 @@ def main():
     ap.add_argument("--fast_every", type=int, default=0, help="FAST check (16 short matches + head to head vs --fast_ref) every N updates, training paused; 0 = never")
     ap.add_argument("--fast_ref", default="", help="game-model JSON of the net the run started from (the fast check plays it head to head)")
     ap.add_argument("--learn_threads", type=int, default=2, help="torch threads of the learning step (all 4 would fight the Godot workers for the CPU: the Pi froze)")
+    ap.add_argument("--base_port", type=int, default=7100, help="first port of the rule-group workers (self-play group: +100)")
+    ap.add_argument("--hidden", type=int, default=128, help="width of the two hidden layers (must match --start)")
+    ap.add_argument("--teacher", default="", help="kickstarting: a checkpoint (.pt/.json, e.g. the 54-input jit8) whose moves the learner is pulled towards")
+    ap.add_argument("--kl_coef", type=float, default=0.0, help="weight of KL(teacher || learner) in the loss at update 0, decaying linearly")
+    ap.add_argument("--kl_decay", type=int, default=300, help="update at which the teacher term reaches 0")
+    ap.add_argument("--opp_models", default="", help="comma-separated strong opponents for the self-play group (.pt or game-model .json, 46 or 54 inputs)")
+    ap.add_argument("--pfsp", type=float, default=0.5, help="share of the self-play slots 1-3 given to --opp_models, each picked more often the more it wins (PFSP)")
     ap.add_argument("--eval_games", type=int, default=1, help="league games per team and side (1 = 32 matches)")
     ap.add_argument("--eval_duration", type=float, default=90.0, help="seconds per evaluation match")
     ap.add_argument("--eval_h2h_games", type=int, default=8, help="head-to-head games per side against each reference net")
@@ -129,6 +162,20 @@ def main():
     args = ap.parse_args()
     os.makedirs(os.path.join(ROOT, "logs"), exist_ok=True)
     obs_dim = OBS_DIMS[args.obs]
+    strong = [(os.path.splitext(os.path.basename(p))[0], load_net(os.path.join(ROOT, p) if not os.path.isabs(p) else p).actor)
+              for p in args.opp_models.split(",") if p]
+    teacher = load_net(args.teacher if os.path.isabs(args.teacher) else os.path.join(ROOT, args.teacher)) if args.teacher else None
+    both = teacher is not None or any(n[0].in_features == N_LEGACY for _, n in strong)
+    assert not both or args.obs == "team", "a teacher / 54-input opponents need --obs team"
+    env_obs = "both" if both else args.obs
+    D_env = N_TEAM + N_LEGACY if both else obs_dim
+    L = slice(0, obs_dim)                                           # the learner's columns of the environment observation
+    for _, n in strong:
+        for p in n.parameters():
+            p.requires_grad_(False)
+    if teacher is not None:
+        for p in teacher.parameters():
+            p.requires_grad_(False)
     config = {**vars(args), "obs_dim": obs_dim, "started": int(time.time())}
     with open(os.path.join(ROOT, "logs", args.tag + "_config.json"), "w") as f:        # read by the live viewer's SETUP page
         json.dump(config, f, indent=1)
@@ -146,11 +193,11 @@ def main():
         logf.write(line + "\n")
         logf.flush()
 
-    agent = Agent(obs_dim)
+    agent = Agent(obs_dim, args.hidden)
     load_padded(agent, args.start)
     opt = torch.optim.Adam(agent.parameters(), lr=args.lr)
-    baseline = Agent(obs_dim)
-    load_padded(baseline, args.baseline or args.start)
+    baseline = load_net(args.baseline or args.start)
+    assert baseline.sizes[0] == obs_dim, "the frozen benchmark must read the learner's observation"
     for p in baseline.parameters():
         p.requires_grad_(False)
     pool = [copy.deepcopy(baseline.actor.state_dict())]           # opponent pool: baseline first, then snapshots
@@ -162,26 +209,38 @@ def main():
         pool = [pool[0]] + saved.get("pool", [])[1:]
         warm = 0
     NSLOT = 4
-    opp_nets = [Agent(obs_dim).actor for _ in range(NSLOT)]
-    for n in opp_nets:
+    snap_nets = [Agent(obs_dim, args.hidden).actor for _ in range(NSLOT)]     # learner snapshots (slots 1-3)
+    for n in snap_nets:
         for p in n.parameters():
             p.requires_grad_(False)
+    slot_net, slot_cols, slot_name = [baseline.actor] * NSLOT, [L] * NSLOT, ["bench"] * NSLOT
+    strong_res = {name: deque(maxlen=60) for name, _ in strong}
+
+    def pfsp_pick():
+        w = np.array([(1.0 - (np.mean(strong_res[n]) / 3.0 if strong_res[n] else 0.5)) ** 2 + 0.05 for n, _ in strong])
+        return strong[np.random.choice(len(strong), p=w / w.sum())]
 
     def assign_slots():
-        opp_nets[0].load_state_dict(pool[0])                      # slot 0 is always the frozen benchmark
+        slot_net[0], slot_cols[0], slot_name[0] = baseline.actor, L, "bench"      # slot 0 is always the frozen benchmark
         for k in range(1, NSLOT):
-            opp_nets[k].load_state_dict(pool[np.random.randint(len(pool))])
+            if strong and np.random.rand() < args.pfsp:
+                name, net = pfsp_pick()
+                slot_net[k], slot_cols[k], slot_name[k] = net, obs_cols(net[0].in_features), "strong:" + name
+            else:
+                snap_nets[k].load_state_dict(pool[np.random.randint(len(pool))])
+                slot_net[k], slot_cols[k], slot_name[k] = snap_nets[k], L, "league"
 
     assign_slots()
 
     cfg_rule, cfg_self = make_cfgs(args)
-    er = VecEnv(workers=args.workers_rule, envs_per_worker=args.envs_per_worker, base_port=7100, log_path="logs/rl_workers_rule.log")
-    es = VecEnv(workers=args.workers_self, envs_per_worker=args.envs_per_worker, base_port=7200, log_path="logs/rl_workers_self.log")
+    cfg_rule["obs"] = cfg_self["obs"] = env_obs
+    er = VecEnv(workers=args.workers_rule, envs_per_worker=args.envs_per_worker, base_port=args.base_port, log_path="logs/rl_workers_rule.log")
+    es = VecEnv(workers=args.workers_self, envs_per_worker=args.envs_per_worker, base_port=args.base_port + 100, log_path="logs/rl_workers_self.log")
     try:
         er.configure(cfg_rule, seed=args.seed)
         es.configure(cfg_self, seed=args.seed + 1)
         Er, Es = er.E, es.E
-        E, A, D, T = Er + Es, 5, obs_dim, args.rollout
+        E, A, D, T = Er + Es, 5, D_env, args.rollout
         slot_of = np.arange(Es) * NSLOT // Es                      # envs of the self group -> opponent slot
         log("selfplay start | rule envs %d, self envs %d (opp slots %d, slot 0 = frozen benchmark) | lr %g | rewards pass %.2f/%.2f/-%.2f space %.3f kick %.3f" % (
             Er, Es, NSLOT, args.lr, args.w_pass_prog, args.w_pass_ok, args.w_pass_fail, args.w_space, args.w_kick))
@@ -211,17 +270,17 @@ def main():
             for t in range(T):
                 obs_L = torch.cat([obs_r, obs_s[:, :5]], 0)                    # [E, 5, D] learner observations
                 with torch.no_grad():
-                    mr_, kr_, lpr_ = agent.act(obs_r)
-                    vr_ = agent.value(obs_r)
+                    mr_, kr_, lpr_ = agent.act(obs_r[..., L])
+                    vr_ = agent.value(obs_r[..., L])
                 er.step_async(np.stack([mr_.numpy(), kr_.long().numpy()], -1).astype(np.int8))   # rule workers simulate while we infer the self group
                 with torch.no_grad():
-                    ms_, ks_, lps_ = agent.act(obs_s[:, :5])
-                    vs_ = agent.value(obs_s[:, :5])
+                    ms_, ks_, lps_ = agent.act(obs_s[:, :5, L])
+                    vs_ = agent.value(obs_s[:, :5, L])
                     om = torch.zeros(Es, 5, dtype=torch.long)
                     ok = torch.zeros(Es, 5)
                     for sl in range(NSLOT):
                         idx = np.nonzero(slot_of == sl)[0]
-                        z = opp_nets[sl](obs_s[idx, 5:])
+                        z = slot_net[sl](obs_s[idx, 5:][..., slot_cols[sl]])
                         dm = torch.distributions.Categorical(logits=z[..., :9])
                         om[idx] = dm.sample()
                         ok[idx] = torch.distributions.Bernoulli(logits=z[..., 9]).sample()
@@ -240,7 +299,11 @@ def main():
                     stats["rule"].append(pts(int(nr[3][i])))
                 for i in np.nonzero(ns[2])[0]:
                     p_ = pts(int(ns[3][i]))
-                    (stats["bench"] if slot_of[i] == 0 else stats["league"]).append(p_)
+                    who = slot_name[slot_of[i]]
+                    if who.startswith("strong:"):
+                        strong_res[who[7:]].append(p_)
+                    else:
+                        (stats["bench"] if who == "bench" else stats["league"]).append(p_)
                 obs_r = torch.from_numpy(nr[0].copy())
                 obs_s = torch.from_numpy(ns[0].copy())
             t_sim = time.time() - t0
@@ -255,7 +318,7 @@ def main():
                     tf.write(json.dumps({"upd": upd, "terms": {k: v / n_steps for k, v in sums.items()}}) + "\n")
 
             with torch.no_grad():
-                last_v = agent.value(torch.cat([obs_r, obs_s[:, :5]], 0))
+                last_v = agent.value(torch.cat([obs_r, obs_s[:, :5]], 0)[..., L])
             adv = torch.zeros(T, E, A)
             gae = torch.zeros(E, A)
             for t in reversed(range(T)):
@@ -273,19 +336,31 @@ def main():
             t1 = time.time()
             torch.set_num_threads(args.learn_threads)
             f_val = b_val.reshape(-1)
-            health = {"kl": [], "clipfrac": [], "vloss": [], "pg": [], "gradnorm": [], "ent_move": [], "ent_kick": []}
+            health = {"kl": [], "clipfrac": [], "vloss": [], "pg": [], "gradnorm": [], "ent_move": [], "ent_kick": [], "kl_teacher": []}
+            kl_w = args.kl_coef * max(0.0, 1.0 - upd / max(args.kl_decay, 1)) if teacher is not None else 0.0
             ev = 1.0 - float((f_ret - f_val).var() / (f_ret.var() + 1e-8))      # explained variance of the critic (before this update)
             for _ in range(args.epochs):
                 perm = torch.randperm(n)
                 for s in range(0, n, args.minibatch):
                     idx = perm[s:s + args.minibatch]
-                    dm, dk = agent.dist(f_obs[idx])
+                    x = f_obs[idx]
+                    z = agent.actor(x[:, L])
+                    dm, dk = Categorical(logits=z[:, :9]), Bernoulli(logits=z[:, 9])
                     lp = dm.log_prob(f_m[idx]) + dk.log_prob(f_k[idx])
                     ratio = torch.exp(lp - f_lp[idx])
                     pg = -torch.min(ratio * f_adv[idx], torch.clamp(ratio, 0.8, 1.2) * f_adv[idx]).mean()
-                    vl = 0.5 * (agent.value(f_obs[idx]) - f_ret[idx]).pow(2).mean()
+                    vl = 0.5 * (agent.value(x[:, L]) - f_ret[idx]).pow(2).mean()
                     ent = dm.entropy().mean() + dk.entropy().mean()
                     loss = pg + 0.5 * vl - args.ent * ent
+                    if teacher is not None:                         # kickstarting: stay close to the teacher's moves (weight decays to 0)
+                        with torch.no_grad():
+                            zt = teacher.actor(x[:, N_TEAM:N_TEAM + N_LEGACY])
+                        klt = (F.softmax(zt[:, :9], -1) * (F.log_softmax(zt[:, :9], -1) - F.log_softmax(z[:, :9], -1))).sum(-1).mean()
+                        pt, ps = torch.sigmoid(zt[:, 9]), torch.sigmoid(z[:, 9]).clamp(1e-6, 1 - 1e-6)
+                        klt = klt + (pt * (torch.log(pt.clamp(1e-6)) - torch.log(ps)) + (1 - pt) * (torch.log((1 - pt).clamp(1e-6)) - torch.log(1 - ps))).mean()
+                        health["kl_teacher"].append(float(klt))
+                        if kl_w > 0:
+                            loss = loss + kl_w * klt
                     opt.zero_grad()
                     loss.backward()
                     gn = nn.utils.clip_grad_norm_(agent.parameters(), 0.5)
@@ -299,7 +374,7 @@ def main():
                     health["ent_kick"].append(float(dk.entropy().mean()))
             t_learn = time.time() - t1
             with open(os.path.join(ROOT, "logs", args.tag + "_ppo.jsonl"), "a") as pf:      # PPO health, shown by the viewer's TRAINING page
-                pf.write(json.dumps({"upd": upd, "ev": ev, **{k: float(np.mean(v)) for k, v in health.items()}}) + "\n")
+                pf.write(json.dumps({"upd": upd, "ev": ev, "kl_w": kl_w, **{k: float(np.mean(v)) for k, v in health.items() if v}}) + "\n")
 
             if upd % args.log_every == 0 or upd == args.start_update + 1:
                 f = lambda d: ("%.2f(%d)" % (np.mean(d), len(d))) if d else "-"
@@ -307,6 +382,8 @@ def main():
                     "%.0f dec/s sim %.1fs learn %.1fs | %.0fs" % (upd, f(stats["rule"]), f(stats["bench"]), f(stats["league"]),
                                                               b_rew.mean().item(), ent.item(), len(pool), 2 * T * Er / t_sim,
                                                               t_sim, t_learn, time.time() - t_start))
+            if strong and upd % (args.log_every * 5) == 0:
+                log("strong opponents (pts/match, last 60): " + ", ".join("%s %s" % (n, ("%.2f(%d)" % (np.mean(r), len(r))) if r else "-") for n, r in strong_res.items()))
             if upd % args.ckpt_every == 0:
                 path = os.path.join(CKPT, "%s_u%d.json" % (args.tag, upd))
                 with open(path, "w") as fh:

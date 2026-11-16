@@ -114,11 +114,12 @@ def main():
     ap.add_argument("--epochs", type=int, default=40)
     ap.add_argument("--lr", type=float, default=1e-3)
     ap.add_argument("--seed", type=int, default=11)
+    ap.add_argument("--hidden", type=int, default=128, help="width of the student's two hidden layers")
     args = ap.parse_args()
     torch.manual_seed(args.seed)
     teacher = Agent(N_LEGACY)
     load_padded(teacher, args.teacher)
-    student = Agent(N_TEAM)
+    student = Agent(N_TEAM, args.hidden)
     opt = torch.optim.Adam(student.parameters(), lr=args.lr)
     env = new_env(args)
     try:
