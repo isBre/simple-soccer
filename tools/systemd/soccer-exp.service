@@ -6,7 +6,7 @@ After=network-online.target
 User=isbre
 WorkingDirectory=/home/isbre/simple-soccer/rl
 Environment=GODOT_SILENCE_ROOT_WARNING=1
-ExecStart=/home/isbre/rl-venv/bin/python /home/isbre/simple-soccer/rl/exp_runner.py --loop
+ExecStart=/home/isbre/rl-venv/bin/python /home/isbre/simple-soccer/rl/exp_runner.py --loop --viewer
 Nice=10
 Restart=always
 RestartSec=30

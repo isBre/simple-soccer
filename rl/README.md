@@ -105,7 +105,7 @@ Design and reasoning: [docs/experiment_pipeline.md](../docs/experiment_pipeline.
 2. trains with `selfplay.py` (`--fast_every 50`: every 50 updates training pauses for a **fast check**, `eval_checkpoint.py --mode fast`: 24 short matches against every 3rd rule team plus head to head against the start net, a few minutes);
 3. stops the run early as `diverged` (training points vs the rule bots under 70% of their starting value, after 60 updates) or `regressed` (two fast checks in a row worse than the baseline by more than 2 standard errors);
 4. otherwise runs a **full evaluation** of the last checkpoint and compares it with the baseline (`tracker.compare`: league points and goal difference, verdict better / worse / no difference at 1.96 standard errors).
-After a reboot (the Pi's hardware watchdog reboots a frozen Pi) the runner resumes the running experiment from its last checkpoint. `--viewer` also opens the live viewer on the Pi's screen (about 900 MB and a core: off by default).
+After a reboot (the Pi's hardware watchdog reboots a frozen Pi) the runner resumes the running experiment from its last checkpoint. `--viewer` also opens the live viewer on the Pi's screen (about 900 MB and a core; the service runs with it).
 Everything is plain files: `exp/results.jsonl` (one record per evaluation, kind fast|full, league points / goal difference / head to head / behaviour, each with standard errors), `exp/results.md` (table, rewritten after every evaluation),
 `exp/runs/<name>/status.json`, `exp/runner.log`; finished specs move to `exp/done/`, broken ones to `exp/failed/`. `EXP_MLFLOW=1` also mirrors every evaluation to MLflow (`pip install mlflow-skinny`, no server;
 copy `exp/mlruns/` to another computer and run `mlflow ui` there).
