@@ -66,17 +66,33 @@ def tag_of(run, status):
 
 def training(tag):
     """Per logged update: training points vs rule bots / frozen benchmark / league, reward per step, entropy, speed."""
-    rows = {}
+    rows = []
     path = os.path.join(LOGS, tag + ".out")
     if os.path.exists(path):
         for line in open(path, errors="replace"):
             m = TRAIN_RE.match(line)
             if m:
                 u = int(m.group(2))
-                rows[u] = {"upd": u, "rules": num(m.group(3)), "n_rules": int(m.group(4) or 0), "bench": num(m.group(5)), "league": num(m.group(6)),
+                rows.append({"upd": u, "rules": num(m.group(3)), "n_rules": int(m.group(4) or 0), "bench": num(m.group(5)), "league": num(m.group(6)),
                            "rew": num(m.group(7)), "ent": num(m.group(8)), "dps": int(m.group(9)), "sim": num(m.group(10)), "learn": num(m.group(11)),
-                           "elapsed": int(m.group(12)), "clock": m.group(1)}
-    return [rows[k] for k in sorted(rows)]
+                           "elapsed": int(m.group(12)), "clock": m.group(1)})
+    return latest_segment(rows)
+
+
+def latest_segment(rows, key="upd"):
+    """Rows of a log that was appended to across restarts: a restart from update N repeats the updates after N, so every row
+    replaces the ones at or after its update that came before it. Returns the rows in update order."""
+    out = {}
+    last = None
+    for r in rows:
+        u = r.get(key)
+        if u is None:
+            continue
+        if last is not None and u <= last:
+            out = {k: v for k, v in out.items() if k < u}
+        out[u] = r
+        last = u
+    return [out[k] for k in sorted(out)]
 
 
 def thin(rows, n=400):
@@ -206,8 +222,8 @@ def run_detail(run):
         evals.append({**{k: r.get(k) for k in ("update", "kind", "league", "greedy", "h2h", "behaviour", "seconds", "time")},
                       "heat": heatmaps(eval_file(r, tag)) if r["kind"] == "full" else []})
     config = rj(os.path.join(LOGS, tag + "_config.json"), {})
-    terms = thin([{"upd": t["upd"], **t["terms"]} for t in jl(os.path.join(LOGS, tag + "_terms.jsonl"))], 300)
-    ppo = thin(jl(os.path.join(LOGS, tag + "_ppo.jsonl")), 300)
+    terms = thin(latest_segment([{"upd": t["upd"], **t["terms"]} for t in jl(os.path.join(LOGS, tag + "_terms.jsonl"))]), 300)
+    ppo = thin(latest_segment(jl(os.path.join(LOGS, tag + "_ppo.jsonl"))), 300)
     base = None
     if st.get("baseline_run"):
         b = [r for r in results if r["run"] == st["baseline_run"]]

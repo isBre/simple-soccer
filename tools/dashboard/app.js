@@ -83,7 +83,7 @@ function lineChart(series, opt = {}) {
   for (const t of xt) if (t >= x0 && t <= x1) g += `<text class="ax" x="${X(t)}" y="${H - 8}" text-anchor="middle">${fmtTick(t)}</text>`;
   for (const r of opt.refs || []) g += `<line class="ref" x1="${L}" x2="${W - R}" y1="${Y(r.y)}" y2="${Y(r.y)}"/><text class="reft" x="${W - R}" y="${Y(r.y) - 4}" text-anchor="end">${esc(r.label)}</text>`;
   for (const s of series) {
-    const p = s.points.filter((q) => q.y !== null && q.y !== undefined && !Number.isNaN(q.y));
+    const p = s.points.filter((q) => q.y !== null && q.y !== undefined && !Number.isNaN(q.y)).sort((a, b) => a.x - b.x);
     if (!p.length) continue;
     if (s.band) {
       const up = p.map((q) => `${X(q.x)},${Y(q.y + (q.err || 0))}`), dn = p.slice().reverse().map((q) => `${X(q.x)},${Y(q.y - (q.err || 0))}`);
