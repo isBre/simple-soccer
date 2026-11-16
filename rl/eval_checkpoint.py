@@ -89,9 +89,18 @@ def main():
     ap.add_argument("--games", type=int, default=1, help="league games per team and side (1 = 32 matches)")
     ap.add_argument("--duration", type=float, default=90.0, help="seconds per match (the league metric of the shipped teams used 180)")
     ap.add_argument("--h2h_games", type=int, default=8, help="head-to-head games per side and reference")
+    ap.add_argument("--mode", choices=["full", "fast"], default="full",
+                    help="fast: 24 short matches vs every 3rd rule team (sampled moves only) + head to head vs the --ref nets, to catch a collapse in minutes; full: everything")
+    ap.add_argument("--ref", action="append", default=[], metavar="NAME=MODEL", help="extra head-to-head opponent (game-model JSON), e.g. the net the run started from; repeatable")
     ap.add_argument("--paused", action="store_true", help="training is paused while this runs (shown by the viewer's banner)")
     a = ap.parse_args()
+    fast = a.mode == "fast"
+    if fast:                                    # fixed, small, comparable between checkpoints
+        a.games, a.duration, a.h2h_games = 2, 60.0, 4
+    refs = ([] if fast and a.ref else REFERENCES[:1] if fast else REFERENCES) + [tuple(r.split("=", 1)) for r in a.ref]
     model = os.path.relpath(os.path.abspath(a.model), ROOT)
+    if not os.path.isfile(os.path.join(ROOT, model)):
+        sys.exit("no such model: " + a.model)
     res_model = "res://" + model
     t0 = time.time()
     servers = []
@@ -99,18 +108,19 @@ def main():
     flag = os.path.join(ROOT, "logs", "%s_eval_running.json" % tag) if tag else None
     if flag:                                    # the viewer shows an "evaluation running" banner while this file exists
         json.dump({"pid": os.getpid(), "checkpoint": os.path.basename(model)[:-5], "started": int(t0), "paused": a.paused}, open(flag, "w"))
-    lines = ["EVAL %s | league games/side %d | duration %.0fs | h2h games/side %d" % (model, a.games, a.duration, a.h2h_games)]
+    lines = ["EVAL %s | mode %s | league games/side %d | duration %.0fs | h2h games/side %d" % (model, a.mode, a.games, a.duration, a.h2h_games)]
     try:
         proc, port = start_server(model)
         servers.append(proc)
         keep = re.compile(r"^(LEAGUE|team |SUMMARY|\S+\s+(weak|average|strong|elite)\s)")
-        lines += ["# league"] + [l for l in godot("league_eval", ["--model", res_model, "--remote", str(port), "--games", str(a.games), "--duration", str(a.duration)]) if keep.match(l)]
-        lines += ["# behaviour"] + [l for l in godot("behaviour_stats", ["--remote", str(port)]) if re.match(r"^(RL Team|rule-based|scores|HEAT)", l)]
-        lines += ["# greedy (best move instead of sampling)"]
-        lines += ["greedy " + l for l in godot("league_eval", ["--model", res_model, "--remote", str(port), "--games", str(a.games), "--duration", str(a.duration), "--stride", "2", "--greedy"]) if keep.match(l)]
-        lines += ["greedy " + l for l in godot("behaviour_stats", ["--remote", str(port), "--greedy"]) if re.match(r"^(RL Team|rule-based)", l)]
+        lines += ["# league"] + [l for l in godot("league_eval", ["--model", res_model, "--remote", str(port), "--games", str(a.games), "--duration", str(a.duration)] + (["--stride", "3"] if fast else [])) if keep.match(l)]
+        if not fast:
+            lines += ["# behaviour"] + [l for l in godot("behaviour_stats", ["--remote", str(port)]) if re.match(r"^(RL Team|rule-based|scores|HEAT)", l)]
+            lines += ["# greedy (best move instead of sampling)"]
+            lines += ["greedy " + l for l in godot("league_eval", ["--model", res_model, "--remote", str(port), "--games", str(a.games), "--duration", str(a.duration), "--stride", "2", "--greedy"]) if keep.match(l)]
+            lines += ["greedy " + l for l in godot("behaviour_stats", ["--remote", str(port), "--greedy"]) if re.match(r"^(RL Team|rule-based)", l)]
         lines += ["# head to head"]
-        for name, ref in REFERENCES:
+        for name, ref in refs:
             rproc, rport = start_server(ref)
             servers.append(rproc)
             lines += [l for l in godot("h2h_eval", ["--a", str(port), "--b", str(rport), "--name", name, "--games", str(a.h2h_games), "--duration", str(a.duration)]) if l.startswith("H2H")]
@@ -119,7 +129,8 @@ def main():
             p.terminate()
         if flag and os.path.exists(flag):
             os.remove(flag)
-    update_best(model, lines)
+    if not fast:
+        update_best(model, lines)
     lines.append("DONE %d" % (time.time() - t0))
     os.makedirs(os.path.dirname(os.path.abspath(a.out)), exist_ok=True)
     tmp = a.out + ".tmp"

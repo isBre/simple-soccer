@@ -1,0 +1,3 @@
+{"name": "xg", "start": "out_5v5/ckpt/t48_u100.pt", "updates": 300, "lr": 5e-5,
+ "rewards": {"w_xg": 1.0, "xg_cap": 6.0},
+ "notes": "Minimal set + reward for the xG of own shots (shot quality)."}

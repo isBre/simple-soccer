@@ -1,0 +1,20 @@
+{
+ "state": "running",
+ "spec": {
+  "name": "minimal",
+  "start": "out_5v5/ckpt/t48_u100.pt",
+  "updates": 300,
+  "lr": 5e-05,
+  "rewards": {},
+  "notes": "Control: the minimal reward set only. Also measures how much two identical runs differ (the noise floor of the pipeline)."
+ },
+ "baseline_run": "start:t48_u100",
+ "started": 1794861255,
+ "tag": "x_minimal",
+ "target_updates": 300,
+ "name": "minimal",
+ "updated": 1794861405,
+ "update": 4,
+ "train_pts": null,
+ "base_train": null
+}

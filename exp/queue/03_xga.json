@@ -1,0 +1,3 @@
+{"name": "xga", "start": "out_5v5/ckpt/t48_u100.pt", "updates": 300, "lr": 5e-5,
+ "rewards": {"w_xga": 2.0},
+ "notes": "Minimal set + penalty for the xG of the opponent's shots (defending)."}

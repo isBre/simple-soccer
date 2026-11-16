@@ -77,6 +77,8 @@ Modes: single, styles, teams, sanity, strength, versus, human, keeper.
 `strength` plays uniform-attribute squads (90/80/70/60/50, same style) against each other and reports how often the stronger side wins by rating gap: use it to check that team rating really decides matches.
 `experiments/ui_smoke.tscn` walks the UI and saves screenshots to `experiments/shots/`.
 
+RL experiments run unattended on the Raspberry Pi through a queue (`exp/queue/`), a runner service and a web dashboard on port 8080: see [rl/README.md](rl/README.md#experiment-pipeline-rlexp_runnerpy-exp-toolsdashboardpy) and [docs/experiment_pipeline.md](docs/experiment_pipeline.md).
+
 ## Machine learning (first step: imitation learning)
 
 <p align="center"><img src="docs/screenshots/rl_derby.gif" alt="RL Team 2 vs RL Team 4" width="60%"></p>

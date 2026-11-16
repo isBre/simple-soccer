@@ -46,7 +46,7 @@ godot --headless --path . res://rl/behaviour_stats.tscn -- --model res://out_5v5
 godot --headless --path . res://rl/league_eval.tscn -- --model res://out_5v5/ckpt/coop3_u600.json --games 2
 ```
 
-Reward terms (per agent, `rl_env.gd`): goals, ball/goal shaping, `--w_space` (spacing), `--w_kick` (kick discipline),
+Reward terms (per agent, `rl_env.gd`): goals, ball/goal shaping, `--w_space` (spacing, only while our team has the ball), `--w_kick` (kick discipline),
 `--pass_individual` with `--w_recv` / `--w_key_pass` / `--w_xa` (pass credit goes to the passer and receiver),
 `--w_open` (standing open for the ball carrier), `--coop_cap` (max cooperation reward per match) and `--w_keeper`
 (keeper straying from its goal). `--random_start P` starts a fraction P of the episodes from a completely random layout
@@ -81,7 +81,7 @@ next to training it was starved on a Pi 4: the same evaluation took hours instea
 3. **Head to head** (`h2h_eval.gd`) against RL Team 4 and RL Team 5 (the previous shipped nets), both sides, `--eval_h2h_games` games per side (default 8: the rule-bot league saturates at about 3.0 points, so these two are what tells checkpoints apart; 6 matches gave a standard error of about 0.5).
 4. **Sampling vs best move**: the same net playing its best move (`ml_temperature` 0, `--greedy` in the Godot scripts) instead of sampling, on every 2nd team (`--stride 2`, written with a `greedy ` prefix) plus the behaviour numbers. In the first test the net made about 2.4 direction changes/s when playing its best move against about 14 when sampling (rule bots about 2.2): the twitching comes from sampling, not from what the net has learned (short 10 s matches, to be confirmed on real evaluations).
 5. **Heatmaps**: where each player slot and the ball spend their time (`HEAT` lines from `behaviour_stats.gd`, team attacking to the right).
-Every league and head-to-head number carries its standard error (`se`; points per match are 3 / 1 / 0, so 32 matches give about +-0.2): a difference smaller than about two standard errors is noise,
+Every league and head-to-head number carries its standard error (`se`, and `gd` / `gdse` for the goal difference per match; points per match are 3 / 1 / 0, so 32 matches give about +-0.2): a difference smaller than about two standard errors is noise,
 the viewer marks changes beyond noise between evaluations (up / down arrows). The matches use fixed seeds, so every checkpoint plays the same kickoffs.
 After each evaluation `eval_checkpoint.py` keeps the **best checkpoint** by league points (`out_5v5/ckpt/<tag>_best.json/.pt`, `logs/<tag>_best.json`).
 `python3 rl/export_team.py --tag jit8 --number 6` turns it (or `--checkpoint jit8_u300`) into a playable "RL Team 6" (`data/models/rl_5v5_arena_v6.json`, `data/teams/rl_team_6.json`).
@@ -94,6 +94,26 @@ Numbering across restarts: `--start_update N --updates TOTAL` continues a run (c
 `selfplay.py` also writes `logs/<tag>_ppo.jsonl` (PPO health per update: critic explained variance, approx. KL, clip fraction, value loss, gradient norm, entropy of the move and kick heads;
 shown on the TRAINING page with traffic-light colours) and `logs/<tag>_config.json` (all its settings) at start, which the viewer's SETUP page reads, and `logs/<tag>_terms.jsonl` (one line per update:
 what the reward was made of, per reward term, mean per agent-decision). The terms are accumulated in `rl_env.gd` (`_acc`) and read from the workers with the `T` command (`VecEnv.terms()`).
+
+## Experiment pipeline (`rl/exp_runner.py`, `exp/`, `tools/dashboard.py`)
+
+Design and reasoning: [docs/experiment_pipeline.md](../docs/experiment_pipeline.md). An experiment is a small JSON file in `exp/queue/` (run in file-name order):
+`{"name": "xga", "start": "out_5v5/ckpt/t48_u100.pt", "updates": 300, "lr": 5e-5, "rewards": {"w_xga": 2.0}, "notes": "..."}`. `rewards` overrides the minimal reward set
+(goals, passing, cooperation, spacing while attacking, kick discipline; every other term 0); `args` may set any other `selfplay.py` option.
+`rl/exp_runner.py --loop` (service `soccer-exp`, `tools/systemd/`) takes the next spec and:
+1. evaluates the start net once (fast + full; cached per start file) = the baseline;
+2. trains with `selfplay.py` (`--fast_every 50`: every 50 updates training pauses for a **fast check**, `eval_checkpoint.py --mode fast`: 24 short matches against every 3rd rule team plus head to head against the start net, a few minutes);
+3. stops the run early as `diverged` (training points vs the rule bots under 70% of their starting value, after 60 updates) or `regressed` (two fast checks in a row worse than the baseline by more than 2 standard errors);
+4. otherwise runs a **full evaluation** of the last checkpoint and compares it with the baseline (`tracker.compare`: league points and goal difference, verdict better / worse / no difference at 1.96 standard errors).
+After a reboot (the Pi's hardware watchdog reboots a frozen Pi) the runner resumes the running experiment from its last checkpoint. `--viewer` also opens the live viewer on the Pi's screen (about 900 MB and a core: off by default).
+Everything is plain files: `exp/results.jsonl` (one record per evaluation, kind fast|full, league points / goal difference / head to head / behaviour, each with standard errors), `exp/results.md` (table, rewritten after every evaluation),
+`exp/runs/<name>/status.json`, `exp/runner.log`; finished specs move to `exp/done/`, broken ones to `exp/failed/`. `EXP_MLFLOW=1` also mirrors every evaluation to MLflow (`pip install mlflow-skinny`, no server;
+copy `exp/mlruns/` to another computer and run `mlflow ui` there).
+`tools/dashboard.py` (service `soccer-dashboard`, port 8080, read-only, **no login: local network only**) serves "Soccer Lab", a single-page app (`tools/dashboard/`) that polls a JSON API every 10 s:
+**Overview** (running experiment with progress and ETA, league strength of every run with error bars, training curve, runner events, queue, Pi state), **Runs** (sortable table with training sparklines and verdicts),
+**Run** pages (evaluations over updates, training points, PPO health, reward terms over time and their composition, league per tier, head to head, behaviour, player heatmaps, all settings),
+**Compare** (two runs side by side with differences and significance), **Queue** and **Raspberry Pi** (temperature, load, memory, clock, throttling). Open `http://<pi-address>:8080` from any computer on the network. `tools/pi_health_log.sh` (service `soccer-health`) logs throttle flags, temperature, load and memory every 10 s to `logs/pi_health.log`.
+Safety against the freezes seen on the Pi: the learning step uses 2 torch threads (`--learn_threads`), `tools/net_server.py` pins numpy/OpenBLAS to one thread (with the venv's OpenBLAS a net server spun 28 threads and starved the simulation: evaluations took 3x longer), and `tools/systemd/watchdog.conf` turns on the hardware watchdog (15 s).
 
 ## Watching training live (`tools/watch_training.tscn`, touch screen, no keyboard)
 

@@ -58,7 +58,7 @@ var open_min := 120.0
 var open_max := 450.0
 var lane_clear := 45.0
 var prev_ps: Dictionary = {}      # uid -> [ok, failed, progressive, key passes, xA, received]
-var w_space := 0.0                # penalty per player and teammate closer than space_radius (not while fighting for the ball)
+var w_space := 0.0                # penalty per player and teammate closer than space_radius (only while our team has the ball, not while fighting for it)
 var space_radius := 140.0
 var w_kick := 0.0                 # penalty for pressing kick while the ball is out of reach
 var kick_reach := 40.0
@@ -394,6 +394,10 @@ func _opp_has_ball() -> bool:
     return sim.last_touch != null and sim.last_touch.team == 1
 
 
+func _we_have_ball() -> bool:
+    return sim.last_touch != null and sim.last_touch.team == 0
+
+
 ## 0..1: how far the 4 outfield players are stretched beyond compact_len (along the pitch) and compact_wid (across), averaged.
 func _stretch() -> float:
     var lo := Vector2(1.0e9, 1.0e9)
@@ -448,7 +452,7 @@ func _individual() -> PackedFloat32Array:
                     r -= w_jitter
                     _acc("jitter", -w_jitter / n_learn)
                 prev_dir[a.uid] = dnow
-        if w_space > 0.0 and da > 70.0:
+        if w_space > 0.0 and da > 70.0 and _we_have_ball():      # spreading out is for attacking; while defending the team stays compact
             for j in agents.size():
                 if j != i:
                     var b := agents[j]

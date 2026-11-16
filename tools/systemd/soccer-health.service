@@ -1,0 +1,12 @@
+[Unit]
+Description=Pi health log (tools/pi_health_log.sh) for finding out why the Pi freezes
+
+[Service]
+User=isbre
+WorkingDirectory=/home/isbre/simple-soccer
+ExecStart=/home/isbre/simple-soccer/tools/pi_health_log.sh
+Nice=5
+Restart=always
+
+[Install]
+WantedBy=multi-user.target

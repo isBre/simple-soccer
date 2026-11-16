@@ -1,0 +1,3 @@
+{"name": "win_draw", "start": "out_5v5/ckpt/t48_u100.pt", "updates": 300, "lr": 5e-5,
+ "rewards": {"w_win": 3.0, "w_draw": 1.0},
+ "notes": "Minimal set + team bonus for a won / drawn match."}

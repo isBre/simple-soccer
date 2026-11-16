@@ -6,6 +6,8 @@ Protocol: on connect the server sends the net's input size n_in (uint32); then p
                           rl/eval_checkpoint.py), falls back to --model until the first evaluation has chosen one
 """
 import argparse, glob, json, os, re, socket, struct, threading
+for _v in ("OPENBLAS_NUM_THREADS", "OMP_NUM_THREADS", "MKL_NUM_THREADS"):      # one thread: the products are tiny, and BLAS worker threads
+    os.environ.setdefault(_v, "1")                                             # spin on every core and starve the Godot simulation (evaluations took 3x longer)
 import numpy as np
 
 

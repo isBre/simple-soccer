@@ -284,7 +284,7 @@ func _setup() -> void:
             ["shot quality", "%s per xG  [color=#%s]cap %s[/color]" % [_w(c, "w_xg", "+"), Data.MUTED, str(c.get("xg_cap", "?"))]],
             ["tackle / interception", "%s  [color=#%s]cap %s[/color]" % [_w(c, "w_tackle", "+"), Data.MUTED, str(c.get("def_cap", "?"))]],
             ["goal-side defending", _w(c, "w_goalside", "+")], ["standing open", _w(c, "w_open", "+")],
-            ["teammate too close", _w(c, "w_space", "-")], ["too far from the ball", "%s  [color=#%s]> %s px[/color]" % [_w(c, "w_far", "-"), Data.MUTED, _int(c, "far_radius")]],
+            ["teammate too close (attacking)", _w(c, "w_space", "-")], ["too far from the ball", "%s  [color=#%s]> %s px[/color]" % [_w(c, "w_far", "-"), Data.MUTED, _int(c, "far_radius")]],
             ["kick away from ball", _w(c, "w_kick", "-")], ["keeper far from goal", _w(c, "w_keeper", "-")], ["direction twitch", _w(c, "w_jitter", "-")]])
     d += _observation_text(c)
     d += Data.section("ACTIONS", [["move", "9: 8 directions or still"], ["kick", "pressed or not"], ["decision", "every 2 ticks (30 / s)"], ["choice", "sampled, not argmax"]])

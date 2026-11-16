@@ -85,6 +85,7 @@ func _process(_d: float) -> void:
 			tab[m["opp"]] = {"p": 0, "w": 0, "d": 0, "l": 0, "gf": 0, "ga": 0}
 		var t: Dictionary = tab[m["opp"]]
 		t["p"] += 1
+		t["gd2"] = t.get("gd2", 0) + (gf - ga) * (gf - ga)         # sum of squared goal differences: for the standard error of the goal difference
 		t["gf"] += gf
 		t["ga"] += ga
 		if gf > ga: t["w"] += 1
@@ -101,19 +102,22 @@ func _process(_d: float) -> void:
 		lines.append("%s%s%s%s%d  %d  %d   %.2f    %.2f/%.2f" % [id.rpad(11), str(inf["tier"]).rpad(9), str(inf["strength"]).rpad(6),
 			("yes" if inf["held_out"] else "").rpad(5), t["w"], t["d"], t["l"], pts / t["p"], float(t["gf"]) / t["p"], float(t["ga"]) / t["p"]])
 		for key in ["all", inf["tier"], "held" if inf["held_out"] else "train"]:
-			if not agg.has(key): agg[key] = [0.0, 0, 0.0, 0.0, 0.0]
+			if not agg.has(key): agg[key] = [0.0, 0, 0.0, 0.0, 0.0, 0.0]
 			agg[key][0] += pts
 			agg[key][1] += t["p"]
 			agg[key][2] += t["gf"]
 			agg[key][3] += t["ga"]
 			agg[key][4] += 9.0 * t["w"] + t["d"]          # sum of squared match points (3 / 1 / 0): for the standard error
+			agg[key][5] += t["gd2"]
 	for key in ["weak", "average", "strong", "elite", "train", "held", "all"]:
 		if not agg.has(key):                      # e.g. --stride 2 leaves no held-out team
 			continue
 		var g: Array = agg[key]
 		var mean: float = g[0] / g[1]
 		var se := sqrt(maxf(g[4] / g[1] - mean * mean, 0.0) / g[1])
-		lines.append("SUMMARY %s: pts/m %.2f  GF %.2f GA %.2f  (%d matches) se %.2f" % [key.rpad(8), mean, g[2] / g[1], g[3] / g[1], g[1], se])
+		var gd: float = (g[2] - g[3]) / g[1]
+		var gd_se := sqrt(maxf(g[5] / g[1] - gd * gd, 0.0) / g[1])
+		lines.append("SUMMARY %s: pts/m %.2f  GF %.2f GA %.2f  (%d matches) se %.2f gd %.2f gdse %.2f" % [key.rpad(8), mean, g[2] / g[1], g[3] / g[1], g[1], se, gd, gd_se])
 	var text := "\n".join(lines)
 	print(text)
 	var f := FileAccess.open("res://logs/league_last.txt", FileAccess.WRITE)

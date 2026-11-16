@@ -53,16 +53,20 @@ func _process(_d: float) -> void:
 	var l := 0
 	var gf := 0
 	var ga := 0
+	var gd2 := 0.0
 	for i in batch.results.size():
 		var side: int = meta[i]
 		var sc: Array = batch.results[i]["scores"]
 		gf += sc[side]
 		ga += sc[1 - side]
+		gd2 += float((sc[side] - sc[1 - side]) * (sc[side] - sc[1 - side]))
 		if sc[side] > sc[1 - side]: w += 1
 		elif sc[side] == sc[1 - side]: d += 1
 		else: l += 1
 	var n := batch.results.size()
 	var mean := (3.0 * w + d) / n
 	var se := sqrt(maxf((9.0 * w + d) / n - mean * mean, 0.0) / n)
-	print("H2H %s: W %d D %d L %d | pts/m %.2f | GF/GA %.2f/%.2f | %d matches | se %.2f" % [opp_name, w, d, l, mean, float(gf) / n, float(ga) / n, n, se])
+	var gd := float(gf - ga) / n
+	var gd_se := sqrt(maxf(gd2 / n - gd * gd, 0.0) / n)
+	print("H2H %s: W %d D %d L %d | pts/m %.2f | GF/GA %.2f/%.2f | %d matches | se %.2f | gd %.2f gdse %.2f" % [opp_name, w, d, l, mean, float(gf) / n, float(ga) / n, n, se, gd, gd_se])
 	get_tree().quit()

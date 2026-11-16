@@ -48,14 +48,17 @@ def make_cfgs(args):
     return {**base, "opp": pool}, {**base, "opp": "owls", "opp_external": True}
 
 
-def eval_blocking(model_path, tag, args, log):
+def eval_blocking(model_path, tag, args, log, mode="full"):
     """Complete evaluation of a snapshot (rl/eval_checkpoint.py: league, behaviour, head to head, ...) while training is PAUSED:
     this call returns when it is done, the Godot workers just wait, so the evaluation gets the whole CPU (the viewer shows an
     "evaluation running" banner meanwhile). Result: logs/sp_eval/<tag>.txt"""
-    out = os.path.join(ROOT, "logs", "sp_eval", tag + ".txt")
-    cmd = [sys.executable, os.path.join(ROOT, "rl", "eval_checkpoint.py"), "--model", model_path, "--out", out, "--paused",
+    suffix = "_fast" if mode == "fast" else ""
+    out = os.path.join(ROOT, "logs", "sp_eval", tag + suffix + ".txt")
+    cmd = [sys.executable, os.path.join(ROOT, "rl", "eval_checkpoint.py"), "--model", model_path, "--out", out, "--paused", "--mode", mode,
            "--games", str(args.eval_games), "--duration", str(args.eval_duration), "--h2h_games", str(args.eval_h2h_games)]
-    log("training paused: evaluating %s (logs/sp_eval/%s.txt)" % (tag, tag))
+    if args.fast_ref:
+        cmd += ["--ref", "start=" + args.fast_ref]                  # head to head against the net this run started from
+    log("training paused: %s evaluation of %s (logs/sp_eval/%s%s.txt)" % (mode, tag, tag, suffix))
     t0 = time.time()
     subprocess.run(cmd, cwd=os.path.join(ROOT, "rl"), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     log("evaluation of %s finished in %.0f min, training continues" % (tag, (time.time() - t0) / 60.0))
@@ -115,6 +118,9 @@ def main():
     ap.add_argument("--resample_every", type=int, default=20)
     ap.add_argument("--ckpt_every", type=int, default=100)
     ap.add_argument("--eval_every", type=int, default=100, help="complete evaluation of the checkpoint every N updates (multiple of --ckpt_every; 0 = never); training is paused meanwhile")
+    ap.add_argument("--fast_every", type=int, default=0, help="FAST check (16 short matches + head to head vs --fast_ref) every N updates, training paused; 0 = never")
+    ap.add_argument("--fast_ref", default="", help="game-model JSON of the net the run started from (the fast check plays it head to head)")
+    ap.add_argument("--learn_threads", type=int, default=2, help="torch threads of the learning step (all 4 would fight the Godot workers for the CPU: the Pi froze)")
     ap.add_argument("--eval_games", type=int, default=1, help="league games per team and side (1 = 32 matches)")
     ap.add_argument("--eval_duration", type=float, default=90.0, help="seconds per evaluation match")
     ap.add_argument("--eval_h2h_games", type=int, default=8, help="head-to-head games per side against each reference net")
@@ -258,7 +264,7 @@ def main():
             f_adv = (f_adv - f_adv.mean()) / (f_adv.std() + 1e-8)
             n = f_obs.shape[0]
             t1 = time.time()
-            torch.set_num_threads(os.cpu_count())
+            torch.set_num_threads(args.learn_threads)
             f_val = b_val.reshape(-1)
             health = {"kl": [], "clipfrac": [], "vloss": [], "pg": [], "gradnorm": [], "ent_move": [], "ent_kick": []}
             ev = 1.0 - float((f_ret - f_val).var() / (f_ret.var() + 1e-8))      # explained variance of the critic (before this update)
@@ -301,6 +307,8 @@ def main():
                 torch.save(agent.state_dict(), os.path.join(CKPT, "%s_u%d.pt" % (args.tag, upd)))
                 if args.eval_every > 0 and upd % args.eval_every == 0:
                     eval_blocking(path, "%s_u%d" % (args.tag, upd), args, log)
+                elif args.fast_every > 0 and upd % args.fast_every == 0:
+                    eval_blocking(path, "%s_u%d" % (args.tag, upd), args, log, "fast")
         log("selfplay finished")
     finally:
         er.close()
