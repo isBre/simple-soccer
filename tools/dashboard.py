@@ -195,9 +195,14 @@ def overview():
         tr = training(running["tag"])
         ev = rj(os.path.join(LOGS, running["tag"] + "_eval_running.json"))
         spu = None
-        if len(tr) >= 3:
-            a, b = tr[max(0, len(tr) - 30)], tr[-1]
-            spu = (b["elapsed"] - a["elapsed"]) / max(b["upd"] - a["upd"], 1) if b["elapsed"] > a["elapsed"] else None
+        seg = tr[-1:]                                   # rows of the trainer's current start ("elapsed" restarts at 0 with every restart)
+        for r in reversed(tr[:-1]):
+            if r["elapsed"] >= seg[0]["elapsed"]:
+                break
+            seg.insert(0, r)
+        if len(seg) >= 2:
+            a, b = seg[max(0, len(seg) - 30)], seg[-1]
+            spu = (b["elapsed"] - a["elapsed"]) / max(b["upd"] - a["upd"], 1)
         log_path = os.path.join(LOGS, running["tag"] + ".out")
         age = time.time() - os.path.getmtime(log_path) if os.path.exists(log_path) else None
         now = {**running, "sec_per_update": spu, "eta_s": spu * max((running["target"] or 0) - (running["update"] or 0), 0) if spu else None,
