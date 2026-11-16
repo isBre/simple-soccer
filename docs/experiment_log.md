@@ -51,4 +51,6 @@ All from `t48_u100`, 300 updates, lr 5e-5, minimal set plus one term: 01 minimal
 06 far, 07 xg, 08 tackle. Baseline `start:t48_u100`: full 2.25 ± 0.20, fast 1.42 ± 0.24.
 
 ## Reviews
+An automatic review runs every 2 hours while the agent's session is open: it checks the Pi and the runner, appends a review here for every
+finished experiment and adjusts the queue.
 <!-- the agent appends one entry per finished experiment: date, run, verdict with numbers, what it means, what was queued next -->
