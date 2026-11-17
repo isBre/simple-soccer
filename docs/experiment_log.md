@@ -82,3 +82,8 @@ finished experiment and adjusts the queue.
 - Behaviour: 12.9 direction changes/s (still twitchy, rule bots ~2), idle 3%, 24.8 passes and 8.6 shots per match, key passes 3.75, xA 1.17 (start net had far fewer shots).
 - Meaning: an anchor fixes the decline and lifts league points; rule-bot saturation limits what the league can show, so progress now has to be read from h2h and goal difference.
 - Queue: `strong_opponents` (jit8 / RL4 / RL5 in self-play slots with PFSP) is running: it targets exactly the remaining weakness. `control_long` stays after it. Idea for later: `strong_opponents` started from `kickstart_u600`, then the `wall` term on top of the best line.
+
+### Review 2026-11-17 12:20: `strong_opponents` (unanchored, jit8/RL4/RL5 opponents + PFSP, from t48_u100)
+- Stopped as diverged at u194: fast 1.29 at u150 (z -0.4 vs start), h2h vs start 0.88; training points 1.88 -> 1.29. No full evaluation.
+- Meaning: the third unanchored run (after `minimal`, `wall`) that declines; kickstarting is the only thing that kept the net stable. Strong opponents are not a cure without an anchor.
+- Queue: cancelled `control_long` (1000 unanchored updates would be ~8 h on the same decline). Added `kickstart_strong`: from `x_kickstart_u600` (2.81), strong opponents + PFSP + decaying teacher KL (0.3 -> 0 at u400), lr 5e-5, 400 updates, judged against its start net. Still to come: `wall` on top of the anchored line; wider net.

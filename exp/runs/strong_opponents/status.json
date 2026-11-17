@@ -1,5 +1,5 @@
 {
- "state": "running",
+ "state": "diverged",
  "spec": {
   "name": "strong_opponents",
   "start": "out_5v5/ckpt/t48_u100.pt",
@@ -59,11 +59,23 @@
  "restarts": [],
  "control": null,
  "name": "strong_opponents",
- "updated": 1794907061,
- "update": 50,
- "train_pts": 2.02,
- "base_train": null,
+ "updated": 1794912524,
+ "update": 194,
+ "train_pts": 1.29,
+ "base_train": 1.88,
  "bad_checks": 0,
- "recorded": [],
- "train_s": 1689
+ "recorded": [
+  50,
+  100,
+  150
+ ],
+ "train_s": 6516,
+ "stop_reason": "diverged",
+ "finished": 1794912524,
+ "final_update": 175,
+ "verdict": null,
+ "cost_hours": {
+  "train": 1.81,
+  "eval": 0.25
+ }
 }

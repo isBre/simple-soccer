@@ -1,0 +1,15 @@
+{
+ "name": "kickstart_strong",
+ "start": "out_5v5/ckpt/x_kickstart_u600.pt",
+ "updates": 400,
+ "lr": 5e-05,
+ "rewards": {},
+ "args": {
+  "teacher": "out_5v5/ckpt/jit8_best.pt",
+  "kl_coef": 0.3,
+  "kl_decay": 400,
+  "opp_models": "out_5v5/ckpt/jit8_best.pt,data/models/rl_5v5_arena_v4.json,data/models/rl_5v5_arena_v5.json",
+  "pfsp": 0.75
+ },
+ "notes": "From kickstart u600 (2.81). Strong opponents (jit8/RL4/RL5, PFSP) WITH a decaying teacher anchor (KL 0.3 -> 0 by u400), lr 5e-5. strong_opponents without an anchor diverged at u194 like every unanchored run; this tests whether anchored training against strong opponents closes the h2h gap to RL4/RL5."
+}
