@@ -69,3 +69,9 @@ wall for 2+ decisions in a row. Queued first as experiment `wall` (0.005, minima
 An automatic review runs every 2 hours while the agent's session is open: it checks the Pi and the runner, appends a review here for every
 finished experiment and adjusts the queue.
 <!-- the agent appends one entry per finished experiment: date, run, verdict with numbers, what it means, what was queued next -->
+
+### Review 2026-11-17 02:20: `minimal` and `wall` (both stopped "diverged", no full evaluation)
+- `minimal` (control, minimal set, lr 5e-5, seed 7): fast checks 1.79 (u50), 1.42 (u100), 1.12 (u150), 0.67 ± 0.17 (u200, z -2.6 vs start, GD -0.54, conceded 0.88). Training points 1.53 -> 1.07; stopped at u242 as diverged. h2h vs the start net 1.0 ± 0.31 at u200.
+- `wall` (minimal + w_wall 0.005): fast 1.58, 1.50, 0.96 (u150, z -1.4); training points 2.05 -> 1.35; stopped at u194. Same decline as the control, so the wall term is neither shown to help nor to hurt; the wall metric was not measured because no full evaluation ran.
+- Meaning: pure PPO with the minimal rewards degrades the 46-number start net even at lr 5e-5 (two independent runs, the same slope). The reward terms are not the cause of the decline; the learning signal itself (self-play plus rule bots, no anchor) drifts away from the distilled policy. Plain "more training" is therefore the wrong lever; an anchor is needed.
+- Queue decision: cancelled `control_seed11` (a third degrading control adds little; moved to exp/parked). `kickstart` (KL to the jit8 teacher, decaying) now runs next, then `strong_opponents`, then `control_long`. The `wall` term should be re-tested on top of whatever anchor works (standing decision: one term at a time).

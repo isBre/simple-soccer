@@ -1,3 +1,4 @@
 {"t": "2026-11-16T22:24:36", "action": "queue_add", "name": "kickstart", "position": 3}
 {"t": "2026-11-16T22:24:36", "action": "queue_add", "name": "strong_opponents", "position": 4}
 {"t": "2026-11-16T23:02:28", "action": "queue_add", "name": "wall", "position": 1}
+{"t": "2026-11-17T02:18:02", "action": "cancel_running", "name": "control_seed11"}

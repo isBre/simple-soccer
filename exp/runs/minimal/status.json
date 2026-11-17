@@ -1,5 +1,5 @@
 {
- "state": "running",
+ "state": "diverged",
  "spec": {
   "name": "minimal",
   "start": "out_5v5/ckpt/t48_u100.pt",
@@ -13,13 +13,15 @@
  "tag": "x_minimal",
  "target_updates": 300,
  "name": "minimal",
- "updated": 1794866642,
- "update": 110,
- "train_pts": 1.84,
- "base_train": null,
+ "updated": 1794871289,
+ "update": 242,
+ "train_pts": 1.07,
+ "base_train": 1.53,
  "recorded": [
   50,
-  100
+  100,
+  150,
+  200
  ],
  "effective_rewards": {
   "pass_individual": 1,
@@ -67,6 +69,14 @@
   }
  ],
  "control": null,
- "bad_checks": 0,
- "train_s": 1511
+ "bad_checks": 1,
+ "train_s": 5581,
+ "stop_reason": "diverged",
+ "finished": 1794871289,
+ "final_update": 225,
+ "verdict": null,
+ "cost_hours": {
+  "train": 1.55,
+  "eval": 0.39
+ }
 }
