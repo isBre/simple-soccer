@@ -1,0 +1,15 @@
+{
+ "name": "anchor_wall",
+ "start": "out_5v5/ckpt/x_kickstart_u600.pt",
+ "updates": 300,
+ "lr": 5e-05,
+ "rewards": {
+  "w_wall": 0.005
+ },
+ "args": {
+  "teacher": "out_5v5/ckpt/jit8_best.pt",
+  "kl_coef": 0.3,
+  "kl_decay": 300
+ },
+ "notes": "From kickstart u600 (2.81), rule bots + self-play, decaying teacher anchor (KL 0.3 -> 0 at u300). wall: adds w_wall 0.005 (wall time was 20.8% for the 46-number start net); judge it against anchor_ctrl with lab.py compare (the runner can only refer to a control that already exists)"
+}

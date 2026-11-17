@@ -5,3 +5,4 @@
 {"t": "2026-11-17T12:17:59", "action": "cancel_running", "name": "control_long"}
 {"t": "2026-11-17T12:18:00", "action": "queue_add", "name": "kickstart_strong", "position": 1}
 {"t": "2026-11-17T16:17:54", "action": "queue_add", "name": "anchor_ctrl", "position": null}
+{"t": "2026-11-17T16:18:03", "action": "queue_add", "name": "anchor_wall", "position": null}

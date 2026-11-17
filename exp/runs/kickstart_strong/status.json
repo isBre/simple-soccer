@@ -65,8 +65,8 @@
  "restarts": [],
  "control": null,
  "name": "kickstart_strong",
- "updated": 1794928651,
- "update": 320,
+ "updated": 1794928681,
+ "update": 322,
  "train_pts": 2.85,
  "base_train": 2.83,
  "bad_checks": 0,
@@ -78,5 +78,5 @@
   250,
   300
  ],
- "train_s": 11286
+ "train_s": 11316
 }
