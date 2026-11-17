@@ -1,5 +1,5 @@
 {
- "state": "running",
+ "state": "done",
  "spec": {
   "name": "anchor_ctrl",
   "start": "out_5v5/ckpt/x_kickstart_u600.pt",
@@ -61,11 +61,40 @@
  "restarts": [],
  "control": null,
  "name": "anchor_ctrl",
- "updated": 1794935859,
- "update": 40,
- "train_pts": 2.91,
- "base_train": null,
+ "updated": 1794948978,
+ "update": 300,
+ "train_pts": 2.85,
+ "base_train": 2.89,
  "bad_checks": 0,
- "recorded": [],
- "train_s": 1479
+ "recorded": [
+  50,
+  100,
+  150,
+  200,
+  250,
+  300
+ ],
+ "train_s": 10320,
+ "stop_reason": "budget",
+ "finished": 1794948978,
+ "final_update": 300,
+ "verdict": {
+  "pts": 0.0938,
+  "pts_se": 0.1445,
+  "gd": 0.1562,
+  "gd_se": 0.2735,
+  "n": 32,
+  "paired": true,
+  "z": 0.6487,
+  "z_gd": 0.5712,
+  "p": 0.5165,
+  "mde": 0.4047,
+  "verdict": "no difference",
+  "reference": "start:x_kickstart_u600",
+  "update": 300
+ },
+ "cost_hours": {
+  "train": 2.87,
+  "eval": 1.18
+ }
 }

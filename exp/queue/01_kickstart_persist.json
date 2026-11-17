@@ -1,0 +1,15 @@
+{
+ "name": "kickstart_persist",
+ "start": "out_5v5/ckpt/x_kickstart_u600.pt",
+ "updates": 400,
+ "lr": 5e-05,
+ "rewards": {},
+ "args": {
+  "teacher": "out_5v5/ckpt/jit8_best.pt",
+  "kl_coef": 0.2,
+  "kl_decay": 1000,
+  "opp_models": "out_5v5/ckpt/jit8_best.pt,data/models/rl_5v5_arena_v4.json,data/models/rl_5v5_arena_v5.json",
+  "pfsp": 0.75
+ },
+ "notes": "Like kickstart_strong but the teacher anchor stays (KL 0.2 decaying only to 0.12 by u400, instead of 0.3 -> 0). Tests whether a persistent teacher pull plus strong opponents moves the h2h gap vs RL4/RL5; every run so far without a strong anchor is flat or declines."
+}
