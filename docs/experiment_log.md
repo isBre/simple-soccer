@@ -90,3 +90,9 @@ finished experiment and adjusts the queue.
 
 ### Note 2026-11-17 16:20: queue after `kickstart_strong`
 `kickstart_strong` (u300 fast 2.62, paired +0.04 ± 0.27 vs its start) is flat so far; its full evaluation decides. Queued behind it, so the Pi never idles: `anchor_ctrl` (from kickstart u600, rule bots + self-play, KL 0.3 -> 0 over 300 updates) and `anchor_wall` (same plus w_wall 0.005, judged against `anchor_ctrl`). This re-tests the user-requested wall term on the stable anchored line; the earlier test on the unanchored line was lost to drift.
+
+### Review 2026-11-17 18:20: `kickstart_strong` (from kickstart u600, strong opponents jit8/RL4/RL5 + PFSP 0.75, KL 0.3 -> 0 at u400, lr 5e-5, 400 updates)
+- Full evaluation u400: **2.88 ± 0.09**, GD +2.25, conceded 0.06 vs its start net 2.81 (GD +2.12, conceded 0.16): +0.06 ± 0.14, paired z 0.4, p 0.66, MDE 0.40: **no difference**. Fast checks all within ±0.2 of the start (z <= 1.4).
+- h2h: RL Team 4 0.81 (start 0.56), RL Team 5 0.44 (0.31), start net 1.88 (GD +0.69); still clearly behind RL4/RL5 (jit8: 1.67 / 2.17). Behaviour: 11.6 direction changes/s (start 12.9), idle 3%.
+- Meaning: the anchored line is stable but 400 updates against the strong nets at lr 5e-5 did not move the h2h gap beyond noise; the h2h differences (+0.25, +0.13 on 16 games) are far below what the evaluation can resolve. Rule-bot league points are saturated, so only h2h can show progress.
+- Next: `anchor_ctrl` -> `anchor_wall` (running / queued) re-test the wall term. After them the main lever for the RL4/RL5 gap is capacity or a better teacher signal: a wider net (distill.py --hidden 256 from jit8, then kickstart) is the next candidate; to be queued when the Pi frees up.

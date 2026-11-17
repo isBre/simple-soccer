@@ -1,12 +1,13 @@
 # Experiment results
 
-Updated 2026-11-17 16:18. pts = league points per match (16 rule teams, both sides), gd = goal difference per match, mean ± standard error. Verdicts compare within one protocol (fast and full are never mixed), paired over identical matches when possible. `python3 rl/lab.py` gives the same data as JSON.
+Updated 2026-11-17 18:17. pts = league points per match (16 rule teams, both sides), gd = goal difference per match, mean ± standard error. Verdicts compare within one protocol (fast and full are never mixed), paired over identical matches when possible. `python3 rl/lab.py` gives the same data as JSON.
 
 | run | state | update | protocol | pts ± se | gd | GA | vs RL4 | vs RL5 | dir chg/s | idle % | verdict |
 |---|---|---|---|---|---|---|---|---|---|---|---|
 | kickstart | done | 600 | full/g1/d90 | 2.81 ± 0.1 | 2.12 | 0.16 | 0.56 | 0.31 | 12.87 | 3.0 | better (vs start:t48_u100) |
 | kickstart | done | 600 | fast/g2/d60 | 2.58 ± 0.17 | 1.58 | 0.08 | - | - | - | - |  |
-| kickstart_strong | running | 300 | fast/g2/d60 | 2.62 ± 0.17 | 1.79 | 0.04 | - | - | - | - |  |
+| kickstart_strong | done | 400 | full/g1/d90 | 2.88 ± 0.09 | 2.25 | 0.06 | 0.81 | 0.44 | 11.6 | 2.0 | no difference (vs start:x_kickstart_u600) |
+| kickstart_strong | done | 400 | fast/g2/d60 | 2.5 ± 0.18 | 1.58 | 0.04 | - | - | - | - |  |
 | minimal | diverged | 200 | fast/g2/d60 | 0.67 ± 0.17 | -0.54 | 0.88 | - | - | - | - |  |
 | old_jit8 | imported | 200 | full/g1/d90 | 2.94 ± 0.06 | 2.94 | 0.03 | 1.67 | 2.17 | 8.16 | 2.0 |  |
 | old_t46 | imported | 200 | full/g1/d90 | 1.16 ± 0.22 | -0.1 | 1.22 | 0.56 | 0.25 | 9.87 | 3.0 |  |
@@ -18,4 +19,4 @@ Updated 2026-11-17 16:18. pts = league points per match (16 rule teams, both sid
 | strong_opponents | diverged | 150 | fast/g2/d60 | 1.29 ± 0.26 | 0.08 | 0.96 | - | - | - | - |  |
 | wall | diverged | 150 | fast/g2/d60 | 0.96 ± 0.21 | -0.25 | 1.42 | - | - | - | - |  |
 
-Runs: control_long (cancelled), control_seed11 (cancelled), kickstart (done), kickstart_strong (running), minimal (diverged), old_jit8 (imported), old_t46 (imported), old_t47 (imported), start:t48_u100 (imported), start:x_kickstart_u600 (imported), strong_opponents (diverged), team:RL Team 4 (imported), team:RL Team 5 (imported), wall (diverged)
+Runs: anchor_ctrl (running), control_long (cancelled), control_seed11 (cancelled), kickstart (done), kickstart_strong (done), minimal (diverged), old_jit8 (imported), old_t46 (imported), old_t47 (imported), start:t48_u100 (imported), start:x_kickstart_u600 (imported), strong_opponents (diverged), team:RL Team 4 (imported), team:RL Team 5 (imported), wall (diverged)
