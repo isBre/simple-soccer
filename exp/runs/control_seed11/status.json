@@ -1,5 +1,5 @@
 {
- "state": "running",
+ "state": "cancelled",
  "spec": {
   "name": "control_seed11",
   "start": "out_5v5/ckpt/t48_u100.pt",
@@ -56,11 +56,19 @@
  "restarts": [],
  "control": null,
  "name": "control_seed11",
- "updated": 1794878258,
- "update": 1,
+ "updated": 1794878291,
+ "update": 2,
  "train_pts": null,
  "base_train": null,
  "bad_checks": 0,
  "recorded": [],
- "train_s": 60
+ "train_s": 90,
+ "stop_reason": "cancelled",
+ "finished": 1794878291,
+ "final_update": 0,
+ "verdict": null,
+ "cost_hours": {
+  "train": 0.03,
+  "eval": 0.0
+ }
 }
