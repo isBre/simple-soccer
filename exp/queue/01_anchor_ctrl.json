@@ -1,0 +1,13 @@
+{
+ "name": "anchor_ctrl",
+ "start": "out_5v5/ckpt/x_kickstart_u600.pt",
+ "updates": 300,
+ "lr": 5e-05,
+ "rewards": {},
+ "args": {
+  "teacher": "out_5v5/ckpt/jit8_best.pt",
+  "kl_coef": 0.3,
+  "kl_decay": 300
+ },
+ "notes": "From kickstart u600 (2.81), rule bots + self-play, decaying teacher anchor (KL 0.3 -> 0 at u300). ctrl: control for the wall arm, same anchor, no extra term"
+}

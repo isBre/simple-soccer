@@ -1,5 +1,5 @@
 {
- "state": "running",
+ "state": "cancelled",
  "spec": {
   "name": "control_long",
   "start": "out_5v5/ckpt/t48_u100.pt",
@@ -56,11 +56,19 @@
  "restarts": [],
  "control": null,
  "name": "control_long",
- "updated": 1794914274,
+ "updated": 1794914309,
  "update": 50,
  "train_pts": 2.12,
  "base_train": null,
  "bad_checks": 0,
  "recorded": [],
- "train_s": 1568
+ "train_s": 1568,
+ "stop_reason": "cancelled",
+ "finished": 1794914309,
+ "final_update": 50,
+ "verdict": null,
+ "cost_hours": {
+  "train": 0.44,
+  "eval": 0.0
+ }
 }

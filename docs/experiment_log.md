@@ -87,3 +87,6 @@ finished experiment and adjusts the queue.
 - Stopped as diverged at u194: fast 1.29 at u150 (z -0.4 vs start), h2h vs start 0.88; training points 1.88 -> 1.29. No full evaluation.
 - Meaning: the third unanchored run (after `minimal`, `wall`) that declines; kickstarting is the only thing that kept the net stable. Strong opponents are not a cure without an anchor.
 - Queue: cancelled `control_long` (1000 unanchored updates would be ~8 h on the same decline). Added `kickstart_strong`: from `x_kickstart_u600` (2.81), strong opponents + PFSP + decaying teacher KL (0.3 -> 0 at u400), lr 5e-5, 400 updates, judged against its start net. Still to come: `wall` on top of the anchored line; wider net.
+
+### Note 2026-11-17 16:20: queue after `kickstart_strong`
+`kickstart_strong` (u300 fast 2.62, paired +0.04 ± 0.27 vs its start) is flat so far; its full evaluation decides. Queued behind it, so the Pi never idles: `anchor_ctrl` (from kickstart u600, rule bots + self-play, KL 0.3 -> 0 over 300 updates) and `anchor_wall` (same plus w_wall 0.005, judged against `anchor_ctrl`). This re-tests the user-requested wall term on the stable anchored line; the earlier test on the unanchored line was lost to drift.
