@@ -3,6 +3,12 @@ extends Node
 ## Drop a new .json file into data/pitches, data/styles or data/teams (or into
 ## user://teams) and it shows up in the game - no code changes needed.
 
+## The two leagues every team belongs to (TeamDef.league; a team JSON may set "league" explicitly).
+const LEAGUES := [
+    {"id": "rules", "name": "Rule Based League"},
+    {"id": "rl", "name": "Reinforcement Learning League"},
+]
+
 var pitches: Dictionary = {}
 var styles: Dictionary = {}
 var teams: Dictionary = {}
@@ -61,12 +67,38 @@ func write_json(path: String, data: Variant) -> bool:
     return true
 
 
+## All teams grouped by league (in LEAGUES order), by name inside a league.
 func team_list() -> Array[TeamDef]:
     var out: Array[TeamDef] = []
     for t: TeamDef in teams.values():
         out.append(t)
-    out.sort_custom(func(a: TeamDef, b: TeamDef) -> bool: return a.name < b.name)
+    out.sort_custom(func(a: TeamDef, b: TeamDef) -> bool:
+        var la := league_index(a.league)
+        var lb := league_index(b.league)
+        return la < lb if la != lb else a.name < b.name)
     return out
+
+
+## Teams of one league, sorted by name.
+func league_teams(league_id: String) -> Array[TeamDef]:
+    var out: Array[TeamDef] = []
+    for t in team_list():
+        if t.league == league_id:
+            out.append(t)
+    return out
+
+
+## Position of a league in LEAGUES (unknown ids sort last).
+func league_index(league_id: String) -> int:
+    for i in LEAGUES.size():
+        if LEAGUES[i]["id"] == league_id:
+            return i
+    return LEAGUES.size()
+
+
+func league_name(league_id: String) -> String:
+    var i := league_index(league_id)
+    return str(LEAGUES[i]["name"]) if i < LEAGUES.size() else league_id.capitalize()
 
 
 func pitch_list() -> Array[PitchDef]:

@@ -13,6 +13,7 @@ var style_id := "balanced"
 var style: StyleDef = null       # resolved by Database
 var formations: Dictionary = {}  # "5" -> formation name (optional)
 var ml_model := ""               # optional res:// path of an MLP json: the whole team (keeper included) is driven by it
+var league := ""                 # Database.LEAGUES id; defaults to "rl" for net-driven teams, else "rules"
 var players: Array[PlayerDef] = []
 
 
@@ -29,6 +30,7 @@ static func from_dict(d: Dictionary) -> TeamDef:
     t.style_id = str(d.get("style", "balanced"))
     t.formations = d.get("formations", {})
     t.ml_model = str(d.get("ml_model", ""))
+    t.league = str(d.get("league", "rl" if t.ml_model != "" else "rules"))
     for pd in d.get("players", []):
         t.players.append(PlayerDef.from_dict(pd))
     return t
@@ -40,7 +42,11 @@ func to_dict() -> Dictionary:
         pl.append(p.to_dict())
     return {"id": id, "name": name, "short": short,
         "colors": {"primary": color_primary.to_html(false), "secondary": color_secondary.to_html(false)},
-        "kit": kit_pattern, "logo": logo, "style": style_id, "formations": formations, "ml_model": ml_model, "players": pl}
+        "kit": kit_pattern, "logo": logo, "style": style_id, "formations": formations, "ml_model": ml_model, "league": league, "players": pl}
+
+
+func league_name() -> String:
+    return Database.league_name(league)
 
 
 ## What the UI shows as the team's "style": a net-driven team has no rule-based style.

@@ -2,11 +2,13 @@ class_name QuickMatchScreen
 extends Control
 ## Configure and start a one-off match.
 
-var teams: Array[TeamDef] = []
+var teams: Array[TeamDef] = []     # every team (used by "Random teams")
+var side_teams: Array = [[], []]   # per side: the teams of the league picked on that side
 var pitches: Array[PitchDef] = []
 
 var pitch_opt: OptionButton
 var size_opt: OptionButton
+var league_opt: Array = []
 var team_opt: Array = []
 var form_opt: Array = []
 var mode_opt: OptionButton
@@ -29,7 +31,7 @@ func _ready() -> void:
     var mc := UIKit.margin(page, UIKit.SP_32)
     mc.set_anchors_preset(Control.PRESET_FULL_RECT)
     add_child(mc)
-    page.add_child(UIKit.screen_header("Quick Match", "Pick a pitch, two teams and how you want to play."))
+    page.add_child(UIKit.screen_header("Quick Match", "Pick a pitch, a league and a team for each side, and how you want to play."))
 
     var body := UIKit.hbox(UIKit.SP_24)
     body.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -65,6 +67,7 @@ func _ready() -> void:
     body.add_child(right)
     for i in 2:
         right.add_child(_team_panel(i))
+        _fill_teams(i, i)       # both sides start in the first league, on different teams
 
     _on_pitch_changed(pitch_opt.selected)
     _refresh_team_info(0)
@@ -76,7 +79,7 @@ func _ready() -> void:
     buttons.add_child(UIKit.spacer())
     buttons.add_child(UIKit.button("Random teams  (R)", _randomize_teams, Vector2(220, 52)))
     buttons.add_child(UIKit.primary_button("Kick Off", _start, Vector2(260, 52)))
-    team_opt[0].call_deferred("grab_focus")
+    league_opt[0].call_deferred("grab_focus")
 
 
 func _team_panel(i: int) -> Control:
@@ -86,10 +89,13 @@ func _team_panel(i: int) -> Control:
     logos.append(lg)
     v.add_child(lg)
 
-    var names: Array = []
-    for t in teams:
-        names.append(t.name)
-    var opt: Control = ArrowPicker.new().setup(names, i % teams.size(), func(_idx: int) -> void: _refresh_team_info(i), true)
+    var lnames: Array = []
+    for league: Dictionary in Database.LEAGUES:
+        lnames.append(league["name"])
+    var lo: Control = ArrowPicker.new().setup(lnames, 0, func(_idx: int) -> void: _on_league(i, 0))
+    league_opt.append(lo)
+    v.add_child(UIKit.field("League", lo))
+    var opt: Control = ArrowPicker.new().setup([], 0, func(_idx: int) -> void: _refresh_team_info(i), true)
     team_opt.append(opt)
     v.add_child(UIKit.field("Team", opt))
 
@@ -110,7 +116,26 @@ func _team_panel(i: int) -> Control:
     return c
 
 
-## Picks two different teams at random (formation fields follow via _refresh_team_info).
+## The team picked on side i.
+func _team(i: int) -> TeamDef:
+    return side_teams[i][team_opt[i].selected]
+
+
+## Lists the teams of the league picked on side i and selects the one at `pick`.
+func _fill_teams(i: int, pick: int) -> void:
+    side_teams[i] = Database.league_teams(Database.LEAGUES[league_opt[i].selected]["id"])
+    team_opt[i].clear()
+    for t: TeamDef in side_teams[i]:
+        team_opt[i].add_item(t.name)
+    team_opt[i].select(pick)
+
+
+func _on_league(i: int, pick: int) -> void:
+    _fill_teams(i, pick)
+    _refresh_team_info(i)
+
+
+## Picks two different teams at random from any league (the league pickers follow).
 func _randomize_teams() -> void:
     if teams.size() < 2:
         return
@@ -118,10 +143,12 @@ func _randomize_teams() -> void:
     var b := randi() % (teams.size() - 1)
     if b >= a:
         b += 1
-    team_opt[0].select(a)
-    team_opt[1].select(b)
-    _refresh_team_info(0)
-    _refresh_team_info(1)
+    for side in 2:
+        var t: TeamDef = teams[[a, b][side]]
+        league_opt[side].select(Database.league_index(t.league))
+        _fill_teams(side, 0)
+        team_opt[side].select(side_teams[side].find(t))
+        _refresh_team_info(side)
 
 
 func _selected_size() -> int:
@@ -145,13 +172,13 @@ func _refresh_formations() -> void:
         form_opt[i].clear()
         for f in opts:
             form_opt[i].add_item(str(f))
-        var t: TeamDef = teams[team_opt[i].selected]
+        var t := _team(i)
         var want := t.formation_for(_selected_size())
         form_opt[i].select(maxi(0, opts.find(want)))
 
 
 func _refresh_team_info(i: int) -> void:
-    var t: TeamDef = teams[team_opt[i].selected]
+    var t := _team(i)
     logos[i].set_team(t)
     style_lbl[i].text = t.style_label()
     rating_view[i].set_team(t)
@@ -159,8 +186,8 @@ func _refresh_team_info(i: int) -> void:
 
 
 func _start() -> void:
-    var a: TeamDef = teams[team_opt[0].selected]
-    var b: TeamDef = teams[team_opt[1].selected]
+    var a := _team(0)
+    var b := _team(1)
     var p: PitchDef = pitches[pitch_opt.selected]
     var n_size := _selected_size()
     var cfg := Database.make_config(a.id, b.id, p.id, n_size, DURATIONS[dur_opt.selected], randi())

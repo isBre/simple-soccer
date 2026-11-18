@@ -1,8 +1,9 @@
 class_name TournamentSetupScreen
 extends Control
 
-var teams: Array[TeamDef] = []
+var teams: Array[TeamDef] = []     # teams of the chosen league
 var pitches: Array[PitchDef] = []
+var league_opt: OptionButton
 var team_opt: Control
 var count_opt: OptionButton
 var format_opt: OptionButton
@@ -21,14 +22,14 @@ const StarsView := preload("res://scripts/ui/stars_view.gd")
 
 
 func _ready() -> void:
-    teams = Database.team_list()
+    teams = Database.league_teams(Database.LEAGUES[0]["id"])
     pitches = Database.pitch_list()
     var page := UIKit.vbox(UIKit.SP_16)
     var mc := UIKit.margin(page, UIKit.SP_32)
     mc.set_anchors_preset(Control.PRESET_FULL_RECT)
     add_child(mc)
     page.add_child(UIKit.screen_header("New Tournament",
-        "Pick your team, the format and how many teams take part (%d teams exist)." % teams.size()))
+        "Pick a league, your team, the format and how many teams take part."))
 
     var body := UIKit.hbox(UIKit.SP_24)
     body.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -37,22 +38,16 @@ func _ready() -> void:
     # --- left: settings
     var form := UIKit.vbox(UIKit.SP_12)
     form.custom_minimum_size = Vector2(420, 0)
-    var names: Array = []
-    for t in teams:
-        names.append(t.name)
-    team_opt = ArrowPicker.new().setup(names, 0, func(_i: int) -> void: _refresh(), true)
+    var lnames: Array = []
+    for lg: Dictionary in Database.LEAGUES:
+        lnames.append("%s  (%d teams)" % [lg["name"], Database.league_teams(lg["id"]).size()])
+    league_opt = UIKit.option(lnames, 0, _on_league)
+    form.add_child(UIKit.field("League", league_opt))
+    team_opt = ArrowPicker.new().setup([], 0, func(_i: int) -> void: _refresh(), true)
     form.add_child(UIKit.field("Your team", team_opt))
     format_opt = UIKit.option(Tournament.FORMAT_NAMES, 2, func(_i: int) -> void: pass)
-    form.add_child(UIKit.field("Format", format_opt))
-    var counts: Array = []
-    if teams.size() > 8:
-        counts.append("8 teams")
-    if teams.size() >= 16:
-        counts.append("16 teams")
-    if counts.is_empty():
-        counts.append("%d teams" % teams.size())
-    count_opt = UIKit.option(counts, 0, func(_i: int) -> void: pass)
-    form.add_child(UIKit.field("Teams in tournament", count_opt))
+    count_opt = UIKit.option(["-"], 0, func(_i: int) -> void: _sync_format())
+    form.add_child(_pair(UIKit.field("Format", format_opt), UIKit.field("Teams in tournament", count_opt)))
     var pnames: Array = []
     for p in pitches:
         pnames.append(p.name)
@@ -63,9 +58,8 @@ func _ready() -> void:
     pitch_opt = UIKit.option(pnames, default_pitch, _on_pitch)
     form.add_child(UIKit.field("Pitch", pitch_opt))
     size_opt = UIKit.option(["1v1", "2v2", "3v3", "4v4", "5v5"], 2, func(_i: int) -> void: pass)
-    form.add_child(UIKit.field("Team size", size_opt))
     dur_opt = UIKit.option(["1 minute", "2 minutes", "3 minutes"], 2, func(_i: int) -> void: pass)
-    form.add_child(UIKit.field("Match length", dur_opt))
+    form.add_child(_pair(UIKit.field("Team size", size_opt), UIKit.field("Match length", dur_opt)))
     var fcard := UIKit.card(form, "Settings")
     fcard.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
     body.add_child(fcard)
@@ -91,7 +85,7 @@ func _ready() -> void:
     body.add_child(scard)
 
     _on_pitch(pitch_opt.selected)
-    _refresh()
+    _on_league(0)
 
     var buttons := UIKit.hbox(UIKit.SP_12)
     page.add_child(buttons)
@@ -101,12 +95,60 @@ func _ready() -> void:
     team_opt.call_deferred("grab_focus")
 
 
+## Two form fields side by side, equal width.
+func _pair(a: Control, b: Control) -> Control:
+    var h := UIKit.hbox(UIKit.SP_12)
+    for c in [a, b]:
+        c.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+        h.add_child(c)
+    return h
+
+
 func _on_pitch(_i: int) -> void:
     var p: PitchDef = pitches[pitch_opt.selected]
     size_opt.select(clampi(p.recommended_size(), 1, 5) - 1)
 
 
+## Fills the team and team-count pickers with the chosen league's teams.
+func _on_league(i: int) -> void:
+    teams = Database.league_teams(Database.LEAGUES[i]["id"])
+    team_opt.clear()
+    for t in teams:
+        team_opt.add_item(t.name)
+    count_opt.clear()
+    for c in [4, 8, 16]:                    # knockout / groups need a power of two
+        if c < teams.size():
+            count_opt.add_item("%d teams" % c)
+    count_opt.add_item("%d teams (whole league)" % teams.size())
+    var default_count := count_opt.item_count - 1      # 8 teams when the league has more, else all
+    for k in count_opt.item_count:
+        if count_opt.get_item_text(k).begins_with("8 "):
+            default_count = k
+    count_opt.select(default_count)
+    _sync_format()
+    _refresh()
+
+
+## Knockout and groups need 4, 8 or 16 teams; any other count plays a league (round robin).
+func _sync_format() -> void:
+    var ko_ok := _is_pow2(_count())
+    for f in [Tournament.Format.KNOCKOUT, Tournament.Format.GROUPS]:
+        format_opt.set_item_disabled(f, not ko_ok)
+    if not ko_ok:
+        format_opt.select(Tournament.Format.LEAGUE)
+
+
+func _count() -> int:
+    return int(count_opt.get_item_text(count_opt.selected).split(" ")[0])
+
+
+static func _is_pow2(n: int) -> bool:
+    return n >= 4 and (n & (n - 1)) == 0
+
+
 func _refresh() -> void:
+    if teams.is_empty():
+        return
     var t: TeamDef = teams[team_opt.selected]
     logo.set_team(t)
     name_lbl.text = t.name
@@ -116,8 +158,10 @@ func _refresh() -> void:
 
 
 func _start() -> void:
+    if teams.size() < 2:
+        return
     var t: TeamDef = teams[team_opt.selected]
-    var count := int(count_opt.get_item_text(count_opt.selected).split(" ")[0])
+    var count := _count()
     var ids: Array = [t.id]
     var others: Array = []
     for x in teams:
@@ -134,6 +178,7 @@ func _start() -> void:
     var p: PitchDef = pitches[pitch_opt.selected]
     var tour := Tournament.create(format_opt.selected, ids, t.id, p.id, size_opt.selected + 1,
         DURATIONS[dur_opt.selected], randi() % 100000)
+    tour.title = "%s - %s" % [Database.league_name(t.league), tour.title]
     App.tournament = tour
     tour.save()
     App.show_screen(TournamentHubScreen.new())

@@ -38,8 +38,9 @@ There are no difficulty levels. A bot is exactly as good as its player's attribu
 
 ## Modes
 - Quick match: pitch, size (3v3 / 5v5), teams, duration, control (none / one player / whole team).
-- Teams browser: 16 fictional teams with logos, kits, rosters, play styles and a tier (Elite / Strong / Average / Weak).
-- Tournament: league, knockout, or groups + knockout (saved to `user://tournament.json`). Knockout draws: golden goal, then penalties.
+- Two leagues: the **Rule Based League** (16 fictional teams driven by the handmade AI styles) and the **Reinforcement Learning League** (the RL Teams, driven by trained nets). In Quick Match each side picks a league first, then a team from it (sides can be in different leagues).
+- Teams browser: teams grouped by league, with logos, kits, rosters, play styles and a tier (Elite / Strong / Average / Weak).
+- Tournament: pick a league, then league, knockout, or groups + knockout among its teams (saved to `user://tournament.json`). Knockout and groups need 4, 8 or 16 teams; other counts play a round robin. Knockout draws: golden goal, then penalties.
 - Report after each match: score, scorers, team stats, player grades (3.0-10.0), man of the match.
 
 ## Architecture
@@ -62,7 +63,7 @@ Physics is identical for every team. Attributes (finishing, passing, defending, 
 ## Adding content
 - Pitch: `data/pitches/<id>.json` (copy `classic.json`).
 - Style: `data/styles/<id>.json` (line_height, compactness, width, press, marking, directness, shoot_range, pass_bias, risk, keeper_sweep, forward_stay, support_dist, fluidity, attack_commit). `fluidity` 0 = fixed goalkeeper, 1 = whoever is rearmost keeps goal; `attack_commit` = how many players join the attack. Strategy params: `intercept` (run onto the ball path of opponent passes/shots), `counter_press` (extra chasers right after losing the ball), `long_shot` (shoot from range when the lane is open), `switch_play` (prefer passes to the far side). 16 styles ship: balanced, tiki_taka, high_press, park_the_bus, counter_attack, long_ball, wing_play, total_football, catenaccio, all_out_attack, gegenpress, sharpshooters, man_to_man, zone_trap, dribblers, switch_play.
-- Team: `data/teams/<id>.json` (also loaded from `user://teams`).
+- Team: `data/teams/<id>.json` (also loaded from `user://teams`). Optional `"league"`: `"rules"` or `"rl"`; without it a team with an `ml_model` joins the RL league, every other team the rule-based one.
 - Formation: `scripts/data/formations.gd`, slots `[role, fx, fy]`.
 - New `class_name` scripts need an editor rescan before `run_project` sees them.
 

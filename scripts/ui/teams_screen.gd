@@ -18,7 +18,7 @@ func _ready() -> void:
     add_child(mc)
     var head := UIKit.hbox(UIKit.SP_12)
     page.add_child(head)
-    head.add_child(UIKit.screen_header("Teams & Squads", "Identity, play style and squad attributes."))
+    head.add_child(UIKit.screen_header("Teams & Squads", "Identity, play style and squad attributes, by league."))
     head.add_child(UIKit.spacer())
     head.add_child(UIKit.ghost_button("Back", func() -> void: App.menu(), Vector2(140, 44)))
 
@@ -33,7 +33,16 @@ func _ready() -> void:
     lscroll.add_child(list)
     list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     body.add_child(lscroll)
+    var shown_league := ""
     for t in teams:
+        if t.league != shown_league:             # one section per league
+            shown_league = t.league
+            var n := Database.league_teams(t.league).size()
+            var h := UIKit.label("%s  (%d)" % [t.league_name().to_upper(), n], UIKit.FS_CAPTION, UIKit.MUTED)
+            if list.get_child_count() > 0:
+                h.custom_minimum_size.y = 36
+                h.vertical_alignment = VERTICAL_ALIGNMENT_BOTTOM
+            list.add_child(h)
         var row := UIKit.hbox(UIKit.SP_12)
         row.add_child(LogoView.new(t, 40))
         var b := UIKit.button(t.name, _show_team.bind(t), Vector2(230, 44))
@@ -63,7 +72,7 @@ func _show_team(t: TeamDef) -> void:
     head.add_child(LogoView.new(t, 110))
     var info := UIKit.vbox(4)
     info.add_child(UIKit.label(t.name, UIKit.FS_H1))
-    info.add_child(UIKit.label("%s  -  %s" % [t.short, t.style.name], UIKit.FS_BODY, UIKit.ACCENT))
+    info.add_child(UIKit.label("%s  -  %s  -  %s" % [t.short, t.style_label(), t.league_name()], UIKit.FS_BODY, UIKit.ACCENT))
     var d := UIKit.label(t.style_description(), UIKit.FS_BODY, UIKit.MUTED)
     d.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
     d.custom_minimum_size = Vector2(480, 0)
