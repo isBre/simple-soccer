@@ -826,3 +826,8 @@ $("#theme").addEventListener("click", () => {
 setThemeButton();
 poll();
 setInterval(poll, POLL_MS);
+// the kiosk keeps one page open for days: reload it when the dashboard's files changed on the Pi
+let pageVersion = null;
+setInterval(async () => {
+  try { const v = (await (await fetch("/api/version")).json()).v; if (pageVersion === null) pageVersion = v; else if (v !== pageVersion) location.reload(); } catch (e) {}
+}, 30000);

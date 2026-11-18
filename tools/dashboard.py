@@ -204,6 +204,9 @@ class Handler(BaseHTTPRequestHandler):
                 return self.api_v1(path, self.path.split("?", 1)[1] if "?" in self.path else "")
             if path == "/api/live":
                 return self.live()
+            if path == "/api/version":                              # the page reloads itself when the dashboard's files changed (the kiosk has no keyboard)
+                v = max(os.path.getmtime(f) for f in glob.glob(os.path.join(STATIC, "*")))
+                return self.send(json.dumps({"v": v}).encode(), "application/json")
             if path == "/api/live/opponents":
                 return self.send(json.dumps({"opponents": live_opponents(), "selected": live_selected()}).encode(), "application/json")
             if path == "/api/health":
