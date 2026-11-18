@@ -1,9 +1,10 @@
 # Experiment results
 
-Updated 2026-11-18 18:17. pts = league points per match (16 rule teams, both sides), gd = goal difference per match, mean ± standard error. Verdicts compare within one protocol (fast and full are never mixed), paired over identical matches when possible. `python3 rl/lab.py` gives the same data as JSON.
+Updated 2026-11-18 20:43. pts = league points per match (16 rule teams, both sides), gd = goal difference per match, mean ± standard error. Verdicts compare within one protocol (fast and full are never mixed), paired over identical matches when possible. `python3 rl/lab.py` gives the same data as JSON.
 
 | run | state | update | protocol | pts ± se | gd | GA | vs RL4 | vs RL5 | dir chg/s | idle % | verdict |
 |---|---|---|---|---|---|---|---|---|---|---|---|
+| anchor_corner | cancelled | 200 | fast/g2/d60 | 2.75 ± 0.14 | 1.71 | 0.0 | - | - | - | - |  |
 | anchor_ctrl | done | 300 | full/g1/d90 | 2.91 ± 0.09 | 2.28 | 0.16 | 0.94 | 0.69 | 11.75 | 3.0 | no difference (vs start:x_kickstart_u600) |
 | anchor_ctrl | done | 300 | fast/g2/d60 | 2.58 ± 0.19 | 1.46 | 0.12 | - | - | - | - |  |
 | anchor_wall | done | 300 | full/g1/d90 | 2.88 ± 0.09 | 2.34 | 0.28 | 1.38 | 0.06 | 11.61 | 2.0 | no difference (vs start:x_kickstart_u600) |
@@ -29,4 +30,4 @@ Updated 2026-11-18 18:17. pts = league points per match (16 rule teams, both sid
 | strong_opponents | diverged | 150 | fast/g2/d60 | 1.29 ± 0.26 | 0.08 | 0.96 | - | - | - | - |  |
 | wall | diverged | 150 | fast/g2/d60 | 0.96 ± 0.21 | -0.25 | 1.42 | - | - | - | - |  |
 
-Runs: anchor_corner (running), anchor_ctrl (done), anchor_wall (done), anchor_wall_strong (done), control_long (cancelled), control_seed11 (cancelled), kickstart (done), kickstart_persist (done), kickstart_strong (done), minimal (diverged), old_jit8 (imported), old_t46 (imported), old_t47 (imported), persist_mix (done), start:t48_u100 (imported), start:x_kickstart_u600 (imported), strong_opponents (diverged), team:RL Team 4 (imported), team:RL Team 5 (imported), wall (diverged)
+Runs: anchor_corner (cancelled), anchor_ctrl (done), anchor_wall (done), anchor_wall_strong (done), control_long (cancelled), control_seed11 (cancelled), kickstart (done), kickstart_persist (done), kickstart_strong (done), minimal (diverged), old_jit8 (imported), old_t46 (imported), old_t47 (imported), persist_mix (done), start:t48_u100 (imported), start:x_kickstart_u600 (imported), strong_opponents (diverged), team:RL Team 4 (imported), team:RL Team 5 (imported), wall (diverged)

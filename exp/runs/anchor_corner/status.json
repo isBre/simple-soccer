@@ -1,5 +1,5 @@
 {
- "state": "running",
+ "state": "cancelled",
  "spec": {
   "name": "anchor_corner",
   "start": "out_5v5/ckpt/x_kickstart_u600.pt",
@@ -67,11 +67,24 @@
  "restarts": [],
  "control": "anchor_wall_strong",
  "name": "anchor_corner",
- "updated": 1795022271,
- "update": 36,
- "train_pts": 2.88,
- "base_train": null,
+ "updated": 1795031014,
+ "update": 234,
+ "train_pts": 2.83,
+ "base_train": 2.9,
  "bad_checks": 0,
- "recorded": [],
- "train_s": 1390
+ "recorded": [
+  50,
+  100,
+  150,
+  200
+ ],
+ "train_s": 8798,
+ "stop_reason": "cancelled",
+ "finished": 1795031014,
+ "final_update": 225,
+ "verdict": null,
+ "cost_hours": {
+  "train": 2.44,
+  "eval": 0.37
+ }
 }
