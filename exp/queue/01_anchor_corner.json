@@ -1,0 +1,17 @@
+{
+ "name": "anchor_corner",
+ "start": "out_5v5/ckpt/x_kickstart_u600.pt",
+ "updates": 300,
+ "lr": 5e-05,
+ "rewards": {
+  "w_wall": 0.02,
+  "w_corner": 0.01
+ },
+ "control": "anchor_wall_strong",
+ "args": {
+  "teacher": "out_5v5/ckpt/jit8_best.pt",
+  "kl_coef": 0.3,
+  "kl_decay": 300
+ },
+ "notes": "anchor_wall_strong (the control: same start, anchor, w_wall 0.02) plus w_corner 0.01: penalty per decision to every learner while OUR team put the ball in a corner (last touch ours, ball within 150 px of both lines). Baseline from scouting: the ball is in a corner 23% of the time, 13-14% after our touch. Judge with lab.py compare + eval_checkpoint.py --mode scout (ball_corner_pct, ball_corner_ours_pct)."
+}

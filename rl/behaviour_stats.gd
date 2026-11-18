@@ -9,6 +9,7 @@ var results: Array = []
 var model_net: MLP = null          # optional --model <res:// json>: measure this net instead of the team's shipped one
 var remote_port := 0
 var greedy := false          # --greedy: the net plays its best move instead of sampling
+const CORNER_ZONE := 150.0      # the ball counts as "in a corner" within this many px of both the goal line and the side line
 const GX := 14               # heatmap grid (the RL team always attacks to the right)
 const GY := 8
 var mutex := Mutex.new()
@@ -41,7 +42,7 @@ func _run(i: int) -> void:
 	var sim := MatchSim.new(c)
 	sim.log_events = true
 	var sc := {"role": [], "pos": {"in": [], "out": []}, "n_phase": {"in": 0, "out": 0}, "shape": {"in": [0.0, 0.0, 0.0, 0.0], "out": [0.0, 0.0, 0.0, 0.0]},
-		"press": [0.0, 0.0, 0], "guarded": 0, "empty": 0, "deep_dist": 0.0, "n": 0, "tilt": 0, "own_half_ball": 0, "wall": 0.0}
+		"press": [0.0, 0.0, 0], "guarded": 0, "empty": 0, "deep_dist": 0.0, "n": 0, "tilt": 0, "own_half_ball": 0, "wall": 0.0, "corner": 0, "corner_own": 0}
 	for k in 5:
 		sc["role"].append([0, 0, 0, 0, 0])
 		sc["pos"]["in"].append([0.0, 0.0])
@@ -145,6 +146,10 @@ func _scout_tick(sc: Dictionary, sim: MatchSim, team: Array) -> void:
 	for p: SimPlayer in team:							# share of player time pressed against the outer wall
 		if absf(p.pos.x) >= sim.pitch.out_x - p.radius - 3.0 or absf(p.pos.y) >= sim.pitch.out_y - p.radius - 3.0:
 			sc["wall"] += 1.0 / 5.0
+	if absf(sim.ball.pos.x) > hw - CORNER_ZONE and absf(sim.ball.pos.y) > hh - CORNER_ZONE:      # the ball in a corner of the pitch
+		sc["corner"] += 1
+		if lt != null and lt.team == 0:
+			sc["corner_own"] += 1                                                               # ... and our team put it there (last touch)
 	var ball := Vector2(sim.ball.pos.x * ax / hw, sim.ball.pos.y / hh)
 	if ball.x < 0.0:
 		sc["own_half_ball"] += 1
@@ -197,7 +202,7 @@ func _scout_summary() -> Dictionary:
 	var pos := {"in": [], "out": []}
 	var nph := {"in": 0, "out": 0}
 	var shape := {"in": [0.0, 0.0, 0.0, 0.0], "out": [0.0, 0.0, 0.0, 0.0]}
-	var tot := {"n": 0, "guarded": 0, "empty": 0, "deep_dist": 0.0, "tilt": 0, "own_half_ball": 0, "possession": 0.0, "wall": 0.0}
+	var tot := {"n": 0, "guarded": 0, "empty": 0, "deep_dist": 0.0, "tilt": 0, "own_half_ball": 0, "possession": 0.0, "wall": 0.0, "corner": 0, "corner_own": 0}
 	var press := [0.0, 0.0, 0]
 	for k in 5:
 		role.append([0, 0, 0, 0, 0])
@@ -225,7 +230,7 @@ func _scout_summary() -> Dictionary:
 			nph[ph] += sc["n_phase"][ph]
 			for j in 4:
 				shape[ph][j] += sc["shape"][ph][j]
-		for key in ["n", "guarded", "empty", "deep_dist", "tilt", "own_half_ball", "wall"]:
+		for key in ["n", "guarded", "empty", "deep_dist", "tilt", "own_half_ball", "wall", "corner", "corner_own"]:
 			tot[key] += sc[key]
 		for j in 3:
 			press[j] += sc["press"][j]
@@ -282,6 +287,7 @@ func _scout_summary() -> Dictionary:
 		"field_tilt_pct": snappedf(100.0 * tot["tilt"] / maxf(nph["in"], 1), 0.1), "goal_guarded_pct": snappedf(100.0 * tot["guarded"] / n_t, 0.1),
 		"goal_empty_pct": snappedf(100.0 * tot["empty"] / n_t, 0.1), "deepest_to_goal_px": roundf(tot["deep_dist"] / n_t),
 		"at_wall_pct": snappedf(100.0 * tot["wall"] / n_t, 0.1),
+		"ball_corner_pct": snappedf(100.0 * tot["corner"] / n_t, 0.1), "ball_corner_ours_pct": snappedf(100.0 * tot["corner_own"] / n_t, 0.1),
 		"press_d1_px": roundf(press[0] / maxf(press[2], 1)), "press_d2_px": roundf(press[1] / maxf(press[2], 1)),
 		"ppda": snappedf(opp_build / maxf(def_high, 1), 0.01), "passes_match": snappedf(n_pass / nm, 0.1),
 		"pass_ok_pct": snappedf(100.0 * n_ok / maxf(n_pass, 1), 0.1), "progressive_match": snappedf(prog / nm, 0.1),

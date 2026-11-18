@@ -20,6 +20,11 @@ Not rewards but loss terms that proved essential:
 - **Teacher KL (kickstarting)**, `kl_coef` 0.2-0.5 towards jit8: the only thing that stopped the 46-number net drifting down. Unanchored runs (`minimal`, `wall`, `strong_opponents`) all declined; anchored ones stayed at 2.8-2.9.
 - **Learning rate 5e-5** with a 30-update warm-up (3e-4 and 1e-4 drifted without an anchor).
 
+## 1b. Being tested now
+| Term | Weight | What it does | Evidence |
+|---|---|---|---|
+| `w_corner` | 0.01 (run `anchor_corner`) | penalty to every learner per decision while our team put the ball in a corner (last touch ours, ball within 150 px of both lines) | the user's idea (2026-11-18). Scouting of `anchor_ctrl` / `anchor_wall_strong`: ball in a corner **22.9% / 23.4%** of the time (about twice the share of the pitch the corners cover), **13.4% / 14.4%** after our touch. Result pending: compared against `anchor_wall_strong` |
+
 ## 2. Unsure (never tested alone on a stable line, or tested only inside a mix)
 Parked in `exp/parked/`; `xga` goes first when they come back. The test belongs on the anchored line (start `kickstart` u600, KL on), one term per run against `anchor_ctrl`-style controls.
 | Term | Idea | What we know |

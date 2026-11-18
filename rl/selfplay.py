@@ -67,7 +67,7 @@ def make_cfgs(args):
             "match_mode": True, "duration": 90.0, "max_steps": 3200,
             "w_pass_prog": args.w_pass_prog, "w_pass_ok": args.w_pass_ok, "w_pass_fail": args.w_pass_fail,
             "pass_individual": bool(args.pass_individual), "w_recv": args.w_recv, "w_open": args.w_open, "w_key_pass": args.w_key_pass, "w_xa": args.w_xa, "w_space": args.w_space, "space_radius": args.space_radius, "w_kick": args.w_kick, "coop_cap": args.coop_cap, "random_start": args.random_start, "w_keeper": args.w_keeper, "w_jitter": args.w_jitter, "keeper_free": args.keeper_free,
-            "obs": args.obs, "shaping": args.shaping, "w_far": args.w_far, "far_radius": args.far_radius, "w_wall": args.w_wall,
+            "obs": args.obs, "shaping": args.shaping, "w_far": args.w_far, "far_radius": args.far_radius, "w_wall": args.w_wall, "w_corner": args.w_corner,
             "w_xg": args.w_xg, "xg_cap": args.xg_cap, "w_xga": args.w_xga, "w_win": args.w_win, "w_draw": args.w_draw, "w_tackle": args.w_tackle, "def_cap": args.def_cap,
             "w_goalside": args.w_goalside, "goalside_lane": args.goalside_lane, "w_opp_half": args.w_opp_half, "w_compact": args.w_compact,
             "compact_len": args.compact_len, "compact_wid": args.compact_wid}
@@ -124,6 +124,7 @@ def main():
     ap.add_argument("--w_jitter", type=float, default=0.0)
     ap.add_argument("--w_keeper", type=float, default=0.0)
     ap.add_argument("--shaping", type=float, default=1.0, help="weight of the ball shaping (ball towards the goal, teammate towards the ball); 0 = off")
+    ap.add_argument("--w_corner", type=float, default=0.0, help="penalty per decision while our team put the ball in a corner (last touch ours)")
     ap.add_argument("--w_wall", type=float, default=0.0, help="penalty per decision for a player pressed against the outer wall for 2+ decisions in a row")
     ap.add_argument("--w_far", type=float, default=0.0, help="penalty for an outfield player further than --far_radius px from the ball (the arena is 1280 x 600; full penalty at twice the radius)")
     ap.add_argument("--far_radius", type=float, default=600.0)

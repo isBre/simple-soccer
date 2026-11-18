@@ -84,6 +84,8 @@ var w_far := 0.0                 # penalty per decision for an outfield player f
 var far_radius := 600.0
 var w_jitter := 0.0               # penalty per decision when the move direction turns by more than ~60 degrees (anti-twitch)
 var w_wall := 0.0                # penalty per decision for a player pressed against the outer wall for 2+ decisions in a row (no reason to be there)
+var w_corner := 0.0              # penalty per decision (to every learner) while OUR team put the ball in a corner (last touch ours, ball within corner_zone px of both lines)
+var corner_zone := 150.0
 var wall_streak: Dictionary = {}  # uid -> consecutive decisions at the wall
 var prev_dir: Dictionary = {}     # uid -> last non-zero input_dir
 var term_sums: Dictionary = {}    # reward term -> summed per-agent mean contribution since the last read (rl_server command 'T')
@@ -143,6 +145,8 @@ func configure(c: Dictionary) -> void:
     w_jitter = float(c.get("w_jitter", w_jitter))
     w_far = float(c.get("w_far", w_far))
     w_wall = float(c.get("w_wall", w_wall))
+    w_corner = float(c.get("w_corner", w_corner))
+    corner_zone = float(c.get("corner_zone", corner_zone))
     obs_mode = str(c.get("obs", obs_mode))
     w_xg = float(c.get("w_xg", w_xg))
     xg_cap = float(c.get("xg_cap", xg_cap))
@@ -432,9 +436,10 @@ func _individual() -> PackedFloat32Array:
     out.resize(agents.size() + opp_agents.size())
     var credit := match_mode and pass_individual
     if w_kick == 0.0 and w_space == 0.0 and not credit and w_open == 0.0 and w_keeper == 0.0 and w_jitter == 0.0 and w_far == 0.0 \
-            and w_xg == 0.0 and w_tackle == 0.0 and w_goalside == 0.0 and w_wall == 0.0:
+            and w_xg == 0.0 and w_tackle == 0.0 and w_goalside == 0.0 and w_wall == 0.0 and w_corner == 0.0:
         return out
     var bp := sim.ball.pos
+    var ball_in_corner := absf(bp.x) > sim.pitch.half_w - corner_zone and absf(bp.y) > sim.pitch.half_h - corner_zone
     var n_learn := float(agents.size())
     # the carrier: the learner agent that last touched the ball and is next to it
     var carrier: SimPlayer = null
@@ -475,6 +480,9 @@ func _individual() -> PackedFloat32Array:
             if streak >= 2:
                 r -= w_wall
                 _acc("wall", -w_wall / n_learn)
+        if w_corner > 0.0 and ball_in_corner and sim.last_touch != null and sim.last_touch.team == 0:
+            r -= w_corner                                          # our team pushed the ball into a corner: nothing to gain there
+            _acc("corner", -w_corner / n_learn)
         if w_xg > 0.0 or w_tackle > 0.0:
             var cd := _def_vec(a)
             var pd: Array = prev_def.get(a.uid, cd)
