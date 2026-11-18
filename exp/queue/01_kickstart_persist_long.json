@@ -1,0 +1,15 @@
+{
+ "name": "kickstart_persist_long",
+ "start": "out_5v5/ckpt/x_kickstart_persist_u400.pt",
+ "updates": 600,
+ "lr": 5e-05,
+ "rewards": {},
+ "args": {
+  "teacher": "out_5v5/ckpt/jit8_best.pt",
+  "kl_coef": 0.12,
+  "kl_decay": 1000,
+  "opp_models": "out_5v5/ckpt/jit8_best.pt,data/models/rl_5v5_arena_v4.json,data/models/rl_5v5_arena_v5.json",
+  "pfsp": 0.75
+ },
+ "notes": "Continuation of kickstart_persist (u400: 2.94, best h2h vs RL4/RL5 so far, not yet significant). Same strong opponents + PFSP, teacher KL kept at 0.12 decaying slowly, lr 5e-5, 600 more updates. Does a longer run turn the small h2h edge into a real one?"
+}
