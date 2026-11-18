@@ -99,7 +99,7 @@ class Net:
 
 
 class RemoteNet:
-    """A net served by tools/net_server.py (the experiment pipeline: newest / best checkpoint, the dashboard's live opponent).
+    """A net served by rl/net_server.py (the experiment pipeline: newest / best checkpoint, the dashboard's live opponent).
     The server sends the input size on connect, then answers n_in float32 with 10 float32."""
 
     def __init__(self, port):
@@ -132,7 +132,7 @@ _cache_lock = threading.Lock()
 
 def load(spec):
     """spec: {"model": path} (a game-model JSON), {"dict": game model} (in memory, e.g. a self-play snapshot) or
-    {"port": n} (a running tools/net_server.py). Model files are cached."""
+    {"port": n} (a running rl/net_server.py). Model files are cached."""
     if "port" in spec:
         return RemoteNet(spec["port"])
     if "dict" in spec:

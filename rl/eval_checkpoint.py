@@ -1,6 +1,6 @@
 """Complete evaluation of one checkpoint, cheap enough to run next to training on a Raspberry Pi.
 
-Starts numpy net servers (tools/net_server.py) for the checkpoint and for the reference nets, then runs rl/evaluate.py:
+Starts numpy net servers (rl/net_server.py) for the checkpoint and for the reference nets, then runs rl/evaluate.py:
   1. league_eval      all 16 rule-based teams, both sides (pts/m, GF/GA per team, per tier, trained-against vs held-out teams)
   2. behaviour_stats  direction changes/s, kick presses, spacing, keeper distance, passes, key passes (RL net vs rule bots)
   3. h2h_eval         head to head against RL Team 4 and against the weights the run started from (RL Team 5)
@@ -33,7 +33,7 @@ def free_port():
 
 def start_server(model):
     port = free_port()
-    proc = subprocess.Popen([sys.executable, os.path.join(ROOT, "tools", "net_server.py"), "--port", str(port), "--model", os.path.join(ROOT, model)],
+    proc = subprocess.Popen([sys.executable, os.path.join(ROOT, "rl", "net_server.py"), "--port", str(port), "--model", os.path.join(ROOT, model)],
                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     for _ in range(100):
         try:
@@ -44,7 +44,7 @@ def start_server(model):
     raise RuntimeError("net server did not start for " + model)
 
 
-def godot(scene, args, timeout=3 * 3600):
+def run_eval(scene, args, timeout=3 * 3600):
     """Output lines of an evaluation (rl/evaluate.py: league_eval, behaviour_stats, h2h_eval; played by the Python match core
     in parallel processes). A hung run is killed after `timeout` (otherwise it would block every later evaluation)."""
     cmd = [sys.executable, os.path.join(ROOT, "rl", "evaluate.py"), scene] + args
@@ -119,18 +119,18 @@ def main():
         if scout:
             refs = []
         else:
-            lines += ["# league"] + [l for l in godot("league_eval", ["--model", res_model, "--remote", str(port), "--games", str(a.games), "--duration", str(a.duration)] + (["--stride", "3"] if fast else [])) if keep.match(l)]
+            lines += ["# league"] + [l for l in run_eval("league_eval", ["--model", res_model, "--remote", str(port), "--games", str(a.games), "--duration", str(a.duration)] + (["--stride", "3"] if fast else [])) if keep.match(l)]
         if not fast:
-            lines += ["# behaviour"] + [l for l in godot("behaviour_stats", ["--remote", str(port)]) if behaviour.match(l)]
+            lines += ["# behaviour"] + [l for l in run_eval("behaviour_stats", ["--remote", str(port)]) if behaviour.match(l)]
         if not fast and not scout:
             lines += ["# greedy (best move instead of sampling)"]
-            lines += ["greedy " + l for l in godot("league_eval", ["--model", res_model, "--remote", str(port), "--games", str(a.games), "--duration", str(a.duration), "--stride", "2", "--greedy"]) if keep.match(l)]
-            lines += ["greedy " + l for l in godot("behaviour_stats", ["--remote", str(port), "--greedy"]) if re.match(r"^(RL Team|rule-based)", l)]
+            lines += ["greedy " + l for l in run_eval("league_eval", ["--model", res_model, "--remote", str(port), "--games", str(a.games), "--duration", str(a.duration), "--stride", "2", "--greedy"]) if keep.match(l)]
+            lines += ["greedy " + l for l in run_eval("behaviour_stats", ["--remote", str(port), "--greedy"]) if re.match(r"^(RL Team|rule-based)", l)]
         lines += ["# head to head"]
         for name, ref in refs:
             rproc, rport = start_server(ref)
             servers.append(rproc)
-            lines += [l for l in godot("h2h_eval", ["--a", str(port), "--b", str(rport), "--name", name, "--games", str(a.h2h_games), "--duration", str(a.duration)]) if l.startswith(("H2H", "MATCH "))]
+            lines += [l for l in run_eval("h2h_eval", ["--a", str(port), "--b", str(rport), "--name", name, "--games", str(a.h2h_games), "--duration", str(a.duration)]) if l.startswith(("H2H", "MATCH "))]
     finally:
         for p in servers:
             p.terminate()

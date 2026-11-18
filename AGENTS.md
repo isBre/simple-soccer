@@ -1,26 +1,27 @@
 # Agents: how to run and judge RL experiments here
 
 This repository trains 5v5 soccer nets with PPO on a Raspberry Pi 4 and runs experiments unattended. If you are an AI agent working
-on the experiments, start here. People: the same applies; the dashboard is at `http://<pi-address>:8080`.
+on the experiments, start here. People: the same applies; the dashboard (the Lab area of the web app) is at `http://<pi-address>:8080`.
 
 ## Read first
 - `docs/rewards.md`: every reward term sorted into beneficial / unsure / not good, with the evidence (update it after each review).
 - `docs/experiment_log.md`: history, **standing decisions** (do not violate them without asking the user), conclusions, reviews.
 - `exp/schema.json`: what every metric means, its unit and direction, the evaluation protocols and the comparison rules.
 - The match itself (physics, rules, stats, AI) is the Python core `soccer/`; training (`rl/env.py`) and evaluations
-  (`rl/evaluate.py`) run on it without Godot. Godot is only the UI (and the live viewer). `tests/` checks the core against
+  (`rl/evaluate.py`) and the Live demo match (`lab/live.py`) run on it. The web app (`web/app.py`, port 8080) has two areas: Game (the
+  playable game, back end `game/`) and Lab (this pipeline's dashboard). There is no Godot any more; `tests/` checks the core against
   the Godot implementation it replaced (README "Tests").
 
 ## Look (read-only, compact JSON)
 ```
-python3 rl/lab.py status                  # Pi + runner + running experiment (progress, ETA, stalled?) + last reboot
-python3 rl/lab.py runs                    # every run: what it changed, state, stop reason, verdict, cost
-python3 rl/lab.py run NAME --tail 20      # one run in detail (evaluations, training / PPO / reward-term tail, config)
-python3 rl/lab.py evals --kind full       # evaluation records (filters: --run, --kind, --protocol)
-python3 rl/lab.py best                    # checkpoints ranked by the lower 95% bound of league points (one protocol)
-python3 rl/lab.py compare A B             # paired difference A - B with se, z, p, MDE and a verdict (same protocol only)
-python3 rl/lab.py ablation                # each finished run vs its reference, Holm-corrected over the batch
-python3 rl/lab.py events --since 2026-11-16T20:00   # what happened (starts, resumes, stops, evaluations, reboots)
+python3 lab/lab.py status                  # Pi + runner + running experiment (progress, ETA, stalled?) + last reboot
+python3 lab/lab.py runs                    # every run: what it changed, state, stop reason, verdict, cost
+python3 lab/lab.py run NAME --tail 20      # one run in detail (evaluations, training / PPO / reward-term tail, config)
+python3 lab/lab.py evals --kind full       # evaluation records (filters: --run, --kind, --protocol)
+python3 lab/lab.py best                    # checkpoints ranked by the lower 95% bound of league points (one protocol)
+python3 lab/lab.py compare A B             # paired difference A - B with se, z, p, MDE and a verdict (same protocol only)
+python3 lab/lab.py ablation                # each finished run vs its reference, Holm-corrected over the batch
+python3 lab/lab.py events --since 2026-11-16T20:00   # what happened (starts, resumes, stops, evaluations, reboots)
 ```
 Style / tactics: every full evaluation (and `python3 rl/eval_checkpoint.py --model M --out F --mode scout`, ~2 min) stores a `scout`
 summary: possession, field tilt, PPDA, pressing distances, how often the goal is guarded or empty, shape by depth rank in and out of
@@ -31,17 +32,17 @@ Every response is `{"schema_version", "generated_at", "data"}`; errors are `{"er
 
 ## Act (local files only; every write is logged in exp/audit.jsonl)
 ```
-python3 rl/lab.py queue list
-python3 rl/lab.py queue validate spec.json       # checks name, start checkpoint, option names
-python3 rl/lab.py queue add spec.json [--position 1]
-python3 rl/lab.py queue move NAME --position 1
-python3 rl/lab.py queue cancel NAME              # running: stops within 30 s ('cancelled'); queued: moved to exp/parked/
+python3 lab/lab.py queue list
+python3 lab/lab.py queue validate spec.json       # checks name, start checkpoint, option names
+python3 lab/lab.py queue add spec.json [--position 1]
+python3 lab/lab.py queue move NAME --position 1
+python3 lab/lab.py queue cancel NAME              # running: stops within 30 s ('cancelled'); queued: moved to exp/parked/
 ```
 A spec: `{"name": "xga", "start": "out_5v5/ckpt/t48_u100.pt", "updates": 300, "lr": 5e-5, "rewards": {"w_xga": 2.0},
 "args": {"seed": 11}, "control": "minimal", "notes": "why"}`. `rewards` override the minimal set and `args` the training defaults
-(`rl/tracker.py`: MINIMAL, DEFAULTS); any `rl/selfplay.py` option is allowed. Names are unique forever (a used name is refused).
+(`lab/tracker.py`: MINIMAL, DEFAULTS); any `rl/selfplay.py` option is allowed. Names are unique forever (a used name is refused).
 `control` = the run this one is judged against (same update, same protocol); without it the start net is the reference.
-The runner (`rl/exp_runner.py`, service `soccer-exp`) trains the queue one spec at a time, fast-checks every 50 updates, stops early on
+The runner (`lab/exp_runner.py`, service `soccer-exp`) trains the queue one spec at a time, fast-checks every 50 updates, stops early on
 divergence / regression / cancel, then runs full evaluations (last checkpoint and the best fast check) and writes the verdict.
 
 ## Judge correctly
@@ -55,7 +56,7 @@ divergence / regression / cancel, then runs full evaluations (last checkpoint an
 ## Health
 - `lab.py status` shows `stalled` (no training output for 15 min outside an evaluation) and `last_reboot` (last health sample before it).
 - `logs/pi_health.log`: one line every 10 s (ISO time, boot id, throttling, temperature, load, memory). `journalctl -b -1` for the kernel side.
-- Services: `soccer-exp` (runner), `soccer-dashboard` (port 8080), `soccer-health`, `soccer-oppnet` (net server 7304 for the Live opponent). The hardware watchdog reboots a frozen Pi.
+- Services: `soccer-exp` (runner), `soccer-dashboard` (port 8080), `soccer-health` (units in `lab/systemd/`; deploy steps in `lab/README.md`). The hardware watchdog reboots a frozen Pi.
 
 ## Commit
 Results, specs and the notebook are versioned: `git -c user.name=<owner> -c user.email=<owner email> commit` (the Pi has no global

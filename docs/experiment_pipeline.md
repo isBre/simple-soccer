@@ -14,9 +14,9 @@ collected in one place that both people and the agent can read, and a web page o
 |---|---|---|
 | Safety | `rl/selfplay.py`, systemd watchdog | learning step uses 2 threads; a frozen Pi reboots itself in ~15 s |
 | Evaluation | `rl/eval_checkpoint.py` (`--mode fast|full`, `--seed`) | paired seeds, ladder of fixed opponents, goal difference with error |
-| Tracker | `rl/tracker.py`, `exp/` | one record per run and per evaluation, readable by humans, the agent and the web page |
-| Runner | `rl/exp_runner.py` + systemd service | takes the next spec from `exp/queue/`, trains, evaluates, decides, repeats; resumes after reboot |
-| Dashboard | `tools/dashboard.py` | read-only web page on port 8080, reachable from the local network (service `soccer-dashboard`) |
+| Tracker | `lab/tracker.py`, `exp/` | one record per run and per evaluation, readable by humans, the agent and the web page |
+| Runner | `lab/exp_runner.py` + systemd service | takes the next spec from `exp/queue/`, trains, evaluates, decides, repeats; resumes after reboot |
+| Dashboard | `lab/dashboard.py` (API), `web/` (pages, server) | the Lab area of the web app on port 8080, reachable from the local network (service `soccer-dashboard`, `web/app.py`) |
 | Agent loop | scheduled wake-ups | the agent reads `exp/results.md`, writes the next spec, leaves a summary |
 
 ## Experiment spec (`exp/queue/<NN>_<name>.json`)
@@ -52,7 +52,7 @@ An optional mirror to `mlflow-skinny` (no server, writes the standard `mlruns/` 
 to another machine and run `mlflow ui` there to browse it. The full MLflow server is not installed on the Pi (memory).
 
 ## Dashboard
-`python3 tools/dashboard.py` serves a self-refreshing page on `0.0.0.0:8080`: current run and queue, a table of finished runs
+`python3 web/app.py` serves a self-refreshing page on `0.0.0.0:8080`: current run and queue, a table of finished runs
 with verdicts, charts of strength over updates (inline SVG, no internet needed), the Pi health log. It is read-only and has no
 login: use it on a trusted network only.
 
@@ -66,4 +66,4 @@ goal-side positioning, compactness, too-far-from-ball, xG for, tackles. If the P
 1. safety changes, 2. evaluation (fast/full, seeds, ladder), 3. tracker + runner + service, 4. dashboard, 5. first queue, 6. docs and tests.
 
 ## Status
-Built and running as services (`tools/systemd/`). The live viewer is optional (`--viewer`): it costs ~900 MB and a core and the Pi froze while it ran, so unattended runs go without it.
+Built and running as services (`lab/systemd/`). The live viewer is optional (`--viewer`): it costs ~900 MB and a core and the Pi froze while it ran, so unattended runs go without it.

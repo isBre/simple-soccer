@@ -4,9 +4,14 @@
 
 # Simple Soccer
 
-A Haxball-style football game for Godot 4.6 built for AI experiments: custom 60 Hz Haxball physics, data-driven pitches/teams/styles, rule-based AI, per-player stats and grades, and tournaments.
+A Haxball-style football game in the browser, built for AI experiments: custom 60 Hz Haxball physics, data-driven pitches/teams/styles, rule-based and reinforcement-learning AI, per-player stats and grades, and tournaments.
 
-Run the project and the main menu opens (`res://scenes/main.tscn`).
+```bash
+python3 web/app.py
+```
+
+Then open <http://localhost:8080/#/game> (from another computer: `http://<this machine>:8080`). It needs Python 3 with numpy; the
+same page has the **Lab** (the experiment dashboard) next to the **Game**. On the Raspberry Pi the service `soccer-dashboard` runs it.
 
 ## Screenshots
 
@@ -19,11 +24,11 @@ Run the project and the main menu opens (`res://scenes/main.tscn`).
 ![Match report](docs/screenshots/report.png)
 *Match report: score, scorers, team stats and a 3.0-10.0 grade for every player.*
 
-**UI work: follow `DESIGN.md`** (tokens, components, screen layouts, rollout plan).
+**UI work: follow [docs/design.md](docs/design.md)** (tokens, components, screen layouts). The screenshots and GIFs were captured from the earlier Godot version of the game; the browser game draws the same screens.
 
 ## Match gallery
 
-Goals from different pitches, sizes and teams (all AI vs AI, recorded with `tools/capture_gifs.gd`):
+Goals from different pitches, sizes and teams (all AI vs AI):
 
 | | |
 |---|---|
@@ -31,7 +36,7 @@ Goals from different pitches, sizes and teams (all AI vs AI, recorded with `tool
 | ![Big 4v4](docs/screenshots/big_4v4.gif)<br>**Big pitch 4v4**: Arrows vs Bulls | ![Pillars 5v5](docs/screenshots/pillars_5v5.gif)<br>**Big with pillars 5v5**: Rose vs Tide |
 
 ## Controls
-Arrows/WASD move, X/Space kick, Q switch player (Team mode), T sim speed, Esc/P pause, M quit match, Enter continue after the final whistle.
+Arrows/WASD move, X/Space kick, Q switch player (Team mode), T sim speed (x1 / x2 / x4 / x8), Esc/P pause, M (while paused) quit the match, Enter continue after the final whistle. In the menus: Left / Right change a focused picker, Enter starts, Esc goes back, R picks random teams in Quick Match.
 
 ## Team strength & kickoff
 There are no difficulty levels. A bot is exactly as good as its player's attributes (`soccer/ai/__init__.py` `attach_attributes`: reaction -> perception delay, finishing/passing -> aim error, positioning -> position noise, defending -> marking, passing/positioning/reaction -> decision speed), identically for allies and opponents. Strong teams are teams with strong players (16 teams span ~55 to ~84 base rating, 4 per tier, see `tools/generate_data.py`). Kickoffs use a random taker, direction and short delay (seeded by the match seed).
@@ -40,51 +45,60 @@ There are no difficulty levels. A bot is exactly as good as its player's attribu
 - Quick match: pitch, size (3v3 / 5v5), teams, duration, control (none / one player / whole team).
 - Two leagues: the **Rule Based League** (16 fictional teams driven by the handmade AI styles) and the **Reinforcement Learning League** (the RL Teams, driven by trained nets). In Quick Match each side picks a league first, then a team from it (sides can be in different leagues).
 - Teams browser: teams grouped by league, with logos, kits, rosters, play styles and a tier (Elite / Strong / Average / Weak).
-- Tournament: pick a league, then league, knockout, or groups + knockout among its teams (saved to `user://tournament.json`). Knockout and groups need 4, 8 or 16 teams; other counts play a round robin. Knockout draws: golden goal, then penalties.
+- Tournament: pick a league, then league, knockout, or groups + knockout among its teams (saved in the browser, so it continues where you left it). Knockout and groups need 4, 8 or 16 teams; other counts play a round robin. Knockout draws: golden goal, then penalties.
 - Report after each match: score, scorers, team stats, player grades (3.0-10.0), man of the match.
 
 ## Architecture
-The **match core** is Python (`soccer/`): physics, match rules, touches and stats, grades, the AI of rule-based and
-neural-net teams. **Godot is the UI on top**: menus, quick match, tournaments, the team browser, drawing the match and
-reading the keyboard. Godot never decides anything about a match; it asks the core.
-- `soccer/` the match core (no Godot): `data.py` (pitches, styles, teams, formations, line-ups), `match.py` (the
-  simulation, 60 ticks/s), `stats.py`, `rating.py`, `rng.py` (Godot's random generator, bit for bit), `ai/` (`rules.py`
-  team brain and rule bots, `nets.py` net teams and observations), `server.py` (what Godot talks to)
-- `rl/` training (`env.py`, `client.py`, `selfplay.py`, `ppo.py`) and evaluations (`evaluate.py`), all on the core, no Godot
-- `scripts/core/` the UI's view of a match: `MatchClient` (plays a match on the server and mirrors what to draw),
-  `SimBatch` (tournament rounds in parallel), `MatchConfig`, `PitchDef`, `Disc` / `SimPlayer` (what is drawn)
-- `scripts/data/` PlayerDef, TeamDef, StyleDef, Formations, Database (autoload): the data as the UI shows it
-- `scripts/tournament/`, `scripts/view/`, `scripts/ui/` tournaments, the match screen, menus
-- `data/{pitches,styles,teams}/*.json` (regenerated by `tools/generate_data.py`, seeded; style tuning lives there) and
-  `data/formations.json`, read by both the core and the UI
-- `tests/` the core against the Godot implementation it replaced (see "Tests")
+Four parts, each using the one below it:
+
+```
+web/      the web app: one server (app.py) and the page, with two areas: Game and Lab
+game/     the game's back end: catalog, match setup, tournaments, live matches (the pages are web/game.js)
+lab/      experiments on the Pi: queue, runner, Lab API, live demo match, agent CLI (the pages are web/lab.js)
+rl/       training and evaluation of the net teams (PPO, environment, league / head-to-head / scouting)
+soccer/   the match core (Python): physics, rules, stats, grades, rule-based and net AI
+data/     pitches, styles, teams, formations, shipped nets (JSON)
+```
+
+- `soccer/` (no UI): `data.py` (pitches, styles, teams, formations, line-ups, kit colours), `match.py` (the simulation,
+  60 ticks/s), `stats.py`, `rating.py`, `rng.py` (Godot's random generator, bit for bit), `ai/` (`rules.py` team brain and
+  rule bots, `nets.py` net teams and observations).
+- `game/`: `api.py` (catalog, a match setup -> `MatchConfig`, whole matches simulated on all cores), `tournament.py`
+  (fixtures, standings, statistics), `session.py` (a live match over a WebSocket), `routes.py` (the HTTP API).
+- `web/`: `app.py` (the server, standard library only: static files, `/api/game/...`, `/ws/match`, and the Lab's API from
+  `lab/dashboard.py`), `ws.py` (a minimal WebSocket), `index.html` (the shell with the Game / Lab switch), `game.js` +
+  `game.css` + `draw.js` (the game: menus, match renderer, logos and kits), `lab.js` + `style.css` (the Lab).
+- `rl/` ([rl/README.md](rl/README.md)): `env.py`, `client.py`, `selfplay.py`, `ppo.py`, `distill.py`, `evaluate.py`,
+  `eval_checkpoint.py`, `export_team.py`, `net_server.py`.
+- `lab/` ([lab/README.md](lab/README.md)): `exp_runner.py`, `tracker.py`, `lab.py`, `dashboard.py` (Lab API), `live.py`,
+  `systemd/`. Results and specs live in `exp/`, checkpoints in `out_5v5/`, logs in `logs/`.
+- `tests/` the core and the game against the Godot implementation they replaced, and the web app (see "Tests"); `tools/`
+  `bench.py` (core speed), `generate_data.py` (regenerates `data/`, seeded; style tuning lives there); `docs/` notebook,
+  rewards, pipeline design, UI design guide, old results.
 
 ### Bot quality and team AI (how a team gets strong or weak)
 - Per player (`soccer/ai/__init__.py`): reaction -> perception delay, finishing/passing -> aim error, positioning -> position noise, defending -> marking tightness and lane cover, vision (passing+positioning+reaction) -> decision speed, how clean a pass lane must be, and shot-lane choice.
 - Ball carrier (`soccer/ai/rules.py` `StyleBot._decide_action`): shoots at the goal-mouth point whose line is furthest from every opponent (keeper included), takes longer shots when the lane is open, dribbles by scoring 7 headings against opponents' positions and momentum, and rates passes by receiver space plus whether an opponent can reach the lane before the ball (`_pass_margin`, ball travel time from the real kick speed and damping).
 - Ball physics is fixed (a kick adds exactly 5 px/tick to the ball's current velocity, damping 0.99/tick), so the bots predict the ball: `intercept` (`soccer/ai/rules.py`) finds the earliest point on the ball's path a player can reach (chasers run to it, and an off-ball *interceptor* is sent onto an opponent's pass/shot, `style.intercept`); `_compensated_dir` corrects the kick direction for the ball's velocity so passes/shots on a moving ball go where intended.
 - Game management (`TeamBrain.urgency`): in the last ~45 % of the match a team that is behind pushes up, shoots earlier and presses with one more player; a team that is ahead drops deeper.
-- Team strength comes from `tools/generate_data.py` (`base`). The UI shows the team rating (average of the best 5 players) as a number with 0-5 stars (`TeamDef.stars`). Teams are picked with `<` / `>` pickers (Left / Right keys) instead of dropdowns.
+- Team strength comes from `tools/generate_data.py` (`base`). The UI shows the team rating (average of the best 5 players) as a number with 0-5 stars (`game/api.py` `stars`). Teams are picked with `<` / `>` pickers (Left / Right keys) instead of dropdowns.
 
 Physics is identical for every team. Attributes (finishing, passing, defending, positioning, reaction) and styles only change AI behaviour.
 
 ## Adding content
 - Pitch: `data/pitches/<id>.json` (copy `classic.json`).
 - Style: `data/styles/<id>.json` (line_height, compactness, width, press, marking, directness, shoot_range, pass_bias, risk, keeper_sweep, forward_stay, support_dist, fluidity, attack_commit). `fluidity` 0 = fixed goalkeeper, 1 = whoever is rearmost keeps goal; `attack_commit` = how many players join the attack. Strategy params: `intercept` (run onto the ball path of opponent passes/shots), `counter_press` (extra chasers right after losing the ball), `long_shot` (shoot from range when the lane is open), `switch_play` (prefer passes to the far side). 16 styles ship: balanced, tiki_taka, high_press, park_the_bus, counter_attack, long_ball, wing_play, total_football, catenaccio, all_out_attack, gegenpress, sharpshooters, man_to_man, zone_trap, dribblers, switch_play.
-- Team: `data/teams/<id>.json` (also loaded from `user://teams`). Optional `"league"`: `"rules"` or `"rl"`; without it a team with an `ml_model` joins the RL league, every other team the rule-based one.
+- Team: `data/teams/<id>.json`. Optional `"league"`: `"rules"` or `"rl"`; without it a team with an `ml_model` joins the RL league, every other team the rule-based one.
 - Formation: `data/formations.json`, slots `[role, fx, fy]`.
-- New `class_name` scripts need an editor rescan before `run_project` sees them.
 
-## How Godot plays a match (`soccer/server.py`)
-`MatchClient` (scripts/core/match_client.gd) sends the match spec (pitch, both teams, styles, rules, seed, nets) to the match
-server and then, 60 times a second, the keyboard; it gets back what to draw (positions, score, clock, goal and kickoff
-state, goal events). Tournament rounds send whole matches (`MatchClient.run`) and get the result back.
-- The game starts the server itself when nothing listens on port 7330 (`$SOCCER_PORT`; interpreter: `$SOCCER_PYTHON`, else
-  the first `python3` that has numpy; log in `user://match_server.log`). It exits after 10 idle minutes, or as soon as a
-  file in `soccer/` changes (the next match starts the new code). Each match gets its own forked process, so a tournament
-  round uses all cores.
-- A net plays a team through `MatchConfig.nets[team]` (`{"model": path}` or `{"port": n}` for a running
-  `tools/net_server.py`); a team with `ml_model` in its JSON gets its net automatically.
+## How the browser plays a match (`game/session.py`)
+The page opens a WebSocket (`/ws/match`) and sends the match setup (teams, pitch, size, length, seed, control, formations).
+The server builds the match on the core and plays it in real time: 60 ticks a second, each one sent to the page (positions,
+score, clock, goal and kickoff state, goal events); the page sends the keys back when they change. At every kickoff the
+match is held for 130 ticks while the camera zooms in, as in the Godot game. After the final whistle the server sends the
+result, which the report shows. Tournament rounds are simulated in one request (`/api/game/tournament`, all cores).
+- A net plays a team through `MatchConfig.nets[team]` (`{"model": path}`, `{"dict": model}` or `{"port": n}` for a running
+  `rl/net_server.py`); a team with `ml_model` in its JSON gets its net automatically.
 - Speed (`python3 tools/bench.py`, on a Mac): rule-vs-rule 5v5 about 10,600 ticks/s (177x real time), the training
   environment about 5,700 steps/s per process. The Godot implementation did about 7,200 and 3,400.
 
@@ -97,15 +111,19 @@ Godot first, recordings in $SOCCER_REC):
 - `tests/test_match.py`: 17 matches (all sizes, every pitch plus one with extra walls, net teams, a human player in single and
   team control, overtime, shootouts, score limit), tick by tick: Python loads Godot's complete state, steps once with the
   same AI inputs and must reach Godot's next state (positions within float32 rounding, everything else equal).
-  About 86,000 ticks and 44 million values: no mismatch.
+  About 61,000 ticks and 29 million values: no mismatch.
 - `tests/test_env.py`: 7 training environments with every reward term, step by step (rewards, resets, random layouts,
   ghosts, observations). 17,000 steps: identical except one contact decided at exactly touching distance, where Godot's
   32-bit and Python's 64-bit positions round to opposite sides (reported as a precision flip).
 - `tests/test_evaluate.py`: league, head-to-head and behaviour / scouting reports, line for line.
+- `tests/test_tournament.py`: 8 tournaments of every format played with the same made-up results in the Godot game's
+  `Tournament` and in `game/tournament.py`: teams, fixtures, match seeds, standings and statistics identical (254 matches).
+- `tests/test_web.py` (no Godot needed): the web app serves its pages and APIs, a match played live over the WebSocket ends
+  exactly like the same setup simulated in one go, the keys move the player, a tournament can be created, played and simulated.
 The AI itself was checked earlier the same way (46,250 rule-bot and 12,422 net decisions identical).
 
 ## Experiments
-RL experiments run unattended on the Raspberry Pi through a queue (`exp/queue/`), a runner service and a web dashboard on port 8080: see [rl/README.md](rl/README.md#experiment-pipeline-rlexp_runnerpy-exp-toolsdashboardpy) and [docs/experiment_pipeline.md](docs/experiment_pipeline.md).
+RL experiments run unattended on the Raspberry Pi through a queue (`exp/queue/`), a runner service and a web dashboard on port 8080: see [lab/README.md](lab/README.md) and [docs/experiment_pipeline.md](docs/experiment_pipeline.md).
 
 ## Machine learning
 
@@ -116,15 +134,10 @@ The RL teams are trained with PPO in Python (`rl/`, see [rl/README.md](rl/README
 The earlier GDScript experiments (imitation learning, DAgger and evolution strategies against the rule bots) are in the git
 history before the move of the AI to Python.
 
-**Live training viewer, Raspberry Pi notes:** see `rl/README.md` (`tools/watch_training.tscn` shows matches of the newest checkpoint with a training sidebar; `tools/net_server.py` serves the newest / best checkpoint and the dashboard's opponent; `--w_jitter` anti-twitch reward).
+**Raspberry Pi notes:** `rl/README.md` (setup, `--w_jitter` anti-twitch reward); the Lab's Live page plays the newest checkpoint of the running experiment (`lab/live.py`).
 
 ## Team control mode
 `MatchConfig.ControlMode.TEAM`: Q switches to the teammate nearest the ball; `auto_switch` does it automatically (`soccer/match.py` `set_controlled` / `switch_controlled`).
-
-## Regenerating the screenshots
-More goal clips (several teams, pitches and sizes): `xvfb-run -a Godot --path . --resolution 1280x720 res://tools/capture_gifs.tscn` (edit `SCENARIOS` in `tools/capture_gifs.gd`), then `python3 tools/make_gifs.py`.
-
-With a window available (not `--headless`): `Godot --path . res://tools/capture_screenshots.tscn`. It plays a real RL Team match, saves the PNGs and dumps frames around goals to `docs/screenshots/clip*/`, then run `python3 tools/make_gifs.py` to shrink the PNGs and build the GIFs.
 
 ## Not included (by design)
 Fatigue, fouls, offside, substitutions.
@@ -167,7 +180,7 @@ as GK). `ROLE_OFFSET` was calibrated with batches of simulated matches so every 
 <p align="center"><img src="docs/screenshots/rl3_vs_aurora.gif" alt="RL Team 3 vs Aurora" width="60%"></p>
 
 *RL Team 3 vs Aurora.*
-League result of the shipped weights: 61 W, 3 D, 0 L in 64 full matches against the 16 rule-based teams (2.91 pts/match, 5.1 goals for and 1.1 against per match); details in `rl/results_league_final.txt`.
+League result of the shipped weights: 61 W, 3 D, 0 L in 64 full matches against the 16 rule-based teams (2.91 pts/match, 5.1 goals for and 1.1 against per match); details in `docs/history/results_league_final.txt`.
 `data/teams/rl_team.json` ("RL Team") has `"ml_model": "res://data/models/rl_5v5_arena.json"`: all 5 players,
 keeper included, are driven by a net trained with Python PPO (`rl/`, see `rl/README.md`). Pick it in Quick match /
 Tournament like any other team, on the **5v5** size (the arena pitch is what it trained on). On other sizes the net
@@ -177,7 +190,7 @@ does not fit and the team falls back to its rule-based style. Any team can use a
 (`rl/selfplay.py`) with human-likeness rewards (pass quality, spacing, kick discipline). "RL Team" keeps the original validated weights.
 
 `data/teams/rl_team_3.json` ("RL Team 3") uses `data/models/rl_5v5_arena_v3.json`: the self-play snapshot at update 500 (league 2.97 pts/match,
-0.27 goals against; kick discipline and spacing close to the rule bots, see `rl/results_selfplay.txt`).
+0.27 goals against; kick discipline and spacing close to the rule bots, see `docs/history/results_selfplay.txt`).
 
 `data/teams/rl_team_4.json` ("RL Team 4") uses `data/models/rl_5v5_arena_v4.json`: a cooperation fine-tune of RL Team 3 (individual pass credit,
 key-pass / expected-assist rewards, "stand open" reward; snapshot at update 600). League 3.00 pts/match (64/64 wins), about 3x the key passes of

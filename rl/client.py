@@ -1,23 +1,18 @@
 """A vector of RL environments (rl/env.py, on the Python match core) spread over several worker processes.
-Same interface as before, when the workers were Godot processes: configure / step / terms / set_opponent / close."""
+Interface: configure / step / terms / set_opponent / close (the same as when the workers were Godot processes)."""
 import multiprocessing as mp
 import os
-import platform
 import sys
 import time
 import traceback
 
 import numpy as np
 
-GODOT = os.environ.get("SOCCER_GODOT") or os.path.expanduser("~/godot/Godot_v4.6-stable_linux.%s" % ("arm64" if platform.machine() == "aarch64" else "x86_64"))
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-# Godot (the live viewer on the Pi's screen) plays its matches through the match server (soccer/server.py), which it
-# starts on demand: with this interpreter, so it has numpy.
-os.environ.setdefault("SOCCER_PYTHON", sys.executable)
 
 
 def _worker(conn, log_path):
-    """One worker process: several environments stepped in lock-step (what rl_server.gd did inside one Godot process)."""
+    """One worker process: several environments stepped in lock-step ."""
     for v in ("OPENBLAS_NUM_THREADS", "OMP_NUM_THREADS", "MKL_NUM_THREADS"):
         os.environ.setdefault(v, "1")
     sys.path.insert(0, os.path.join(ROOT, "rl"))

@@ -1,6 +1,5 @@
-"""Game data for the match core: pitches, styles, players, teams, formations and line-ups. Read from the same JSON files
-the Godot UI reads (data/pitches, data/styles, data/teams, data/formations.json), or from dicts sent by the UI (teams
-saved under user://teams only exist on the Godot side)."""
+"""Game data for the match core: pitches, styles, players, teams, formations and line-ups, read from the JSON files under
+data/ (pitches, styles, teams, formations.json); the web game (game/api.py) shows the same data."""
 import glob
 import json
 import os
@@ -171,6 +170,33 @@ class Database:
 
     def style_of(self, team):
         return self.styles.get(team.style_id, self.styles.get("balanced", Style({})))
+
+
+def _hex(c, default):
+    return str(c or default).lstrip("#").lower()[:6]
+
+
+def team_colors(team):
+    """[primary, secondary] kit colours of a team as "rrggbb"."""
+    c = team.raw.get("colors", {})
+    return [_hex(c.get("primary"), "e56e56"), _hex(c.get("secondary"), "ffffff")]
+
+
+def resolve_kits(team_a, team_b):
+    """MatchConfig.resolve_kits: [[primary, secondary] of team A, of team B], "rrggbb". The second team switches to its secondary
+    colour (then to white) when the two primaries look alike, so the teams never look the same."""
+    def rgb(h):
+        return [int(h[i:i + 2], 16) / 255.0 for i in (0, 2, 4)]
+
+    def dist(x, y):
+        return sum((p - q) ** 2 for p, q in zip(rgb(x), rgb(y))) ** 0.5
+
+    ka, kb = team_colors(team_a), team_colors(team_b)
+    if dist(ka[0], kb[0]) < 0.35:
+        kb = [kb[1], kb[0]]
+        if dist(ka[0], kb[0]) < 0.35:
+            kb = ["e8e8e8", kb[1]]
+    return [ka, kb]
 
 
 _DB = None

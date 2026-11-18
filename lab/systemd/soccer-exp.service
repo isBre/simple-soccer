@@ -1,0 +1,17 @@
+[Unit]
+Description=Soccer RL experiment runner (lab/exp_runner.py)
+After=network-online.target
+
+[Service]
+User=isbre
+WorkingDirectory=/home/isbre/simple-soccer
+ExecStart=/home/isbre/rl-venv/bin/python /home/isbre/simple-soccer/lab/exp_runner.py --loop --viewer
+Nice=10
+Restart=always
+RestartSec=30
+# a stop (reboot or systemctl stop) interrupts the trainer cleanly so its worker processes close
+KillMode=control-group
+TimeoutStopSec=60
+
+[Install]
+WantedBy=multi-user.target

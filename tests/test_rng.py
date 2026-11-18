@@ -1,13 +1,18 @@
-"""Python's copy of Godot's random generator (soccer/rng.py) against the real thing (tests/godot/rng_probe.gd).
-Run: python3 tests/test_rng.py   (needs Godot; SOCCER_GODOT or the default path)"""
+"""Python's copy of Godot's random generator (soccer/rng.py) against the real thing (tests/reference/rng_probe.gd, run in the
+Godot reference checkout $SOCCER_REF, see tests/test_match.py).
+Run: SOCCER_REF=... python3 tests/test_rng.py   (needs Godot; SOCCER_GODOT or the default path)"""
 import base64, json, struct, sys
 sys.path.insert(0, __import__("os").path.dirname(__import__("os").path.dirname(__import__("os").path.abspath(__file__))))
 from soccer.rng import RandomNumberGenerator
-from tests.godot_run import run_scene
+from tests.godot_run import install_reference, run_scene
 
 
 def main():
-    g = json.loads(run_scene("res://tests/godot/rng_probe.tscn", "RNG "))
+    ref = __import__("os").environ.get("SOCCER_REF")
+    if not ref:
+        sys.exit("set SOCCER_REF to a checkout of the Godot implementation (see tests/test_match.py)")
+    install_reference(ref)
+    g = json.loads(run_scene("res://tests/godot/rng_probe.tscn", "RNG ", project=ref))
     exact = 0
     worst_randfn = 0.0
     n_randfn = n_randfn_exact = 0

@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Simple Soccer</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='14' fill='%233cc488'/%3E%3Ccircle cx='16' cy='16' r='5' fill='white'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="game.css">
+<script>try { if (localStorage.getItem("theme") === "light") document.documentElement.dataset.theme = "light"; } catch (e) {}</script>
+</head>
+<body data-area="lab">
+<header class="bar">
+  <div class="bar-in">
+    <a class="brand" href="#/game"><span class="logo"></span>Simple Soccer</a>
+    <nav class="areas" aria-label="Areas">
+      <a href="#/game" data-area-link="game">Game</a>
+      <a href="#/" data-area-link="lab">Lab</a>
+    </nav>
+    <nav class="nav lab-only">
+      <a href="#/" data-v="now">Now</a>
+      <a href="#/live" data-v="live">Live</a>
+      <a href="#/runs" data-v="runs">Runs</a>
+      <a href="#/compare" data-v="compare">Compare</a>
+      <a href="#/docs" data-v="docs">Docs</a>
+    </nav>
+    <span class="nav-fill game-only"></span>
+    <input id="picker" class="picker lab-only" list="runlist" placeholder="Jump to run…  /" aria-label="Jump to a run"><datalist id="runlist"></datalist>
+    <a id="pichip" class="pichip lab-only" href="#/pi" data-v="pi" title="Raspberry Pi">Pi</a>
+    <button id="theme" class="theme-btn lab-only" title="Light / dark" aria-label="Switch light or dark theme">☀</button>
+    <span id="pulse" class="pulse lab-only" title="Connection to the Pi"><i></i></span>
+  </div>
+</header>
+<nav class="rail" aria-label="Pages">
+  <a href="#/live" data-v="live"><span>▶</span>Live</a>
+  <a href="#/" data-v="now"><span>◉</span>Now</a>
+  <a href="#/runs" data-v="runs"><span>☰</span>Runs</a>
+  <a href="#/docs" data-v="docs"><span>▤</span>Docs</a>
+  <a href="#/pi" data-v="pi"><span>⚙</span>Pi</a>
+</nav>
+<div id="offline" class="offline lab-only" hidden></div>
+<main id="view"><div class="empty">Loading…</div></main>
+<div id="tip" class="tip" hidden></div>
+<footer class="lab-only">Read-only · refreshes every 10 s · <a href="/api/v1">API</a> · <a href="/results.md">results.md</a> · agents: <span class="mono">python3 lab/lab.py -h</span></footer>
+<script src="draw.js"></script>
+<script src="game.js"></script>
+<script src="lab.js"></script>
+</body>
+</html>

@@ -5,10 +5,10 @@ and the dashboard parse them); checked against them by tests/test_evaluate.py.
   python3 rl/evaluate.py league_eval --model res://out_5v5/x.json --games 4 [--duration 180] [--remote PORT] [--stride 2] [--greedy]
       The net drives ALL 5 players (keeper included) against each of the 16 rule-based teams, on both sides. Also writes
       rl/teams_info.json (id, strength, style, tier, held_out) for the trainer. Held-out teams (never trained against): sorted
-      by strength, indices 1, 5, 9, 13 (one per tier). --remote PORT: the net is served by tools/net_server.py on that port
+      by strength, indices 1, 5, 9, 13 (one per tier). --remote PORT: the net is served by rl/net_server.py on that port
       (--model is then only a label).
   python3 rl/evaluate.py h2h_eval --a PORT --b PORT --name "RL Team 4" [--games 2] [--duration 90]
-      Head to head of two nets (both served by tools/net_server.py), both sides. Prints
+      Head to head of two nets (both served by rl/net_server.py), both sides. Prints
       H2H <name>: W x D y L z | pts/m | GF/GA | N matches   (a = the net being evaluated, results from its side)
   python3 rl/evaluate.py behaviour_stats [--model res://x.json | --remote PORT] [--greedy]
       Behaviour per decision (jitter, kick presses, clumping, keeper position), heatmaps and one "SCOUT {json}" line for the
