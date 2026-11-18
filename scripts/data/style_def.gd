@@ -1,6 +1,6 @@
 class_name StyleDef
 extends RefCounted
-## Team-level tactical parameters, used by the rule-based AI in the brain server (brain/rules.py). All 0..1 unless noted.
+## Team-level tactical parameters, used by the rule-based AI of the match core (soccer/ai/rules.py). All 0..1 unless noted.
 
 const KEYS := ["line_height", "compactness", "width", "press", "marking", "directness",
     "shoot_range", "pass_bias", "risk", "keeper_sweep", "forward_stay", "support_dist", "fluidity", "attack_commit", "intercept", "counter_press", "long_shot", "switch_play"]

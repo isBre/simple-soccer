@@ -7,6 +7,9 @@ on the experiments, start here. People: the same applies; the dashboard is at `h
 - `docs/rewards.md`: every reward term sorted into beneficial / unsure / not good, with the evidence (update it after each review).
 - `docs/experiment_log.md`: history, **standing decisions** (do not violate them without asking the user), conclusions, reviews.
 - `exp/schema.json`: what every metric means, its unit and direction, the evaluation protocols and the comparison rules.
+- The match itself (physics, rules, stats, AI) is the Python core `soccer/`; training (`rl/env.py`) and evaluations
+  (`rl/evaluate.py`) run on it without Godot. Godot is only the UI (and the live viewer). `tests/` checks the core against
+  the Godot implementation it replaced (README "Tests").
 
 ## Look (read-only, compact JSON)
 ```

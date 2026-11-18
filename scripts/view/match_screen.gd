@@ -1,13 +1,14 @@
 class_name MatchScreen
 extends Control
-## Live match: runs the sim at 60 Hz, reads human input, draws HUD.
+## Live match: steps the match (played by the Python match core) at 60 Hz, sends the keyboard, draws the HUD.
 ## Emits finished(result) after the final whistle (Enter) or quit_requested.
 
 signal finished(result: Dictionary)
 signal quit_requested
 
 var cfg: MatchConfig
-var sim: MatchSim
+var puzzle_seed := -1        # >= 0: start from a random layout of all players and the ball (the Live page's puzzle)
+var sim: MatchClient
 var view: MatchView
 var hud: Control
 var speed := 1
@@ -37,8 +38,9 @@ var _zoom := 1.0
 var _cam := Vector2.ZERO  # world point shown at the centre of the playfield
 
 
-func setup(config: MatchConfig) -> MatchScreen:
+func setup(config: MatchConfig, puzzle: int = -1) -> MatchScreen:
     cfg = config
+    puzzle_seed = puzzle
     return self
 
 
@@ -49,7 +51,7 @@ func _ready() -> void:
     bg.set_anchors_preset(Control.PRESET_FULL_RECT)
     add_child(bg)
 
-    sim = MatchSim.new(cfg)
+    sim = MatchClient.new(cfg, puzzle_seed)
     view = MatchView.new()
     view.sim = sim
     add_child(view)
@@ -90,7 +92,7 @@ func _physics_process(_delta: float) -> void:
     if paused or sim == null:
         return
     _step_particles()
-    if sim.state == MatchSim.State.PLAYING and sim.kickoff_active and sim.kickoff_start != _intro_id:
+    if sim.state == MatchClient.State.PLAYING and sim.kickoff_active and sim.kickoff_start != _intro_id:
         _intro_id = sim.kickoff_start
         _intro = INTRO_TICKS
         _intro_total = INTRO_TICKS
@@ -110,11 +112,10 @@ func _physics_process(_delta: float) -> void:
     if sim.controlled != null:
         sim.set_human_input(_read_dir(), _read_kick())
     var prev_goals := sim.events.size()
-    for i in speed:
-        sim.step()
+    sim.step(speed)
     if sim.events.size() > prev_goals:
         _on_goal(sim.events[sim.events.size() - 1])
-    if sim.state == MatchSim.State.ENDED:
+    if sim.state == MatchClient.State.ENDED:
         _end_ticks += 1
     _update_camera()
     view.queue_redraw()
@@ -185,7 +186,7 @@ func _step_particles() -> void:
             q["rot"] += q["spin"]
         i -= 1
     # sparks shooting out of the banner edges while the word is on screen
-    if sim != null and sim.state == MatchSim.State.GOAL:
+    if sim != null and sim.state == MatchClient.State.GOAL:
         var age := sim.goal_pause - sim.goal_timer
         if age > 8 and age < 70 and age % 2 == 0:
             for sgn in [-1.0, 1.0]:
@@ -317,7 +318,7 @@ func _unhandled_input(e: InputEvent) -> void:
         speed = 2 if speed == 1 else (4 if speed == 2 else (8 if speed == 4 else 1))
     elif k == KEY_Q:
         sim.switch_controlled()
-    elif (k == KEY_ENTER or k == KEY_KP_ENTER) and sim.state == MatchSim.State.ENDED:
+    elif (k == KEY_ENTER or k == KEY_KP_ENTER) and sim.state == MatchClient.State.ENDED:
         finished.emit(sim.make_result())
     get_viewport().set_input_as_handled()
 
@@ -353,9 +354,12 @@ func _draw_hud() -> void:
 
     var msg := ""
     var col2 := Color.WHITE
-    if sim.state == MatchSim.State.GOAL:
+    if not sim.ok:
+        msg = "The match could not start: " + sim.error
+        col2 = UIKit.BAD
+    elif sim.state == MatchClient.State.GOAL:
         _draw_goal_banner(font, w)
-    elif sim.state == MatchSim.State.ENDED:
+    elif sim.state == MatchClient.State.ENDED:
         if sim.winner == -1:
             msg = "FULL TIME - DRAW"
         else:
@@ -368,7 +372,7 @@ func _draw_hud() -> void:
     if msg != "":
         hud.draw_rect(Rect2(0, size.y * 0.5 - 30, w, 70), Color(0, 0, 0, 0.55))
         hud.draw_string(font, Vector2(0, size.y * 0.5 + 18), msg, HORIZONTAL_ALIGNMENT_CENTER, w, 40, col2)
-        if sim.state == MatchSim.State.ENDED:
+        if sim.state == MatchClient.State.ENDED:
             hud.draw_string(font, Vector2(0, size.y * 0.5 + 38), "Enter - match report", HORIZONTAL_ALIGNMENT_CENTER, w, 16, UIKit.MUTED)
     _draw_particles()
     if paused:

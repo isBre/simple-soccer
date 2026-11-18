@@ -18,6 +18,7 @@ var box_half := 0.0
 var stripes := 0
 var obstacles: Array = []         # [[x, y, r], ...] static discs
 var walls: Array = []             # extra walls: {a: Vector2, b: Vector2, ball: bool, player: bool, bc: float}
+var raw: Dictionary = {}           # the JSON it was read from (sent to the match core)
 var color_pitch := Color("718c5a")
 var color_outer := Color("5b7347")
 var color_line := Color("c7e6bd")
@@ -25,6 +26,7 @@ var color_line := Color("c7e6bd")
 
 static func from_dict(d: Dictionary) -> PitchDef:
     var p := PitchDef.new()
+    p.raw = d
     p.id = str(d.get("id", "pitch"))
     p.name = str(d.get("name", p.id))
     p.sizes = d.get("sizes", [3])

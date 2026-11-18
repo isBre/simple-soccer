@@ -12,7 +12,7 @@ var logo: Dictionary = {}
 var style_id := "balanced"
 var style: StyleDef = null       # resolved by Database
 var formations: Dictionary = {}  # "5" -> formation name (optional)
-var ml_model := ""               # optional res:// path of a game-model JSON: the brain server plays the whole team (keeper included) with it
+var ml_model := ""               # optional res:// path of a game-model JSON: the match core plays the whole team (keeper included) with it
 var league := ""                 # Database.LEAGUES id; defaults to "rl" for net-driven teams, else "rules"
 var players: Array[PlayerDef] = []
 

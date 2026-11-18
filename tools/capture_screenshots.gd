@@ -57,7 +57,7 @@ func _run() -> void:
     var seen := 0
     var clip_frames: Array = []
     var tick := 0
-    while ms.sim.state != MatchSim.State.ENDED and clips < 3:
+    while ms.sim.state != MatchClient.State.ENDED and clips < 3:
         await RenderingServer.frame_post_draw
         tick += 1
         if tick % 3 == 0:

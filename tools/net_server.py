@@ -1,5 +1,5 @@
 """Tiny numpy inference server for the experiment pipeline (newest / best checkpoint of a run, the dashboard's live opponent).
-The brain server (brain/nets.py RemoteNet) connects to it for a team whose MatchConfig.nets entry is {"port": n}.
+The match core (soccer/ai/nets.py RemoteNet) connects to it for a team whose MatchConfig.nets entry is {"port": n}.
 Protocol: on connect the server sends the net's input size n_in (uint32); then per request n_in float32 in -> 10 float32 out. On every new connection the model is (re)loaded:
   --model FILE            fixed game-model JSON
   --tag TAG --ckpt DIR    newest DIR/TAG_u*.json (falls back to --model)
@@ -36,7 +36,7 @@ def serve(conn, path):
     n_in = W[0].shape[1]
     print("serving", path, "(%d inputs)" % n_in, flush=True)
     conn.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
-    conn.sendall(struct.pack("<I", n_in))                 # the client (brain/nets.py RemoteNet) needs it to pick the matching observation
+    conn.sendall(struct.pack("<I", n_in))                 # the client (soccer/ai/nets.py RemoteNet) needs it to pick the matching observation
     size = 4 * n_in
     buf = b""
     while True:

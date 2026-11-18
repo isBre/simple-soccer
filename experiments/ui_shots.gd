@@ -29,9 +29,7 @@ func _run() -> void:
     c3.control = MatchConfig.ControlMode.NONE
     await _play(c3, 25.0, "c_pillars_play")
     var rcfg := Database.make_config("cobalt", "harbor", "classic", 3, 120.0, 21)
-    var sim := MatchSim.new(rcfg)
-    sim.run_to_end()
-    App.show_screen(ReportScreen.new().setup(sim.make_result(), func() -> void: pass))
+    App.show_screen(ReportScreen.new().setup(MatchClient.run(rcfg), func() -> void: pass))
     await _shot("d_report")
     App.show_screen(QuickMatchScreen.new())
     await _shot("e_quickmatch")

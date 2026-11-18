@@ -1,6 +1,7 @@
 class_name SimBatch
 extends RefCounted
-## Runs many MatchSim instances in parallel on worker threads.
+## Plays many matches in parallel (tournament rounds): each one on a worker thread, played to the end by the match core
+## (MatchClient.run: one forked server process per match, so they use all cores).
 
 var configs: Array = []
 var results: Array = []
@@ -17,9 +18,7 @@ func start(cfgs: Array) -> void:
 
 
 func _run(i: int) -> void:
-    var sim := MatchSim.new(configs[i])
-    sim.run_to_end()
-    var r := sim.make_result()
+    var r := MatchClient.run(configs[i])
     _mutex.lock()
     results[i] = r
     _done += 1

@@ -13,6 +13,7 @@ import copy
 import json
 import os
 import subprocess
+import sys
 import time
 
 import numpy as np
@@ -20,7 +21,7 @@ import torch
 import torch.nn as nn
 from torch.distributions import Bernoulli, Categorical
 
-from client import GODOT, ROOT, VecEnv
+from client import ROOT, VecEnv
 
 OUT = os.path.join(ROOT, "out_5v5")
 OBS_DIM = 54
@@ -28,7 +29,7 @@ OUT_GOAL, OUT_OWN, OUT_TIMEOUT, OUT_CONCEDED, OUT_WIN, OUT_DRAW, OUT_LOSS = 1, 2
 
 
 def team_pools():
-    """Training pools by tier from rl/teams_info.json (written by league_eval.tscn); held-out teams excluded."""
+    """Training pools by tier from rl/teams_info.json (written by rl/evaluate.py league_eval); held-out teams excluded."""
     info = json.load(open(os.path.join(ROOT, "rl", "teams_info.json")))
     pools = {}
     for t in info:
@@ -118,13 +119,12 @@ def save_model(agent, name):
 
 
 def league_eval(model_path, games, log):
-    """Independent evaluation through the game's own path (SimBatch, all cores; the brain server plays the net)."""
+    """Independent evaluation through the match core (rl/evaluate.py league_eval, all cores)."""
     t0 = time.time()
     try:
-        r = subprocess.run([GODOT, "--headless", "--path", ROOT, "res://rl/league_eval.tscn", "--",
+        r = subprocess.run([sys.executable, os.path.join(ROOT, "rl", "evaluate.py"), "league_eval",
                             "--model", "res://" + os.path.relpath(model_path, ROOT), "--games", str(games)],
-                           capture_output=True, text=True, timeout=1800,
-                           env={**os.environ, "GODOT_SILENCE_ROOT_WARNING": "1"})
+                           capture_output=True, text=True, timeout=1800)
         lines = [l for l in r.stdout.splitlines() if l.startswith("SUMMARY")]
         log("LEAGUE EVAL (%s, %.0fs)" % (os.path.basename(model_path), time.time() - t0))
         for l in lines:

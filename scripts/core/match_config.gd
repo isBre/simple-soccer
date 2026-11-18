@@ -17,7 +17,7 @@ var human_team := 0
 var auto_switch := false         # TEAM control: auto switch to the player nearest to the ball
 var formations: Array[String] = ["", ""]
 var style_override: Array = [null, null]     # optional StyleDef per team (experiments)
-## Optional neural net per team, run by the brain server; it drives the whole team, goalkeeper included:
+## Optional neural net per team, played by the match core (soccer/); it drives the whole team, goalkeeper included:
 ## {"model": absolute path of a game-model JSON} or {"port": n} (a running tools/net_server.py). null = the team's own
 ## ml_model if it has one, else rule-based.
 var nets: Array = [null, null]

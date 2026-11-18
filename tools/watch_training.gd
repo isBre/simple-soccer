@@ -7,7 +7,7 @@ extends CanvasLayer
 ##   Godot --path . res://tools/watch_training.tscn -- --tag jit7 --start res://out_5v5/ckpt/jit6_u50.json [--page training]
 ## The scene is a CanvasLayer above the App autoload's own full-screen background.
 ## Needs the nets served by tools/net_server.py (ports 7301 = the run's newest checkpoint, 7302 = RL Team 4, 7303 = the run's best checkpoint,
-## 7304 = the dashboard's opponent); the brain server (brain/server.py) plays them and the rule-based opponents.
+## 7304 = the dashboard's opponent); the match core (soccer/server.py) plays them and the rule-based opponents.
 ## The match is also streamed (UDP to 127.0.0.1:7310, JSON) to tools/dashboard.py, which shows it live in the browser (#/live).
 
 const Data := preload("res://tools/training_data.gd")
@@ -205,12 +205,10 @@ func _next() -> void:
     opp_label = opp.label
     if _best_move:
         cfg.net_temperature = 0.0                                  # argmax instead of sampling (applies from the next match)
-    var ms := MatchScreen.new().setup(cfg)
+    var ms := MatchScreen.new().setup(cfg, rng.randi() if _mode == "puzzle" else -1)   # puzzle: random layout (soccer/match.py)
     ms.finished.connect(func(_result): _next.call_deferred())
     ms.quit_requested.connect(get_tree().quit)
     match_area.add_child(ms)                                       # the sim is built when the screen enters the tree
-    if _mode == "puzzle":
-        _puzzle_layout(ms.sim)
     _ms = ms
     ms.set_effects(false)                                          # no confetti: cheaper on the Pi
     ms.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)    # a screen added after the first match would stay 0x0
@@ -221,7 +219,7 @@ func _next() -> void:
 ## puzzle (after the celebration); a change of mode or opponent on the dashboard ends the shown match at once.
 func _auto_continue(ms: MatchScreen) -> void:
     var celebrate := 0
-    while is_instance_valid(ms) and ms.sim.state != MatchSim.State.ENDED:
+    while is_instance_valid(ms) and ms.sim.state != MatchClient.State.ENDED:
         await get_tree().create_timer(0.5).timeout
         if not is_instance_valid(ms):
             return
@@ -251,39 +249,12 @@ func _choices() -> String:
     return _read_text("res://logs/live_mode.json") + _read_text("res://logs/live_opponent.json")
 
 
-## Puzzle: every player (keepers too) and the ball at random places (as in training's random starts), play from the first tick.
-func _puzzle_layout(sim: MatchSim) -> void:
-    var pt := sim.pitch
-    sim.kickoff_active = false
-    sim.kickoff_taker = null
-    sim.state = MatchSim.State.PLAYING
-    var hw := pt.half_w * 0.9
-    var hh := pt.half_h * 0.9
-    sim.ball.pos = Vector2(rng.randf_range(-hw, hw), rng.randf_range(-hh, hh))
-    sim.ball.vel = Vector2.from_angle(rng.randf() * TAU) * rng.randf_range(0.0, 3.0)
-    var placed: Array[Vector2] = [sim.ball.pos]
-    for p: SimPlayer in sim.players:
-        var pos := Vector2.ZERO
-        for _try in 40:
-            pos = Vector2(rng.randf_range(-hw, hw), rng.randf_range(-hh, hh))
-            var ok := true
-            for q in placed:
-                if q.distance_to(pos) < 45.0:
-                    ok = false
-                    break
-            if ok:
-                break
-        p.pos = pos
-        p.vel = Vector2.ZERO
-        placed.append(pos)
-
-
 ## Streams the shown match to the web dashboard: a "meta" packet (pitch, kits, players) once a second and a frame with
 ## the positions every drawn frame (30/s). Small JSON over local UDP: nothing waits if the dashboard is not running.
 func _process(_delta: float) -> void:
     if _ms == null or not is_instance_valid(_ms) or _ms.sim == null:
         return
-    var sim: MatchSim = _ms.sim
+    var sim: MatchClient = _ms.sim
     _frames += 1
     if _frames % 30 == 1:
         _udp.put_packet(JSON.stringify(_stream_meta(sim)).to_utf8_buffer())
@@ -296,7 +267,7 @@ func _process(_delta: float) -> void:
         "gt": sim.goal_team, "paused": not _views["live"].visible}).to_utf8_buffer())
 
 
-func _stream_meta(sim: MatchSim) -> Dictionary:
+func _stream_meta(sim: MatchClient) -> Dictionary:
     var pd := sim.pitch
     var teams: Array = []
     for t in 2:

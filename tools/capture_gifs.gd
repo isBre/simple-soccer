@@ -41,9 +41,9 @@ func _cfg(sc: Array, seed_value: int) -> MatchConfig:
 
 
 func _first_goal(sc: Array, seed_value: int) -> int:
-    var sim := MatchSim.new(_cfg(sc, seed_value))
+    var sim := MatchClient.new(_cfg(sc, seed_value))
     var limit := 60 * 150
-    while sim.state != MatchSim.State.ENDED and sim.events.is_empty() and sim.tick < limit:
+    while sim.state != MatchClient.State.ENDED and sim.events.is_empty() and sim.tick < limit:
         sim.step()
     return sim.tick if not sim.events.is_empty() else -1
 
@@ -64,7 +64,7 @@ func _record(sc: Array) -> void:
     await _frames(3)
     var ms: MatchScreen = App.current
     ms.speed = 8
-    while ms.sim.tick < goal_tick - PRE_TICKS - 20 and ms.sim.state != MatchSim.State.ENDED:
+    while ms.sim.tick < goal_tick - PRE_TICKS - 20 and ms.sim.state != MatchClient.State.ENDED:
         await get_tree().physics_frame
     ms.speed = 1
     var frames: Array = []

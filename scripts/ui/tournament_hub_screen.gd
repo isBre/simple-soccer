@@ -44,7 +44,9 @@ func _ready() -> void:
     var oc := CenterContainer.new()
     oc.set_anchors_preset(Control.PRESET_FULL_RECT)
     var ov := UIKit.vbox(10)
-    ov.add_child(UIKit.label("Simulating matches...", UIKit.FS_H1, Color.WHITE, HORIZONTAL_ALIGNMENT_CENTER))
+    var msg := UIKit.label("Simulating matches...", UIKit.FS_H1, Color.WHITE, HORIZONTAL_ALIGNMENT_CENTER)
+    msg.name = "Msg"
+    ov.add_child(msg)
     progress = ProgressBar.new()
     progress.custom_minimum_size = Vector2(420, 26)
     progress.max_value = 1.0
@@ -66,6 +68,16 @@ func _process(_delta: float) -> void:
     progress.value = batch.progress()
     if batch.is_done():
         batch.finish()
+        for r in batch.results:
+            if not (r is Dictionary) or not r.has("scores"):     # no match server: say so, record nothing
+                batch = null
+                batch_fixtures = []
+                progress.value = 0.0
+                var lbl := overlay.find_child("Msg", true, false) as Label
+                if lbl != null:
+                    lbl.text = "The matches could not be played:\n" + MatchClient.last_error
+                overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE      # "Save & Menu" stays usable
+                return
         for i in batch_fixtures.size():
             t.record(batch_fixtures[i], batch.results[i])
         batch = null

@@ -1,6 +1,6 @@
 """Self-play + league fine-tuning of the 5v5 RL net, with human-likeness rewards.
 
-Two groups of Godot workers run side by side and feed ONE learner (shared policy over the 5 players of team 0):
+Two groups of env workers run side by side and feed ONE learner (shared policy over the 5 players of team 0):
   * rule group : team 1 = the rule-based teams (training pool only, 4 teams are held out)
   * self group : team 1 = the net itself, driven from Python (all 5 players, keeper included). Opponent slots:
                  slot 0 = the frozen shipped model (benchmark: the log shows how the learner scores against it),
@@ -25,11 +25,11 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.distributions import Bernoulli, Categorical
 
-from client import GODOT, ROOT, VecEnv
+from client import ROOT, VecEnv
 from ppo import Agent, OUT, OUT_DRAW, OUT_LOSS, OUT_WIN, load_padded, save_model, team_pools
 
 CKPT = os.path.join(OUT, "ckpt")
-OBS_DIMS = {"legacy": 54, "team": 46}            # observation layouts (see brain/nets.py features_team): ego with player slot / role-free team observation
+OBS_DIMS = {"legacy": 54, "team": 46}            # observation layouts (see soccer/ai/nets.py features_team): ego with player slot / role-free team observation
 
 
 N_TEAM, N_LEGACY = 46, 54                       # env obs "both" = the team observation followed by the legacy one
@@ -76,7 +76,7 @@ def make_cfgs(args):
 
 def eval_blocking(model_path, tag, args, log, mode="full"):
     """Complete evaluation of a snapshot (rl/eval_checkpoint.py: league, behaviour, head to head, ...) while training is PAUSED:
-    this call returns when it is done, the Godot workers just wait, so the evaluation gets the whole CPU (the viewer shows an
+    this call returns when it is done, the env workers just wait, so the evaluation gets the whole CPU (the viewer shows an
     "evaluation running" banner meanwhile). Result: logs/sp_eval/<tag>.txt"""
     suffix = "_fast" if mode == "fast" else ""
     out = os.path.join(ROOT, "logs", "sp_eval", tag + suffix + ".txt")
@@ -148,7 +148,7 @@ def main():
     ap.add_argument("--eval_every", type=int, default=100, help="complete evaluation of the checkpoint every N updates (multiple of --ckpt_every; 0 = never); training is paused meanwhile")
     ap.add_argument("--fast_every", type=int, default=0, help="FAST check (16 short matches + head to head vs --fast_ref) every N updates, training paused; 0 = never")
     ap.add_argument("--fast_ref", default="", help="game-model JSON of the net the run started from (the fast check plays it head to head)")
-    ap.add_argument("--learn_threads", type=int, default=2, help="torch threads of the learning step (all 4 would fight the Godot workers for the CPU: the Pi froze)")
+    ap.add_argument("--learn_threads", type=int, default=2, help="torch threads of the learning step (all 4 would fight the env workers for the CPU: the Pi froze)")
     ap.add_argument("--base_port", type=int, default=7100, help="first port of the rule-group workers (self-play group: +100)")
     ap.add_argument("--hidden", type=int, default=128, help="width of the two hidden layers (must match --start)")
     ap.add_argument("--teacher", default="", help="kickstarting: a checkpoint (.pt/.json, e.g. the 54-input jit8) whose moves the learner is pulled towards")
@@ -268,7 +268,7 @@ def main():
             b_done = torch.zeros(T, E)
             b_val = torch.zeros(T, E, A)
             t0 = time.time()
-            torch.set_num_threads(1)                      # tiny batches: extra threads only steal CPU from the Godot workers
+            torch.set_num_threads(1)                      # tiny batches: extra threads only steal CPU from the env workers
             for t in range(T):
                 obs_L = torch.cat([obs_r, obs_s[:, :5]], 0)                    # [E, 5, D] learner observations
                 with torch.no_grad():

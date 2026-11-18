@@ -139,7 +139,7 @@ def parse_eval(path):
             opp = m.group(2)
             group = "h2h" if opp.startswith("h2h:") else ("greedy" if m.group(1) else "league")
             r["matches"].append([group, opp[4:].replace("_", " ") if group == "h2h" else opp, int(m.group(3)), int(m.group(4)), int(m.group(5)), int(m.group(6))])
-        if line.startswith("SCOUT "):                          # scouting summary (rl/behaviour_stats.gd): shape, roles, pressing, events
+        if line.startswith("SCOUT "):                          # scouting summary (rl/evaluate.py behaviour_stats): shape, roles, pressing, events
             try:
                 r["scout"] = json.loads(line[6:])
             except ValueError:

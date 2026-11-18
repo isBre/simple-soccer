@@ -1,0 +1,18 @@
+{
+  "_doc": "Training environments recorded in Godot (tests/godot/record_env.gd, random actions) and replayed step by step in Python (tests/test_env.py). Every reward term is switched on somewhere.",
+  "scenarios": [
+    {"name": "selfplay_default", "steps": 2500, "cfg": {"pitch": "arena", "size": 5, "n_active": 5, "with_keeper": true, "opp": "aurora,cobalt,granite,tide", "match_mode": true, "duration": 30.0, "obs": "team", "own_team": "owls",
+      "pass_individual": true, "w_pass_prog": 0.3, "w_pass_ok": 0.1, "w_pass_fail": 0.2, "w_key_pass": 0.5, "w_xa": 1.0, "w_recv": 0.1, "coop_cap": 8.0,
+      "w_open": 0.002, "w_space": 0.003, "w_kick": 0.01, "w_wall": 0.02, "w_corner": 0.01, "random_start": 0.3}},
+    {"name": "shaping_terms", "steps": 2500, "cfg": {"pitch": "arena", "size": 5, "n_active": 5, "with_keeper": true, "opp": "harbor,scorpions", "match_mode": true, "duration": 25.0, "obs": "both", "own_team": "rose",
+      "w_pass_prog": 0.3, "w_pass_ok": 0.1, "w_pass_fail": 0.2, "w_key_pass": 0.5, "w_xa": 1.0, "w_jitter": 0.01, "w_far": 0.01, "far_radius": 300.0,
+      "w_xg": 1.0, "xg_cap": 2.0, "w_xga": 1.0, "w_win": 3.0, "w_draw": 1.0, "w_tackle": 0.5, "def_cap": 1.0, "w_goalside": 0.002, "w_opp_half": 0.001,
+      "w_compact": 0.002, "compact_len": 300.0, "compact_wid": 200.0, "w_keeper": 0.01, "keeper_free": 150.0}},
+    {"name": "opp_external", "steps": 1500, "cfg": {"pitch": "arena", "size": 5, "n_active": 5, "with_keeper": true, "opp": "owls", "opp_external": true, "match_mode": true, "duration": 20.0, "obs": "team", "own_team": "owls",
+      "pass_individual": true, "w_pass_ok": 0.1, "w_wall": 0.02}},
+    {"name": "selfplay_net", "steps": 1500, "selfplay_net": "res://data/models/rl_5v5_arena_v4.json", "cfg": {"pitch": "arena", "size": 5, "n_active": 5, "with_keeper": true, "opp": "aurora", "selfplay": 0.7, "match_mode": true, "duration": 20.0, "obs": "legacy", "own_team": "owls"}},
+    {"name": "curriculum_empty", "steps": 3000, "cfg": {"pitch": "arena", "size": 5, "n_active": 5, "with_keeper": true, "opp": "none", "max_steps": 200, "spread": 0.6, "ball_speed": 2.0, "obs": "legacy", "w_kick": 0.01}},
+    {"name": "curriculum_keeper", "steps": 3000, "cfg": {"pitch": "arena", "size": 5, "n_active": 4, "with_keeper": false, "opp": "keeper", "max_steps": 200, "spread": 0.1, "obs": "legacy"}},
+    {"name": "curriculum_rules", "steps": 3000, "cfg": {"pitch": "arena", "size": 5, "n_active": 3, "with_keeper": false, "opp": "lime,dune", "max_steps": 300, "spread": 1.0, "ball_speed": 1.0, "obs": "team", "shaping": 0.5, "w_space": 0.003}}
+  ]
+}

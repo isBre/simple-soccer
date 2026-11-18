@@ -25,7 +25,7 @@ func _ready() -> void:
         var cur = App.current
         if cur != null and "sim" in cur:
             state = int(cur.sim.state)
-            if cur.sim.state == MatchSim.State.ENDED:
+            if cur.sim.state == MatchClient.State.ENDED:
                 break
     await get_tree().create_timer(1.0).timeout
     var ev := InputEventKey.new()

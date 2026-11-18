@@ -1,6 +1,6 @@
 """Complete evaluation of one checkpoint, cheap enough to run next to training on a Raspberry Pi.
 
-Starts numpy net servers (tools/net_server.py) for the checkpoint and for the reference nets, then runs headless Godot:
+Starts numpy net servers (tools/net_server.py) for the checkpoint and for the reference nets, then runs rl/evaluate.py:
   1. league_eval      all 16 rule-based teams, both sides (pts/m, GF/GA per team, per tier, trained-against vs held-out teams)
   2. behaviour_stats  direction changes/s, kick presses, spacing, keeper distance, passes, key passes (RL net vs rule bots)
   3. h2h_eval         head to head against RL Team 4 and against the weights the run started from (RL Team 5)
@@ -20,7 +20,7 @@ import subprocess
 import sys
 import time
 
-from client import GODOT, ROOT
+from client import ROOT
 
 REFERENCES = [("RL Team 4", "data/models/rl_5v5_arena_v4.json"), ("RL Team 5", "data/models/rl_5v5_arena_v5.json")]
 
@@ -45,10 +45,11 @@ def start_server(model):
 
 
 def godot(scene, args, timeout=3 * 3600):
-    """Output lines of a headless eval scene. A hung scene is killed after `timeout` (otherwise it would block every later evaluation)."""
-    cmd = [GODOT, "--headless", "--path", ROOT, "res://rl/%s.tscn" % scene, "--"] + args
+    """Output lines of an evaluation (rl/evaluate.py: league_eval, behaviour_stats, h2h_eval; played by the Python match core
+    in parallel processes). A hung run is killed after `timeout` (otherwise it would block every later evaluation)."""
+    cmd = [sys.executable, os.path.join(ROOT, "rl", "evaluate.py"), scene] + args
     try:
-        out = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, timeout=timeout, env={**os.environ, "GODOT_SILENCE_ROOT_WARNING": "1"})
+        out = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, timeout=timeout)
         return out.stdout.splitlines()
     except subprocess.TimeoutExpired:
         return ["TIMEOUT %s after %d s" % (scene, timeout)]

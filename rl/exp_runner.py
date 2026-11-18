@@ -50,8 +50,9 @@ def json_of(path):
 
 
 def stop_stale_workers():
-    """Godot workers of a killed trainer (they would hold the ports and the CPU)."""
-    for pat in ("res://rl/rl_server.tscn", "rl/eval_checkpoint.py", "tools/net_server.py --port"):
+    """Leftovers of a killed trainer or evaluation (they would hold the ports and the CPU). Training workers end on their own
+    when their trainer is gone (their pipe closes)."""
+    for pat in ("rl/eval_checkpoint.py", "rl/evaluate.py", "tools/net_server.py --port"):
         out = subprocess.run(["pgrep", "-f", pat], stdout=subprocess.PIPE, text=True).stdout.split()
         for pid in out:
             if int(pid) != os.getpid():
@@ -247,7 +248,7 @@ def run_experiment(spec_path, viewer=False):
                 stop_reason = "diverged"
             if stop_reason != "budget":
                 log("%s: %s at update %d (training points %.2f, start %.2f) - stopping" % (name, stop_reason, upd, pts or 0, base_train or 0))
-                proc.send_signal(signal.SIGINT)                        # lets selfplay close its Godot workers
+                proc.send_signal(signal.SIGINT)                        # lets selfplay close its env workers
                 try:
                     proc.wait(60)
                 except subprocess.TimeoutExpired:

@@ -6,9 +6,7 @@ func _ready() -> void:
     await get_tree().process_frame
     for sd in [21, 22]:
         var rcfg := Database.make_config("cobalt", "harbor", "arena", 5, 180.0, sd)
-        var sim := MatchSim.new(rcfg)
-        sim.run_to_end()
-        var res := sim.make_result()
+        var res := MatchClient.run(rcfg)
         App.show_screen(ReportScreen.new().setup(res, func() -> void: pass))
         for i in 8:
             await get_tree().process_frame
