@@ -57,7 +57,7 @@ func _ready() -> void:
     var kt := sim.kickoff_team
     var dirx := 1.0 if kt == 0 else -1.0
     var p: SimPlayer = sim.team_lists[kt][1]
-    p.controller = null      # drive him by hand
+    p.bot = false            # drive him by hand
     p.pos = Vector2(-dirx * 60.0, 0.0)
     var crossed := false
     var maxd := 0.0

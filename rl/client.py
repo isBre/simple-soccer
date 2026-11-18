@@ -9,8 +9,12 @@ import time
 import numpy as np
 
 import platform
-GODOT = os.path.expanduser("~/godot/Godot_v4.6-stable_linux.%s" % ("arm64" if platform.machine() == "aarch64" else "x86_64"))
+import sys
+GODOT = os.environ.get("SOCCER_GODOT") or os.path.expanduser("~/godot/Godot_v4.6-stable_linux.%s" % ("arm64" if platform.machine() == "aarch64" else "x86_64"))
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+# Every Godot started from here (training workers, evaluations, the live viewer) runs its AI in the brain server
+# (brain/server.py), which Godot starts on demand: with this interpreter, so it has numpy.
+os.environ.setdefault("SOCCER_PYTHON", sys.executable)
 
 
 class Worker:

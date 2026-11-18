@@ -37,9 +37,8 @@ func _ready() -> void:
 			if side == 1:
 				c.teams = [Database.teams["rl_team_4"], Database.teams["owls"]]
 			c.resolve_kits()
-			c.ml_models[side] = RemoteMLP.new(port_a)
-			c.ml_models[1 - side] = RemoteMLP.new(port_b)
-			c.ml_keeper = true
+			c.nets[side] = {"port": port_a}          # both nets are served by tools/net_server.py, played by the brain server
+			c.nets[1 - side] = {"port": port_b}
 			cfgs.append(c)
 			meta.append(side)
 			seeds.append(c.match_seed)

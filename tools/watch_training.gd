@@ -6,8 +6,8 @@ extends CanvasLayer
 ## The match pauses while another page is shown.
 ##   Godot --path . res://tools/watch_training.tscn -- --tag jit7 --start res://out_5v5/ckpt/jit6_u50.json [--page training]
 ## The scene is a CanvasLayer above the App autoload's own full-screen background.
-## Needs the nets served by tools/net_server.py (ports 7301 = the run's newest checkpoint, 7302 = RL Team 4, 7303 = the run's best checkpoint):
-## the GDScript MLP is too slow to play two net teams in real time on a Raspberry Pi.
+## Needs the nets served by tools/net_server.py (ports 7301 = the run's newest checkpoint, 7302 = RL Team 4, 7303 = the run's best checkpoint,
+## 7304 = the dashboard's opponent); the brain server (brain/server.py) plays them and the rule-based opponents.
 ## The match is also streamed (UDP to 127.0.0.1:7310, JSON) to tools/dashboard.py, which shows it live in the browser (#/live).
 
 const Data := preload("res://tools/training_data.gd")
@@ -199,13 +199,12 @@ func _next() -> void:
     _choice_snapshot = _choices()
     var cfg := Database.make_config("rl_team_5", opp.team, "arena", 5, 60.0 if _mode == "puzzle" else 90.0, rng.randi())
     cfg.control = MatchConfig.ControlMode.NONE
-    cfg.ml_models[0] = RemoteMLP.new(7303 if use_best else 7301)
+    cfg.nets[0] = {"port": 7303 if use_best else 7301}
     if opp.net:
-        cfg.ml_models[1] = RemoteMLP.new(OPP_PORT)                 # the opponent net chosen on the dashboard (tools/net_server.py --select-file)
+        cfg.nets[1] = {"port": OPP_PORT}                           # the opponent net chosen on the dashboard (tools/net_server.py --select-file)
     opp_label = opp.label
-    cfg.ml_keeper = true
     if _best_move:
-        cfg.ml_temperature = 0.0                                   # argmax instead of sampling (applies from the next match)
+        cfg.net_temperature = 0.0                                  # argmax instead of sampling (applies from the next match)
     var ms := MatchScreen.new().setup(cfg)
     ms.finished.connect(func(_result): _next.call_deferred())
     ms.quit_requested.connect(get_tree().quit)
@@ -303,12 +302,12 @@ func _stream_meta(sim: MatchSim) -> Dictionary:
     for t in 2:
         var td: TeamDef = sim.cfg.teams[t]
         teams.append({"name": td.name, "short": td.short, "primary": sim.cfg.kits[t][0].to_html(false), "secondary": sim.cfg.kits[t][1].to_html(false),
-            "pattern": td.kit_pattern, "net": "remote" if sim.cfg.ml_models[t] != null else ""})
+            "pattern": td.kit_pattern, "net": "remote" if sim.cfg.nets[t] != null else ""})
     var players: Array = []
     for p in sim.players:
         players.append({"team": p.team, "n": p.def.number, "r": p.radius, "role": p.role})
     var l := data.last()
-    return {"k": "m", "id": sim.cfg.match_seed, "tag": tag, "playing": data.playing, "opponent": opp_label, "mode": _mode, "upd": l.get("upd", 0), "best_move": sim.cfg.ml_temperature == 0.0,
+    return {"k": "m", "id": sim.cfg.match_seed, "tag": tag, "playing": data.playing, "opponent": opp_label, "mode": _mode, "upd": l.get("upd", 0), "best_move": sim.cfg.net_temperature == 0.0,
         "best_ckpt": _best_ckpt, "duration": sim.cfg.duration, "ball_r": sim.ball.radius, "teams": teams, "players": players,
         "pitch": {"half_w": pd.half_w, "half_h": pd.half_h, "goal_half": pd.goal_half, "net_depth": pd.net_depth, "out_x": pd.out_x, "out_y": pd.out_y,
             "center_r": pd.center_r, "box_depth": pd.box_depth, "box_half": pd.box_half, "stripes": pd.stripes, "post_r": pd.post_r,

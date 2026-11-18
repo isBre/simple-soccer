@@ -17,12 +17,11 @@ var human_team := 0
 var auto_switch := false         # TEAM control: auto switch to the player nearest to the ball
 var formations: Array[String] = ["", ""]
 var style_override: Array = [null, null]     # optional StyleDef per team (experiments)
-var ml_models: Array = [null, null]    # optional MLP per team: drives all outfield players
-var ml_keeper := false                 # true -> the ML net also drives the goalkeeper slot (no rule-based keeper)
-var ml_temperature := 1.0               # sampling temperature of the ML bots (lower = greedier)
-var dagger: Array = [null, null]       # optional {rec, net, beta, temp}: teacher labels, student (net) acts with prob 1-beta
-var legacy_bot: Array = [false, false]    # benchmark: team plays with the frozen pre-rework bot
-var recorders: Array = [null, null]    # optional MLRecorder per team: records the StyleBot outfield players
+## Optional neural net per team, run by the brain server; it drives the whole team, goalkeeper included:
+## {"model": absolute path of a game-model JSON} or {"port": n} (a running tools/net_server.py). null = the team's own
+## ml_model if it has one, else rule-based.
+var nets: Array = [null, null]
+var net_temperature := 1.0             # sampling temperature of the net teams (0 = always the best move)
 var kits: Array = []             # resolved by resolve_kits(): [[primary, secondary], [primary, secondary]]
 
 

@@ -8,14 +8,15 @@ extends Node
 ##                                                                  | u8 done[E] | u8 outcome[E] | f32 ep_return[E] | u8 gf[E] | u8 ga[E]
 ##                   (a finished env is reset immediately; its obs is the first obs of the next episode)
 ##   'T' reward terms : (no payload) -> JSON {terms: {name: summed per-agent mean reward}, steps}; resets the sums
-##   'W' set opponent net : payload = JSON MLP dict (or {} to clear)  -> JSON {ok}
+##   'W' set opponent net : payload = JSON game-model dict (or {} to clear)  -> JSON {ok}
+##                          (saved to user://opp_net_<pid>.json; the brain server plays it for the self-play opponents)
 ##   'Q' quit
 
 var server := TCPServer.new()
 var conn: StreamPeerTCP = null
 var envs: Array[RLEnv] = []
 var cfg: Dictionary = {}
-var opp_net: MLP = null
+var opp_net = null                 # net spec of the self-play opponent ({"model": path}), null = none
 
 
 func _ready() -> void:
@@ -104,7 +105,11 @@ func _terms() -> void:
 
 func _set_opp(payload: PackedByteArray) -> void:
     var d = JSON.parse_string(payload.get_string_from_utf8())
-    opp_net = MLP.from_dict(d) if (d is Dictionary and d.has("W")) else null
+    opp_net = null
+    if d is Dictionary and d.has("W"):
+        var path := "user://opp_net_%d_%d.json" % [OS.get_process_id(), Time.get_ticks_msec()]   # a new file: running matches keep theirs
+        Database.write_json(path, d)
+        opp_net = {"model": ProjectSettings.globalize_path(path)}
     for e in envs:
         e.opp_net = opp_net            # takes effect from the next episode
     _send(JSON.stringify({"ok": true}).to_utf8_buffer())

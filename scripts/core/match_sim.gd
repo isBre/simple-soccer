@@ -1,15 +1,14 @@
 class_name MatchSim
 extends RefCounted
-## Headless, deterministic (seeded) Haxball-style match simulation at a fixed 60 Hz.
-## No rendering or scene-tree access, so it can run in worker threads for fast
-## tournament / experiment simulation.
+## Headless, deterministic (seeded) Haxball-style match simulation at a fixed 60 Hz: physics, match rules and stats.
+## No rendering or scene-tree access, so it can run in worker threads for fast tournament / experiment simulation.
+## Every AI decision (rule-based and neural-net teams) comes from the Python brain server through `brain` (BrainLink).
 
 const TICK := 1.0 / 60.0
 const KICK_STRENGTH := 5.0
 const KICK_RANGE := 4.0
 const GOAL_PAUSE := 210
 const AI_PERIOD := 2
-const LegacyBotScript := preload("res://scripts/ai/legacy_bot.gd")
 const HIST := 32
 
 enum State { PLAYING, GOAL, ENDED }
@@ -24,8 +23,10 @@ var movers: Array[Disc] = []
 var players: Array[SimPlayer] = []
 var team_lists: Array = [[], []]
 var by_uid: Dictionary = {}
-var brains: Array[TeamBrain] = []
 var styles: Array[StyleDef] = []
+var brain: BrainLink = null              # the AI of this match (brain/server.py)
+var keeper_uid: Array[int] = [-1, -1]    # who keeps goal for each team right now (decided by the brain), -1 = the nominal GK
+var reset_count := 0                     # kickoff resets so far (the brain resets its team plans on each)
 
 # walls as struct-of-arrays (fast): ball walls and player walls
 var bseg_a := PackedVector2Array()
@@ -110,6 +111,7 @@ func _init(config: MatchConfig) -> void:
     if cfg.control != MatchConfig.ControlMode.NONE:
         _pick_initial_controlled()
         _setup_kickoff_taker()
+    brain = BrainLink.open(self)
 
 
 # ------------------------------------------------------------------ setup
@@ -185,20 +187,13 @@ func _build_stadium() -> void:
 func _build_players() -> void:
     for t in 2:
         styles.append(cfg.get_style(t))
-        var b := TeamBrain.new()
-        b.team = t
-        b.style = styles[t]
-        brains.append(b)
     movers.append(ball)
     for t in 2:
         var team_def: TeamDef = cfg.teams[t]
         var ax := attack_dir(t)
-        if cfg.ml_models[t] == null and team_def.ml_model != "":
-            # a team driven by a trained net (5v5 only: the net's input size must match this team size)
-            var team_net: MLP = MLModels.load_for(team_def.ml_model, cfg.team_size)
-            if team_net != null:
-                cfg.ml_models[t] = team_net
-                cfg.ml_keeper = true
+        if cfg.nets[t] == null and team_def.ml_model != "":
+            # a team driven by a trained net (the brain falls back to the rule-based style when the net does not fit the size)
+            cfg.nets[t] = {"model": ProjectSettings.globalize_path(team_def.ml_model)}
         var lineup: Array = team_def.lineup(cfg.team_size, cfg.formations[t])
         for i in lineup.size():
             var e: Dictionary = lineup[i]
@@ -214,40 +209,10 @@ func _build_players() -> void:
             if sp.length() < minr:
                 sp = sp.normalized() * minr if sp.length() > 0.01 else Vector2(-ax * minr, 0.0)
             p.spawn = sp
-            # No difficulty levels: a bot is exactly as good as its player's attributes, for every team
-            # (allies and opponents alike). Strong teams are teams with strong players.
-            var q_rea := SimPlayer.quality(p.def.reaction)
-            var q_fin := SimPlayer.quality(p.def.finishing)
-            var q_pas := SimPlayer.quality(p.def.passing)
-            var q_pos := SimPlayer.quality(p.def.positioning)
-            p.defend_q = SimPlayer.quality(p.def.defending)
-            p.vision = (q_pas + q_pos + q_rea) / 3.0
-            p.reaction_delay = roundi(lerpf(14.0, 0.0, q_rea))
-            p.err_finish = lerpf(0.24, 0.005, q_fin)
-            p.err_pass = lerpf(0.20, 0.005, q_pas)
-            p.pos_noise = lerpf(70.0, 2.0, q_pos)
-            p.think_ticks = roundi(lerpf(18.0, 6.0, p.vision))
+            # No difficulty levels: a bot is exactly as good as its player's attributes (the brain server turns them
+            # into reaction time, aim error, vision...), for every team. Strong teams are teams with strong players.
             p.ps = stats.get_player(p.uid)
-            var br := RandomNumberGenerator.new()
-            br.seed = rng.randi()
-            var ctrl: BotController = StyleBot.new(styles[t], br)
-            if cfg.legacy_bot[t]:
-                ctrl = LegacyBotScript.new(styles[t], br)
-            if p.role != "GK" or (cfg.ml_keeper and cfg.ml_models[t] != null):
-                if cfg.ml_models[t] != null:
-                    var mb := MLBot.new(cfg.ml_models[t], br)
-                    mb.temperature = cfg.ml_temperature
-                    ctrl = mb
-                elif cfg.dagger[t] != null:
-                    var dg: Dictionary = cfg.dagger[t]
-                    var st: MLBot = null
-                    if dg["net"] != null:
-                        st = MLBot.new(dg["net"], br)
-                        st.temperature = float(dg["temp"])
-                    ctrl = DaggerBot.new(ctrl, st, dg["rec"], float(dg["beta"]), br)
-                elif cfg.recorders[t] != null:
-                    ctrl = RecordingBot.new(ctrl, cfg.recorders[t])
-            p.controller = ctrl
+            p.ai_seed = rng.randi()
             players.append(p)
             movers.append(p)
             team_lists[t].append(p)
@@ -272,8 +237,7 @@ func _reset_positions() -> void:
     carry_p = null
     for i in HIST:
         ball_hist[i] = Vector2.ZERO
-    for b in brains:
-        b.reset()
+    reset_count += 1
     _setup_kickoff_taker()
 
 
@@ -373,16 +337,16 @@ func step() -> void:
         return
     tick += 1
 
-    if tick % AI_PERIOD == 0:
-        for b in brains:
-            b.update(self)
-
+    var update := tick % AI_PERIOD == 0
+    var due := false
     for p in players:
         if p.is_human:
             p.input_dir = human_dir
             p.input_kick = human_kick
-        elif p.controller != null and (tick + p.slot) % AI_PERIOD == 0:
-            p.controller.decide(self, p)
+        elif p.bot and (tick + p.slot) % AI_PERIOD == 0:
+            due = true
+    if brain != null and (update or due):
+        brain.decide(self, update)          # team plans every AI_PERIOD ticks, then the bots that are due
 
     if state == State.GOAL:
         _celebrate()
@@ -590,8 +554,8 @@ func _apply_kickoff_limits() -> void:
 # ------------------------------------------------------- touches & stats
 
 func _is_keeper(p: SimPlayer) -> bool:
-    var k: SimPlayer = brains[p.team].keeper if brains.size() > p.team else null
-    return k == p if k != null else p.role == "GK"
+    var k: int = keeper_uid[p.team]
+    return k == p.uid if k >= 0 else p.role == "GK"
 
 
 ## An opponent is close enough to bother this player.
@@ -946,34 +910,12 @@ func make_result() -> Dictionary:
         "ticks": tick, "kickoff_waits": kickoff_waits, "zones": zone_ticks, "idle": idle_ticks}
 
 
-# --------------------------------------------------- agent / RL interface
+# --------------------------------------------------- RL interface (actions of the trainer; observations come from brain/nets.py)
 
 const DIRS: Array[Vector2] = [
     Vector2(0, 0), Vector2(0, -1), Vector2(1, -1), Vector2(1, 0), Vector2(1, 1),
     Vector2(0, 1), Vector2(-1, 1), Vector2(-1, 0), Vector2(-1, -1),
 ]
-
-
-## Normalized state, mirrored so the agent always attacks toward +x.
-## Layout: self, ball, teammates, opponents; each = [x, y, vx, vy].
-func get_observation(p: SimPlayer) -> PackedFloat32Array:
-    var s := attack_dir(p.team)
-    var obs := PackedFloat32Array()
-    _push_disc(obs, p, s)
-    _push_disc(obs, ball, s)
-    for m: SimPlayer in team_lists[p.team]:
-        if m != p:
-            _push_disc(obs, m, s)
-    for o: SimPlayer in team_lists[1 - p.team]:
-        _push_disc(obs, o, s)
-    return obs
-
-
-func _push_disc(obs: PackedFloat32Array, d: Disc, s: float) -> void:
-    obs.append(d.pos.x * s / pitch.out_x)
-    obs.append(d.pos.y / pitch.out_y)
-    obs.append(d.vel.x * s / 5.0)
-    obs.append(d.vel.y / 5.0)
 
 
 ## Discrete action: move_idx 0..8 (DIRS, in the agent's own frame where +x is

@@ -3,8 +3,8 @@ extends Node
 ## against each of the 16 rule-based teams, on both sides, full 180 s matches (SimBatch, all cores).
 ## Also writes rl/teams_info.json (id, strength, style, tier, held_out) for the trainer.
 ##   godot --headless --path . res://rl/league_eval.tscn -- --model res://out_5v5/x.json --games 4 [--duration 180] [--remote PORT]
-## --remote PORT: the net runs in tools/net_server.py on that port (numpy; the GDScript MLP is ~15x slower on a Raspberry Pi);
-## --model is then only a label. --greedy: argmax play; --stride 2: every 2nd team only.
+## --remote PORT: the net is served by tools/net_server.py on that port (newest / best checkpoint logic lives there);
+## --model is then only a label. Without it the brain server loads --model itself. --greedy: argmax play; --stride 2: every 2nd team only.
 ## Held-out teams (never trained against): sorted by strength, indices 1, 5, 9, 13 (one per tier).
 
 var batch := SimBatch.new()
@@ -13,7 +13,7 @@ var ids: Array = []
 var info: Dictionary = {}
 var model_path := ""
 var remote_port := 0
-var greedy := false          # --greedy: the net plays its best move instead of sampling (ml_temperature 0)
+var greedy := false          # --greedy: the net plays its best move instead of sampling (net_temperature 0)
 var stride := 1              # --stride N: only every Nth team (sorted by strength), for a cheaper run
 var t0 := 0
 
@@ -45,7 +45,7 @@ func _ready() -> void:
 	if model_path == "":
 		get_tree().quit()
 		return
-	var net: MLP = null if remote_port > 0 else MLP.from_dict(Database.read_json(model_path))
+	var net_spec := {"port": remote_port} if remote_port > 0 else {"model": ProjectSettings.globalize_path(model_path)}
 	var cfgs: Array = []
 	var seed_i := 0
 	for id: String in ids:
@@ -60,10 +60,9 @@ func _ready() -> void:
 				c.teams = [Database.teams["owls"], Database.teams["owls"]]
 				c.teams[1 - side] = Database.teams[id]
 				c.resolve_kits()
-				c.ml_models[side] = RemoteMLP.new(remote_port) if remote_port > 0 else net      # one connection per match (matches run on threads)
-				c.ml_keeper = true
+				c.nets[side] = net_spec          # the brain server plays the net (one connection per match; matches run on threads)
 				if greedy:
-					c.ml_temperature = 0.0
+					c.net_temperature = 0.0
 				cfgs.append(c)
 				meta.append({"opp": id, "side": side, "seed": c.match_seed})
 	t0 = Time.get_ticks_msec()

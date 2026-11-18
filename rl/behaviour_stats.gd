@@ -1,12 +1,12 @@
 extends Node
 ## Behaviour statistics, RL Team vs rule-based opponents per decision: jitter, kick presses, clumping, keeper position.
 ##   godot --headless --path . res://rl/behaviour_stats.tscn [-- --model res://x.json | --remote PORT]
-## --remote PORT: the measured net runs in tools/net_server.py (see league_eval.gd).
+## --remote PORT: the measured net is served by tools/net_server.py on that port (see league_eval.gd).
 ## Also prints one "SCOUT {json}" line for the scouting page: team shape in and out of possession by depth rank (who is really the
 ## deepest / most advanced player, whatever its slot), keeper presence, pressing, possession, territory and located events (shots
 ## for and against, completed passes between slots, recoveries), positions normalised to [-1, 1] in the RL team's attacking frame.
 var results: Array = []
-var model_net: MLP = null          # optional --model <res:// json>: measure this net instead of the team's shipped one
+var model_net = null               # optional --model <res:// json>: measure this net instead of the team's shipped one (a net spec)
 var remote_port := 0
 var greedy := false          # --greedy: the net plays its best move instead of sampling
 const CORNER_ZONE := 150.0      # the ball counts as "in a corner" within this many px of both the goal line and the side line
@@ -32,13 +32,11 @@ func _run(i: int) -> void:
 	c.teams = [rl, opp]
 	c.resolve_kits()
 	if greedy:
-		c.ml_temperature = 0.0
+		c.net_temperature = 0.0
 	if remote_port > 0:
-		c.ml_models[0] = RemoteMLP.new(remote_port)
-		c.ml_keeper = true
+		c.nets[0] = {"port": remote_port}
 	elif model_net != null:
-		c.ml_models[0] = model_net
-		c.ml_keeper = true
+		c.nets[0] = model_net
 	var sim := MatchSim.new(c)
 	sim.log_events = true
 	var sc := {"role": [], "pos": {"in": [], "out": []}, "n_phase": {"in": 0, "out": 0}, "shape": {"in": [0.0, 0.0, 0.0, 0.0], "out": [0.0, 0.0, 0.0, 0.0]},
@@ -299,7 +297,7 @@ func _ready() -> void:
 	var cli := OS.get_cmdline_user_args()
 	for i in cli.size():
 		if cli[i] == "--model" and i + 1 < cli.size():
-			model_net = MLP.from_dict(Database.read_json(cli[i + 1]))
+			model_net = {"model": ProjectSettings.globalize_path(cli[i + 1])}
 		if cli[i] == "--greedy":
 			greedy = true
 		if cli[i] == "--remote" and i + 1 < cli.size():

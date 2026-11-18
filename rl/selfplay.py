@@ -29,7 +29,7 @@ from client import GODOT, ROOT, VecEnv
 from ppo import Agent, OUT, OUT_DRAW, OUT_LOSS, OUT_WIN, load_padded, save_model, team_pools
 
 CKPT = os.path.join(OUT, "ckpt")
-OBS_DIMS = {"legacy": 54, "team": 46}            # observation layouts (see MLBot.features_team): ego with player slot / role-free team observation
+OBS_DIMS = {"legacy": 54, "team": 46}            # observation layouts (see brain/nets.py features_team): ego with player slot / role-free team observation
 
 
 N_TEAM, N_LEGACY = 46, 54                       # env obs "both" = the team observation followed by the legacy one

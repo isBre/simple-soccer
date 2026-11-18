@@ -1,8 +1,9 @@
 class_name RLEnv
 extends RefCounted
 ## One RL episode source on top of MatchSim. The learner controls players of team 0 with ONE shared
-## policy (one observation per player: MLBot.features + slot one-hot, 54 inputs). With `with_keeper`
+## policy (one observation per player, built by the brain server: brain/nets.py). With `with_keeper`
 ## the goalkeeper slot is a normal learner player too: no rule-based keeper, no fixed formation.
+## The rule-based players (opponents, a kept keeper) are run by the brain server like in any match.
 ##
 ## Config (see configure()):
 ##   n_active     number of learner-controlled players (1..5); the rest of team 0 is removed ("ghosts")
@@ -16,7 +17,7 @@ extends RefCounted
 ##   selfplay     probability that team 1 is driven by `opp_net` (all 5 players incl. keeper) instead of rules
 ##   own_team     id of the learner's team (only matters for a rule-based keeper / lineup)
 
-const REPEAT := 2                 # sim ticks per decision (same as MLBot's AI_PERIOD)
+const REPEAT := 2                 # sim ticks per decision (same as MatchSim.AI_PERIOD)
 const OUT_NONE := 0
 const OUT_GOAL := 1
 const OUT_OWN := 2
@@ -26,6 +27,7 @@ const OUT_WIN := 5
 const OUT_DRAW := 6
 const OUT_LOSS := 7
 const OBS_LEGACY := 54           # ego observation with the slot one-hot (the first RL teams)
+const OBS_TEAM := 46             # role-free team observation (brain/nets.py features_team)
 
 var pitch_id := "arena"
 var size := 5
@@ -92,9 +94,9 @@ var term_sums: Dictionary = {}    # reward term -> summed per-agent mean contrib
 var term_steps := 0
 var prev_pass := [0, 0, 0, 0, 0.0]  # team 0 totals: progressive, ok, failed, key passes, xA
 var opp_external := false         # team 1 is controlled from Python too (self-play): its players are extra agents
-var opp_net: MLP = null
+var opp_net = null               # net spec for self-play opponents ({"model": path}, see MatchConfig.nets), null = none
 var own_keeper := true            # only used when the keeper is not controlled: keep the rule-based one?
-var external_actions := false     # true -> step() leaves the players' inputs alone (set by MLBot etc.)
+var external_actions := false     # true -> step() leaves the players' inputs alone
 
 var sim: MatchSim
 var agents: Array[SimPlayer] = []
@@ -167,10 +169,10 @@ func configure(c: Dictionary) -> void:
         rng.seed = int(c["seed"])
 
 
-## Observation layout (config "obs"): "legacy" = 54 numbers with slot, "team" = the 46-number role-free one (MLBot.features_team),
+## Observation layout (config "obs"): "legacy" = 54 numbers with slot, "team" = the 46-number role-free one (features_team),
 ## "both" = team then legacy (100 numbers; only for distilling an old net into a new one, rl/distill.py).
 func obs_dim() -> int:
-    return {"legacy": OBS_LEGACY, "team": MLBot.TEAM_OBS, "both": MLBot.TEAM_OBS + OBS_LEGACY}[obs_mode]
+    return {"legacy": OBS_LEGACY, "team": OBS_TEAM, "both": OBS_TEAM + OBS_LEGACY}[obs_mode]
 
 
 ## Learner agents first, then (self-play) the opponent team's players.
@@ -194,8 +196,7 @@ func reset() -> void:
     cfg.resolve_kits()
     used_selfplay = opp_net != null and rng.randf() < selfplay
     if used_selfplay:
-        cfg.ml_models[1] = opp_net
-        cfg.ml_keeper = true
+        cfg.nets[1] = opp_net
     sim = MatchSim.new(cfg)
     episode_id += 1
     steps = 0
@@ -214,7 +215,7 @@ func reset() -> void:
         var is_gk := p.role == "GK"
         if agents.size() < n_active and (with_keeper or not is_gk):
             agents.append(p)
-            p.controller = null
+            p.bot = false
         elif is_gk and own_keeper and not with_keeper:
             pass                                   # stays a rule-based keeper
         else:
@@ -229,7 +230,7 @@ func reset() -> void:
                 ordered1.append(p)
         for p in ordered1:
             opp_agents.append(p)
-            p.controller = null
+            p.bot = false
     if opp == "none":
         for p: SimPlayer in sim.team_lists[1]:
             ghosts.append(p)
@@ -263,7 +264,7 @@ func reset() -> void:
 
 ## Removes a player from the physics and the rule logic but keeps it in team_lists (observations).
 func _ghost(g: SimPlayer) -> void:
-    g.controller = null
+    g.bot = false
     sim.movers.erase(g)
     sim.players.erase(g)
     g.pos = Vector2(0.0, sim.pitch.out_y * 2.5)
@@ -542,12 +543,11 @@ func _individual() -> PackedFloat32Array:
 
 
 func observe() -> PackedFloat32Array:
-    var out := PackedFloat32Array()
-    for a in agents + opp_agents:
-        if obs_mode != "legacy":
-            out.append_array(MLBot.features_team(sim, a))
-        if obs_mode != "team":
-            out.append_array(MLBot.features(sim, a, true))
+    var mode: int = {"legacy": BrainLink.OBS_EGO, "team": BrainLink.OBS_TEAM, "both": BrainLink.OBS_TEAM | BrainLink.OBS_EGO}[obs_mode]
+    var out := sim.brain.observe(sim, agents + opp_agents, mode)
+    if out.size() != n_agents() * obs_dim():      # no brain server: zeros keep the trainer's shapes (the error is logged)
+        out = PackedFloat32Array()
+        out.resize(n_agents() * obs_dim())
     return out
 
 

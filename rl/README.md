@@ -1,18 +1,19 @@
 # RL training (Python PPO <-> headless Godot)
 
 The AI controls **all 5 players of a team, keeper included**, with one shared policy, so roles and formation are learned, not scripted.
-The actor has the game's `MLP` layout (`[n_in, h, h, 10]`: 9 move logits + 1 kick logit) and is exported as game model JSON; `MLBot` plays it as is.
-Two observation layouts exist (`selfplay.py --obs`, `rl_env.gd` config `obs`, chosen by the net's input size in `MLBot.features_for`):
+The actor has the game-model layout (`[n_in, h, h, 10]`: 9 move logits + 1 kick logit) and is exported as game model JSON; the brain server (`brain/nets.py`) plays it as is.
+Two observation layouts exist (`selfplay.py --obs`, `rl_env.gd` config `obs`, chosen by the net's input size in `brain/nets.py` `features_for`):
 - **`team` (46 numbers, default for new runs, no player ID):** me (position and speed), my 4 teammates nearest first, the 5 opponents nearest first, the ball (position and speed),
   kickoff on (0/1), goal celebration on (0/1). Positions are scaled by the pitch, speeds by 5, the pitch is mirrored so the team attacks to the right. Sorting by distance instead of by
-  slot keeps a player from knowing a "role": it acts on the situation (see `MLBot.features_team`).
+  slot keeps a player from knowing a "role": it acts on the situation (see `features_team` in `brain/nets.py`).
 - **`legacy` (54 numbers):** me first, ball, the 4 teammates and 5 opponents in slot order, ball and opponent goal relative to me, and a one-hot of the player's slot. The first RL teams (RL Team 1-5) use it.
 
-- `rl_env.gd` / `rl_server.gd`: environment + TCP bridge (several envs per Godot process).
+- `rl_env.gd` / `rl_server.gd`: environment + TCP bridge (several envs per Godot process). The rule-based players and the
+  observations come from the brain server (`brain/`), which each Godot worker starts on demand with the trainer's own Python
+  (`client.py` sets `SOCCER_PYTHON`; `SOCCER_GODOT` overrides the Godot binary).
 - `client.py`: vector env over N Godot workers. `ppo.py`: PPO + curriculum + model export.
 - `league_eval.gd`: plays a model against all 16 teams on both sides (full matches, game code path) and
   writes `teams_info.json` (strengths, tiers, 4 held-out teams that are never trained against).
-- `eval_model.gd`: quick check of an exported model on the first-goal scenarios.
 
 Curriculum: empty goal -> rule-based keeper -> full 90 s matches vs weak / average / strong training teams.
 
@@ -30,7 +31,7 @@ A net with another observation cannot continue from an old checkpoint, so `disti
 gives both layouts of every state), the student learns its move distribution, kick probability and value estimate, then **DAgger rounds** let the student play and the teacher label the states
 the student really reaches (plain imitation alone gave a student that agreed 85% with the teacher but scored 0.9 instead of 2.9 league points per match).
 `python3 rl/distill.py --teacher out_5v5/ckpt/jit8_best.pt --out team46_start --rounds 4` writes `out_5v5/team46_start.pt/.json`; start the run with `selfplay.py --obs team --start out_5v5/team46_start.pt`.
-The net server announces the net's input size to `RemoteMLP` when a client connects, so nets of both layouts can play side by side (evaluation against RL Team 4 / 5 works unchanged).
+The net server announces the net's input size when the brain server connects, so nets of both layouts can play side by side (evaluation against RL Team 4 / 5 works unchanged).
 
 ## Self-play and cooperation fine-tuning
 
@@ -91,7 +92,7 @@ After each evaluation `eval_checkpoint.py` keeps the **best checkpoint** by leag
 `python3 rl/export_team.py --tag jit8 --number 6` turns it (or `--checkpoint jit8_u300`) into a playable "RL Team 6" (`data/models/rl_5v5_arena_v6.json`, `data/teams/rl_team_6.json`).
 A scene that hangs is killed after 3 hours (`TIMEOUT` line) so it cannot block later evaluations.
 
-All three run the nets in numpy servers (`--remote PORT` in the Godot scripts, `tools/net_server.py`, `RemoteMLP`): the GDScript MLP is too slow on a Raspberry Pi to evaluate a checkpoint in reasonable time.
+All three serve the nets from numpy servers (`--remote PORT` in the Godot scripts, `tools/net_server.py`); the brain server builds the observations and asks them for the outputs.
 Cost on a Pi 4 with the CPU free: about 25-30 minutes with the defaults (a quick test with 20 s matches took 6 minutes). Run it by hand on any checkpoint:
 `python3 rl/eval_checkpoint.py --model out_5v5/ckpt/x.json --out logs/sp_eval/x.txt [--games 1] [--duration 90] [--h2h_games 3]`.
 Numbering across restarts: `--start_update N --updates TOTAL` continues a run (checkpoint names, logs and charts keep counting; append to the log with `>>`).
@@ -139,8 +140,8 @@ The **BEST MOVE** button in the bar makes the next matches play the net's best m
 Code: `training_data.gd` (parsing of the log, checkpoints and evaluations, machine info; no UI), `training_page.gd` (full pages), `heatmap.gd`, `training_sidebar.gd` (compact panel), `line_chart.gd`, `watch_training.gd/.tscn` (navigation and the match). The numbers come from `logs/<tag>.out` and `logs/sp_eval/`, so it works while training runs in another process.
 `CKPT_EVERY` / `EVAL_EVERY` in `training_data.gd` must match the run's `--ckpt_every` / `--eval_every` (only used for "next checkpoint / evaluation" estimates).
 
-Why a Python server: playing two net teams with the game's GDScript `MLP` ran at about 4 FPS on a Pi (about 300 forward passes per second of 25k multiply-adds each).
-`tools/net_server.py` runs the nets in numpy; `scripts/ml/remote_mlp.gd` (`RemoteMLP`, an `MLP` whose `forward` asks the server) plugs into `MatchConfig.ml_models`.
+Why a net server: playing two net teams with the old GDScript net ran at about 4 FPS on a Pi (about 300 forward passes per second of 25k multiply-adds each).
+`tools/net_server.py` runs the nets in numpy; the brain server connects to it for a team whose `MatchConfig.nets` entry is `{"port": n}`.
 The server loads the newest `<tag>_u*.json` each time a match connects, so every match uses the latest weights (before the first checkpoint it plays `--model`).
 
 ```bash
@@ -151,5 +152,5 @@ godot --path . res://tools/watch_training.tscn -- --tag jit7 --start res://out_5
 
 Frame rate: capped at 30 FPS (physics keeps 60 ticks/s) and without goal confetti (`MatchScreen.set_effects(false)`; the normal game is unchanged).
 `MatchView` draws the static pitch once in a layer behind the players and paints the background without overdraw: that, not the nets, was the cost left on the Pi GPU (about 36 -> 60 FPS).
-`tools/bench_sim.tscn` is a headless benchmark (ticks/s with rule bots and with remote nets, observation and net latency) to see where time goes before optimising.
+`tools/bench_sim.tscn` is a headless benchmark (sim ticks/s of rule-vs-rule matches and training-environment steps/s, both through the brain server) to see where time goes before optimising.
 A match screen added after the first one must be sized explicitly (`set_anchors_and_offsets_preset`), otherwise it stays 0x0.

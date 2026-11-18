@@ -1,7 +1,7 @@
 """PPO (shared policy over the 5 players of a team, keeper included) for simple-soccer 5v5 arena.
 
 The net decides everything, with slot one-hot inputs so roles (keeper / defender / attacker) can emerge.
-Actor layout = the game's MLP: [54, h, h, 10] (9 move logits + 1 kick logit, ReLU); exported as game JSON.
+Actor layout = the game-model layout: [54, h, h, 10] (9 move logits + 1 kick logit, ReLU); exported as game JSON.
 
 Curriculum (STAGES): empty goal with 5 players -> vs a rule-based keeper -> full matches against weak,
 average, strong teams (training teams only; 4 teams are held out) -> all teams + self-play snapshots.
@@ -118,7 +118,7 @@ def save_model(agent, name):
 
 
 def league_eval(model_path, games, log):
-    """Independent evaluation through the game's own MLBot path (SimBatch, all cores)."""
+    """Independent evaluation through the game's own path (SimBatch, all cores; the brain server plays the net)."""
     t0 = time.time()
     try:
         r = subprocess.run([GODOT, "--headless", "--path", ROOT, "res://rl/league_eval.tscn", "--",
