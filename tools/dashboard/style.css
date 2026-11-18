@@ -305,3 +305,4 @@ body.kiosk .search { width: 160px; }
 
 .lv-opp { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); margin: 0 0 10px; }
 .lv-opp select { flex: 1; min-width: 0; font: inherit; font-size: 13px; color: var(--ink); background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px; padding: 7px 8px; }
+.chip.net { background: var(--info-soft); }

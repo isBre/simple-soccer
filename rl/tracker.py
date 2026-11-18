@@ -40,6 +40,21 @@ def selfplay_options():
     return set(re.findall(r'add_argument\("--(\w+)"', open(os.path.join(ROOT, "rl", "selfplay.py")).read()))
 
 
+def net_info(model):
+    """The network a run starts from (and trains), read from the game-model JSON next to the checkpoint: {"sizes": [46, 128, 128, 10],
+    "label": "46-128-128-10", "params": 24.4k}. None when the file is missing."""
+    if not model:
+        return None
+    path = model if os.path.isabs(model) else os.path.join(ROOT, model)
+    path = os.path.splitext(path)[0] + ".json"
+    try:
+        sizes = json.load(open(path))["sizes"]
+    except (OSError, ValueError, KeyError):
+        return None
+    params = sum(a * b + b for a, b in zip(sizes, sizes[1:]))
+    return {"sizes": sizes, "label": "-".join(str(x) for x in sizes), "params": params}
+
+
 def validate_spec(spec):
     """List of problems of an experiment spec (empty = fine)."""
     errs = []
@@ -290,7 +305,7 @@ def write_markdown():
     lines = ["# Experiment results", "", "Updated %s. pts = league points per match (16 rule teams, both sides), gd = goal difference per match, "
              "mean ± standard error. Verdicts compare within one protocol (fast and full are never mixed), paired over identical matches "
              "when possible. `python3 rl/lab.py` gives the same data as JSON." % time.strftime("%Y-%m-%d %H:%M"), "",
-             "| run | state | update | protocol | pts ± se | gd | GA | vs RL4 | vs RL5 | dir chg/s | idle % | verdict |", "|---|---|---|---|---|---|---|---|---|---|---|---|"]
+             "| run | net | state | update | protocol | pts ± se | gd | GA | vs RL4 | vs RL5 | dir chg/s | idle % | verdict |", "|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
     for run in runs:
         st = run_status(run)
         for kind in ("full", "fast"):
@@ -299,8 +314,8 @@ def write_markdown():
                 continue
             a, h, b = r["league"].get("all", {}), r["h2h"], r["behaviour"]
             v = (st.get("verdict") or {}) if kind == "full" else {}
-            lines.append("| %s | %s | %s | %s | %s ± %s | %s | %s | %s | %s | %s | %s | %s |" % (
-                run, st.get("state", "imported"), r["update"], r.get("protocol"), a.get("pts", "-"), a.get("se", "-"), a.get("gd", "-"), a.get("ga", "-"),
+            lines.append("| %s | %s | %s | %s | %s | %s ± %s | %s | %s | %s | %s | %s | %s | %s |" % (
+                run, (st.get("net") or net_info(st.get("spec", {}).get("start")) or {}).get("label", "-"), st.get("state", "imported"), r["update"], r.get("protocol"), a.get("pts", "-"), a.get("se", "-"), a.get("gd", "-"), a.get("ga", "-"),
                 (h.get("RL Team 4") or {}).get("pts", "-"), (h.get("RL Team 5") or {}).get("pts", "-"),
                 b.get("dir_changes_s", "-"), b.get("idle_pct", "-"), ("%s (vs %s)" % (v.get("verdict"), v.get("reference"))) if v.get("verdict") else ""))
     lines += ["", "Runs: " + ", ".join("%s (%s)" % (r, run_status(r).get("state", "imported")) for r in runs), ""]

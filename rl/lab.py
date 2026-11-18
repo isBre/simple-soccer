@@ -222,6 +222,7 @@ def run_row(name, rows):
     changed = {k: v for k, v in rewards.items() if tracker.MINIMAL.get(k) != v}
     return {"name": name, "state": st.get("state", "imported" if name.startswith(("old_", "start:")) else "reference" if name.startswith("team:") else "unknown"),
             "notes": spec.get("notes", ""), "start": spec.get("start"), "control": spec.get("control"),
+            "net": (st.get("net") or tracker.net_info(spec.get("start") or ("out_5v5/ckpt/" + name[6:] if name.startswith("start:") else None)) or {}).get("label"),
             "rewards_changed_vs_minimal": changed if rewards else spec.get("rewards", {}), "seed": st.get("seed"),
             "update": st.get("update"), "target": st.get("target_updates"), "stop_reason": st.get("stop_reason"),
             "restarts": len(st.get("restarts", [])), "verdict": st.get("verdict"), "cost_hours": st.get("cost_hours"),
@@ -347,7 +348,7 @@ def cmd_queue(a):
         for f in queue_files():
             spec = json.load(open(f))
             rewards, args = tracker.effective(spec)
-            out.append({"file": os.path.basename(f), "name": spec["name"], "start": spec.get("start"), "updates": args["updates"], "lr": args["lr"],
+            out.append({"file": os.path.basename(f), "name": spec["name"], "start": spec.get("start"), "net": (tracker.net_info(spec.get("start")) or {}).get("label"), "updates": args["updates"], "lr": args["lr"],
                         "seed": args["seed"], "rewards_changed_vs_minimal": spec.get("rewards", {}), "args": spec.get("args", {}),
                         "control": spec.get("control"), "notes": spec.get("notes", "")})
         running = [json.load(open(f))["name"] for f in glob.glob(os.path.join(EXP, "running", "*.json"))]

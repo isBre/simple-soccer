@@ -65,6 +65,12 @@ Players were seen pressed against the arena's outer wall. Measured with the new 
 spends **20.8%** of each player's time pressed against the wall. New term `w_wall` (rl_env.gd): a penalty per decision for a player at the
 wall for 2+ decisions in a row. Queued first as experiment `wall` (0.005, minimal set, 300 updates, judged against the `minimal` control).
 
+## Network used (convention, 2026-11-18)
+Every run states its network: `net` in `lab.py runs` / `run`, in `exp/results.md`, as a chip on the dashboard, and in every review here as
+`inputs-hidden-hidden-outputs` (all runs so far: **46-128-128-10**, about 24k parameters; the old 54-number jit8 is 54-128-128-10).
+The wider net (**46-256-256-10**) comes after the current queue: distil it from jit8 (`rl/distill.py --hidden 256 --out team46_w256`), then kickstart it
+like `kickstart` / `kickstart_persist`; its reviews will name the net and compare against the 128-wide runs.
+
 ## Reviews
 An automatic review runs every 2 hours while the agent's session is open: it checks the Pi and the runner, appends a review here for every
 finished experiment and adjusts the queue.

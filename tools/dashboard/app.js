@@ -40,6 +40,7 @@ async function getJSON(url) { const r = await fetch(url, { cache: "no-store" });
 const runLink = (n) => `<a class="rl" href="#/run/${encodeURIComponent(n)}"><i class="dot" style="background:${runColor(n)}"></i>${esc(n)}</a>`;
 function chips(row) {
   const out = [];
+  if (row.net) out.push(`<span class="chip net" title="network: inputs-hidden-hidden-outputs">net ${esc(row.net)}</span>`);
   for (const [k, v] of Object.entries(row.rewards_changed_vs_minimal || {})) out.push(`<span class="chip rw">${esc(k)}=${esc(v)}</span>`);
   for (const [k, v] of Object.entries(row.args || {})) {
     const short = String(v).split(",").map((x) => x.split("/").pop().replace(/\.(pt|json)$/, "").replace(/^rl_5v5_arena_v/, "RL")).join(", ");
@@ -204,7 +205,7 @@ function viewNow() {
     const delta = run.train_pts_vs_rules != null && run.train_pts_at_start != null ? run.train_pts_vs_rules - run.train_pts_at_start : null;
     const lf = row.latest_fast;
     hero = `<section class="hero ${mode}"><div class="hero-top"><div class="min0"><div class="eyebrow">Running experiment</div><h1>${runLink(run.run)}</h1>
-        <div class="notes">${esc(row.notes || "")}</div><div class="chips">${chips({ rewards_changed_vs_minimal: row.rewards_changed_vs_minimal, args: (state.detail[run.run]?.status?.spec?.args) || spec.args || {} })}</div></div><div>${lbl}</div></div>
+        <div class="notes">${esc(row.notes || "")}</div><div class="chips">${chips({ net: row.net, rewards_changed_vs_minimal: row.rewards_changed_vs_minimal, args: (state.detail[run.run]?.status?.spec?.args) || spec.args || {} })}</div></div><div>${lbl}</div></div>
       <div class="progress"><i style="width:${pct}%"></i></div>
       <div class="hero-stats"><div><b>${run.update ?? 0}<small> / ${run.target ?? "?"}</small></b><span>updates</span></div>
         <div><b>${run.eta_hours != null ? dur(run.eta_hours * 3600) : "–"}</b><span>training left</span></div>
@@ -229,7 +230,7 @@ function viewNow() {
   let curve = '<div class="empty">Nothing training</div>';
   if (run) { const d = state.detail[run.run]; ensureDetail(run.run); curve = d && !d.error ? trainingChart(d, 200, "now") : '<div class="empty">Loading…</div>'; }
   const ev = o.events.slice(0, 9).map((e) => `<li class="ev ${esc(e.kind)}"><time>${esc((e.t || "").slice(11, 16))}</time><span>${esc(e.text)}</span></li>`).join("");
-  const q = o.queue.queued.slice(0, 5).map((s, i) => `<li><span class="qn">${i + 1}</span><b>${esc(s.name)}</b><span class="chips">${chips({ rewards_changed_vs_minimal: s.rewards_changed_vs_minimal, args: s.args })}</span></li>`).join("");
+  const q = o.queue.queued.slice(0, 5).map((s, i) => `<li><span class="qn">${i + 1}</span><b>${esc(s.name)}</b><span class="chips">${chips({ rewards_changed_vs_minimal: s.rewards_changed_vs_minimal, args: s.args, net: s.net })}</span></li>`).join("");
   return `<div class="grid now-top">${hero}${vitals}</div>
     <div class="grid g2"><section class="card"><div class="card-h"><h2>League strength</h2><span class="muted small">latest full evaluation · 95% interval</span></div>${leaderboard(o.runs)}</section>
       <section class="card"><div class="card-h"><h2>Training${run ? " · " + esc(run.run) : ""}</h2>${smoothControl()}</div>${curve}</section></div>
@@ -262,7 +263,7 @@ function trainingChart(d, height, key, width) {
 // ---------- RUNS ----------
 function viewRuns() {
   const o = state.ov; if (!o) return '<div class="empty">Loading…</div>';
-  const queued = o.queue.queued.map((s) => ({ name: s.name, state: "queued", notes: s.notes, rewards_changed_vs_minimal: s.rewards_changed_vs_minimal, args: s.args, target: s.updates, queued: true }));
+  const queued = o.queue.queued.map((s) => ({ name: s.name, net: s.net, state: "queued", notes: s.notes, rewards_changed_vs_minimal: s.rewards_changed_vs_minimal, args: s.args, target: s.updates, queued: true }));
   let rows = o.runs.concat(queued);
   const flt = state.filter.toLowerCase();
   if (flt) rows = rows.filter((r) => (r.name + " " + (r.notes || "") + " " + JSON.stringify(r.rewards_changed_vs_minimal || {})).toLowerCase().includes(flt));
@@ -278,7 +279,7 @@ function viewRuns() {
     return `<tr class="${r.queued ? "queued" : "link"}" data-run="${r.queued ? "" : esc(r.name)}"><td class="k-hide">${r.queued ? "" : `<input type="checkbox" data-pick="${esc(r.name)}" ${sel ? "checked" : ""} aria-label="select ${esc(r.name)}">`}</td>
       <td>${r.queued ? `<span class="rl"><i class="dot" style="background:var(--line)"></i>${esc(r.name)}</span>` : runLink(r.name)}<div class="muted small clip k-hide" title="${esc(r.notes || "")}">${esc(r.notes || "")}</div></td>
       <td>${badge(r.state)}${r.stop_reason && r.stop_reason !== "budget" ? `<div class="muted small">${esc(r.stop_reason)}</div>` : ""}</td>
-      <td class="k-hide">${r.state === "imported" ? '<span class="muted small">older run</span>' : r.state === "reference" ? '<span class="muted small">shipped team</span>' : `<div class="chips">${chips({ rewards_changed_vs_minimal: r.rewards_changed_vs_minimal, args })}</div>`}</td>
+      <td class="k-hide">${r.state === "imported" ? '<span class="muted small">older run</span>' : r.state === "reference" ? '<span class="muted small">shipped team</span>' : `<div class="chips">${chips({ net: r.net, rewards_changed_vs_minimal: r.rewards_changed_vs_minimal, args })}</div>`}</td>
       <td class="r">${r.update ?? (r.queued ? "" : "–")}${r.target ? `<span class="pm">/${r.target}</span>` : ""}</td>
       <td class="k-hide">${r.queued ? "" : sparkline(r.spark, runColor(r.name))}</td>
       <td class="r">${a ? `${f(a.pts)}<span class="pm">±${f(a.se)}</span>` : "–"}</td><td class="r ${a && a.gd > 0 ? "pos" : a && a.gd < 0 ? "neg" : ""}">${a ? sgn(a.gd) : "–"}</td><td class="r">${a ? f(a.ga) : "–"}</td>
@@ -302,7 +303,7 @@ function viewRun(name, tab) {
   tab = TABS.includes(tab) ? tab : "summary";
   const st = d.status || {}, row = d.row || {}, spec = st.spec || {};
   const head = `<div class="crumbs"><a href="#/runs">Runs</a> / ${esc(name)}</div>
-    <div class="head"><div class="min0"><h1>${runLink(name)} ${badge(row.state)}</h1><p>${esc(row.notes || (row.state === "imported" ? "Imported from an older run (no spec)." : ""))}</p>${row.state === "imported" ? "" : `<div class="chips">${chips({ rewards_changed_vs_minimal: row.rewards_changed_vs_minimal, args: spec.args || {} })}</div>`}</div>
+    <div class="head"><div class="min0"><h1>${runLink(name)} ${badge(row.state)}</h1><p>${esc(row.notes || (row.state === "imported" ? "Imported from an older run (no spec)." : ""))}</p>${row.state === "imported" ? "" : `<div class="chips">${chips({ net: row.net, rewards_changed_vs_minimal: row.rewards_changed_vs_minimal, args: spec.args || {} })}</div>`}</div>
       <div class="meta">${row.update != null ? `update <b>${row.update}</b>${row.target ? " / " + row.target : ""}<br>` : ""}${row.started ? "started " + ago(row.started) + "<br>" : ""}${row.finished ? "finished " + ago(row.finished) + "<br>" : ""}${st.git_commit ? `commit <span class="mono">${esc(st.git_commit)}</span>${st.git_dirty ? " (dirty)" : ""}<br>` : ""}${(st.restarts || []).length ? `${st.restarts.length} restart(s)<br>` : ""}
       <a href="/api/v1/run/${encodeURIComponent(name)}" target="_blank">JSON</a> · <button class="linkbtn" data-copy="${esc(name)}">copy summary</button></div></div>
     <nav class="tabs">${TABS.map((t) => `<a class="${t === tab ? "on" : ""}" href="#/run/${encodeURIComponent(name)}/${t}">${t[0].toUpperCase() + t.slice(1)}</a>`).join("")}</nav>`;

@@ -198,7 +198,7 @@ def run_experiment(spec_path, viewer=False):
     commit, dirty = tracker.git_commit()
     tracker.set_status(name, state="running", spec=spec, baseline_run=base_name, started=st.get("started", int(time.time())), tag=tag,
                        target_updates=upd_end, effective_rewards=rewards, effective_args=args, seed=args.get("seed"), git_commit=commit,
-                       git_dirty=dirty, boot_id=boot, restarts=restarts, control=spec.get("control"))
+                       git_dirty=dirty, boot_id=boot, restarts=restarts, control=spec.get("control"), net=tracker.net_info(spec["start"]))
     done = set(st.get("recorded", []))
     base_train = st.get("base_train")
     bad_checks = st.get("bad_checks", 0)

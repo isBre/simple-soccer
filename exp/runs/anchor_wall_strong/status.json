@@ -64,8 +64,8 @@
  "restarts": [],
  "control": null,
  "name": "anchor_wall_strong",
- "updated": 1794995319,
- "update": 212,
+ "updated": 1794995560,
+ "update": 218,
  "train_pts": 2.79,
  "base_train": 2.85,
  "bad_checks": 0,
@@ -75,5 +75,5 @@
   150,
   200
  ],
- "train_s": 7459
+ "train_s": 7701
 }
