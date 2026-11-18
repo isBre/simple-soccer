@@ -318,3 +318,5 @@ body.kiosk.live-ctl .live-side { transform: none; }
 body.kiosk .live-side .seg { flex: 1 1 200px; }
 body.kiosk .live-side .lv-opp { flex: 1 1 100%; margin: 0; }
 body.live-fs .ctl-btn { display: none !important; }
+.ctl-close { display: none; }
+body.kiosk .live-side .ctl-close { display: block; flex: 1 1 100%; font: inherit; font-size: 15px; font-weight: 650; padding: 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--panel-2); color: var(--ink); }

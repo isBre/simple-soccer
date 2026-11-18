@@ -527,7 +527,7 @@ function viewLive() {
         <canvas id="lv-c" width="1400" height="710"></canvas><div class="lv-over" id="lv-over">Waiting for the Pi's match…</div>
         <button class="ctl-btn" data-ctl title="Controls" aria-label="Controls">⚙</button>
         <button class="fs-btn" data-fs title="Full screen" aria-label="Full screen">${FS_ICON[document.body.classList.contains("live-fs") ? 1 : 0]}</button></div>
-      <div class="card live-side"><div id="lv-prog"></div><div class="seg" id="lv-mode" title="Puzzle: random layout of every player and the ball, 60 s, over at the first goal"><button data-mode="match">Match</button><button data-mode="puzzle">Puzzle</button></div><div class="seg" id="lv-cam"><button data-cam="1">Follow ball</button><button data-cam="0">Whole pitch</button></div>
+      <div class="card live-side"><button class="ctl-close" data-ctl aria-label="Close controls">✕ Close</button><div id="lv-prog"></div><div class="seg" id="lv-mode" title="Puzzle: random layout of every player and the ball, 60 s, over at the first goal"><button data-mode="match">Match</button><button data-mode="puzzle">Puzzle</button></div><div class="seg" id="lv-cam"><button data-cam="1">Follow ball</button><button data-cam="0">Whole pitch</button></div>
         <label class="lv-opp">Opponent <select id="lv-opp" aria-label="Opponent of the next match"><option>…</option></select></label>
         <details class="lv-more"><summary>Details</summary><dl class="kv" id="lv-side"></dl></details></div>
     </div>`;
@@ -758,11 +758,15 @@ function render() {
   const dl = $("#runlist");
   if (dl && state.ov) dl.innerHTML = state.ov.runs.map((x) => `<option value="${esc(x.name)}">`).join("");
 }
+// the kiosk's control panel closes by itself 12 s after the last touch inside it
+let ctlTimer = 0;
+function setCtl(on) { document.body.classList.toggle("live-ctl", on); clearTimeout(ctlTimer); if (on) ctlTimer = setTimeout(() => document.body.classList.remove("live-ctl"), 12000); }
 function rerender() { lastHTML = ""; render(); }
 document.addEventListener("click", (e) => {
   const t = e.target;
   if (t.closest("[data-fs]")) { toggleFullscreen(); return; }
-  if (t.closest("[data-ctl]")) { document.body.classList.toggle("live-ctl"); return; }
+  if (t.closest("[data-ctl]")) { setCtl(!document.body.classList.contains("live-ctl")); return; }
+  if (document.body.classList.contains("live-ctl")) { if (t.closest(".live-side")) setCtl(true); else { setCtl(false); return; } }   // a tap outside the panel closes it; a tap inside keeps it open
   const md = t.closest("button[data-mode]");
   if (md) { live.mode = md.dataset.mode; liveSide(); fetch("/api/live/mode", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mode: live.mode }) }).catch(() => {}); return; }
   const cam = t.closest("button[data-cam]");
