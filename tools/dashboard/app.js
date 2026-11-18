@@ -506,22 +506,27 @@ function loadDocs(id) {
     .catch(() => { if (id) docs.text[id] = null; else docs.list = []; })
     .finally(() => { docs.loading.delete(key); rerender(); });
 }
+function resolveDoc(href, base) {          // a relative link of a document -> a path from the project root
+  const dir = base.includes("/") ? base.slice(0, base.lastIndexOf("/") + 1) : "";
+  return (dir + href).split("/").reduce((a, p) => { if (p === "..") a.pop(); else if (p && p !== ".") a.push(p); return a; }, []).join("/");
+}
 function mdInline(t, base) {
   t = esc(t);
   t = t.replace(/`([^`]+)`/g, (_, c) => `<code>${c}</code>`);
   t = t.replace(/\*\*([^*]+)\*\*/g, "<b>$1</b>").replace(/(^|[\s(])\*([^*\s][^*]*)\*(?=[\s).,;:]|$)/g, "$1<i>$2</i>");
-  t = t.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (_, a) => `<span class="muted">[image: ${a}]</span>`);
+  t = t.replace(/!\[([^\]]*)\]\(([^)\s]+)\)/g, (_, alt, src) => `<img class="md-img" loading="lazy" alt="${alt}" src="/api/docfile?path=${encodeURIComponent(resolveDoc(src.replace(/&amp;/g, "&"), base))}">`);
+  t = t.replace(/&lt;br\s*\/?&gt;/g, "<br>");
   t = t.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, (_, label, href) => {
     href = href.replace(/&amp;/g, "&");
     if (/^https?:/.test(href)) return `<a href="${esc(href)}" target="_blank" rel="noopener">${label}</a>`;
-    const rel = href.split("#")[0], dir = base.includes("/") ? base.slice(0, base.lastIndexOf("/") + 1) : "";
-    const norm = (dir + rel).split("/").reduce((a, p) => { if (p === "..") a.pop(); else if (p && p !== ".") a.push(p); return a; }, []).join("/");
+    const norm = resolveDoc(href.split("#")[0], base);
     const d = (docs.list || []).find((x) => x.path === norm);
     return d ? `<a href="#/docs/${esc(d.id)}">${label}</a>` : label;
   });
   return t;
 }
 function md(src, base) {
+  src = src.replace(/<img\s[^>]*?src="([^"]+)"[^>]*?alt="([^"]*)"[^>]*>/g, "![$2]($1)").replace(/<\/?p[^>]*>/g, "");   // the few HTML tags of the READMEs
   const lines = src.replace(/\r/g, "").split("\n"), out = [];
   let i = 0, para = [];
   const flush = () => { if (para.length) { out.push(`<p>${mdInline(para.join(" "), base)}</p>`); para = []; } };
@@ -535,7 +540,7 @@ function md(src, base) {
     if (/^\s*\|/.test(l) && i + 1 < lines.length && /^\s*\|?\s*:?-{2,}/.test(lines[i + 1])) {
       flush(); const head = cells(l); i += 2; const rows = [];
       while (i < lines.length && /^\s*\|/.test(lines[i])) rows.push(cells(lines[i++]));
-      out.push(`<div class="tbl-wrap"><table class="md"><thead><tr>${head.map((c) => `<th>${mdInline(c, base)}</th>`).join("")}</tr></thead><tbody>${rows.map((r) => `<tr>${r.map((c) => `<td>${mdInline(c, base)}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`);
+      out.push(`<div class="tbl-wrap"><table class="md">${head.some((c) => c) ? `<thead><tr>${head.map((c) => `<th>${mdInline(c, base)}</th>`).join("")}</tr></thead>` : ""}<tbody>${rows.map((r) => `<tr>${r.map((c) => `<td>${mdInline(c, base)}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`);
       continue;
     }
     if (/^\s*>/.test(l)) { flush(); const buf = []; while (i < lines.length && /^\s*>/.test(lines[i])) buf.push(lines[i++].replace(/^\s*>\s?/, "")); out.push(`<blockquote>${mdInline(buf.join(" "), base)}</blockquote>`); continue; }

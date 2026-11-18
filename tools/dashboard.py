@@ -239,6 +239,14 @@ class Handler(BaseHTTPRequestHandler):
                 if doc is None:
                     return self.send(json.dumps({"error": "unknown document"}).encode(), "application/json", 404)
                 return self.send(open(os.path.join(ROOT, doc["path"]), "rb").read(), "text/markdown; charset=utf-8")
+            if path == "/api/docfile":                              # images of the documents: only pictures under docs/ and icon.svg
+                from urllib.parse import parse_qsl
+                rel = dict(parse_qsl(self.path.split("?", 1)[1] if "?" in self.path else "")).get("path", "")
+                full = os.path.realpath(os.path.join(ROOT, rel))
+                ctype = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".gif": "image/gif", ".webp": "image/webp", ".svg": "image/svg+xml"}.get(os.path.splitext(full)[1].lower())
+                if not ctype or not (full.startswith(os.path.join(ROOT, "docs") + os.sep) or full == os.path.join(ROOT, "icon.svg")) or not os.path.isfile(full):
+                    return self.send(b"not found", "text/plain", 404)
+                return self.send(open(full, "rb").read(), ctype)
             if path == "/api/version":                              # the page reloads itself when the dashboard's files changed (the kiosk has no keyboard)
                 v = max(os.path.getmtime(f) for f in glob.glob(os.path.join(STATIC, "*")))
                 return self.send(json.dumps({"v": v}).encode(), "application/json")
