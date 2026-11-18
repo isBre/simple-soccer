@@ -4,6 +4,7 @@ This repository trains 5v5 soccer nets with PPO on a Raspberry Pi 4 and runs exp
 on the experiments, start here. People: the same applies; the dashboard is at `http://<pi-address>:8080`.
 
 ## Read first
+- `docs/rewards.md`: every reward term sorted into beneficial / unsure / not good, with the evidence (update it after each review).
 - `docs/experiment_log.md`: history, **standing decisions** (do not violate them without asking the user), conclusions, reviews.
 - `exp/schema.json`: what every metric means, its unit and direction, the evaluation protocols and the comparison rules.
 

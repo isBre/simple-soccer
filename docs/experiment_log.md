@@ -13,6 +13,7 @@ dashboard: `http://<pi-address>:8080`. Newest entries at the bottom; the agent a
   Minimal set: goals, passing (progressive / ok / failed, individual credit, receive, key pass, xA), cooperation (capped at 8/match),
   "open for a pass", spacing **only while our team has the ball**, kick discipline. Off: shaping, twitching, keeper-far, too-far-from-ball,
   xG for/against, win/draw bonus, tackles, goal-side, opponent-in-our-half, compactness.
+- **w_wall 0.02 is in the default reward set** (user yes, 2026-11-18; earlier runs and the specs of `persist_*` keep 0 so their controls stay valid). Full reward register with evidence: `docs/rewards.md`.
 - **No hand-made positioning terms for defence or the keeper** (goal-line cover, keeper position): the user wants the net to find its own
   solution, e.g. high pressing without a keeper (2026-11-16).
 - **Learning rate 5e-5** with a 30-update warm-up after every (re)start. 3e-4 and 1e-4 runs drifted away from the warm start.

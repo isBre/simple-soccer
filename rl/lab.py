@@ -219,7 +219,8 @@ def run_row(name, rows):
     full = next((r for r in reversed(ev) if r["kind"] == "full"), None)
     fast = next((r for r in reversed(ev) if r["kind"] == "fast"), None)
     rewards = st.get("effective_rewards") or {}
-    changed = {k: v for k, v in rewards.items() if tracker.MINIMAL.get(k) != v}
+    mn = tracker.minimal_for(st.get("started"))
+    changed = {k: v for k, v in rewards.items() if mn.get(k) != v}
     return {"name": name, "state": st.get("state", "imported" if name.startswith(("old_", "start:")) else "reference" if name.startswith("team:") else "unknown"),
             "notes": spec.get("notes", ""), "start": spec.get("start"), "control": spec.get("control"),
             "net": (st.get("net") or tracker.net_info(spec.get("start") or ("out_5v5/ckpt/" + name[6:] if name.startswith("start:") else None)) or {}).get("label"),

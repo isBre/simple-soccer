@@ -29,7 +29,17 @@ MIN_SE_PER_MATCH = 0.5          # floor of the per-match spread of points (3/1/0
 # the experiment defaults (rl/exp_runner.py): every spec's "rewards" override MINIMAL, its "args" override DEFAULTS
 MINIMAL = {"pass_individual": 1, "w_recv": 0.1, "w_open": 0.003, "w_key_pass": 0.25, "w_xa": 2.5, "coop_cap": 8, "random_start": 0.6,
            "shaping": 0, "w_keeper": 0, "w_jitter": 0, "w_far": 0, "w_xg": 0, "w_xga": 0, "w_win": 0, "w_draw": 0, "w_tackle": 0,
-           "w_goalside": 0, "w_opp_half": 0, "w_compact": 0, "w_wall": 0}
+           "w_goalside": 0, "w_opp_half": 0, "w_compact": 0, "w_wall": 0.02}
+WALL_ON = 1795001830             # since this moment (2026-11-18, user decision after `anchor_wall_strong`) the minimal set includes w_wall 0.02; earlier runs had 0
+
+
+def minimal_for(started):
+    """The minimal reward set as it was when a run started (so older runs do not show w_wall as a change)."""
+    m = dict(MINIMAL)
+    if not started or started < WALL_ON:
+        m["w_wall"] = 0
+    return m
+
 DEFAULTS = {"lr": 5e-5, "updates": 300, "workers_rule": 2, "workers_self": 1, "envs_per_worker": 16, "rollout": 128, "minibatch": 4096,
             "ckpt_every": 25, "fast_every": 50, "learn_threads": 2, "seed": 7}
 FINISHED = ("done", "diverged", "regressed", "cancelled", "failed")

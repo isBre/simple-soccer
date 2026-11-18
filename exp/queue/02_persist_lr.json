@@ -1,7 +1,9 @@
 {
  "start": "out_5v5/ckpt/x_kickstart_u600.pt",
  "updates": 400,
- "rewards": {},
+ "rewards": {
+  "w_wall": 0.0
+ },
  "control": "kickstart_persist",
  "name": "persist_lr",
  "lr": 0.0001,
@@ -12,5 +14,5 @@
   "opp_models": "out_5v5/ckpt/jit8_best.pt,data/models/rl_5v5_arena_v4.json,data/models/rl_5v5_arena_v5.json",
   "pfsp": 0.75
  },
- "notes": "Same as kickstart_persist (the control) but lr 1e-4 instead of 5e-5: the teacher anchor (KL 0.2 -> 0.12) is what made a higher rate safe; does the faster rate converge further in 400 updates?"
+ "notes": "Same as kickstart_persist (the control) but lr 1e-4 instead of 5e-5: the teacher anchor (KL 0.2 -> 0.12) is what made a higher rate safe; does the faster rate converge further in 400 updates? [w_wall pinned to 0 so it stays comparable with its control; the default became 0.02 on 2026-11-18]"
 }

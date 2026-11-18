@@ -1,7 +1,9 @@
 {
  "start": "out_5v5/ckpt/x_kickstart_u600.pt",
  "updates": 400,
- "rewards": {},
+ "rewards": {
+  "w_wall": 0.0
+ },
  "control": "kickstart_persist",
  "name": "persist_mix",
  "lr": 5e-05,
@@ -14,5 +16,5 @@
   "workers_rule": 1,
   "workers_self": 2
  },
- "notes": "Same as kickstart_persist (the control) but the worker mix 1 rule + 2 strong/self-play instead of 2 rule + 1: rule bots are already beaten (~2.9/3), so compute goes to the opponents that matter (RL4/RL5/jit8/self)."
+ "notes": "Same as kickstart_persist (the control) but the worker mix 1 rule + 2 strong/self-play instead of 2 rule + 1: rule bots are already beaten (~2.9/3), so compute goes to the opponents that matter (RL4/RL5/jit8/self). [w_wall pinned to 0 so it stays comparable with its control; the default became 0.02 on 2026-11-18]"
 }
