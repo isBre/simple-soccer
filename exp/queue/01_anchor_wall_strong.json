@@ -1,0 +1,15 @@
+{
+ "name": "anchor_wall_strong",
+ "start": "out_5v5/ckpt/x_kickstart_u600.pt",
+ "updates": 300,
+ "lr": 5e-05,
+ "rewards": {
+  "w_wall": 0.02
+ },
+ "args": {
+  "teacher": "out_5v5/ckpt/jit8_best.pt",
+  "kl_coef": 0.3,
+  "kl_decay": 300
+ },
+ "notes": "anchor_wall with 4x the weight (0.02). 0.005 lowered at_wall_pct only from 21.9% (ctrl) to 17.9%. Compare with anchor_ctrl by hand (lab.py compare) and check at_wall_pct with eval_checkpoint.py --mode scout."
+}
