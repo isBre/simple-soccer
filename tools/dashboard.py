@@ -8,6 +8,7 @@ The page (tools/dashboard/: index.html, app.js, style.css) is a small single-pag
   /results.md         the tracker's table as text
   /api/v1/<command>   the agent interface (rl/lab.py, read-only): status, runs, run/<name>, evals, best, compare?a=&b=, ablation, events?since=,
                       queue, schema; query parameters = the CLI options (e.g. /api/v1/evals?run=minimal&kind=full). See AGENTS.md.
+  /api/docs, /api/docs/<id>  the project's Markdown files (AGENTS.md, docs/*.md, exp/results.md, READMEs): the Docs page
   /api/live/opponents GET the opponents the Live page can play (rule teams, RL Team 4/5, older checkpoints) and the chosen one
   /api/live/mode      POST {"mode": "match"|"puzzle"}: puzzle = random layout of all players and the ball, 60 s, over at the first goal
   /api/live/opponent  POST {"id": ...}: with the mode, the ONLY writes of this server: which opponent the Pi's demo match plays next (logs/live_opponent.json,
@@ -103,6 +104,24 @@ def run_detail(run):
 def health_view(hours=12.0):
     hl = lab.health(hours)
     return {"rows": lab.thin(hl, 720), "reboots": lab.reboots(lab.health(72)), "hours": hours}
+
+
+DOC_FILES = [("Experiments", "AGENTS.md"), ("Experiments", "docs/experiment_log.md"), ("Experiments", "docs/rewards.md"), ("Experiments", "docs/experiment_pipeline.md"),
+             ("Experiments", "exp/results.md"), ("Project", "README.md"), ("Project", "rl/README.md"), ("Project", "DESIGN.md"), ("Project", "AI_ANALYSIS.md")]
+
+
+def doc_list():
+    """The Markdown files the Docs page shows (a fixed list: nothing else is ever served): [{id, path, title, group, size, updated}]."""
+    out = []
+    for group, rel in DOC_FILES:
+        full = os.path.join(ROOT, rel)
+        if not os.path.isfile(full):
+            continue
+        text = open(full, encoding="utf-8", errors="replace").read(4000)
+        m = re.search(r"^#\s+(.+)$", text, re.M)
+        out.append({"id": rel.replace("/", "__"), "path": rel, "title": m.group(1).strip() if m else rel, "group": group,
+                    "size": os.path.getsize(full), "updated": os.path.getmtime(full)})
+    return out
 
 
 LIVE_SEL = os.path.join(ROOT, "logs", "live_opponent.json")
@@ -213,6 +232,13 @@ class Handler(BaseHTTPRequestHandler):
                 return self.api_v1(path, self.path.split("?", 1)[1] if "?" in self.path else "")
             if path == "/api/live":
                 return self.live()
+            if path == "/api/docs":
+                return self.send(json.dumps({"docs": doc_list()}).encode(), "application/json")
+            if path.startswith("/api/docs/"):
+                doc = next((d for d in doc_list() if d["id"] == path[len("/api/docs/"):]), None)
+                if doc is None:
+                    return self.send(json.dumps({"error": "unknown document"}).encode(), "application/json", 404)
+                return self.send(open(os.path.join(ROOT, doc["path"]), "rb").read(), "text/markdown; charset=utf-8")
             if path == "/api/version":                              # the page reloads itself when the dashboard's files changed (the kiosk has no keyboard)
                 v = max(os.path.getmtime(f) for f in glob.glob(os.path.join(STATIC, "*")))
                 return self.send(json.dumps({"v": v}).encode(), "application/json")

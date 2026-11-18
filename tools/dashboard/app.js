@@ -495,6 +495,84 @@ function viewCompare(params) {
 }
 
 // ---------- PI ----------
+// ---- Docs: the project's Markdown files, rendered here (a small Markdown renderer: headings, tables, lists, code, links; no libraries)
+const docs = { list: null, text: {}, loading: new Set() };
+function loadDocs(id) {
+  const key = id || "*";
+  if (docs.loading.has(key)) return;
+  docs.loading.add(key);
+  (id ? fetch("/api/docs/" + encodeURIComponent(id)).then((r) => (r.ok ? r.text() : Promise.reject())).then((t) => { docs.text[id] = t; })
+      : fetch("/api/docs").then((r) => r.json()).then((d) => { docs.list = d.docs; }))
+    .catch(() => { if (id) docs.text[id] = null; else docs.list = []; })
+    .finally(() => { docs.loading.delete(key); rerender(); });
+}
+function mdInline(t, base) {
+  t = esc(t);
+  t = t.replace(/`([^`]+)`/g, (_, c) => `<code>${c}</code>`);
+  t = t.replace(/\*\*([^*]+)\*\*/g, "<b>$1</b>").replace(/(^|[\s(])\*([^*\s][^*]*)\*(?=[\s).,;:]|$)/g, "$1<i>$2</i>");
+  t = t.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (_, a) => `<span class="muted">[image: ${a}]</span>`);
+  t = t.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, (_, label, href) => {
+    href = href.replace(/&amp;/g, "&");
+    if (/^https?:/.test(href)) return `<a href="${esc(href)}" target="_blank" rel="noopener">${label}</a>`;
+    const rel = href.split("#")[0], dir = base.includes("/") ? base.slice(0, base.lastIndexOf("/") + 1) : "";
+    const norm = (dir + rel).split("/").reduce((a, p) => { if (p === "..") a.pop(); else if (p && p !== ".") a.push(p); return a; }, []).join("/");
+    const d = (docs.list || []).find((x) => x.path === norm);
+    return d ? `<a href="#/docs/${esc(d.id)}">${label}</a>` : label;
+  });
+  return t;
+}
+function md(src, base) {
+  const lines = src.replace(/\r/g, "").split("\n"), out = [];
+  let i = 0, para = [];
+  const flush = () => { if (para.length) { out.push(`<p>${mdInline(para.join(" "), base)}</p>`); para = []; } };
+  const cells = (l) => l.trim().replace(/^\||\|$/g, "").split("|").map((c) => c.trim());
+  while (i < lines.length) {
+    const l = lines[i];
+    if (/^```/.test(l)) { flush(); const buf = []; i++; while (i < lines.length && !/^```/.test(lines[i])) buf.push(lines[i++]); i++; out.push(`<pre>${esc(buf.join("\n"))}</pre>`); continue; }
+    const h = /^(#{1,4})\s+(.*)$/.exec(l);
+    if (h) { flush(); const n = h[1].length; out.push(`<h${n} id="${esc(h[2].toLowerCase().replace(/[^a-z0-9]+/g, "-"))}">${mdInline(h[2], base)}</h${n}>`); i++; continue; }
+    if (/^\s*---+\s*$/.test(l)) { flush(); out.push("<hr>"); i++; continue; }
+    if (/^\s*\|/.test(l) && i + 1 < lines.length && /^\s*\|?\s*:?-{2,}/.test(lines[i + 1])) {
+      flush(); const head = cells(l); i += 2; const rows = [];
+      while (i < lines.length && /^\s*\|/.test(lines[i])) rows.push(cells(lines[i++]));
+      out.push(`<div class="tbl-wrap"><table class="md"><thead><tr>${head.map((c) => `<th>${mdInline(c, base)}</th>`).join("")}</tr></thead><tbody>${rows.map((r) => `<tr>${r.map((c) => `<td>${mdInline(c, base)}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`);
+      continue;
+    }
+    if (/^\s*>/.test(l)) { flush(); const buf = []; while (i < lines.length && /^\s*>/.test(lines[i])) buf.push(lines[i++].replace(/^\s*>\s?/, "")); out.push(`<blockquote>${mdInline(buf.join(" "), base)}</blockquote>`); continue; }
+    const li = /^(\s*)([-*]|\d+\.)\s+(.*)$/.exec(l);
+    if (li) {
+      flush(); const ordered = /\d/.test(li[2]), items = [];
+      while (i < lines.length) {
+        const m = /^(\s*)([-*]|\d+\.)\s+(.*)$/.exec(lines[i]);
+        if (m) { items.push({ depth: Math.min(3, Math.floor(m[1].length / 2)), text: m[3] }); i++; }
+        else if (/^\s{2,}\S/.test(lines[i]) && items.length) { items[items.length - 1].text += " " + lines[i].trim(); i++; }
+        else break;
+      }
+      out.push(`<${ordered ? "ol" : "ul"} class="md">${items.map((it) => `<li style="margin-left:${it.depth * 18}px">${mdInline(it.text.replace(/^\[ \]/, "☐").replace(/^\[x\]/i, "☑"), base)}</li>`).join("")}</${ordered ? "ol" : "ul"}>`);
+      continue;
+    }
+    if (!l.trim()) { flush(); i++; continue; }
+    para.push(l.trim()); i++;
+  }
+  flush();
+  return out.join("\n");
+}
+function viewDocs(id) {
+  if (docs.list === null) { loadDocs(""); return '<div class="empty">Loading…</div>'; }
+  const groups = {};
+  for (const d of docs.list) (groups[d.group] = groups[d.group] || []).push(d);
+  const side = Object.entries(groups).map(([g, ds]) => `<div class="doc-g">${esc(g)}</div>${ds.map((d) => `<a class="doc-l${d.id === id ? " on" : ""}" href="#/docs/${esc(d.id)}">${esc(d.title)}<small>${esc(d.path)}</small></a>`).join("")}`).join("");
+  let body;
+  if (!id) body = `<div class="card"><h2>Docs</h2><p class="muted">The project's notes, read from the repository on the Pi: the lab notebook, the reward register, how to run experiments and how the game works.</p><div class="doc-cards">${docs.list.map((d) => `<a class="doc-card" href="#/docs/${esc(d.id)}"><b>${esc(d.title)}</b><span class="muted small">${esc(d.path)} · updated ${esc(ago(d.updated))}</span></a>`).join("")}</div></div>`;
+  else {
+    const d = docs.list.find((x) => x.id === id);
+    if (!d) body = '<div class="empty">Unknown document.</div>';
+    else if (docs.text[id] === undefined) { loadDocs(id); body = '<div class="empty">Loading…</div>'; }
+    else if (docs.text[id] === null) body = '<div class="empty">Could not load this document.</div>';
+    else body = `<article class="card doc-body"><div class="muted small">${esc(d.path)} · updated ${esc(ago(d.updated))}</div>${md(docs.text[id], d.path)}</article>`;
+  }
+  return `<div class="docs-wrap"><nav class="doc-side">${side}</nav><div class="doc-main">${body}</div></div>`;
+}
 function viewPi() {
   const o = state.ov; if (!o) return '<div class="empty">Loading…</div>';
   if (!state.health || state.health.hours !== state.piHours) loadHealth();
@@ -734,6 +812,7 @@ function setPulse(ok) {
 function route() {
   const h = location.hash.replace(/^#\/?/, ""), [path, qs] = h.split("?"), parts = path.split("/"), params = new URLSearchParams(qs || "");
   if (parts[0] === "run" && parts[1]) return { view: "run", arg: decodeURIComponent(parts[1]), tab: parts[2], params };
+  if (parts[0] === "docs") return { view: "docs", arg: parts[1] ? decodeURIComponent(parts[1]) : "", params };
   return { view: ["runs", "compare", "pi", "live"].includes(parts[0]) ? parts[0] : "now", params };
 }
 let lastHTML = "";
@@ -743,7 +822,7 @@ function render() {
   document.body.dataset.view = r.view;
   if (r.view !== "live") { stopLive(); document.body.classList.remove("live-ctl"); }
   const before = new Set(Object.keys(chartData));
-  const html = r.view === "live" ? viewLive() : r.view === "runs" ? viewRuns() : r.view === "run" ? viewRun(r.arg, r.tab) : r.view === "compare" ? viewCompare(r.params) : r.view === "pi" ? viewPi() : viewNow();
+  const html = r.view === "live" ? viewLive() : r.view === "runs" ? viewRuns() : r.view === "run" ? viewRun(r.arg, r.tab) : r.view === "compare" ? viewCompare(r.params) : r.view === "pi" ? viewPi() : r.view === "docs" ? viewDocs(r.arg) : viewNow();
   const cleaned = html.replace(/data-chart="c[a-z0-9]+"/g, "");
   const drop = (keep) => { for (const k of Object.keys(chartData)) if (before.has(k) !== keep) delete chartData[k]; };
   if (cleaned === lastHTML) { drop(true); return; }
