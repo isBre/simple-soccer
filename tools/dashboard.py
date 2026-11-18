@@ -9,7 +9,8 @@ The page (tools/dashboard/: index.html, app.js, style.css) is a small single-pag
   /api/v1/<command>   the agent interface (rl/lab.py, read-only): status, runs, run/<name>, evals, best, compare?a=&b=, ablation, events?since=,
                       queue, schema; query parameters = the CLI options (e.g. /api/v1/evals?run=minimal&kind=full). See AGENTS.md.
   /api/live/opponents GET the opponents the Live page can play (rule teams, RL Team 4/5, older checkpoints) and the chosen one
-  /api/live/opponent  POST {"id": ...}: the ONLY write of this server: which opponent the Pi's demo match plays next (logs/live_opponent.json,
+  /api/live/mode      POST {"mode": "match"|"puzzle"}: puzzle = random layout of all players and the ball, 60 s, over at the first goal
+  /api/live/opponent  POST {"id": ...}: with the mode, the ONLY writes of this server: which opponent the Pi's demo match plays next (logs/live_opponent.json,
                       logs/live_opp_net.json); ids come from the list above, requests from another web site are refused
 Standard library only and no internet needed (the charts are drawn in the browser as SVG). It reads exp/ and logs/; the one write is the opponent choice.
 There is NO login: use it on a trusted network only.
@@ -106,6 +107,7 @@ def health_view(hours=12.0):
 
 LIVE_SEL = os.path.join(ROOT, "logs", "live_opponent.json")
 LIVE_NET = os.path.join(ROOT, "logs", "live_opp_net.json")
+LIVE_MODE = os.path.join(ROOT, "logs", "live_mode.json")
 NET_LABELS = {"rl_5v5_arena_v4": "RL Team 4", "rl_5v5_arena_v5": "RL Team 5"}
 
 
@@ -129,6 +131,13 @@ def live_opponents():
         if os.path.isfile(os.path.join(ROOT, rel)):
             out.append({"id": "net:" + rel, "kind": "net", "model": rel, "label": label, "group": "Previous runs"})
     return out
+
+
+def live_mode():
+    try:
+        return "puzzle" if json.load(open(LIVE_MODE)).get("mode") == "puzzle" else "match"
+    except (OSError, ValueError):
+        return "match"
 
 
 def live_selected():
@@ -208,7 +217,7 @@ class Handler(BaseHTTPRequestHandler):
                 v = max(os.path.getmtime(f) for f in glob.glob(os.path.join(STATIC, "*")))
                 return self.send(json.dumps({"v": v}).encode(), "application/json")
             if path == "/api/live/opponents":
-                return self.send(json.dumps({"opponents": live_opponents(), "selected": live_selected()}).encode(), "application/json")
+                return self.send(json.dumps({"opponents": live_opponents(), "selected": live_selected(), "mode": live_mode()}).encode(), "application/json")
             if path == "/api/health":
                 from urllib.parse import parse_qsl
                 q = dict(parse_qsl(self.path.split("?", 1)[1])) if "?" in self.path else {}
@@ -227,6 +236,17 @@ class Handler(BaseHTTPRequestHandler):
         """The only write: choose the live opponent. Same-origin only (a page on another site cannot trigger it)."""
         path = unquote(self.path.split("?")[0])
         host, origin = self.headers.get("Host", ""), self.headers.get("Origin", "")
+        if path == "/api/live/mode":
+            try:
+                body = json.loads(self.rfile.read(min(int(self.headers.get("Content-Length", 0)), 4096)) or b"{}")
+            except ValueError:
+                body = {}
+            mode = "puzzle" if body.get("mode") == "puzzle" else "match"
+            if origin and origin.split("://")[-1] != host:
+                return self.send(json.dumps({"error": "not allowed"}).encode(), "application/json", 403)
+            json.dump({"mode": mode}, open(LIVE_MODE + ".tmp", "w"))
+            os.replace(LIVE_MODE + ".tmp", LIVE_MODE)
+            return self.send(json.dumps({"mode": mode}).encode(), "application/json")
         if path != "/api/live/opponent" or (origin and origin.split("://")[-1] != host):
             return self.send(json.dumps({"error": "not allowed"}).encode(), "application/json", 403)
         try:

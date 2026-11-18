@@ -256,8 +256,7 @@ body.kiosk .rail a.on { color: var(--accent); }
 body.kiosk .rail a:hover { text-decoration: none; }
 body.kiosk .offline { top: 0; margin-left: 72px; }
 body.kiosk main { margin-left: 72px; max-width: none; padding: 8px 10px; }
-body.kiosk .live-wrap { grid-template-columns: minmax(0, 1fr); gap: 8px; }
-body.kiosk .live-side { padding: 8px 12px; display: grid; grid-template-columns: 1fr 260px; align-items: center; gap: 14px; }
+body.kiosk .live-wrap { display: block; }
 body.kiosk .live-side .big3 { grid-template-columns: repeat(3, auto); justify-content: start; gap: 28px; }
 body.kiosk .live-side .big3 b { font-size: 22px; }
 body.kiosk .live-side .progress { display: none; }
@@ -306,3 +305,16 @@ body.kiosk .search { width: 160px; }
 .lv-opp { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); margin: 0 0 10px; }
 .lv-opp select { flex: 1; min-width: 0; font: inherit; font-size: 13px; color: var(--ink); background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px; padding: 7px 8px; }
 .chip.net { background: var(--info-soft); }
+
+/* kiosk live: the pitch covers the whole screen next to the rail; the scorebar floats on it; the controls slide up from the bottom (gear button) */
+.ctl-btn { display: none; }
+.live-main.fill canvas { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; }
+.live-main.fill .scorebar { position: absolute; top: 0; left: 0; right: 0; z-index: 2; background: linear-gradient(rgba(8, 12, 9, .85), rgba(8, 12, 9, 0)); padding-bottom: 14px; pointer-events: none; }
+body.kiosk[data-view="live"] main { padding: 0; margin-left: 72px; }
+body.kiosk[data-view="live"] .live-main { position: fixed; left: 72px; top: 0; right: 0; bottom: 0; border-radius: 0; }
+body.kiosk[data-view="live"] .ctl-btn { display: grid; place-items: center; position: absolute; left: 10px; bottom: 10px; width: 48px; height: 48px; border-radius: 10px; border: 0; background: rgba(10, 14, 12, .65); color: #fff; font-size: 24px; opacity: .8; z-index: 3; }
+body.kiosk .live-side { position: fixed; left: 72px; right: 0; bottom: 0; z-index: 30; border-radius: 14px 14px 0 0; padding: 10px 14px; display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; transform: translateY(105%); transition: transform .18s ease; }
+body.kiosk.live-ctl .live-side { transform: none; }
+body.kiosk .live-side .seg { flex: 1 1 200px; }
+body.kiosk .live-side .lv-opp { flex: 1 1 100%; margin: 0; }
+body.live-fs .ctl-btn { display: none !important; }

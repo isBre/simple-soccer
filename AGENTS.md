@@ -59,5 +59,5 @@ git identity; use the identity of the existing commits), with a `Co-Authored-By`
 
 ## Live demo match
 The Live page plays the newest checkpoint against a **random opponent per match** (all handmade rule teams, RL Team 4/5, t48_u100, jit8 and the
-best checkpoint of every `x_*` run). The dropdown on the page pins one opponent (`POST /api/live/opponent`, same-origin only, the dashboard's only
+best checkpoint of every `x_*` run). The Live page also has a **puzzle mode** (random layout of all players and the ball, 60 s, over at the first goal; `POST /api/live/mode`). The dropdown on the page pins one opponent (`POST /api/live/opponent`, same-origin only, the dashboard's only
 write; state in `logs/live_opponent.json`). Agents do not need it.

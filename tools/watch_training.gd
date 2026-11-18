@@ -30,6 +30,8 @@ var _frames := 0
 const STREAM_PORT := 7310
 const OPP_PORT := 7304                   # net server of the opponent picker (service soccer-oppnet)
 var opp_label := "RL Team 4"
+var _mode := "match"                      # "match" (90 s, kickoff) or "puzzle" (60 s from a random layout of all players and the ball, over at the first goal)
+var _choice_snapshot := ""                # contents of the dashboard's choice files when the shown match started: a change ends the match early
 @onready var nav_row: HBoxContainer = $Root/Nav/Row
 @onready var pages: Control = $Root/Pages
 @onready var banner: Label = $Root/Banner
@@ -193,7 +195,9 @@ func _next() -> void:
     var use_best := _best_ckpt and not best.is_empty()
     data.playing = str(best.checkpoint) if use_best else Data.newest_checkpoint(tag, start_weights).get_file().get_basename()
     var opp := _opponent()
-    var cfg := Database.make_config("rl_team_5", opp.team, "arena", 5, 90.0, rng.randi())
+    _mode = "puzzle" if _read_text("res://logs/live_mode.json").contains("puzzle") else "match"
+    _choice_snapshot = _choices()
+    var cfg := Database.make_config("rl_team_5", opp.team, "arena", 5, 60.0 if _mode == "puzzle" else 90.0, rng.randi())
     cfg.control = MatchConfig.ControlMode.NONE
     cfg.ml_models[0] = RemoteMLP.new(7303 if use_best else 7301)
     if opp.net:
@@ -205,23 +209,74 @@ func _next() -> void:
     var ms := MatchScreen.new().setup(cfg)
     ms.finished.connect(func(_result): _next.call_deferred())
     ms.quit_requested.connect(get_tree().quit)
-    match_area.add_child(ms)
+    match_area.add_child(ms)                                       # the sim is built when the screen enters the tree
+    if _mode == "puzzle":
+        _puzzle_layout(ms.sim)
     _ms = ms
     ms.set_effects(false)                                          # no confetti: cheaper on the Pi
     ms.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)    # a screen added after the first match would stay 0x0
     _auto_continue(ms)
 
 
-## No keyboard needed: after the final whistle, record the score and move on after a short pause.
+## No keyboard needed: after the final whistle, record the score and move on after a short pause. Puzzle mode: the first goal ends the
+## puzzle (after the celebration); a change of mode or opponent on the dashboard ends the shown match at once.
 func _auto_continue(ms: MatchScreen) -> void:
+    var celebrate := 0
     while is_instance_valid(ms) and ms.sim.state != MatchSim.State.ENDED:
-        await get_tree().create_timer(1.0).timeout
+        await get_tree().create_timer(0.5).timeout
+        if not is_instance_valid(ms):
+            return
+        if _choices() != _choice_snapshot:
+            ms.finished.emit(ms.sim.make_result())
+            return
+        if _mode == "puzzle" and (ms.sim.scores[0] + ms.sim.scores[1]) > 0:
+            celebrate += 1
+            if celebrate >= 5:                                     # ~2.5 s of celebration, then the next puzzle
+                ms.finished.emit(ms.sim.make_result())
+                return
     if not is_instance_valid(ms):
         return
-    data.record_result(ms.sim.scores[0], ms.sim.scores[1])
-    await get_tree().create_timer(4.0).timeout
+    if _mode == "match":
+        data.record_result(ms.sim.scores[0], ms.sim.scores[1])
+    await get_tree().create_timer(4.0 if _mode == "match" else 2.0).timeout
     if is_instance_valid(ms):
         ms.finished.emit(ms.sim.make_result())
+
+
+func _read_text(path: String) -> String:
+    var f := FileAccess.open(path, FileAccess.READ)
+    return f.get_as_text() if f != null else ""
+
+
+func _choices() -> String:
+    return _read_text("res://logs/live_mode.json") + _read_text("res://logs/live_opponent.json")
+
+
+## Puzzle: every player (keepers too) and the ball at random places (as in training's random starts), play from the first tick.
+func _puzzle_layout(sim: MatchSim) -> void:
+    var pt := sim.pitch
+    sim.kickoff_active = false
+    sim.kickoff_taker = null
+    sim.state = MatchSim.State.PLAYING
+    var hw := pt.half_w * 0.9
+    var hh := pt.half_h * 0.9
+    sim.ball.pos = Vector2(rng.randf_range(-hw, hw), rng.randf_range(-hh, hh))
+    sim.ball.vel = Vector2.from_angle(rng.randf() * TAU) * rng.randf_range(0.0, 3.0)
+    var placed: Array[Vector2] = [sim.ball.pos]
+    for p: SimPlayer in sim.players:
+        var pos := Vector2.ZERO
+        for _try in 40:
+            pos = Vector2(rng.randf_range(-hw, hw), rng.randf_range(-hh, hh))
+            var ok := true
+            for q in placed:
+                if q.distance_to(pos) < 45.0:
+                    ok = false
+                    break
+            if ok:
+                break
+        p.pos = pos
+        p.vel = Vector2.ZERO
+        placed.append(pos)
 
 
 ## Streams the shown match to the web dashboard: a "meta" packet (pitch, kits, players) once a second and a frame with
@@ -253,7 +308,7 @@ func _stream_meta(sim: MatchSim) -> Dictionary:
     for p in sim.players:
         players.append({"team": p.team, "n": p.def.number, "r": p.radius, "role": p.role})
     var l := data.last()
-    return {"k": "m", "id": sim.cfg.match_seed, "tag": tag, "playing": data.playing, "opponent": opp_label, "upd": l.get("upd", 0), "best_move": sim.cfg.ml_temperature == 0.0,
+    return {"k": "m", "id": sim.cfg.match_seed, "tag": tag, "playing": data.playing, "opponent": opp_label, "mode": _mode, "upd": l.get("upd", 0), "best_move": sim.cfg.ml_temperature == 0.0,
         "best_ckpt": _best_ckpt, "duration": sim.cfg.duration, "ball_r": sim.ball.radius, "teams": teams, "players": players,
         "pitch": {"half_w": pd.half_w, "half_h": pd.half_h, "goal_half": pd.goal_half, "net_depth": pd.net_depth, "out_x": pd.out_x, "out_y": pd.out_y,
             "center_r": pd.center_r, "box_depth": pd.box_depth, "box_half": pd.box_half, "stripes": pd.stripes, "post_r": pd.post_r,

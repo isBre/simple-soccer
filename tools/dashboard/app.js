@@ -519,14 +519,15 @@ function viewPi() {
 const FS_ICON = [   // enter / leave full screen, drawn (the Pi's fonts have no such symbols)
   '<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>',
   '<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5"/></svg>'];
-const live = { es: null, meta: null, frames: [], trail: [], raf: 0, recv: [], lastFrameAt: 0, sideAt: 0, cam: null,
+const live = { mode: "match", es: null, meta: null, frames: [], trail: [], raf: 0, recv: [], lastFrameAt: 0, sideAt: 0, cam: null,
   follow: (() => { try { return localStorage.getItem("liveFollow") !== "0"; } catch (e) { return true; } })() };
 function viewLive() {
   return `<div class="live-wrap">
       <div class="live-main"><div class="scorebar" id="lv-sb"><div class="tm"><i class="kit"></i><span>–</span></div><div class="mid"><div class="score">– : –</div><div class="clock">–</div></div><div class="tm r"><span>–</span><i class="kit"></i></div></div>
         <canvas id="lv-c" width="1400" height="710"></canvas><div class="lv-over" id="lv-over">Waiting for the Pi's match…</div>
+        <button class="ctl-btn" data-ctl title="Controls" aria-label="Controls">⚙</button>
         <button class="fs-btn" data-fs title="Full screen" aria-label="Full screen">${FS_ICON[document.body.classList.contains("live-fs") ? 1 : 0]}</button></div>
-      <div class="card live-side"><div id="lv-prog"></div><div class="seg" id="lv-cam"><button data-cam="1">Follow ball</button><button data-cam="0">Whole pitch</button></div>
+      <div class="card live-side"><div id="lv-prog"></div><div class="seg" id="lv-mode" title="Puzzle: random layout of every player and the ball, 60 s, over at the first goal"><button data-mode="match">Match</button><button data-mode="puzzle">Puzzle</button></div><div class="seg" id="lv-cam"><button data-cam="1">Follow ball</button><button data-cam="0">Whole pitch</button></div>
         <label class="lv-opp">Opponent <select id="lv-opp" aria-label="Opponent of the next match"><option>…</option></select></label>
         <details class="lv-more"><summary>Details</summary><dl class="kv" id="lv-side"></dl></details></div>
     </div>`;
@@ -561,6 +562,7 @@ async function loadOpponents() {
   const sel = $("#lv-opp"); if (!sel) return;
   try {
     const d = await (await fetch("/api/live/opponents")).json(), groups = {};
+    live.mode = d.mode || "match"; liveSide();
     for (const o of d.opponents) (groups[o.group] = groups[o.group] || []).push(o);
     sel.innerHTML = Object.entries(groups).map(([g, os]) => `<optgroup label="${esc(g)}">${os.map((o) => `<option value="${esc(o.id)}"${o.id === d.selected ? " selected" : ""}>${esc(o.label)}${o.tier ? " · " + esc(o.tier) : ""}</option>`).join("")}</optgroup>`).join("");
   } catch (e) { sel.innerHTML = "<option>unavailable</option>"; }
@@ -574,6 +576,7 @@ function liveSide() {
   if (pr) pr.innerHTML = run ? `<div class="big3"><div><b>${run.update ?? 0}<small>/${run.target ?? "?"}</small></b><span>${esc(run.run)}</span></div>
       <div><b>${run.eta_hours != null ? dur(run.eta_hours * 3600) : "–"}</b><span>${run.evaluating ? "evaluating…" : "training left"}</span></div>
       <div><b>${f(run.train_pts_vs_rules)}</b><span>training pts</span></div></div><div class="progress"><i style="width:${run.target ? Math.min(100, (100 * (run.update || 0)) / run.target) : 0}%"></i></div>` : '<div class="muted">nothing training</div>';
+  for (const bt of document.querySelectorAll("#lv-mode button")) bt.classList.toggle("on", bt.dataset.mode === live.mode);
   for (const bt of document.querySelectorAll("#lv-cam button")) bt.classList.toggle("on", (bt.dataset.cam === "1") === live.follow);
   const el = $("#lv-side"); if (!el) return;
   const m = live.meta, fps = live.recv.length / 2, fresh = live.lastFrameAt && performance.now() - live.lastFrameAt < 3000;
@@ -596,10 +599,16 @@ function liveDraw(ts) {
   const P = m.pitch, dpr = window.devicePixelRatio || 1, aspect = P.out_x / P.out_y;
   const box = cv.parentElement.getBoundingClientRect(), sbH = $("#lv-sb")?.offsetHeight || 0;
   const kiosk = document.body.classList.contains("kiosk"), fs = document.body.classList.contains("live-fs");
-  const availH = fs ? window.innerHeight - sbH : window.innerHeight - box.top - sbH - (kiosk ? ($(".live-side")?.offsetHeight || 0) + 18 : 24);
-  const cssW = Math.round(Math.max(200, Math.min(box.width, availH * aspect))), cssH = Math.round(cssW / aspect);
-  if (cv.style.width !== cssW + "px") { cv.style.width = cssW + "px"; cv.style.height = cssH + "px"; }
-  if (cv.width !== Math.round(cssW * dpr)) { cv.width = Math.round(cssW * dpr); cv.height = Math.round(cssH * dpr); }
+  const fill = kiosk || fs;                                   // kiosk and full screen: the canvas covers the whole area (any aspect ratio)
+  cv.parentElement.classList.toggle("fill", fill);
+  let cssW, cssH;
+  if (fill) { cssW = Math.max(200, Math.round(box.width)); cssH = Math.max(120, Math.round(box.height)); }
+  else {
+    const availH = window.innerHeight - box.top - sbH - 24;
+    cssW = Math.round(Math.max(200, Math.min(box.width, availH * aspect))); cssH = Math.round(cssW / aspect);
+    if (cv.style.width !== cssW + "px") { cv.style.width = cssW + "px"; cv.style.height = cssH + "px"; }
+  }
+  if (cv.width !== Math.round(cssW * dpr) || cv.height !== Math.round(cssH * dpr)) { cv.width = Math.round(cssW * dpr); cv.height = Math.round(cssH * dpr); }
   const ctx = cv.getContext("2d");
   const rt = performance.now() - 70, fr = live.frames;
   let a = fr[fr.length - 1], b = a, u = 0;
@@ -607,8 +616,10 @@ function liveDraw(ts) {
   if (a.p.length !== b.p.length) { a = b; u = 0; }
   const Lp = (x, y) => x + (y - x) * u;
   const ball = [Lp(a.b[0], b.b[0]), Lp(a.b[1], b.b[1])];
-  const zoom = live.follow ? 1.9 : 1, k = (cv.width / (2 * P.out_x)) * zoom, vx = P.out_x / zoom, vy = P.out_y / zoom;
-  const target = live.follow ? [Math.max(-P.out_x + vx, Math.min(P.out_x - vx, ball[0])), Math.max(-P.out_y + vy, Math.min(P.out_y - vy, ball[1]))] : [0, 0];
+  const zoom = live.follow ? 1.9 : 1, k = Math.min(cv.width / (2 * P.out_x), cv.height / (2 * P.out_y)) * zoom;
+  const vx = cv.width / (2 * k), vy = cv.height / (2 * k);   // half the visible area in pitch units
+  const clampTo = (v, half, out) => (half >= out ? 0 : Math.max(-out + half, Math.min(out - half, v)));
+  const target = live.follow ? [clampTo(ball[0], vx, P.out_x), clampTo(ball[1], vy, P.out_y)] : [0, 0];
   if (!live.cam) live.cam = target.slice();
   live.cam[0] += (target[0] - live.cam[0]) * 0.12; live.cam[1] += (target[1] - live.cam[1]) * 0.12;
   ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.fillStyle = shade("#" + P.outer, -0.25); ctx.fillRect(0, 0, cv.width, cv.height);
@@ -659,10 +670,10 @@ function liveDraw(ts) {
   if (sb) {
     const runName = m.tag && m.tag.startsWith("x_") ? m.tag.slice(2) : m.tag;
     const t0 = { ...m.teams[0], name: m.teams[0].net && runName ? `${runName} · ${(m.playing || "").replace(/^.*_u/, "u")}` : m.teams[0].name }, t1 = m.teams[1];
-    const key = `${t0.name}|${t1.name}|${b.sc}|${Math.ceil(b.tl)}|${b.st}`;
+    const key = `${t0.name}|${t1.name}|${b.sc}|${Math.ceil(b.tl)}|${b.st}|${m.mode}`;
     if (sb.dataset.key !== key) {
       sb.dataset.key = key;
-      sb.innerHTML = `<div class="tm"><i class="kit" style="background:#${t0.primary}"></i><span>${esc(t0.name)}</span></div><div class="mid"><div class="score">${b.sc[0]} : ${b.sc[1]}</div><div class="clock">${b.st === 2 ? "full time" : clockText(b.tl)}</div></div><div class="tm r"><span>${esc(t1.name)}</span><i class="kit" style="background:#${t1.primary}"></i></div>`;
+      sb.innerHTML = `<div class="tm"><i class="kit" style="background:#${t0.primary}"></i><span>${esc(t0.name)}</span></div><div class="mid"><div class="score">${b.sc[0]} : ${b.sc[1]}</div><div class="clock">${m.mode === "puzzle" ? "PUZZLE · " : ""}${b.st === 2 ? "full time" : clockText(b.tl)}</div></div><div class="tm r"><span>${esc(t1.name)}</span><i class="kit" style="background:#${t1.primary}"></i></div>`;
     }
   }
   const stale = performance.now() - live.lastFrameAt > 3000;
@@ -729,7 +740,8 @@ let lastHTML = "";
 function render() {
   const r = route();
   for (const a of document.querySelectorAll("[data-v]")) a.classList.toggle("on", a.dataset.v === (r.view === "run" ? "runs" : r.view));
-  if (r.view !== "live") stopLive();
+  document.body.dataset.view = r.view;
+  if (r.view !== "live") { stopLive(); document.body.classList.remove("live-ctl"); }
   const before = new Set(Object.keys(chartData));
   const html = r.view === "live" ? viewLive() : r.view === "runs" ? viewRuns() : r.view === "run" ? viewRun(r.arg, r.tab) : r.view === "compare" ? viewCompare(r.params) : r.view === "pi" ? viewPi() : viewNow();
   const cleaned = html.replace(/data-chart="c[a-z0-9]+"/g, "");
@@ -750,6 +762,9 @@ function rerender() { lastHTML = ""; render(); }
 document.addEventListener("click", (e) => {
   const t = e.target;
   if (t.closest("[data-fs]")) { toggleFullscreen(); return; }
+  if (t.closest("[data-ctl]")) { document.body.classList.toggle("live-ctl"); return; }
+  const md = t.closest("button[data-mode]");
+  if (md) { live.mode = md.dataset.mode; liveSide(); fetch("/api/live/mode", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mode: live.mode }) }).catch(() => {}); return; }
   const cam = t.closest("button[data-cam]");
   if (cam) { live.follow = cam.dataset.cam === "1"; try { localStorage.setItem("liveFollow", live.follow ? "1" : "0"); } catch (err) {} liveSide(); return; }
   const lg = t.closest("button.lg");
