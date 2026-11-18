@@ -1,5 +1,5 @@
 {
- "state": "running",
+ "state": "done",
  "spec": {
   "name": "anchor_wall_strong",
   "start": "out_5v5/ckpt/x_kickstart_u600.pt",
@@ -64,16 +64,40 @@
  "restarts": [],
  "control": null,
  "name": "anchor_wall_strong",
- "updated": 1794995560,
- "update": 218,
- "train_pts": 2.79,
+ "updated": 1795001589,
+ "update": 300,
+ "train_pts": 2.81,
  "base_train": 2.85,
  "bad_checks": 0,
  "recorded": [
   50,
   100,
   150,
-  200
+  200,
+  250,
+  300
  ],
- "train_s": 7701
+ "train_s": 10662,
+ "stop_reason": "budget",
+ "finished": 1795001589,
+ "final_update": 300,
+ "verdict": {
+  "pts": 0.0,
+  "pts_se": 0.127,
+  "gd": -0.0625,
+  "gd_se": 0.2497,
+  "n": 32,
+  "paired": true,
+  "z": 0.0,
+  "z_gd": -0.2503,
+  "p": 1.0,
+  "mde": 0.3556,
+  "verdict": "no difference",
+  "reference": "start:x_kickstart_u600",
+  "update": 300
+ },
+ "cost_hours": {
+  "train": 2.96,
+  "eval": 1.18
+ }
 }
