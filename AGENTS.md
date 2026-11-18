@@ -51,8 +51,13 @@ divergence / regression / cancel, then runs full evaluations (last checkpoint an
 ## Health
 - `lab.py status` shows `stalled` (no training output for 15 min outside an evaluation) and `last_reboot` (last health sample before it).
 - `logs/pi_health.log`: one line every 10 s (ISO time, boot id, throttling, temperature, load, memory). `journalctl -b -1` for the kernel side.
-- Services: `soccer-exp` (runner), `soccer-dashboard` (port 8080), `soccer-health`. The hardware watchdog reboots a frozen Pi.
+- Services: `soccer-exp` (runner), `soccer-dashboard` (port 8080), `soccer-health`, `soccer-oppnet` (net server 7304 for the Live opponent). The hardware watchdog reboots a frozen Pi.
 
 ## Commit
 Results, specs and the notebook are versioned: `git -c user.name=<owner> -c user.email=<owner email> commit` (the Pi has no global
 git identity; use the identity of the existing commits), with a `Co-Authored-By` line, then `git push`.
+
+## Live demo match
+The Live page plays the newest checkpoint against a **random opponent per match** (all handmade rule teams, RL Team 4/5, t48_u100, jit8 and the
+best checkpoint of every `x_*` run). The dropdown on the page pins one opponent (`POST /api/live/opponent`, same-origin only, the dashboard's only
+write; state in `logs/live_opponent.json`). Agents do not need it.

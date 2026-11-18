@@ -28,6 +28,8 @@ var _ms: MatchScreen = null              # the match being shown (streamed to th
 var _udp := PacketPeerUDP.new()
 var _frames := 0
 const STREAM_PORT := 7310
+const OPP_PORT := 7304                   # net server of the opponent picker (service soccer-oppnet)
+var opp_label := "RL Team 4"
 @onready var nav_row: HBoxContainer = $Root/Nav/Row
 @onready var pages: Control = $Root/Pages
 @onready var banner: Label = $Root/Banner
@@ -147,6 +149,42 @@ func _refresh() -> void:
         sidebar.refresh()
 
 
+## The opponent of the next match. Default and "random": drawn for every match from all handmade (rule-based) teams, RL Team 4/5 and the
+## earlier runs' best checkpoints (out_5v5/ckpt/x_*_best.json, jit8, t48_u100). The dashboard's Live page can pin one opponent instead
+## (logs/live_opponent.json, written by tools/dashboard.py). A net opponent is served by tools/net_server.py on OPP_PORT (service soccer-oppnet),
+## which reads the model to play from logs/live_opp_net.json (written here before the match connects).
+func _opponent() -> Dictionary:
+    var sel: Dictionary = {}
+    var f := FileAccess.open("res://logs/live_opponent.json", FileAccess.READ)
+    if f != null:
+        var parsed = JSON.parse_string(f.get_as_text())
+        if parsed is Dictionary:
+            sel = parsed
+    var kind := str(sel.get("kind", "random"))
+    if kind == "random":
+        var pool: Array = []
+        for t: TeamDef in Database.teams.values():
+            if t.ml_model == "":
+                pool.append({"kind": "rule", "team": t.id, "label": t.id.capitalize()})
+        pool.append({"kind": "net", "model": "data/models/rl_5v5_arena_v4.json", "label": "RL Team 4"})
+        pool.append({"kind": "net", "model": "data/models/rl_5v5_arena_v5.json", "label": "RL Team 5"})
+        pool.append({"kind": "net", "model": "out_5v5/ckpt/t48_u100.json", "label": "Start net t48_u100"})
+        pool.append({"kind": "net", "model": "out_5v5/ckpt/jit8_best.json", "label": "jit8 (54-number)"})
+        for fn in DirAccess.get_files_at("res://out_5v5/ckpt"):
+            if fn.begins_with("x_") and fn.ends_with("_best.json"):
+                pool.append({"kind": "net", "model": "out_5v5/ckpt/" + fn, "label": "Run %s (best)" % fn.trim_prefix("x_").trim_suffix("_best.json")})
+        sel = pool[rng.randi() % pool.size()]
+        kind = sel.kind
+    if kind == "rule" and Database.teams.has(str(sel.get("team", ""))):
+        return {"team": str(sel.team), "net": false, "label": str(sel.get("label", sel.team))}
+    var model := str(sel.get("model", "data/models/rl_5v5_arena_v4.json"))
+    var nf := FileAccess.open("res://logs/live_opp_net.json", FileAccess.WRITE)
+    if nf != null:
+        nf.store_string(JSON.stringify({"model": model}))
+        nf.close()
+    return {"team": "rl_team_4", "net": true, "label": str(sel.get("label", "RL Team 4"))}
+
+
 ## Starts a match of the newest weights (the net server loads them when the match connects).
 func _next() -> void:
     for old in match_area.get_children():
@@ -154,10 +192,13 @@ func _next() -> void:
     var best := data.best_checkpoint()
     var use_best := _best_ckpt and not best.is_empty()
     data.playing = str(best.checkpoint) if use_best else Data.newest_checkpoint(tag, start_weights).get_file().get_basename()
-    var cfg := Database.make_config("rl_team_5", "rl_team_4", "arena", 5, 90.0, rng.randi())
+    var opp := _opponent()
+    var cfg := Database.make_config("rl_team_5", opp.team, "arena", 5, 90.0, rng.randi())
     cfg.control = MatchConfig.ControlMode.NONE
     cfg.ml_models[0] = RemoteMLP.new(7303 if use_best else 7301)
-    cfg.ml_models[1] = RemoteMLP.new(7302)
+    if opp.net:
+        cfg.ml_models[1] = RemoteMLP.new(OPP_PORT)                 # the opponent net chosen on the dashboard (tools/net_server.py --select-file)
+    opp_label = opp.label
     cfg.ml_keeper = true
     if _best_move:
         cfg.ml_temperature = 0.0                                   # argmax instead of sampling (applies from the next match)
@@ -212,7 +253,7 @@ func _stream_meta(sim: MatchSim) -> Dictionary:
     for p in sim.players:
         players.append({"team": p.team, "n": p.def.number, "r": p.radius, "role": p.role})
     var l := data.last()
-    return {"k": "m", "id": sim.cfg.match_seed, "tag": tag, "playing": data.playing, "upd": l.get("upd", 0), "best_move": sim.cfg.ml_temperature == 0.0,
+    return {"k": "m", "id": sim.cfg.match_seed, "tag": tag, "playing": data.playing, "opponent": opp_label, "upd": l.get("upd", 0), "best_move": sim.cfg.ml_temperature == 0.0,
         "best_ckpt": _best_ckpt, "duration": sim.cfg.duration, "ball_r": sim.ball.radius, "teams": teams, "players": players,
         "pitch": {"half_w": pd.half_w, "half_h": pd.half_h, "goal_half": pd.goal_half, "net_depth": pd.net_depth, "out_x": pd.out_x, "out_y": pd.out_y,
             "center_r": pd.center_r, "box_depth": pd.box_depth, "box_half": pd.box_half, "stripes": pd.stripes, "post_r": pd.post_r,

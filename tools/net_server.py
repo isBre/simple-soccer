@@ -2,6 +2,8 @@
 Protocol: on connect the server sends the net's input size n_in (uint32); then per request n_in float32 in -> 10 float32 out. On every new connection the model is (re)loaded:
   --model FILE            fixed game-model JSON
   --tag TAG --ckpt DIR    newest DIR/TAG_u*.json (falls back to --model)
+  --select-file FILE      JSON {"model": path relative to the project} written by the dashboard (live opponent picker); read on every
+                          new connection, falls back to --model
   --best-file FILE        the model named in logs/<tag>_best.json ("model": path relative to the project; written by
                           rl/eval_checkpoint.py), falls back to --model until the first evaluation has chosen one
 """
@@ -56,6 +58,7 @@ ap.add_argument("--model", default="")
 ap.add_argument("--tag", default="")
 ap.add_argument("--ckpt", default="out_5v5/ckpt")
 ap.add_argument("--best-file", default="")
+ap.add_argument("--select-file", default="")
 a = ap.parse_args()
 srv = socket.socket()
 srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -66,4 +69,11 @@ while True:
     p = newest(a.ckpt, a.tag, a.model) if a.tag else a.model
     if a.best_file and os.path.exists(a.best_file):
         p = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), json.load(open(a.best_file))["model"])
+    if a.select_file and os.path.exists(a.select_file):
+        try:
+            sel = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), json.load(open(a.select_file))["model"])
+            if os.path.isfile(sel):
+                p = sel
+        except (ValueError, KeyError, OSError):
+            pass
     threading.Thread(target=lambda c=c, p=p: serve(c, p), daemon=True).start()

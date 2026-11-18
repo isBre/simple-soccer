@@ -8,7 +8,10 @@ The page (tools/dashboard/: index.html, app.js, style.css) is a small single-pag
   /results.md         the tracker's table as text
   /api/v1/<command>   the agent interface (rl/lab.py, read-only): status, runs, run/<name>, evals, best, compare?a=&b=, ablation, events?since=,
                       queue, schema; query parameters = the CLI options (e.g. /api/v1/evals?run=minimal&kind=full). See AGENTS.md.
-Standard library only and no internet needed (the charts are drawn in the browser as SVG). It reads exp/ and logs/, never writes.
+  /api/live/opponents GET the opponents the Live page can play (rule teams, RL Team 4/5, older checkpoints) and the chosen one
+  /api/live/opponent  POST {"id": ...}: the ONLY write of this server: which opponent the Pi's demo match plays next (logs/live_opponent.json,
+                      logs/live_opp_net.json); ids come from the list above, requests from another web site are refused
+Standard library only and no internet needed (the charts are drawn in the browser as SVG). It reads exp/ and logs/; the one write is the opponent choice.
 There is NO login: use it on a trusted network only.
 
   python3 tools/dashboard.py [--port 8080]                 (service soccer-dashboard, tools/systemd/)
@@ -101,6 +104,53 @@ def health_view(hours=12.0):
     return {"rows": lab.thin(hl, 720), "reboots": lab.reboots(lab.health(72)), "hours": hours}
 
 
+LIVE_SEL = os.path.join(ROOT, "logs", "live_opponent.json")
+LIVE_NET = os.path.join(ROOT, "logs", "live_opp_net.json")
+NET_LABELS = {"rl_5v5_arena_v4": "RL Team 4", "rl_5v5_arena_v5": "RL Team 5"}
+
+
+def live_opponents():
+    """Everything the demo match can play against: [{id, kind rule|net|random, label, group, team|model, ...}]."""
+    out = [{"id": "random", "kind": "random", "label": "Random (all teams and earlier runs)", "group": "Automatic"}]
+    try:
+        info = json.load(open(os.path.join(ROOT, "rl", "teams_info.json")))
+    except (OSError, ValueError):
+        info = []
+    for t in sorted(info, key=lambda t: t.get("strength", 0)):
+        out.append({"id": "rule:" + t["id"], "kind": "rule", "team": t["id"], "label": t["id"].replace("_", " ").title(),
+                    "group": "Handmade teams", "tier": t.get("tier"), "strength": t.get("strength"), "style": t.get("style")})
+    for name, label in NET_LABELS.items():
+        out.append({"id": "net:" + name, "kind": "net", "model": "data/models/%s.json" % name, "label": label, "group": "Earlier RL teams"})
+    nets = [("out_5v5/ckpt/t48_u100.json", "Start net t48_u100"), ("out_5v5/ckpt/jit8_best.json", "jit8 (54-number, 2.94)")]
+    for f in sorted(glob.glob(os.path.join(ROOT, "out_5v5", "ckpt", "x_*_best.json"))):
+        run = os.path.basename(f)[2:-len("_best.json")]
+        nets.append(("out_5v5/ckpt/" + os.path.basename(f), "Run %s (best)" % run))
+    for rel, label in nets:
+        if os.path.isfile(os.path.join(ROOT, rel)):
+            out.append({"id": "net:" + rel, "kind": "net", "model": rel, "label": label, "group": "Previous runs"})
+    return out
+
+
+def live_selected():
+    try:
+        return json.load(open(LIVE_SEL)).get("id", "random")
+    except (OSError, ValueError):
+        return "random"
+
+
+def live_select(opp_id):
+    opp = next((o for o in live_opponents() if o["id"] == opp_id), None)
+    if opp is None:
+        return None
+    sel = {"id": opp["id"], "kind": opp["kind"], "label": opp["label"], "team": opp.get("team", ""), "model": opp.get("model", "")}
+    if opp["kind"] == "net":                                  # (random: the viewer draws a new one and writes logs/live_opp_net.json itself)
+        json.dump({"model": opp["model"]}, open(LIVE_NET + ".tmp", "w"))
+        os.replace(LIVE_NET + ".tmp", LIVE_NET)              # the net server reads it when the next match connects
+    json.dump(sel, open(LIVE_SEL + ".tmp", "w"))
+    os.replace(LIVE_SEL + ".tmp", LIVE_SEL)
+    return sel
+
+
 class Live:
     """Latest match state from the viewer (UDP JSON packets): 'meta' (pitch, kits, players) and 'frame' (positions)."""
     cond = threading.Condition()
@@ -154,6 +204,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self.api_v1(path, self.path.split("?", 1)[1] if "?" in self.path else "")
             if path == "/api/live":
                 return self.live()
+            if path == "/api/live/opponents":
+                return self.send(json.dumps({"opponents": live_opponents(), "selected": live_selected()}).encode(), "application/json")
             if path == "/api/health":
                 from urllib.parse import parse_qsl
                 q = dict(parse_qsl(self.path.split("?", 1)[1])) if "?" in self.path else {}
@@ -167,6 +219,21 @@ class Handler(BaseHTTPRequestHandler):
             return self.send(open(full, "rb").read(), (mimetypes.guess_type(full)[0] or "application/octet-stream") + "; charset=utf-8")
         except Exception as e:                                 # a half-written log must not kill the server
             return self.send(json.dumps({"error": repr(e)}).encode(), "application/json", 500)
+
+    def do_POST(self):
+        """The only write: choose the live opponent. Same-origin only (a page on another site cannot trigger it)."""
+        path = unquote(self.path.split("?")[0])
+        host, origin = self.headers.get("Host", ""), self.headers.get("Origin", "")
+        if path != "/api/live/opponent" or (origin and origin.split("://")[-1] != host):
+            return self.send(json.dumps({"error": "not allowed"}).encode(), "application/json", 403)
+        try:
+            body = json.loads(self.rfile.read(min(int(self.headers.get("Content-Length", 0)), 4096)) or b"{}")
+            sel = live_select(str(body.get("id", "")))
+        except (ValueError, OSError):
+            sel = None
+        if sel is None:
+            return self.send(json.dumps({"error": "unknown opponent"}).encode(), "application/json", 400)
+        return self.send(json.dumps({"selected": sel["id"], "label": sel["label"]}).encode(), "application/json")
 
     def api_v1(self, path, qs):
         """/api/v1/<command>[/<positional>...]?option=value -> rl/lab.py <command> ... (read-only commands only)."""

@@ -526,6 +526,7 @@ function viewLive() {
         <canvas id="lv-c" width="1400" height="710"></canvas><div class="lv-over" id="lv-over">Waiting for the Pi's match…</div>
         <button class="fs-btn" data-fs title="Full screen" aria-label="Full screen">${FS_ICON[document.body.classList.contains("live-fs") ? 1 : 0]}</button></div>
       <div class="card live-side"><div id="lv-prog"></div><div class="seg" id="lv-cam"><button data-cam="1">Follow ball</button><button data-cam="0">Whole pitch</button></div>
+        <label class="lv-opp">Opponent <select id="lv-opp" aria-label="Opponent of the next match"><option>…</option></select></label>
         <details class="lv-more"><summary>Details</summary><dl class="kv" id="lv-side"></dl></details></div>
     </div>`;
 }
@@ -554,6 +555,19 @@ function stopLive() {
   live.frames = []; live.trail = []; live.cam = null;
 }
 function clockText(s) { s = Math.max(0, Math.ceil(s)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`; }
+// the opponent of the demo match: "random" (default) draws a handmade team or an earlier run for every match; a pinned choice applies from the next match
+async function loadOpponents() {
+  const sel = $("#lv-opp"); if (!sel) return;
+  try {
+    const d = await (await fetch("/api/live/opponents")).json(), groups = {};
+    for (const o of d.opponents) (groups[o.group] = groups[o.group] || []).push(o);
+    sel.innerHTML = Object.entries(groups).map(([g, os]) => `<optgroup label="${esc(g)}">${os.map((o) => `<option value="${esc(o.id)}"${o.id === d.selected ? " selected" : ""}>${esc(o.label)}${o.tier ? " · " + esc(o.tier) : ""}</option>`).join("")}</optgroup>`).join("");
+  } catch (e) { sel.innerHTML = "<option>unavailable</option>"; }
+}
+document.addEventListener("change", async (e) => {
+  if (e.target.id !== "lv-opp") return;
+  try { await fetch("/api/live/opponent", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: e.target.value }) }); } catch (err) {}
+});
 function liveSide() {
   const run = state.ov?.status?.runner?.running, pr = $("#lv-prog");
   if (pr) pr.innerHTML = run ? `<div class="big3"><div><b>${run.update ?? 0}<small>/${run.target ?? "?"}</small></b><span>${esc(run.run)}</span></div>
@@ -726,7 +740,7 @@ function render() {
   view.innerHTML = html;
   attachCharts(view);
   if (focus) { const i = $("[data-filter]"); if (i) { i.focus(); i.setSelectionRange(caret, caret); } }
-  if (r.view === "live") { if (live.raf) cancelAnimationFrame(live.raf); live.raf = 0; startLive(); }
+  if (r.view === "live") { loadOpponents(); if (live.raf) cancelAnimationFrame(live.raf); live.raf = 0; startLive(); }
   document.title = (r.view === "run" ? r.arg + " · " : "") + "Soccer Lab";
   const dl = $("#runlist");
   if (dl && state.ov) dl.innerHTML = state.ov.runs.map((x) => `<option value="${esc(x.name)}">`).join("");
