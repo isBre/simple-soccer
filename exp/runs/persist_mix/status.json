@@ -1,5 +1,5 @@
 {
- "state": "running",
+ "state": "done",
  "spec": {
   "start": "out_5v5/ckpt/x_kickstart_u600.pt",
   "updates": 400,
@@ -68,11 +68,42 @@
  "restarts": [],
  "control": "kickstart_persist",
  "name": "persist_mix",
- "updated": 1795001711,
- "update": 1,
- "train_pts": null,
- "base_train": null,
+ "updated": 1795020880,
+ "update": 400,
+ "train_pts": 2.89,
+ "base_train": 2.82,
  "bad_checks": 0,
- "recorded": [],
- "train_s": 121
+ "recorded": [
+  50,
+  100,
+  150,
+  200,
+  250,
+  300,
+  350,
+  400
+ ],
+ "train_s": 14234,
+ "stop_reason": "budget",
+ "finished": 1795020880,
+ "final_update": 400,
+ "verdict": {
+  "pts": -0.0625,
+  "pts_se": 0.1094,
+  "gd": -0.4688,
+  "gd_se": 0.3329,
+  "n": 32,
+  "paired": true,
+  "z": -0.5712,
+  "z_gd": -1.4079,
+  "p": 0.5678,
+  "mde": 0.3064,
+  "verdict": "no difference",
+  "reference": "kickstart_persist",
+  "update": 400
+ },
+ "cost_hours": {
+  "train": 3.95,
+  "eval": 1.4
+ }
 }
