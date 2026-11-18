@@ -1,6 +1,6 @@
 # Experiment results
 
-Updated 2026-11-18 08:32. pts = league points per match (16 rule teams, both sides), gd = goal difference per match, mean ± standard error. Verdicts compare within one protocol (fast and full are never mixed), paired over identical matches when possible. `python3 rl/lab.py` gives the same data as JSON.
+Updated 2026-11-18 10:48. pts = league points per match (16 rule teams, both sides), gd = goal difference per match, mean ± standard error. Verdicts compare within one protocol (fast and full are never mixed), paired over identical matches when possible. `python3 rl/lab.py` gives the same data as JSON.
 
 | run | state | update | protocol | pts ± se | gd | GA | vs RL4 | vs RL5 | dir chg/s | idle % | verdict |
 |---|---|---|---|---|---|---|---|---|---|---|---|
@@ -8,6 +8,7 @@ Updated 2026-11-18 08:32. pts = league points per match (16 rule teams, both sid
 | anchor_ctrl | done | 300 | fast/g2/d60 | 2.58 ± 0.19 | 1.46 | 0.12 | - | - | - | - |  |
 | anchor_wall | done | 300 | full/g1/d90 | 2.88 ± 0.09 | 2.34 | 0.28 | 1.38 | 0.06 | 11.61 | 2.0 | no difference (vs start:x_kickstart_u600) |
 | anchor_wall | done | 300 | fast/g2/d60 | 2.62 ± 0.17 | 1.38 | 0.38 | - | - | - | - |  |
+| anchor_wall_strong | running | 200 | fast/g2/d60 | 3.0 ± 0.0 | 1.79 | 0.0 | - | - | - | - |  |
 | kickstart | done | 600 | full/g1/d90 | 2.81 ± 0.1 | 2.12 | 0.16 | 0.56 | 0.31 | 12.87 | 3.0 | better (vs start:t48_u100) |
 | kickstart | done | 600 | fast/g2/d60 | 2.58 ± 0.17 | 1.58 | 0.08 | - | - | - | - |  |
 | kickstart_persist | done | 400 | full/g1/d90 | 2.94 ± 0.06 | 2.66 | 0.06 | 0.75 | 0.94 | 11.08 | 2.0 | no difference (vs start:x_kickstart_u600) |

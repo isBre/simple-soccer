@@ -1,0 +1,18 @@
+{
+ "start": "out_5v5/ckpt/x_kickstart_u600.pt",
+ "updates": 400,
+ "rewards": {},
+ "control": "kickstart_persist",
+ "name": "persist_mix",
+ "lr": 5e-05,
+ "args": {
+  "teacher": "out_5v5/ckpt/jit8_best.pt",
+  "kl_coef": 0.2,
+  "kl_decay": 1000,
+  "opp_models": "out_5v5/ckpt/jit8_best.pt,data/models/rl_5v5_arena_v4.json,data/models/rl_5v5_arena_v5.json",
+  "pfsp": 0.75,
+  "workers_rule": 1,
+  "workers_self": 2
+ },
+ "notes": "Same as kickstart_persist (the control) but the worker mix 1 rule + 2 strong/self-play instead of 2 rule + 1: rule bots are already beaten (~2.9/3), so compute goes to the opponents that matter (RL4/RL5/jit8/self)."
+}

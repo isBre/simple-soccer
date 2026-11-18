@@ -64,11 +64,16 @@
  "restarts": [],
  "control": null,
  "name": "anchor_wall_strong",
- "updated": 1794987161,
- "update": 12,
- "train_pts": null,
- "base_train": null,
+ "updated": 1794995319,
+ "update": 212,
+ "train_pts": 2.79,
+ "base_train": 2.85,
  "bad_checks": 0,
- "recorded": [],
- "train_s": 483
+ "recorded": [
+  50,
+  100,
+  150,
+  200
+ ],
+ "train_s": 7459
 }

@@ -112,3 +112,10 @@ finished experiment and adjusts the queue.
 - Full evaluation u400: **2.94 ± 0.06**, GD +2.66, conceded 0.06 vs start (kickstart u600) 2.81 / +2.12 / 0.16: +0.13 ± 0.13, paired z 1.0, p 0.32; GD +0.53 (z 1.5): **no difference**.
 - h2h: RL Team 4 0.75 (GD -0.44; start 0.56), RL Team 5 0.94 (-0.50; start 0.31), start net 1.94. Best of the 46-number runs against RL4/RL5 but still losing, and inside the noise (16 games each). Behaviour: 11.1 direction changes/s, 9.2 shots per match.
 - Meaning: a persistent teacher pull plus strong opponents gives the best numbers so far (matches jit8 on the rule league) without drift, but no significant gain. Queued `kickstart_persist_long` (from its u400, 600 more updates, same setup) to see whether the small edge grows. Wider net (distill.py --hidden 256) after `anchor_wall_strong` finishes.
+
+### Note 2026-11-18 10:50: speeding up convergence (agreed with the user)
+Observation: the gains of every anchored run arrive in the first ~50 updates, then plateau; 2 of 3 workers play rule bots that are already beaten (~2.9 / 3). Queued behind `anchor_wall_strong`, each judged against `kickstart_persist` (same start, anchor, opponents, 400 updates):
+- `persist_mix`: worker mix 1 rule + 2 strong/self-play (instead of 2 + 1).
+- `persist_lr`: lr 1e-4 (instead of 5e-5) with the teacher anchor on.
+- `kickstart_persist_long` moved last (a longer run of what we already have).
+Not queued yet: supervised route (more DAgger rounds, `distill.py --hidden 256` from jit8, then kickstart). A distillation uses 3 workers and would fight a running training for the Pi's 4 cores: run it between experiments or on a faster machine. Also open: fast checks every 100 updates (about -4 s/update) and a screen-off switch, once the user decides.
