@@ -80,11 +80,15 @@
   "params": 23818
  },
  "name": "persist_lr",
- "updated": 1795032034,
- "update": 2,
- "train_pts": null,
- "base_train": null,
+ "updated": 1795037810,
+ "update": 176,
+ "train_pts": 2.85,
+ "base_train": 2.82,
  "bad_checks": 0,
- "recorded": [],
- "train_s": 123
+ "recorded": [
+  50,
+  100,
+  150
+ ],
+ "train_s": 5247
 }
