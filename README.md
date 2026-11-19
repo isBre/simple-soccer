@@ -47,7 +47,7 @@ There are no difficulty levels. A bot is exactly as good as its player's attribu
   not take kickoffs).
 - **Dataset** ("Record my play", on by default, remembered in the browser): every match you play is saved as a training file for
   imitation learning (`data/human/`, see "Recording your play" below). A red REC mark shows in the corner while it records.
-- Two leagues: the **Rule Based League** (16 fictional teams driven by the handmade AI styles) and the **Reinforcement Learning League** (the RL Teams, driven by trained nets). In Quick Match each side picks a league first, then a team from it (sides can be in different leagues).
+- Two leagues: the **Rule Based League** (16 fictional teams driven by the handmade AI styles, plus **Opus 5.5 High**, a team with its own team brain, see below) and the **Reinforcement Learning League** (the RL Teams, driven by trained nets). In Quick Match each side picks a league first, then a team from it (sides can be in different leagues).
 - Teams browser: teams grouped by league, with logos, kits, rosters, play styles and a tier (Elite / Strong / Average / Weak).
 - Tournament: pick a league, then league, knockout, or groups + knockout among its teams (saved in the browser, so it continues where you left it). Knockout and groups need 4, 8 or 16 teams; other counts play a round robin. Knockout draws: golden goal, then penalties.
 - Report after each match: score, scorers, team stats, player grades (3.0-10.0), man of the match.
@@ -65,7 +65,7 @@ data/     pitches, styles, teams, formations, shipped nets (JSON)
 ```
 
 - `soccer/` (no UI): `data.py` (pitches, styles, teams, formations, line-ups, kit colours), `match.py` (the simulation,
-  60 ticks/s), `stats.py`, `rating.py`, `rng.py` (Godot's random generator, bit for bit), `ai/` (`rules.py` team brain and
+  60 ticks/s), `stats.py`, `rating.py`, `rng.py` (Godot's random generator, bit for bit), `ai/` (`opus.py` the Opus 5.5 High team brain, `rules.py` team brain and
   rule bots, `nets.py` net teams and observations).
 - `game/`: `api.py` (catalog, a match setup -> `MatchConfig`, whole matches simulated on all cores), `tournament.py`
   (fixtures, standings, statistics), `session.py` (a live match over a WebSocket), `routes.py` (the HTTP API).
@@ -77,7 +77,9 @@ data/     pitches, styles, teams, formations, shipped nets (JSON)
 - `lab/` ([lab/README.md](lab/README.md)): `exp_runner.py`, `tracker.py`, `lab.py`, `dashboard.py` (Lab API), `live.py`,
   `systemd/`. Results and specs live in `exp/`, checkpoints in `out_5v5/`, logs in `logs/`.
 - `tests/` the core and the game against the Godot implementation they replaced, and the web app (see "Tests"); `tools/`
-  `bench.py` (core speed), `generate_data.py` (regenerates `data/`, seeded; style tuning lives there); `docs/` notebook,
+  `bench.py` (core speed), `team_bench.py` (one team against the league / RL teams / trained nets: points, goals, and how
+  much it plays as a team), `elo.py` (one Elo ranking of every rule team, RL team and net in `models/`: round robin plus a
+  Bradley-Terry fit with intervals; results in `logs/elo/`, latest table in [docs/elo_ranking.md](docs/elo_ranking.md)), `generate_data.py` (regenerates `data/`, seeded; style tuning lives there); `docs/` notebook,
   rewards, pipeline design, UI design guide, old results.
 
 ### Bot quality and team AI (how a team gets strong or weak)
@@ -85,14 +87,40 @@ data/     pitches, styles, teams, formations, shipped nets (JSON)
 - Ball carrier (`soccer/ai/rules.py` `StyleBot._decide_action`): shoots at the goal-mouth point whose line is furthest from every opponent (keeper included), takes longer shots when the lane is open, dribbles by scoring 7 headings against opponents' positions and momentum, and rates passes by receiver space plus whether an opponent can reach the lane before the ball (`_pass_margin`, ball travel time from the real kick speed and damping).
 - Ball physics is fixed (a kick adds exactly 5 px/tick to the ball's current velocity, damping 0.99/tick), so the bots predict the ball: `intercept` (`soccer/ai/rules.py`) finds the earliest point on the ball's path a player can reach (chasers run to it, and an off-ball *interceptor* is sent onto an opponent's pass/shot, `style.intercept`); `_compensated_dir` corrects the kick direction for the ball's velocity so passes/shots on a moving ball go where intended.
 - Game management (`TeamBrain.urgency`): in the last ~45 % of the match a team that is behind pushes up, shoots earlier and presses with one more player; a team that is ahead drops deeper.
+
+### Opus 5.5 High (`soccer/ai/opus.py`)
+A Rule Based League team with its own team brain (`OpusBrain` + `OpusBot`, chosen by `"brain": "opus"` in its style). Same senses
+and limits as every bot (perception delay, aim error, position noise and decision speed from the attributes, which are those of
+Silver Arrows, the strongest handmade team), so the difference is only how it plays:
+- **Jobs, not a swarm**: exactly one outfield player plays the ball (whoever gets there first). With the ball, one player stays
+  back as the rest defence, the most advanced supporter attacks the far post in the final third and the others take open
+  support spots (value of the spot, pass lane, distance to opponents, spread from team-mates). Without it, one presser
+  approaches goal-side, one covers between ball and goal, the others mark the most dangerous receivers; near our goal a marker
+  whose man is already in a scramble guards the far half of the goal mouth instead of piling in. The keeper keeps goal and only
+  plays balls he wins in his own box. In our own half the team only switches to attack when the ball is clearly ours.
+- **Every kick is simulated** (build-up and midfield): the ball path of 40+ directions, straight passes and shots (three aim
+  samples each for the player's aim error) and when every player can reach it (exact player dynamics: current momentum plus full
+  acceleration after his reaction delay). Who touches first decides the value (receiver's spot and space, or the danger of losing
+  it; shots: chance nobody reaches it before the line, with a reading delay for defenders and a rebound value). The kick that is
+  actually taken is the one the contact gives right now, evaluated fresh, so a pass never goes off by the line-up tolerance.
+  Pass predictions are calibrated: passes rated over 95 % safe are kept about 90 % of the time.
+- **Final third** (from 35 % of the half beyond halfway): the carrier drives at goal and shoots like the handmade bots
+  (`StyleBot._decide_action` with the Opus style), with the Opus shape around him.
+- Elo ranking of all 42 teams and nets ([docs/elo_ranking.md](docs/elo_ranking.md)): 1331, 24th, the top rule team (Silver Arrows
+  1079) and above two trained nets.
+- Measured with `python3 tools/team_bench.py opus_high --rl` (5v5 arena, 3 min, both sides): about 1.9 points per match against
+  the 16 rule teams (it beats every one of them on balance; level with Silver Arrows head to head), 3.4 goals conceded per match
+  against RL Team 4/5 (Silver Arrows: 5.8), and wins games against several of the trained nets in `models/`. It plays as a team:
+  3+ of its outfield players are within 120 px of the ball only ~3 % of the time (Silver Arrows ~5 %, RL Team 5 ~28 %),
+  ~35 passes per match at ~80 % completion (Silver Arrows ~10 at ~60 %).
 - Team strength comes from `tools/generate_data.py` (`base`). The UI shows the team rating (average of the best 5 players) as a number with 0-5 stars (`game/api.py` `stars`). Teams are picked with `<` / `>` pickers (Left / Right keys) instead of dropdowns.
 
 Physics is identical for every team. Attributes (finishing, passing, defending, positioning, reaction) and styles only change AI behaviour.
 
 ## Adding content
 - Pitch: `data/pitches/<id>.json` (copy `classic.json`).
-- Style: `data/styles/<id>.json` (line_height, compactness, width, press, marking, directness, shoot_range, pass_bias, risk, keeper_sweep, forward_stay, support_dist, fluidity, attack_commit). `fluidity` 0 = fixed goalkeeper, 1 = whoever is rearmost keeps goal; `attack_commit` = how many players join the attack. Strategy params: `intercept` (run onto the ball path of opponent passes/shots), `counter_press` (extra chasers right after losing the ball), `long_shot` (shoot from range when the lane is open), `switch_play` (prefer passes to the far side). 16 styles ship: balanced, tiki_taka, high_press, park_the_bus, counter_attack, long_ball, wing_play, total_football, catenaccio, all_out_attack, gegenpress, sharpshooters, man_to_man, zone_trap, dribblers, switch_play.
-- Team: `data/teams/<id>.json`. Optional `"league"`: `"rules"` or `"rl"`; without it a team with an `ml_model` joins the RL league, every other team the rule-based one.
+- Style: `data/styles/<id>.json` (line_height, compactness, width, press, marking, directness, shoot_range, pass_bias, risk, keeper_sweep, forward_stay, support_dist, fluidity, attack_commit). `fluidity` 0 = fixed goalkeeper, 1 = whoever is rearmost keeps goal; `attack_commit` = how many players join the attack. Strategy params: `intercept` (run onto the ball path of opponent passes/shots), `counter_press` (extra chasers right after losing the ball), `long_shot` (shoot from range when the lane is open), `switch_play` (prefer passes to the far side). `brain`: `"rules"` (default) or `"opus"` (the Opus team brain, `soccer/ai/opus.py`). 17 styles ship: opus_high, balanced, tiki_taka, high_press, park_the_bus, counter_attack, long_ball, wing_play, total_football, catenaccio, all_out_attack, gegenpress, sharpshooters, man_to_man, zone_trap, dribblers, switch_play.
+- Team: `data/teams/<id>.json`. Optional `"league"`: `"rules"` or `"rl"`; without it a team with an `ml_model` joins the RL league, every other team the rule-based one. A rule team added after the original 16 sets `"rl_eval": false`, so the RL evaluation league (`rl/evaluate.py`, `rl/teams_info.json`) and every earlier evaluation stay comparable.
 - Formation: `data/formations.json`, slots `[role, fx, fy]`.
 
 ## How the browser plays a match (`game/session.py`)
