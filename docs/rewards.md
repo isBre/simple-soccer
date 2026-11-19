@@ -23,7 +23,7 @@ Not rewards but loss terms that proved essential:
 ## 1b. Being tested now
 | Term | Weight | What it does | Evidence |
 |---|---|---|---|
-| `w_corner` | 0.01 (run `anchor_corner`) | penalty to every learner per decision while our team put the ball in a corner (last touch ours, ball within 150 px of both lines) | the user's idea (2026-11-18). Scouting of `anchor_ctrl` / `anchor_wall_strong`: ball in a corner **22.9% / 23.4%** of the time (about twice the share of the pitch the corners cover), **13.4% / 14.4%** after our touch. Result pending: compared against `anchor_wall_strong` |
+| `w_corner` | 0.01 (`anchor_corner2`), 0.04 queued (`anchor_corner_strong`) | penalty to every learner per decision while our team put the ball in a corner (last touch ours, ball within 150 px of both lines) | the user's idea (2026-11-18). Scouting of `anchor_ctrl` / `anchor_wall_strong`: ball in a corner **22.9% / 23.4%** of the time (about twice the share of the pitch the corners cover), **13.4% / 14.4%** after our touch. 0.01 (`anchor_corner2`, 2026-11-19): ours-in-corner 12.0% vs 14.4%, league 2.81 vs 2.81: no cost, effect inside the scouting noise. Next: 0.04 |
 
 ## 2. Unsure (never tested alone on a stable line, or tested only inside a mix)
 Parked in `exp/parked/`; `xga` goes first when they come back. The test belongs on the anchored line (start `kickstart` u600, KL on), one term per run against `anchor_ctrl`-style controls.

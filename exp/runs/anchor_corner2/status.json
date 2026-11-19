@@ -1,5 +1,5 @@
 {
- "state": "running",
+ "state": "done",
  "spec": {
   "name": "anchor_corner2",
   "start": "out_5v5/ckpt/x_kickstart_u600.pt",
@@ -77,5 +77,40 @@
   "params": 23818
  },
  "name": "anchor_corner2",
- "updated": 1795048879
+ "updated": 1795057033,
+ "update": 300,
+ "train_pts": 2.88,
+ "base_train": 2.69,
+ "bad_checks": 0,
+ "recorded": [
+  50,
+  100,
+  150,
+  200,
+  250,
+  300
+ ],
+ "train_s": 6034,
+ "stop_reason": "budget",
+ "finished": 1795057033,
+ "final_update": 300,
+ "verdict": {
+  "pts": 0.0,
+  "pts_se": 0.1555,
+  "gd": 0.0938,
+  "gd_se": 0.3371,
+  "n": 32,
+  "paired": true,
+  "z": 0.0,
+  "z_gd": 0.2781,
+  "p": 1.0,
+  "mde": 0.4355,
+  "verdict": "no difference",
+  "reference": "anchor_wall_strong",
+  "update": 300
+ },
+ "cost_hours": {
+  "train": 1.68,
+  "eval": 0.58
+ }
 }

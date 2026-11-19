@@ -1,0 +1,17 @@
+{
+ "name": "anchor_corner_strong",
+ "start": "out_5v5/ckpt/x_kickstart_u600.pt",
+ "updates": 300,
+ "lr": 5e-05,
+ "rewards": {
+  "w_wall": 0.02,
+  "w_corner": 0.04
+ },
+ "control": "anchor_wall_strong",
+ "args": {
+  "teacher": "out_5v5/ckpt/jit8_best.pt",
+  "kl_coef": 0.3,
+  "kl_decay": 300
+ },
+ "notes": "anchor_wall_strong (control) plus w_corner 0.04, four times anchor_corner2 (0.01 left ours-in-corner at 12.0% vs 14.4% for the control, inside the scouting noise of about 2 points). Same step the wall term needed (0.005 too weak, 0.02 worked). Judge by ball_corner_ours_pct / ball_corner_pct in the full evaluation's scout summary and league points (no loss)."
+}
