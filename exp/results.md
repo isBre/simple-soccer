@@ -1,6 +1,6 @@
 # Experiment results
 
-Updated 2026-11-19 20:05. pts = league points per match (16 rule teams, both sides), gd = goal difference per match, mean ± standard error. Verdicts compare within one protocol (fast and full are never mixed), paired over identical matches when possible. `python3 lab/lab.py` gives the same data as JSON.
+Updated 2026-11-20 00:17. pts = league points per match (16 rule teams, both sides), gd = goal difference per match, mean ± standard error. Verdicts compare within one protocol (fast and full are never mixed), paired over identical matches when possible. `python3 lab/lab.py` gives the same data as JSON.
 
 | run | net | state | update | protocol | pts ± se | gd | GA | vs RL4 | vs RL5 | dir chg/s | idle % | verdict |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|
@@ -29,6 +29,7 @@ Updated 2026-11-19 20:05. pts = league points per match (16 rule teams, both sid
 | persist_lr | 46-128-128-10 | done | 400 | fast/g2/d60 | 2.5 ± 0.18 | 1.21 | 0.08 | - | - | - | - |  |
 | persist_mix | 46-128-128-10 | done | 400 | full/g1/d90 | 2.88 ± 0.09 | 2.19 | 0.19 | 0.88 | 0.62 | 11.43 | 2.0 | no difference (vs kickstart_persist) |
 | persist_mix | 46-128-128-10 | done | 400 | fast/g2/d60 | 2.58 ± 0.17 | 1.54 | 0.04 | - | - | - | - |  |
+| persist_wallcorner | 46-128-128-10 | running | 350 | fast/g2/d60 | 2.83 ± 0.11 | 1.58 | 0.04 | - | - | - | - |  |
 | start:t48_u100 | - | imported | 0 | full/g1/d90 | 2.25 ± 0.2 | 0.87 | 0.75 | 0.38 | 0.0 | 11.24 | 5.0 |  |
 | start:t48_u100 | - | imported | 0 | fast/g2/d60 | 1.42 ± 0.24 | 0.25 | 0.58 | 0.62 | - | - | - |  |
 | start:team46_w256 | - | imported | 0 | full/g1/d90 | 2.94 ± 0.06 | 2.31 | 0.16 | 0.19 | 0.69 | 9.93 | 2.0 |  |
@@ -48,4 +49,4 @@ Updated 2026-11-19 20:05. pts = league points per match (16 rule teams, both sid
 | wide_wallcorner | 46-256-256-10 | done | 400 | full/g1/d90 | 2.88 ± 0.09 | 2.75 | 0.22 | 1.12 | 0.69 | 10.86 | 2.0 | no difference (vs wide_persist) |
 | wide_wallcorner | 46-256-256-10 | done | 400 | fast/g2/d60 | 2.79 ± 0.14 | 1.79 | 0.08 | - | - | - | - |  |
 
-Runs: anchor_corner (cancelled), anchor_corner2 (done), anchor_corner_strong (done), anchor_ctrl (done), anchor_wall (done), anchor_wall_strong (done), control_long (cancelled), control_seed11 (cancelled), kickstart (done), kickstart_persist (done), kickstart_persist_long (cancelled), kickstart_strong (done), minimal (diverged), old_jit8 (imported), old_t46 (imported), old_t47 (imported), persist_lr (done), persist_mix (done), start:t48_u100 (imported), start:team46_w256 (imported), start:x_kickstart_persist_u400 (imported), start:x_kickstart_u600 (imported), start:x_wide_kickstart_u600 (imported), strong_opponents (diverged), team:RL Team 4 (imported), team:RL Team 5 (imported), wall (diverged), wide_kickstart (done), wide_persist (done), wide_wallcorner (done)
+Runs: anchor_corner (cancelled), anchor_corner2 (done), anchor_corner_strong (done), anchor_ctrl (done), anchor_wall (done), anchor_wall_strong (done), control_long (cancelled), control_seed11 (cancelled), kickstart (done), kickstart_persist (done), kickstart_persist_long (cancelled), kickstart_strong (done), minimal (diverged), old_jit8 (imported), old_t46 (imported), old_t47 (imported), persist_lr (done), persist_mix (done), persist_wallcorner (running), start:t48_u100 (imported), start:team46_w256 (imported), start:x_kickstart_persist_u400 (imported), start:x_kickstart_u600 (imported), start:x_wide_kickstart_u600 (imported), strong_opponents (diverged), team:RL Team 4 (imported), team:RL Team 5 (imported), wall (diverged), wide_kickstart (done), wide_persist (done), wide_wallcorner (done)

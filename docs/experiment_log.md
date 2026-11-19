@@ -184,3 +184,14 @@ New scouting numbers `ball_corner_pct` / `ball_corner_ours_pct` (ball within 150
 - h2h: u400 RL Team 4 1.12 (GD -0.19), RL Team 5 0.69 (-0.62), start net 2.12 (+0.81); u100 1.31 / 1.06. Control `wide_persist`: 0.88 / 1.00. Inside the noise (16 games, se about 0.3). Behaviour: 28.6 passes, 10.4 shots, possession 49.3%.
 - Meaning: combining the two terms costs nothing and helps nothing measurable in points; no new evidence on the RL4/RL5 gap. Nothing queued after it. The plateau of 46-number nets (0.6-1.3 vs RL4/RL5) stays the open problem, with the observation question to the user pending.
 - Next, started right after this review: a larger head-to-head evaluation (h2h 40 games per side) of the best checkpoints to rank them with a smaller error.
+
+### Note 2026-11-20 00:20: larger head-to-head evaluation of the four best checkpoints (80 games per reference, `logs/h2h_big/`, run while the runner was busy with the ladder; league part not used)
+| checkpoint | vs RL Team 4 pts (se), GD | vs RL Team 5 pts (se), GD |
+|---|---|---|
+| `kickstart_persist` u400 (128-wide) | **1.09** (0.14), -0.26 | 0.90 (0.12), -0.35 |
+| `wide_persist` u400 (256-wide) | 0.76 (0.11), -0.50 | **0.95** (0.13), -0.41 |
+| `wide_kickstart` u600 (256-wide) | 0.93 (0.13), -0.56 | 0.85 (0.13), -0.69 |
+| `anchor_corner2` u300 (128-wide) | 0.86 (0.13), -0.61 | 0.91 (0.14), -0.76 |
+- All four sit at **0.76-1.09 points per game and goal difference -0.3 to -0.8** against RL Team 4 / 5; the spread between them (about 0.3) is about two standard errors at most, i.e. no checkpoint is clearly better. The earlier 16-game values (0.56-1.25) were noise around this band.
+- `wide_kickstart`'s apparent edge over plain `kickstart` (1.06 / 1.12 on 16 games) shrinks to 0.93 / 0.85 on 80: that was noise. The best recipe stays `kickstart_persist` (best GD, -0.26 / -0.35), but not significantly.
+- Meaning: the plateau is real and flat across width, recipe and reward terms; the teacher jit8 (54 numbers) reaches 1.67 / 2.17. Still waiting for the user's decision on role-free derived observation features, the only untested lever left under the standing decisions. `persist_wallcorner` finishes about 00:30.
