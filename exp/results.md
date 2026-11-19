@@ -1,6 +1,6 @@
 # Experiment results
 
-Updated 2026-11-19 19:54. pts = league points per match (16 rule teams, both sides), gd = goal difference per match, mean ± standard error. Verdicts compare within one protocol (fast and full are never mixed), paired over identical matches when possible. `python3 lab/lab.py` gives the same data as JSON.
+Updated 2026-11-19 20:05. pts = league points per match (16 rule teams, both sides), gd = goal difference per match, mean ± standard error. Verdicts compare within one protocol (fast and full are never mixed), paired over identical matches when possible. `python3 lab/lab.py` gives the same data as JSON.
 
 | run | net | state | update | protocol | pts ± se | gd | GA | vs RL4 | vs RL5 | dir chg/s | idle % | verdict |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|
