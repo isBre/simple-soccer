@@ -1,5 +1,5 @@
 {
- "state": "running",
+ "state": "done",
  "spec": {
   "name": "wide_kickstart",
   "start": "out_5v5/team46_w256.pt",
@@ -78,11 +78,46 @@
   "params": 80394
  },
  "name": "wide_kickstart",
- "updated": 1795058283,
- "update": 14,
- "train_pts": null,
- "base_train": null,
+ "updated": 1795077683,
+ "update": 600,
+ "train_pts": 2.81,
+ "base_train": 2.74,
  "bad_checks": 0,
- "recorded": [],
- "train_s": 397
+ "recorded": [
+  50,
+  100,
+  150,
+  200,
+  250,
+  300,
+  350,
+  400,
+  450,
+  500,
+  550,
+  600
+ ],
+ "train_s": 15986,
+ "stop_reason": "budget",
+ "finished": 1795077683,
+ "final_update": 600,
+ "verdict": {
+  "pts": -0.125,
+  "pts_se": 0.1782,
+  "gd": -0.0625,
+  "gd_se": 0.3674,
+  "n": 32,
+  "paired": true,
+  "z": -0.7015,
+  "z_gd": -0.1701,
+  "p": 0.483,
+  "mde": 0.499,
+  "verdict": "no difference",
+  "reference": "kickstart",
+  "update": 600
+ },
+ "cost_hours": {
+  "train": 4.44,
+  "eval": 1.07
+ }
 }

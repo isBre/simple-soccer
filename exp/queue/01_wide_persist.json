@@ -1,0 +1,19 @@
+{
+ "name": "wide_persist",
+ "start": "out_5v5/ckpt/x_wide_kickstart_u600.pt",
+ "updates": 400,
+ "lr": 5e-05,
+ "rewards": {
+  "w_wall": 0.0
+ },
+ "args": {
+  "teacher": "out_5v5/ckpt/jit8_best.pt",
+  "kl_coef": 0.2,
+  "kl_decay": 1000,
+  "opp_models": "out_5v5/ckpt/jit8_best.pt,data/models/rl_5v5_arena_v4.json,data/models/rl_5v5_arena_v5.json",
+  "pfsp": 0.75,
+  "hidden": 256
+ },
+ "notes": "The kickstart_persist recipe (strong opponents + PFSP, teacher KL 0.2 decaying slowly, lr 5e-5, 400 updates) on the wide net 46-256-256-10, from wide_kickstart u600 (h2h RL4 1.06 / RL5 1.12, the 128-wide kickstart had 0.56 / 0.31). Control kickstart_persist (the same recipe on the 128-wide net). [w_wall pinned to 0 like the control]",
+ "control": "kickstart_persist"
+}
