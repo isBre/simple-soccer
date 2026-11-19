@@ -111,7 +111,8 @@ def health_view(hours=12.0):
 
 DOC_FILES = [("Experiments", "AGENTS.md"), ("Experiments", "docs/experiment_log.md"), ("Experiments", "docs/rewards.md"), ("Experiments", "docs/experiment_pipeline.md"),
              ("Experiments", "exp/results.md"), ("Experiments", "lab/README.md"),
-             ("Project", "README.md"), ("Project", "rl/README.md"), ("Project", "docs/design.md")]
+             ("Project", "README.md"), ("Project", "rl/README.md"), ("Project", "docs/design.md"),
+             ("Teams", "docs/opus_5_5_high.md"), ("Teams", "docs/elo_ranking.md")]
 
 
 def doc_list():
