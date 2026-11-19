@@ -14,6 +14,9 @@ in "args" (e.g. {"workers_rule": 2}). Per experiment the runner:
 Everything is written to exp/ (see lab/tracker.py). After a reboot the runner resumes the running experiment from its last checkpoint.
 
   ~/rl-venv/bin/python lab/exp_runner.py --loop [--viewer]        (installed as the systemd service soccer-exp.service)
+
+While the queue is empty (--loop) it plays rounds of the Elo ranking (lab/ladder.py round: 6 pairs, 2 matches each, 3 niced
+workers, a few minutes on the Pi) and looks at the queue again after each round. `touch exp/ladder_off` stops that.
 """
 import argparse
 import glob
@@ -302,6 +305,28 @@ def next_spec():
     return queue[0] if queue else None
 
 
+LADDER_PAIRS = 6
+
+
+def ladder_round():
+    """One round of the Elo ranking while nothing else runs. True if it played (so the loop looks at the queue right away)."""
+    if os.path.exists(os.path.join(EXP, "ladder_off")):
+        return False
+    t0 = time.time()
+    try:
+        p = subprocess.run([sys.executable, os.path.join(ROOT, "lab", "ladder.py"), "round", "--pairs", str(LADDER_PAIRS), "--workers", "3"],
+                           cwd=ROOT, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, timeout=3600)
+    except subprocess.TimeoutExpired:
+        log("ladder round timed out")
+        return False
+    first = (p.stdout.strip().splitlines() or [""])[0]
+    if p.returncode != 0:
+        log("ladder round failed: %s" % p.stdout.strip()[-300:])
+        return False
+    log("ladder: %s (%.0f s)" % (first, time.time() - t0))
+    return True
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--loop", action="store_true", help="keep waiting for new specs (the service); default: run the queue once and exit")
@@ -316,7 +341,8 @@ def main():
         if spec is None:
             if not a.loop:
                 return
-            time.sleep(60)
+            if not ladder_round():
+                time.sleep(60)
             continue
         try:
             run_experiment(spec, a.viewer)

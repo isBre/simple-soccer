@@ -353,3 +353,7 @@ tr.thin td:first-child::after { content: " · thin"; color: var(--warn, var(--ba
 .nowrap { white-space: nowrap; }
 .bh.vs { grid-template-columns: 150px 1fr 220px; }
 @media (max-width: 600px) { .bh.vs { grid-template-columns: minmax(0, 1fr); gap: 4px; } .bh.vs .bv { text-align: left; } }
+/* Ranking page (web/lab.js viewRanking) */
+table.rank td { vertical-align: middle; }
+table.rank tr.dim td { opacity: .6; }
+.rkbar { display: block; }
