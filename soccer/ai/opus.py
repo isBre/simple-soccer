@@ -40,6 +40,15 @@ PRESSED = 45.0          # px: an opponent this close to the ball = take any kick
 FINAL_FROM = 0.35       # share of the half beyond halfway from which the carrier drives at goal and shoots (StyleBot)
 BOX_FROM = 0.3          # from here on the most advanced supporter attacks the far-post area ...
 BOX_DEPTH, BOX_Y = 80.0, 45.0   # ... this far from the goal line and from the middle
+ATTACK_NEED_OWN = 12.0  # extra ticks of head start needed before switching to attack deep in our own half
+REST_BACK = 330.0       # px the rest defender stays behind the ball
+SUPPORT_MIN, SUPPORT_MAX = 110.0, 330.0   # px: support spots not closer to / further from the ball than this
+SPACING = 170.0         # px: support spots push each other apart within this distance
+COVER_FROM = 0.35       # a cover player drops goal-side when the ball is below this share of the half beyond halfway
+COVER_DIST = 115.0      # px the cover stands behind the ball, towards our goal
+MARK_GAP_FAR, MARK_GAP_NEAR = 55.0, 28.0  # px a marker stays from a harmless / a dangerous receiver
+GUARD_TRIGGER = 85.0    # px: a marker whose spot is this close to the ball near our goal guards the goal mouth instead
+POKE_RADIUS = 260.0     # px from our goal within which the presser pokes the ball away when he cannot play it
 SUPPORT_EVERY = 6                                  # ticks between two support-spot searches
 
 
@@ -219,7 +228,7 @@ class OpusBrain:
             # in our own half the team only switches to attack when the ball is really ours (a clear head start), so a
             # scramble near our goal keeps the defensive shape
             depth = clamp(ball.real * -ax / hw, 0.0, 1.0)
-            need = 4.0 + 12.0 * depth
+            need = 4.0 + ATTACK_NEED_OWN * depth
             if t_us + need < t_them:
                 phase = "attack"
             elif t_them + 4.0 < t_us:
@@ -264,7 +273,7 @@ class OpusBrain:
         if len(free) >= 2:
             rest = min(free, key=lambda sp: (sp.pos.real * ax + (0.0 if sp is self.rest else 30.0) - (60.0 if sp.role == "DEF" else 0.0)))
             self.rest = rest
-            rx = clamp(bx - 330.0, -hw * 0.78, hw * 0.05)
+            rx = clamp(bx - REST_BACK, -hw * 0.78, hw * 0.05)
             ry = clamp(ball.imag * 0.35, -hh * 0.4, hh * 0.4)
             self.targets[rest.uid] = complex(ax * rx, ry)
             self.jobs[rest.uid] = "rest"
@@ -318,8 +327,8 @@ class OpusBrain:
         lane = np.sqrt((ox - (ball.real + lx[None] * tt)) ** 2 + (oy - (ball.imag + ly[None] * tt)) ** 2).min(axis=0)
         dball = np.sqrt(l2)
         score = val * 1.6 + np.minimum(d_opp, 130.0) / 130.0 * 0.22 + np.minimum(lane, 70.0) / 70.0 * 0.22
-        score -= np.where(dball < 110.0, (110.0 - dball) / 110.0 * 0.4, 0.0)            # not on top of the carrier
-        score -= np.where(dball > 330.0, (dball - 330.0) / 200.0 * 0.4, 0.0)            # but within passing range
+        score -= np.where(dball < SUPPORT_MIN, (SUPPORT_MIN - dball) / SUPPORT_MIN * 0.4, 0.0)            # not on top of the carrier
+        score -= np.where(dball > SUPPORT_MAX, (dball - SUPPORT_MAX) / 200.0 * 0.4, 0.0)            # but within passing range
         score -= np.where(np.abs(gy) > hh - 40.0, 0.08, 0.0)
         taken = [ball]
         for r_ in (self.rest, self.striker):
@@ -332,7 +341,7 @@ class OpusBrain:
             s = score.copy()
             for tk in taken:
                 d = np.sqrt((wx - tk.real) ** 2 + (gy - tk.imag) ** 2)
-                s -= np.where(d < 170.0, (170.0 - d) / 170.0 * 0.6, 0.0)
+                s -= np.where(d < SPACING, (SPACING - d) / SPACING * 0.6, 0.0)
             dme = np.sqrt((wx - sp.pos.real) ** 2 + (gy - sp.pos.imag) ** 2)
             s -= dme * 0.0006
             prev = self._support.get(sp.uid)
@@ -353,10 +362,10 @@ class OpusBrain:
         bx = ball.real * ax
         self.cover = None
         # cover: goal-side behind the presser, between the ball and our goal
-        if free and bx < hw * 0.35:
+        if free and bx < hw * COVER_FROM:
             to_goal = own_goal - ball
             dg = abs(to_goal)
-            cpt = ball + to_goal / max(dg, 1.0) * min(115.0, dg * 0.45)
+            cpt = ball + to_goal / max(dg, 1.0) * min(COVER_DIST, dg * 0.45)
             cover = min(free, key=lambda sp: abs(sp.pos - cpt) - (40.0 if sp is self.cover else 0.0))
             self.cover = cover
             self.targets[cover.uid] = cpt
@@ -379,11 +388,11 @@ class OpusBrain:
             # stand goal-side of him, a bit towards the ball (to cut the pass), closer the more dangerous he is
             to_goal = normalized(own_goal - o.pos)
             to_ball = normalized(ball - o.pos)
-            gap = lerpf(55.0, 28.0, clamp(dang / 0.35, 0.0, 1.0))
+            gap = lerpf(MARK_GAP_FAR, MARK_GAP_NEAR, clamp(dang / 0.35, 0.0, 1.0))
             spot = o.pos + normalized(to_goal * 1.0 + to_ball * 0.6) * gap
             best = min(free, key=lambda sp: abs(sp.pos - spot) - (30.0 if self.marks.get(sp.slot) is o else 0.0))
             free.remove(best)
-            if abs(spot - ball) < 85.0 and abs(ball - own_goal) < 330.0:
+            if abs(spot - ball) < GUARD_TRIGGER and abs(ball - own_goal) < 330.0:
                 # his man is already in the scramble at the ball: do not pile in. Guard the far half of the goal mouth
                 # (the keeper takes the near post), or hold the edge of the box for the clearance
                 if not guard:
@@ -485,7 +494,7 @@ class OpusBot(StyleBot):
                 # in reach and it would go away from our goal: decide on a real ball play if there is time, else poke
                 self._go_for_ball(m, p, brain, bpos, bvel)
                 # a blind poke usually just gives the ball back: only near our own goal, to get it away from danger
-                if not p.input_kick and abs(m.ball_pos - own_goal) < 260.0:
+                if not p.input_kick and abs(m.ball_pos - own_goal) < POKE_RADIUS:
                     p.input_kick = True
                     p.kick_intent = "clear"
                     self._pred = ("poke", 0.0, 0.0)

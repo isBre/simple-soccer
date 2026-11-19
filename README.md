@@ -78,7 +78,7 @@ data/     pitches, styles, teams, formations, shipped nets (JSON)
   `systemd/`. Results and specs live in `exp/`, checkpoints in `out_5v5/`, logs in `logs/`.
 - `tests/` the core and the game against the Godot implementation they replaced, and the web app (see "Tests"); `tools/`
   `bench.py` (core speed), `team_bench.py` (one team against the league / RL teams / trained nets: points, goals, and how
-  much it plays as a team), `generate_data.py` (regenerates `data/`, seeded; style tuning lives there); `docs/` notebook,
+  much it plays as a team), `tune_opus.py` (CMA-ES tuning of the Opus team brain against trained nets), `generate_data.py` (regenerates `data/`, seeded; style tuning lives there); `docs/` notebook,
   rewards, pipeline design, UI design guide, old results.
 
 ### Bot quality and team AI (how a team gets strong or weak)
@@ -88,6 +88,8 @@ data/     pitches, styles, teams, formations, shipped nets (JSON)
 - Game management (`TeamBrain.urgency`): in the last ~45 % of the match a team that is behind pushes up, shoots earlier and presses with one more player; a team that is ahead drops deeper.
 
 ### Opus 5.5 High (`soccer/ai/opus.py`)
+Full write-up with the maths, plots and screenshots: [docs/opus_5_5_high.md](docs/opus_5_5_high.md).
+
 A Rule Based League team with its own team brain (`OpusBrain` + `OpusBot`, chosen by `"brain": "opus"` in its style). Same senses
 and limits as every bot (perception delay, aim error, position noise and decision speed from the attributes, which are those of
 Silver Arrows, the strongest handmade team), so the difference is only how it plays:
