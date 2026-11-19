@@ -1,0 +1,97 @@
+{
+ "state": "cancelled",
+ "spec": {
+  "name": "kickstart_persist_long",
+  "start": "out_5v5/ckpt/x_kickstart_persist_u400.pt",
+  "updates": 600,
+  "lr": 5e-05,
+  "rewards": {
+   "w_wall": 0.0
+  },
+  "args": {
+   "teacher": "out_5v5/ckpt/jit8_best.pt",
+   "kl_coef": 0.12,
+   "kl_decay": 1000,
+   "opp_models": "out_5v5/ckpt/jit8_best.pt,data/models/rl_5v5_arena_v4.json,data/models/rl_5v5_arena_v5.json",
+   "pfsp": 0.75
+  },
+  "notes": "Continuation of kickstart_persist (u400: 2.94, best h2h vs RL4/RL5 so far, not yet significant). Same strong opponents + PFSP, teacher KL kept at 0.12 decaying slowly, lr 5e-5, 600 more updates. Does a longer run turn the small h2h edge into a real one? [w_wall pinned to 0 so it stays comparable with its control; the default became 0.02 on 2026-11-18]"
+ },
+ "baseline_run": "start:x_kickstart_persist_u400",
+ "started": 1795045303,
+ "tag": "x_kickstart_persist_long",
+ "target_updates": 600,
+ "effective_rewards": {
+  "pass_individual": 1,
+  "w_recv": 0.1,
+  "w_open": 0.003,
+  "w_key_pass": 0.25,
+  "w_xa": 2.5,
+  "coop_cap": 8,
+  "random_start": 0.6,
+  "shaping": 0,
+  "w_keeper": 0,
+  "w_jitter": 0,
+  "w_far": 0,
+  "w_xg": 0,
+  "w_xga": 0,
+  "w_win": 0,
+  "w_draw": 0,
+  "w_tackle": 0,
+  "w_goalside": 0,
+  "w_opp_half": 0,
+  "w_compact": 0,
+  "w_wall": 0.0,
+  "w_corner": 0
+ },
+ "effective_args": {
+  "lr": 5e-05,
+  "updates": 600,
+  "workers_rule": 2,
+  "workers_self": 1,
+  "envs_per_worker": 16,
+  "rollout": 128,
+  "minibatch": 4096,
+  "ckpt_every": 25,
+  "fast_every": 50,
+  "learn_threads": 2,
+  "seed": 7,
+  "teacher": "out_5v5/ckpt/jit8_best.pt",
+  "kl_coef": 0.12,
+  "kl_decay": 1000,
+  "opp_models": "out_5v5/ckpt/jit8_best.pt,data/models/rl_5v5_arena_v4.json,data/models/rl_5v5_arena_v5.json",
+  "pfsp": 0.75
+ },
+ "seed": 7,
+ "git_commit": "d937f1f",
+ "git_dirty": false,
+ "boot_id": "57a433f7",
+ "restarts": [],
+ "control": null,
+ "net": {
+  "sizes": [
+   46,
+   128,
+   128,
+   10
+  ],
+  "label": "46-128-128-10",
+  "params": 23818
+ },
+ "name": "kickstart_persist_long",
+ "updated": 1795045338,
+ "update": 0,
+ "train_pts": null,
+ "base_train": null,
+ "bad_checks": 0,
+ "recorded": [],
+ "train_s": 30,
+ "stop_reason": "cancelled",
+ "finished": 1795045338,
+ "final_update": 0,
+ "verdict": null,
+ "cost_hours": {
+  "train": 0.01,
+  "eval": 0.0
+ }
+}

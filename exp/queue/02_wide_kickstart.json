@@ -1,0 +1,17 @@
+{
+ "name": "wide_kickstart",
+ "start": "out_5v5/team46_w256.pt",
+ "updates": 600,
+ "lr": 0.0001,
+ "rewards": {
+  "w_wall": 0.0
+ },
+ "control": "kickstart",
+ "args": {
+  "hidden": 256,
+  "teacher": "out_5v5/ckpt/jit8_best.pt",
+  "kl_coef": 0.5,
+  "kl_decay": 600
+ },
+ "notes": "Net 46-256-256-10 (4x the parameters of 46-128-128-10), distilled from jit8 (rl/distill.py --hidden 256 --rounds 4, out_5v5/team46_w256), then the kickstart recipe of `kickstart` (its control: KL 0.5 to jit8 decaying to 0 by u600, lr 1e-4, 600 updates). Five setups on the 128-wide net plateau at ~2.9 league / 0.6-1.4 h2h vs RL4/RL5: is the plateau a capacity limit? [w_wall pinned to 0 like the control]"
+}

@@ -1,5 +1,5 @@
 {
- "state": "running",
+ "state": "done",
  "spec": {
   "start": "out_5v5/ckpt/x_kickstart_u600.pt",
   "updates": 400,
@@ -64,10 +64,16 @@
   "pfsp": 0.75
  },
  "seed": 7,
- "git_commit": "3c118cb",
+ "git_commit": "d937f1f",
  "git_dirty": false,
  "boot_id": "57a433f7",
- "restarts": [],
+ "restarts": [
+  {
+   "at": 1795037857,
+   "update": 175,
+   "reason": "runner restart"
+  }
+ ],
  "control": "kickstart_persist",
  "net": {
   "sizes": [
@@ -80,15 +86,42 @@
   "params": 23818
  },
  "name": "persist_lr",
- "updated": 1795037810,
- "update": 176,
- "train_pts": 2.85,
+ "updated": 1795044636,
+ "update": 400,
+ "train_pts": 2.8,
  "base_train": 2.82,
  "bad_checks": 0,
  "recorded": [
   50,
   100,
-  150
+  150,
+  200,
+  250,
+  300,
+  350,
+  400
  ],
- "train_s": 5247
+ "train_s": 10001,
+ "stop_reason": "budget",
+ "finished": 1795044636,
+ "final_update": 400,
+ "verdict": {
+  "pts": 0.0,
+  "pts_se": 0.0898,
+  "gd": -0.4062,
+  "gd_se": 0.2799,
+  "n": 32,
+  "paired": true,
+  "z": 0.0,
+  "z_gd": -1.4514,
+  "p": 1.0,
+  "mde": 0.2514,
+  "verdict": "no difference",
+  "reference": "kickstart_persist",
+  "update": 400
+ },
+ "cost_hours": {
+  "train": 2.78,
+  "eval": 0.75
+ }
 }
