@@ -12,3 +12,5 @@ exp/runner.log
 exp/mlruns/
 exp/**/*.tmp
 
+!models/
+!models/*.pt
