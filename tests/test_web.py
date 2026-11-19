@@ -103,6 +103,16 @@ def main():
         cat = json.loads(get(port, "/api/game/catalog")[1])
         results.append(check("catalog", len(cat["leagues"]) == 2 and len(cat["teams"]) >= 16 and cat["pitches"] and cat["formations"]["5"],
                              "%d teams, %d pitches" % (len(cat["teams"]), len(cat["pitches"]))))
+        # the team select: every ranked net is an RL team (lab/ladder.py roster), each team has its Elo and a one-line description
+        nets = [t for t in cat["teams"] if t["id"].startswith(api.NET_PREFIX)]
+        rated = [t for t in cat["teams"] if t["elo"] is not None]
+        described = [t for t in cat["teams"] if t["plays"]]
+        net_ok = True
+        if nets:
+            r = api.play({"home": nets[0]["id"], "away": "cobalt", "pitch": "arena", "size": 5, "duration": 20.0, "seed": 5, "control": "none"})
+            net_ok = r["teams"][0] == nets[0]["id"]
+        results.append(check("team select", all(t["league"] == "rl" for t in nets) and net_ok and all("plays" in t and "elo" in t for t in cat["teams"]),
+                             "%d nets as teams, %d rated, %d described" % (len(nets), len(rated), len(described))))
 
         setup = {"home": "cobalt", "away": "rl_team_4", "pitch": "arena", "size": 5, "duration": 40.0, "seed": 21, "control": "none",
                  "allow_draw": False}
@@ -192,6 +202,13 @@ def main():
         rounds = d["t"]["rounds"]
         results.append(check("tournament", len(rounds) >= 2 or d["t"]["finished"],
                              "%s: %s" % (d["t"]["title"], ", ".join("%s %d-%d %s" % (f["home"], f["hg"], f["ag"], f["away"]) for f in rounds[0]["fixtures"]))))
+        # a mixed tournament: "all" draws its teams from every league
+        d = post(port, "/api/game/tournament", {"action": "new", "league": "all", "user": "aurora", "count": len(cat["teams"]), "format": 0,
+                                                "pitch": "arena", "size": 5, "duration": 60})
+        ids = {x for r in d["t"]["rounds"] for f in r["fixtures"] for x in (f["home"], f["away"]) if x}
+        leagues = {next(c["league"] for c in cat["teams"] if c["id"] == i) for i in ids}
+        results.append(check("mixed cup", len(ids) == len(cat["teams"]) and leagues == {lg["id"] for lg in cat["leagues"]},
+                             "%s: %d teams from %s" % (d["t"]["title"], len(ids), ", ".join(sorted(leagues)))))
     finally:
         srv.terminate()
         shutil.rmtree(rec_dir, ignore_errors=True)
