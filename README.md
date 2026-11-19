@@ -42,7 +42,11 @@ Arrows/WASD move, X/Space kick, Q switch player (Team mode), T sim speed (x1 / x
 There are no difficulty levels. A bot is exactly as good as its player's attributes (`soccer/ai/__init__.py` `attach_attributes`: reaction -> perception delay, finishing/passing -> aim error, positioning -> position noise, defending -> marking, passing/positioning/reaction -> decision speed), identically for allies and opponents. Strong teams are teams with strong players (16 teams span ~55 to ~84 base rating, 4 per tier, see `tools/generate_data.py`). Kickoffs use a random taker, direction and short delay (seeded by the match seed).
 
 ## Modes
-- Quick match: pitch, size (3v3 / 5v5), teams, duration, control (none / one player / whole team).
+- Quick match: pitch, size (3v3 / 5v5), teams, duration, control (none / one player / whole team). With one player, "Your player"
+  picks which one (auto = the forward, or the first goalkeeper / defender / midfielder / forward of the lineup; a picked keeper does
+  not take kickoffs).
+- **Dataset** ("Record my play", on by default, remembered in the browser): every match you play is saved as a training file for
+  imitation learning (`data/human/`, see "Recording your play" below). A red REC mark shows in the corner while it records.
 - Two leagues: the **Rule Based League** (16 fictional teams driven by the handmade AI styles) and the **Reinforcement Learning League** (the RL Teams, driven by trained nets). In Quick Match each side picks a league first, then a team from it (sides can be in different leagues).
 - Teams browser: teams grouped by league, with logos, kits, rosters, play styles and a tier (Elite / Strong / Average / Weak).
 - Tournament: pick a league, then league, knockout, or groups + knockout among its teams (saved in the browser, so it continues where you left it). Knockout and groups need 4, 8 or 16 teams; other counts play a round robin. Knockout draws: golden goal, then penalties.
@@ -97,6 +101,12 @@ The server builds the match on the core and plays it in real time: 60 ticks a se
 score, clock, goal and kickoff state, goal events); the page sends the keys back when they change. At every kickoff the
 match is held for 130 ticks while the camera zooms in, as in the Godot game. After the final whistle the server sends the
 result, which the report shows. Tournament rounds are simulated in one request (`/api/game/tournament`, all cores).
+- Recording your play (`game/recorder.py`): with `"record": true` in the setup, every 2 ticks while you control a player in play,
+  one row: the 46-number observation of your player (the nets' input), the raw positions and speeds of everyone and the ball, your
+  direction as one of the nets' 9 moves (in your player's own frame) and your kick. One compressed `.npz` per match in
+  `data/human/` (versioned in git, about 1 MB per 90 s), written at the final whistle, or when you quit after at least 10 s.
+  `python3 il/human_data.py [--check]` lists the files (and rebuilds every observation from the raw state). Plan:
+  [docs/imitation_plan.md](docs/imitation_plan.md).
 - A net plays a team through `MatchConfig.nets[team]` (`{"model": path}`, `{"dict": model}` or `{"port": n}` for a running
   `rl/net_server.py`); a team with `ml_model` in its JSON gets its net automatically.
 - Speed (`python3 tools/bench.py`, on a Mac): rule-vs-rule 5v5 about 10,600 ticks/s (177x real time), the training
@@ -119,7 +129,9 @@ Godot first, recordings in $SOCCER_REC):
 - `tests/test_tournament.py`: 8 tournaments of every format played with the same made-up results in the Godot game's
   `Tournament` and in `game/tournament.py`: teams, fixtures, match seeds, standings and statistics identical (254 matches).
 - `tests/test_web.py` (no Godot needed): the web app serves its pages and APIs, a match played live over the WebSocket ends
-  exactly like the same setup simulated in one go, the keys move the player, a tournament can be created, played and simulated.
+  exactly like the same setup simulated in one go, the keys move the player, a recorded match saves the right file (the picked
+  keeper, the keys as net moves, observations rebuildable from the state) and unrecorded ones save nothing, a tournament can be
+  created, played and simulated.
 The AI itself was checked earlier the same way (46,250 rule-bot and 12,422 net decisions identical).
 
 ## Experiments

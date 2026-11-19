@@ -4,6 +4,8 @@
   live       a match played over the WebSocket (/ws/match, at 8x speed) ends with the same result as the same setup simulated
              in one go (game/api.py play): the live path and the simulation are the same match
   input      the human's keys move the controlled player
+  record     a match with "record" saves the human's play (game/recorder.py): the picked keeper is the one recorded, the keys become
+             the right net moves, the observation can be rebuilt from the stored state (il/human_data.py), a match without it saves nothing
   tournament new -> simulate a round -> fixture -> record a result -> view, through /api/game/tournament
 
   python3 tests/test_web.py"""
@@ -13,7 +15,9 @@ import os
 import socket
 import struct
 import subprocess
+import shutil
 import sys
+import tempfile
 import time
 import urllib.request
 
@@ -79,8 +83,9 @@ def main():
     with socket.socket() as s:
         s.bind(("127.0.0.1", 0))
         port = s.getsockname()[1]
+    rec_dir = tempfile.mkdtemp(prefix="soccer_human_")
     srv = subprocess.Popen([sys.executable, os.path.join(ROOT, "web", "app.py"), "--port", str(port), "--host", "127.0.0.1"],
-                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env={**os.environ, "SOCCER_HUMAN_DIR": rec_dir})
     results = []
     try:
         for _ in range(100):
@@ -136,6 +141,29 @@ def main():
         ws.send({"quit": 1})
         results.append(check("input", moved > 40, "the controlled player moved %.0f px down" % moved))
 
+        from il import human_data
+        unrecorded = len(human_data.files(rec_dir))          # the matches above did not ask for recording
+        ws = WS(port)
+        ws.send({"setup": {**setup, "home": "rl_team_4", "away": "cobalt", "control": "single", "human_team": 1, "player": "GK",
+                           "duration": 20.0, "record": True}})
+        meta = ws.recv()
+        ws.send({"speed": 8})
+        ws.send({"in": [-1, 0, 0]})                          # team 1 attacks left: left is "forward" for the human
+        while ws.recv()["k"] == "f":
+            pass
+        fs = human_data.files(rec_dir)
+        ok = meta.get("rec") is True and unrecorded == 0 and len(fs) == 1
+        detail = "%d files" % len(fs)
+        if len(fs) == 1:
+            d = human_data.load(fs[0])
+            gk = next(p for p in d["meta"]["players"] if p["team"] == 1 and p["role"] == "GK")
+            worst = max(float(abs(human_data.observation(d, i) - d["obs"][i]).max()) for i in range(0, len(d["tick"]), 7))
+            fwd = float((d["move"] == 3).mean())
+            ok = ok and d["meta"]["complete"] and set(d["ctrl"].tolist()) == {gk["uid"]} and d["obs"].shape[1] == 46 and fwd > 0.9 \
+                and worst < 1e-5 and len(d["tick"]) > 400
+            detail = "%d rows, keeper uid %d, forward moves %.0f%%, obs rebuilt within %.1g" % (len(d["tick"]), gk["uid"], 100 * fwd, worst)
+        results.append(check("record", ok, detail))
+
         d = post(port, "/api/game/tournament", {"action": "new", "league": "rules", "user": "aurora", "count": 4, "format": 1,
                                                 "pitch": "classic", "size": 3, "duration": 60})
         t = d["t"]
@@ -148,6 +176,7 @@ def main():
                              "%s: %s" % (d["t"]["title"], ", ".join("%s %d-%d %s" % (f["home"], f["hg"], f["ag"], f["away"]) for f in rounds[0]["fixtures"]))))
     finally:
         srv.terminate()
+        shutil.rmtree(rec_dir, ignore_errors=True)
     ok = all(results)
     print("TOTAL ->", "PASS" if ok else "FAIL")
     return 0 if ok else 1

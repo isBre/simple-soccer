@@ -2,7 +2,8 @@
 sends the keyboard back. One WebSocket per match (web/ws.py).
 
 Page -> server (JSON):
-  {"setup": {...}, "puzzle": seed?}        first message: the match (game/api.py setup)
+  {"setup": {...}, "puzzle": seed?}        first message: the match (game/api.py setup; "record": true saves the human's play as a
+                                           dataset file, game/recorder.py)
   {"in": [dx, dy, kick]}                   the human's keys (direction normalised by the page), sent when they change
   {"switch": 1}                            TEAM control: hand control to the teammate nearest the ball
   {"pause": true|false}  {"speed": 1|2|4|8}  {"quit": 1}
@@ -16,7 +17,7 @@ Kickoff intro (as the Godot game): at every kickoff the match is held for INTRO_
 import math
 import time
 
-from game import api
+from game import api, recorder
 from soccer.match import ENDED, PLAYING, Match
 
 TICK = 1.0 / 60.0
@@ -62,7 +63,20 @@ def frame(m, intro, events):
 
 
 def run(ws):
-    """Plays one match on an accepted WebSocket until it closes."""
+    """Plays one match on an accepted WebSocket until it closes. A recorded match is saved when it ends, or when the page quits
+    or disconnects (if long enough)."""
+    rec = []
+    try:
+        _run(ws, rec)
+    finally:
+        if rec and not rec[0].saved:
+            try:
+                rec[0].save()
+            except Exception as e:                          # never let a failed save break the game server
+                print("recorder: could not save (%s: %s)" % (type(e).__name__, e), flush=True)
+
+
+def _run(ws, rec):
     first = None
     while first is None:
         msgs = ws.poll(30.0)
@@ -77,7 +91,9 @@ def run(ws):
         ws.send({"k": "e", "error": "%s: %s" % (type(e).__name__, e)})
         ws.close()
         return
-    ws.send(meta(m))
+    if recorder.wanted(first["setup"], m):
+        rec.append(recorder.Recorder(m, {**first["setup"], "puzzle": first.get("puzzle")}))
+    ws.send({**meta(m), "rec": bool(rec)})
     human, switch, paused, speed = (0j, False), False, False, 1
     intro, intro_id, result_sent = 0, -1, False
     next_t = time.monotonic()
@@ -124,9 +140,17 @@ def run(ws):
             for _ in range(speed):
                 if m.state == ENDED:
                     break
+                if rec and rec[0].due():
+                    rec[0].sample(*human, speed)
                 m.step()
             events = m.events[n_ev:]
         ws.send(frame(m, intro, events))
         if m.state == ENDED and not result_sent:
-            ws.send({"k": "r", "result": m.make_result()})
+            result = m.make_result()
+            if rec:
+                try:
+                    rec[0].save(result)
+                except Exception as e:
+                    print("recorder: could not save (%s: %s)" % (type(e).__name__, e), flush=True)
+            ws.send({"k": "r", "result": result})
             result_sent = True

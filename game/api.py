@@ -2,7 +2,8 @@
 page's choices, and whole matches simulated in parallel (tournament rounds).
 
 A "setup" is the page's description of one match: {"home", "away", "pitch", "size", "duration", "seed", "control"
-("none" | "single" | "team"), "human_team", "formations": [home, away], "allow_draw"}."""
+("none" | "single" | "team"), "human_team", "player" (single control: "GK" | "DEF" | "MID" | "FWD" | "" = auto), "formations":
+[home, away], "allow_draw", "record" (save the human's play, game/recorder.py)}."""
 import math
 import os
 import random
@@ -84,6 +85,8 @@ def config(setup):
                        float(setup.get("duration", 180.0)), int(setup.get("seed", random.getrandbits(31))))
     c.control = CONTROL.get(str(setup.get("control", "none")), sm.NONE)
     c.human_team = 1 if int(setup.get("human_team", 0)) == 1 else 0
+    role = str(setup.get("player", "")).upper()
+    c.human_role = role if role in ("GK", "DEF", "MID", "FWD") else ""
     c.allow_draw = bool(setup.get("allow_draw", True))
     fs = list(setup.get("formations") or ["", ""])[:2]
     c.formations = [str(f) if f and len(formation_slots(str(f))) == c.team_size else "" for f in fs] + [""] * (2 - len(fs))

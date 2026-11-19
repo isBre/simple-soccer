@@ -112,6 +112,7 @@ class MatchConfig:
         self.control = NONE
         self.human_team = 0
         self.auto_switch = False
+        self.human_role = ""                # SINGLE control: GK / DEF / MID / FWD = control that role's first player ("" = auto)
         self.formations = ["", ""]
         self.nets = [None, None]            # {"model": path} | {"port": n} | None (the team's ml_model, else rules)
         self.net_temperature = 1.0
@@ -336,8 +337,9 @@ class Match:
         cands = [sp for sp in lst if sp.role != "GK" or len(lst) == 1] or lst
         forced = None
         if self.cfg.control != NONE and self.kickoff_team == self.cfg.human_team \
-                and self.controlled is not None and self.controlled.team == self.kickoff_team:
-            forced = self.controlled
+                and self.controlled is not None and self.controlled.team == self.kickoff_team \
+                and not (self.cfg.human_role == "GK" and self.controlled.role == "GK" and len(lst) > 1):
+            forced = self.controlled                # (a keeper picked on the setup page stays in goal)
         taker = forced if forced is not None else cands[self.rng.randi() % len(cands)]
         ang = 0.0 if forced is not None else clamp(self.rng.randfn(0.0, 0.55), -0.95, 0.95)
         self.kickoff_dir = rotated(complex(ax, 0.0), ang)
@@ -348,6 +350,11 @@ class Match:
     def _pick_initial_controlled(self):
         best = None
         lst = self.team_lists[self.cfg.human_team]
+        if self.cfg.control == SINGLE and self.cfg.human_role:     # the page picked a role (keeper included): its first player
+            best = next((p for p in lst if p.role == self.cfg.human_role), None)
+            if best is not None:
+                self.set_controlled(best)
+                return
         for p in lst:
             if p.role == "GK" and len(lst) > 1:
                 continue

@@ -10,6 +10,21 @@ const Game = (() => {
   const SAVE = "soccer.tournament";
   const DURATIONS = [60, 120, 180, 300];
   const CONTROLS = ["single", "team", "none"];
+  // single control: which player the user takes (GK..FWD = the first player with that role); "Record my play": the match is saved as
+  // a dataset file for imitation learning (game/recorder.py). Both remembered in this browser.
+  const PLAYERS = ["", "GK", "DEF", "MID", "FWD"];
+  const PLAYER_NAMES = ["Auto (forward)", "Goalkeeper", "Defender", "Midfielder", "Forward"];
+  const PREFS = "soccer.prefs";
+  const prefs = (() => { try { return { player: 0, record: true, ...JSON.parse(localStorage.getItem(PREFS) || "{}") }; } catch (e) { return { player: 0, record: true }; } })();
+  const savePrefs = () => { try { localStorage.setItem(PREFS, JSON.stringify(prefs)); } catch (e) {} };
+  // the two selects of the match setup (quick match and tournament): your player (single control only) and recording
+  function humanFields(controlOf) {
+    const player = select(PLAYER_NAMES, prefs.player, (i) => { prefs.player = i; savePrefs(); });
+    const rec = select(["Record my play", "Do not record"], prefs.record ? 0 : 1, (i) => { prefs.record = i === 0; savePrefs(); });
+    const sync = () => { const c = controlOf(); player.disabled = c !== "single"; rec.disabled = c === "none"; };
+    sync();
+    return { player, rec, sync, setup: () => ({ player: controlOf() === "single" ? PLAYERS[prefs.player] : "", record: controlOf() !== "none" && prefs.record }) };
+  }
   const $ = (s, el = document) => el.querySelector(s);
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const view = () => document.getElementById("view");
@@ -124,9 +139,11 @@ const Game = (() => {
     const pitchSel = select(P.map((p) => p.name), pitchIdx, (i) => { pitchIdx = i; onPitch(); });
     const info = document.createElement("div"); info.className = "g-caption";
     const sizeSel = select(["1v1", "2v2", "3v3", "4v4", "5v5"], 2, () => refreshForm());
-    const modeSel = select(["Play (one player)", "Play (whole team, Q to switch)", "Watch (AI vs AI)"], 0, () => {});
+    const modeSel = select(["Play (one player)", "Play (whole team, Q to switch)", "Watch (AI vs AI)"], 0, () => hf.sync());
+    const hf = humanFields(() => CONTROLS[modeSel.selectedIndex]);
     const durSel = select(["1 minute", "2 minutes", "3 minutes", "5 minutes"], 2, () => {});
-    left.append(field("Pitch", pitchSel), info, field("Team size", sizeSel), field("Control", modeSel), field("Duration", durSel));
+    left.append(field("Pitch", pitchSel), info, field("Team size", sizeSel), field("Control", modeSel), field("Your player", hf.player),
+      field("Dataset", hf.rec), field("Duration", durSel));
     const ui = [0, 1].map((i) => {
       const c = document.createElement("div");
       c.className = "g-card g-team-card";
@@ -177,7 +194,8 @@ const Game = (() => {
     function start() {
       const fs = [0, 1].map((i) => ui[i].fo.items[ui[i].fo.selected]).map((f) => (f && f !== "-" ? f : ""));
       const setup = { home: team(0).id, away: team(1).id, pitch: P[pitchIdx].id, size: size(), duration: DURATIONS[durSel.selectedIndex],
-        seed: Math.floor(Math.random() * 2147483647), control: CONTROLS[modeSel.selectedIndex], human_team: 0, allow_draw: true, formations: fs };
+        seed: Math.floor(Math.random() * 2147483647), control: CONTROLS[modeSel.selectedIndex], human_team: 0, allow_draw: true, formations: fs,
+        ...hf.setup() };
       play({ setup, done: (res) => showReport(res, "#/game"), quit: () => go("#/game") });
     }
     for (const i of [0, 1]) fill(i, i);           // both sides start in the first league, on different teams
@@ -338,10 +356,12 @@ const Game = (() => {
       const acts = $("#h-actions", v);
       if (acts) {
         if (vw.user_fixture !== null) {
-          const ctl = select(["One player", "Whole team (Q to switch)", "Watch (AI vs AI)"], G.control, (i) => { G.control = i; });
+          const ctl = select(["One player", "Whole team (Q to switch)", "Watch (AI vs AI)"], G.control, (i) => { G.control = i; hf.sync(); });
           ctl.style.width = "260px";
+          const hf = humanFields(() => CONTROLS[G.control]);
+          hf.player.style.width = "190px"; hf.rec.style.width = "190px";
           const cap = document.createElement("span"); cap.className = "g-caption"; cap.textContent = "Control";
-          acts.prepend(cap, ctl);
+          acts.prepend(cap, ctl, hf.player, hf.rec);
         }
         $("#h-play", v)?.addEventListener("click", () => playUser(t));
         $("#h-sim", v)?.addEventListener("click", () => simulateRound(t));
@@ -430,7 +450,8 @@ const Game = (() => {
     if (G.busy) return;
     let fx;
     try { fx = await api("/api/game/tournament", { action: "fixture", t }); } catch (e) { alert(e.message); return; }
-    const setup = { ...fx.setup, control: CONTROLS[G.control] };
+    const control = CONTROLS[G.control];
+    const setup = { ...fx.setup, control, player: control === "single" ? PLAYERS[prefs.player] : "", record: control !== "none" && prefs.record };
     play({ setup, quit: () => go("#/game/tournament"), done: async (res) => {
       try { const d = await api("/api/game/tournament", { action: "record", t, index: fx.index, result: res }); saveT(d.t); }
       catch (e) { alert("The result could not be recorded: " + e.message); }
@@ -737,6 +758,10 @@ const Game = (() => {
       if (M.error) text(ctx, "Enter / Esc - back", 0, H / 2 + 38, "c", W, 16, Draw.css(MUTED));
     }
     drawParticles(ctx, M);
+    if (m.rec && f.cu >= 0 && f.st !== 2) {             // this match is being recorded (game/recorder.py)
+      ctx.beginPath(); ctx.arc(24, 22, 6, 0, 2 * Math.PI); ctx.fillStyle = Math.floor(performance.now() / 700) % 2 ? "#ef6a5b" : "#b8463b"; ctx.fill();
+      text(ctx, "REC", 36, 28, "l", 60, 15, "#ef6a5b");
+    }
     if (M.speed > 1) text(ctx, `x${M.speed}`, W - 70, HUD_H + 26, "r", 56, 18, Draw.css(ACC));
     if (M.paused) {
       ctx.fillStyle = "rgba(0,0,0,0.6)"; ctx.fillRect(0, 0, W, H);
