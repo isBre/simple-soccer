@@ -667,6 +667,7 @@ const Game = (() => {
     ctx.translate(centre[0] - cam[0] * zoom, centre[1] - cam[1] * zoom); ctx.scale(zoom, zoom);
     drawPitch(ctx, m);
     drawPlayers(ctx, M, m, a, b, L, f);
+    drawNets(ctx, m);
     ctx.restore();
     drawHud(ctx, M, m, f, W, H, intro);
   }
@@ -676,18 +677,11 @@ const Game = (() => {
     ctx.fillStyle = C(P.cOuter); ctx.fillRect(-P.out_x, -P.out_y, 2 * P.out_x, 2 * P.out_y);
     const n = Math.max(P.stripes, 1), sw = (2 * hw) / n;
     for (let i = 0; i < n; i++) { ctx.fillStyle = C(P.stripes > 0 && i % 2 === 0 ? Draw.darkened(P.cPitch, 0.07) : P.cPitch); ctx.fillRect(-hw + i * sw, -hh, sw + 0.4, 2 * hh); }
-    for (let t = 0; t < 2; t++) {                              // goals / nets in the colour of the team defending them
+    for (let t = 0; t < 2; t++) {                              // goal floor and goal line; the net goes on top later (drawNets)
       const sx = t === 0 ? -1 : 1, col = m.goalCols[t], x0 = sx * hw, x1 = sx * (hw + P.net_depth), gh = P.goal_half;
       ctx.fillStyle = C(Draw.darkened(P.cPitch, 0.2)); ctx.fillRect(Math.min(x0, x1), -gh, P.net_depth, 2 * gh);
-      ctx.strokeStyle = C(col, 0.55); ctx.lineWidth = 1; ctx.beginPath();
-      for (let g = 0; g <= P.net_depth; g += 10) { ctx.moveTo(x0 + sx * g, -gh); ctx.lineTo(x0 + sx * g, gh); }
-      for (let g = -gh; g <= gh; g += 10) { ctx.moveTo(x0, g); ctx.lineTo(x1, g); }
-      ctx.stroke();
-      const frame = () => { ctx.beginPath(); ctx.moveTo(x0, -gh); ctx.lineTo(x1, -gh); ctx.lineTo(x1, gh); ctx.lineTo(x0, gh); };
-      const line = () => { ctx.beginPath(); ctx.moveTo(x0, -gh); ctx.lineTo(x0, gh); };
-      ctx.lineJoin = "miter";
-      frame(); ctx.lineWidth = 6.5; ctx.strokeStyle = "rgba(0,0,0,0.75)"; ctx.stroke(); line(); ctx.lineWidth = 7.5; ctx.stroke();
-      frame(); ctx.lineWidth = 3; ctx.strokeStyle = C(col); ctx.stroke(); line(); ctx.lineWidth = 4; ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(x0, -gh); ctx.lineTo(x0, gh);
+      ctx.lineWidth = 7.5; ctx.strokeStyle = "rgba(0,0,0,0.75)"; ctx.stroke(); ctx.lineWidth = 4; ctx.strokeStyle = C(col); ctx.stroke();
     }
     const lc = C(P.cLine);
     ctx.strokeStyle = lc; ctx.lineWidth = 3; ctx.strokeRect(-hw, -hh, 2 * hw, 2 * hh);
@@ -695,6 +689,20 @@ const Game = (() => {
     ctx.beginPath(); ctx.arc(0, 0, P.center_r, 0, 2 * Math.PI); ctx.stroke();
     ctx.fillStyle = lc; ctx.beginPath(); ctx.arc(0, 0, 4, 0, 2 * Math.PI); ctx.fill();
     if (P.box_depth > 0) { ctx.lineWidth = 2.5; ctx.strokeRect(-hw, -P.box_half, P.box_depth, 2 * P.box_half); ctx.strokeRect(hw - P.box_depth, -P.box_half, P.box_depth, 2 * P.box_half); }
+  }
+  function drawNets(ctx, m) {                                   // nets in the colour of the team defending them, over the ball and players
+    const P = m.pitch, hw = P.half_w, C = Draw.css;
+    for (let t = 0; t < 2; t++) {
+      const sx = t === 0 ? -1 : 1, col = m.goalCols[t], x0 = sx * hw, x1 = sx * (hw + P.net_depth), gh = P.goal_half;
+      ctx.strokeStyle = C(col, 0.55); ctx.lineWidth = 1; ctx.beginPath();
+      for (let g = 0; g <= P.net_depth; g += 10) { ctx.moveTo(x0 + sx * g, -gh); ctx.lineTo(x0 + sx * g, gh); }
+      for (let g = -gh; g <= gh; g += 10) { ctx.moveTo(x0, g); ctx.lineTo(x1, g); }
+      ctx.stroke();
+      const frame = () => { ctx.beginPath(); ctx.moveTo(x0, -gh); ctx.lineTo(x1, -gh); ctx.lineTo(x1, gh); ctx.lineTo(x0, gh); };
+      ctx.lineJoin = "miter";
+      frame(); ctx.lineWidth = 6.5; ctx.strokeStyle = "rgba(0,0,0,0.75)"; ctx.stroke();
+      frame(); ctx.lineWidth = 3; ctx.strokeStyle = C(col); ctx.stroke();
+    }
     for (const [x, y, r] of P.statics) {                        // posts and obstacles
       ctx.beginPath(); ctx.arc(x, y, r, 0, 2 * Math.PI); ctx.fillStyle = "#f2f2f2"; ctx.fill(); ctx.lineWidth = 2; ctx.strokeStyle = "#000"; ctx.stroke();
     }

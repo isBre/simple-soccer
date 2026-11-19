@@ -844,15 +844,11 @@ function liveDraw(ts) {
   ctx.fillStyle = "#" + P.outer; ctx.fillRect(-P.out_x, -P.out_y, 2 * P.out_x, 2 * P.out_y);
   const n = Math.max(P.stripes, 1), sw = (2 * hw) / n;
   for (let i = 0; i < n; i++) { ctx.fillStyle = P.stripes > 0 && i % 2 === 0 ? shade("#" + P.pitch, -0.07) : "#" + P.pitch; ctx.fillRect(-hw + i * sw, -hh, sw + 0.5, 2 * hh); }
-  for (let t = 0; t < 2; t++) {
+  for (let t = 0; t < 2; t++) {                               // goal floor and goal line; the net goes on top after the ball
     const sx = t === 0 ? -1 : 1, x0 = sx * hw, x1 = sx * (hw + P.net_depth), col = "#" + m.teams[t].primary;
     ctx.fillStyle = shade("#" + P.pitch, -0.2); ctx.fillRect(Math.min(x0, x1), -P.goal_half, P.net_depth, 2 * P.goal_half);
-    ctx.strokeStyle = col; ctx.globalAlpha = 0.45; ctx.lineWidth = 1; ctx.beginPath();
-    for (let gg = 0; gg <= P.net_depth; gg += 10) { ctx.moveTo(x0 + sx * gg, -P.goal_half); ctx.lineTo(x0 + sx * gg, P.goal_half); }
-    for (let gg = -P.goal_half; gg <= P.goal_half; gg += 10) { ctx.moveTo(x0, gg); ctx.lineTo(x1, gg); }
-    ctx.stroke(); ctx.globalAlpha = 1;
-    ctx.lineWidth = 6; ctx.strokeStyle = "rgba(0,0,0,.7)"; ctx.strokeRect(Math.min(x0, x1), -P.goal_half, P.net_depth, 2 * P.goal_half);
-    ctx.lineWidth = 3; ctx.strokeStyle = col; ctx.strokeRect(Math.min(x0, x1), -P.goal_half, P.net_depth, 2 * P.goal_half);
+    ctx.beginPath(); ctx.moveTo(x0, -P.goal_half); ctx.lineTo(x0, P.goal_half);
+    ctx.lineWidth = 6; ctx.strokeStyle = "rgba(0,0,0,.7)"; ctx.stroke(); ctx.lineWidth = 3; ctx.strokeStyle = col; ctx.stroke();
   }
   ctx.strokeStyle = "#" + P.line; ctx.lineWidth = 3;
   ctx.strokeRect(-hw, -hh, 2 * hw, 2 * hh);
@@ -860,7 +856,6 @@ function liveDraw(ts) {
   ctx.beginPath(); ctx.arc(0, 0, P.center_r, 0, 2 * Math.PI); ctx.stroke();
   ctx.fillStyle = "#" + P.line; ctx.beginPath(); ctx.arc(0, 0, 4, 0, 2 * Math.PI); ctx.fill();
   if (P.box_depth > 0) { ctx.lineWidth = 2.5; ctx.strokeRect(-hw, -P.box_half, P.box_depth, 2 * P.box_half); ctx.strokeRect(hw - P.box_depth, -P.box_half, P.box_depth, 2 * P.box_half); }
-  for (const px of [-hw, hw]) for (const py of [-P.goal_half, P.goal_half]) disc(ctx, px, py, P.post_r, "#f2f2f2", "#000", 2);
   live.trail.push(ball); if (live.trail.length > 14) live.trail.shift();
   for (let i = 0; i < live.trail.length - 1; i++) { ctx.globalAlpha = (i / live.trail.length) * 0.35; disc(ctx, live.trail[i][0], live.trail[i][1], m.ball_r * (0.4 + 0.5 * i / live.trail.length), "#fff"); }
   ctx.globalAlpha = 1;
@@ -882,6 +877,16 @@ function liveDraw(ts) {
     ctx.strokeText(txt, x, ty); ctx.fillStyle = "#fff"; ctx.fillText(txt, x, ty);
   });
   disc(ctx, ball[0], ball[1], m.ball_r, "#fff", "#000", 2);
+  for (let t = 0; t < 2; t++) {                               // nets over the ball and players
+    const sx = t === 0 ? -1 : 1, x0 = sx * hw, x1 = sx * (hw + P.net_depth), col = "#" + m.teams[t].primary, gh = P.goal_half;
+    ctx.strokeStyle = col; ctx.globalAlpha = 0.45; ctx.lineWidth = 1; ctx.beginPath();
+    for (let gg = 0; gg <= P.net_depth; gg += 10) { ctx.moveTo(x0 + sx * gg, -gh); ctx.lineTo(x0 + sx * gg, gh); }
+    for (let gg = -gh; gg <= gh; gg += 10) { ctx.moveTo(x0, gg); ctx.lineTo(x1, gg); }
+    ctx.stroke(); ctx.globalAlpha = 1;
+    ctx.beginPath(); ctx.moveTo(x0, -gh); ctx.lineTo(x1, -gh); ctx.lineTo(x1, gh); ctx.lineTo(x0, gh); ctx.lineJoin = "miter";
+    ctx.lineWidth = 6; ctx.strokeStyle = "rgba(0,0,0,.7)"; ctx.stroke(); ctx.lineWidth = 3; ctx.strokeStyle = col; ctx.stroke();
+  }
+  for (const px of [-hw, hw]) for (const py of [-P.goal_half, P.goal_half]) disc(ctx, px, py, P.post_r, "#f2f2f2", "#000", 2);
   const sb = $("#lv-sb");
   if (sb) {
     const runName = m.tag && m.tag.startsWith("x_") ? m.tag.slice(2) : m.tag;
