@@ -78,8 +78,7 @@ data/     pitches, styles, teams, formations, shipped nets (JSON)
   `systemd/`. Results and specs live in `exp/`, checkpoints in `out_5v5/`, logs in `logs/`.
 - `tests/` the core and the game against the Godot implementation they replaced, and the web app (see "Tests"); `tools/`
   `bench.py` (core speed), `team_bench.py` (one team against the league / RL teams / trained nets: points, goals, and how
-  much it plays as a team), `elo.py` (one Elo ranking of every rule team, RL team and net in `models/`: round robin plus a
-  Bradley-Terry fit with intervals; results in `logs/elo/`, latest table in [docs/elo_ranking.md](docs/elo_ranking.md)), `generate_data.py` (regenerates `data/`, seeded; style tuning lives there); `docs/` notebook,
+  much it plays as a team), `generate_data.py` (regenerates `data/`, seeded; style tuning lives there); `docs/` notebook,
   rewards, pipeline design, UI design guide, old results.
 
 ### Bot quality and team AI (how a team gets strong or weak)
@@ -106,8 +105,9 @@ Silver Arrows, the strongest handmade team), so the difference is only how it pl
   Pass predictions are calibrated: passes rated over 95 % safe are kept about 90 % of the time.
 - **Final third** (from 35 % of the half beyond halfway): the carrier drives at goal and shoots like the handmade bots
   (`StyleBot._decide_action` with the Opus style), with the Opus shape around him.
-- Elo ranking of all 42 teams and nets ([docs/elo_ranking.md](docs/elo_ranking.md)): 1331, 24th, the top rule team (Silver Arrows
-  1079) and above two trained nets.
+- Elo: it joins the Lab's ranking (`lab/ladder.py`) as `rules:opus_high`. A one-off full round robin of 42 teams and nets before
+  that ([docs/elo_ranking.md](docs/elo_ranking.md), 3-minute matches, not on the ladder's scale) put it 24th at 1331, the top rule
+  team (Silver Arrows 1079) and above two trained nets.
 - Measured with `python3 tools/team_bench.py opus_high --rl` (5v5 arena, 3 min, both sides): about 1.9 points per match against
   the 16 rule teams (it beats every one of them on balance; level with Silver Arrows head to head), 3.4 goals conceded per match
   against RL Team 4/5 (Silver Arrows: 5.8), and wins games against several of the trained nets in `models/`. It plays as a team:

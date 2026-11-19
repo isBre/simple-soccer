@@ -1,7 +1,10 @@
-# Elo ranking (2026-11-19)
+# Elo ranking snapshot (2026-11-19, one-off)
+
+> A one-off run made while adding Opus 5.5 High, before the Lab's own ranking (`lab/ladder.py`, Ranking page) existed. Its
+> script was then dropped in favour of the ladder. Not on the ladder's scale: 3-minute matches here, 90 s there, and a draw-aware fit.
 
 One ranking for every team: the 17 Rule Based League teams (Opus 5.5 High included), the 5 RL League teams and the 20 trained
-nets in `models/` (played in RL Team 5's shirts). Made with `python3 tools/elo.py --seeds 2`: a full round robin on the 5v5 arena,
+nets in `models/` (played in RL Team 5's shirts). A full round robin on the 5v5 arena,
 3-minute matches, every pair 4 times (2 fixed seeds per side), 3,444 matches. One Bradley-Terry fit with draws (Davidson, draw
 factor 0.63) over all results, on the Elo scale (400 points = 10x the odds), average team = 1500; 95% intervals from 200 bootstrap
 resamples of the matches.
