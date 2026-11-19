@@ -1,0 +1,92 @@
+{
+ "state": "running",
+ "spec": {
+  "name": "wide_persist",
+  "start": "out_5v5/ckpt/x_wide_kickstart_u600.pt",
+  "updates": 400,
+  "lr": 5e-05,
+  "rewards": {
+   "w_wall": 0.0
+  },
+  "args": {
+   "teacher": "out_5v5/ckpt/jit8_best.pt",
+   "kl_coef": 0.2,
+   "kl_decay": 1000,
+   "opp_models": "out_5v5/ckpt/jit8_best.pt,data/models/rl_5v5_arena_v4.json,data/models/rl_5v5_arena_v5.json",
+   "pfsp": 0.75,
+   "hidden": 256
+  },
+  "notes": "The kickstart_persist recipe (strong opponents + PFSP, teacher KL 0.2 decaying slowly, lr 5e-5, 400 updates) on the wide net 46-256-256-10, from wide_kickstart u600 (h2h RL4 1.06 / RL5 1.12, the 128-wide kickstart had 0.56 / 0.31). Control kickstart_persist (the same recipe on the 128-wide net). [w_wall pinned to 0 like the control]",
+  "control": "kickstart_persist"
+ },
+ "baseline_run": "start:x_wide_kickstart_u600",
+ "started": 1795086698,
+ "tag": "x_wide_persist",
+ "target_updates": 400,
+ "effective_rewards": {
+  "pass_individual": 1,
+  "w_recv": 0.1,
+  "w_open": 0.003,
+  "w_key_pass": 0.25,
+  "w_xa": 2.5,
+  "coop_cap": 8,
+  "random_start": 0.6,
+  "shaping": 0,
+  "w_keeper": 0,
+  "w_jitter": 0,
+  "w_far": 0,
+  "w_xg": 0,
+  "w_xga": 0,
+  "w_win": 0,
+  "w_draw": 0,
+  "w_tackle": 0,
+  "w_goalside": 0,
+  "w_opp_half": 0,
+  "w_compact": 0,
+  "w_wall": 0.0,
+  "w_corner": 0
+ },
+ "effective_args": {
+  "lr": 5e-05,
+  "updates": 400,
+  "workers_rule": 2,
+  "workers_self": 1,
+  "envs_per_worker": 16,
+  "rollout": 128,
+  "minibatch": 4096,
+  "ckpt_every": 25,
+  "fast_every": 50,
+  "learn_threads": 2,
+  "seed": 7,
+  "teacher": "out_5v5/ckpt/jit8_best.pt",
+  "kl_coef": 0.2,
+  "kl_decay": 1000,
+  "opp_models": "out_5v5/ckpt/jit8_best.pt,data/models/rl_5v5_arena_v4.json,data/models/rl_5v5_arena_v5.json",
+  "pfsp": 0.75,
+  "hidden": 256
+ },
+ "seed": 7,
+ "git_commit": "9c95102",
+ "git_dirty": false,
+ "boot_id": "57a433f7",
+ "restarts": [],
+ "control": "kickstart_persist",
+ "net": {
+  "sizes": [
+   46,
+   256,
+   256,
+   10
+  ],
+  "label": "46-256-256-10",
+  "params": 80394
+ },
+ "name": "wide_persist",
+ "updated": 1795087096,
+ "update": 14,
+ "train_pts": null,
+ "base_train": null,
+ "bad_checks": 0,
+ "recorded": [],
+ "train_s": 398
+}

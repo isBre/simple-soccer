@@ -1,5 +1,5 @@
 {
- "state": "running",
+ "state": "done",
  "spec": {
   "name": "anchor_corner_strong",
   "start": "out_5v5/ckpt/x_kickstart_u600.pt",
@@ -77,13 +77,40 @@
   "params": 23818
  },
  "name": "anchor_corner_strong",
- "updated": 1795079888,
- "update": 100,
- "train_pts": 2.77,
+ "updated": 1795085842,
+ "update": 300,
+ "train_pts": 2.81,
  "base_train": 2.77,
  "bad_checks": 0,
  "recorded": [
-  50
+  50,
+  100,
+  150,
+  200,
+  250,
+  300
  ],
- "train_s": 1958
+ "train_s": 6033,
+ "stop_reason": "budget",
+ "finished": 1795085842,
+ "final_update": 300,
+ "verdict": {
+  "pts": -0.125,
+  "pts_se": 0.1603,
+  "gd": -0.0312,
+  "gd_se": 0.2821,
+  "n": 32,
+  "paired": true,
+  "z": -0.7796,
+  "z_gd": -0.1108,
+  "p": 0.4356,
+  "mde": 0.4489,
+  "verdict": "no difference",
+  "reference": "anchor_wall_strong",
+  "update": 300
+ },
+ "cost_hours": {
+  "train": 1.68,
+  "eval": 0.59
+ }
 }
