@@ -1,6 +1,6 @@
 # Plan: learning from the user's play (ML League, DL League)
 
-Status: agreed plan, 2026-11-19. **Phase 1 (recorder) built**; the rest not yet. The user's decisions are at the end.
+Status: agreed plan, 2026-11-19. **Phase 1 (recorder) and Phase 2 (Dataset page) built**; the rest not yet. The user's decisions are at the end.
 
 ## The idea in one paragraph
 
@@ -50,9 +50,16 @@ New route `#/dataset` in `web/lab.js`, API `/api/dataset` in `lab/dashboard.py` 
 - **Situations / coverage**: distance to the ball, on-ball vs off-ball time, attacking vs defending, by role of the controlled player.
   This shows which situations the dataset has hardly any examples of (expected gap: off-ball positioning, the keeper).
 - **Reaction lag**: how many decisions later the user's moves best match the situation (from the Phase 3 fits); converted to ms.
+  (Not built yet: it needs the Phase 3 models.)
 - **Matches**: a table per recorded match, and a replay of any match from the stored states (the Lab already draws matches,
   `web/draw.js`) with the user's input drawn as an arrow.
 - **You vs the leagues**: the user's results against every team they played, grouped by league (see Evaluation, level 4).
+- **Built (2026-11-19):** `il/analysis.py` (cached until a file changes), `/api/dataset` and `/api/dataset/match/<id>` in
+  `lab/dashboard.py`, the page `#/dataset` in `web/lab.js` (nav "Dataset", kiosk rail "Data"): KPIs, the moves as an octagon radar,
+  direction changes and standing still against the newest full evaluation's net and rule bots (same definitions as
+  `rl/evaluate.py`), heatmaps (player, ball, kicks), coverage by distance to the ball and by depth rank among the user's 5 (keeper
+  included) with "thin" marks under a minute of examples, moves by situation, the match table and a replay (play / pause, speed,
+  seek, the held direction as an arrow, red ring while kicking). Checked by `tests/test_web.py` ("dataset").
 
 ## Phase 3: the shared training base
 

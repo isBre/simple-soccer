@@ -348,3 +348,8 @@ body.kiosk .live-side .ctl-close { display: block; flex: 1 1 100%; font: inherit
 .doc-body table.md td code { white-space: normal; overflow-wrap: anywhere; }
 .doc-body img.md-img { max-width: 100%; height: auto; border-radius: 8px; border: 1px solid var(--line); display: block; margin: 4px 0; }
 .doc-body table.md td { min-width: 120px; }
+/* Dataset page (web/lab.js viewDataset) */
+tr.thin td:first-child::after { content: " · thin"; color: var(--warn, var(--bad)); font-size: 11px; }
+.nowrap { white-space: nowrap; }
+.bh.vs { grid-template-columns: 150px 1fr 220px; }
+@media (max-width: 600px) { .bh.vs { grid-template-columns: minmax(0, 1fr); gap: 4px; } .bh.vs .bv { text-align: left; } }

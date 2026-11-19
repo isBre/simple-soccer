@@ -4,6 +4,7 @@
   live       a match played over the WebSocket (/ws/match, at 8x speed) ends with the same result as the same setup simulated
              in one go (game/api.py play): the live path and the simulation are the same match
   input      the human's keys move the controlled player
+  dataset    the Lab's Dataset page API analyses that file (/api/dataset) and serves it for the replay (/api/dataset/match/<id>)
   record     a match with "record" saves the human's play (game/recorder.py): the picked keeper is the one recorded, the keys become
              the right net moves, the observation can be rebuilt from the stored state (il/human_data.py), a match without it saves nothing
   tournament new -> simulate a round -> fixture -> record a result -> view, through /api/game/tournament
@@ -163,6 +164,15 @@ def main():
                 and worst < 1e-5 and len(d["tick"]) > 400
             detail = "%d rows, keeper uid %d, forward moves %.0f%%, obs rebuilt within %.1g" % (len(d["tick"]), gk["uid"], 100 * fwd, worst)
         results.append(check("record", ok, detail))
+
+        ds = json.loads(get(port, "/api/dataset")[1])
+        mid = ds["matches"][0]["id"] if ds.get("matches") else ""
+        rp = json.loads(get(port, "/api/dataset/match/" + mid)[1]) if mid else {}
+        ok = ds.get("files") == 1 and ds["matches"][0].get("outcome") in ("W", "D", "L") and abs(sum(ds["moves"]) - 100) < 1e-6 \
+            and sum(r["rows"] for r in ds["ranks"]) == ds["rows"] and ds["heat"]["player"]["n"] == ds["rows"] \
+            and len(rp.get("p", [])) == ds["rows"] and len(rp["p"][0]) == 20
+        results.append(check("dataset", ok, "%d rows, forward moves %.0f%%, replay %d frames" % (
+            ds.get("rows", 0), ds["moves"][3] if ds.get("moves") else 0, len(rp.get("p", [])))))
 
         d = post(port, "/api/game/tournament", {"action": "new", "league": "rules", "user": "aurora", "count": 4, "format": 1,
                                                 "pitch": "classic", "size": 3, "duration": 60})

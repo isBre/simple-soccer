@@ -8,6 +8,9 @@ Open http://<pi-address>:8080/#/ from another computer; the Lab pages poll the A
   /api/v1/<command>   the agent interface (lab/lab.py, read-only): status, runs, run/<name>, evals, best, compare?a=&b=, ablation, events?since=,
                       queue, schema; query parameters = the CLI options (e.g. /api/v1/evals?run=minimal&kind=full). See AGENTS.md.
   /api/docs, /api/docs/<id>  the project's Markdown files (AGENTS.md, docs/*.md, exp/results.md, READMEs): the Docs page
+  /api/dataset        the user's recorded play (data/human/, game/recorder.py) analysed for the Dataset page (il/analysis.py), plus
+                      the nets' and the rule bots' behaviour numbers of the newest full evaluation as references
+  /api/dataset/match/<id>  one recorded match, every decision, for the replay
   /api/live/opponents GET the opponents the Live page can play (rule teams, RL Team 4/5, older checkpoints) and the chosen one
   /api/live/mode      POST {"mode": "match"|"puzzle"}: puzzle = random layout of all players and the ball, 60 s, over at the first goal
   /api/live/opponent  POST {"id": ...}: with the mode, the ONLY writes of this server: which opponent the Pi's demo match plays next
@@ -129,6 +132,26 @@ LIVE_MODE = os.path.join(ROOT, "logs", "live_mode.json")
 NET_LABELS = {"rl_5v5_arena_v4": "RL Team 4", "rl_5v5_arena_v5": "RL Team 5"}
 
 
+def dataset_view():
+    """The Dataset page: the analysis of data/human/ and, as references, the behaviour of the newest full evaluation (the net
+    and the rule bots it played, same definitions)."""
+    if ROOT not in sys.path:
+        sys.path.insert(0, ROOT)
+    from il import analysis
+    out = dict(analysis.summary())
+    ref = None
+    try:
+        for line in open(os.path.join(EXP, "results.jsonl")):
+            r = json.loads(line)
+            if r.get("kind") == "full" and r.get("behaviour"):
+                ref = r
+    except (OSError, ValueError):
+        pass
+    out["reference"] = None if ref is None else {"run": ref.get("run"), "update": ref.get("update"), "net": ref.get("behaviour"),
+                                                 "rules": ref.get("behaviour_rule")}
+    return out
+
+
 def live_opponents():
     """Everything the demo match can play against: [{id, kind rule|net|random, label, group, team|model, ...}]."""
     out = [{"id": "random", "kind": "random", "label": "Random (all teams and earlier runs)", "group": "Automatic"}]
@@ -246,6 +269,14 @@ class Handler(BaseHTTPRequestHandler):
             if path == "/api/version":                              # the page reloads itself when the dashboard's files changed (the kiosk has no keyboard)
                 v = max(os.path.getmtime(f) for f in glob.glob(os.path.join(STATIC, "*")))
                 return self.send(json.dumps({"v": v}).encode(), "application/json")
+            if path == "/api/dataset":
+                return self.send(json.dumps(dataset_view(), default=float).encode(), "application/json")
+            if path.startswith("/api/dataset/match/"):
+                from il import analysis
+                try:
+                    return self.send(json.dumps(analysis.match_frames(path[len("/api/dataset/match/"):])).encode(), "application/json")
+                except KeyError:
+                    return self.send(json.dumps({"error": "unknown match"}).encode(), "application/json", 404)
             if path == "/api/live/opponents":
                 return self.send(json.dumps({"opponents": live_opponents(), "selected": live_selected(), "mode": live_mode()}).encode(), "application/json")
             if path == "/api/health":
