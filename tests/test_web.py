@@ -7,6 +7,7 @@
   dataset    the Lab's Dataset page API analyses that file (/api/dataset) and serves it for the replay (/api/dataset/match/<id>)
   record     a match with "record" saves the human's play (game/recorder.py): the picked keeper is the one recorded, the keys become
              the right net moves, the observation can be rebuilt from the stored state (il/human_data.py), a match without it saves nothing
+  ranking    the Elo ranking (/api/ranking, lab/ladder.py) lists every team, sorted, each rating inside its interval
   tournament new -> simulate a round -> fixture -> record a result -> view, through /api/game/tournament
 
   python3 tests/test_web.py"""
@@ -173,6 +174,13 @@ def main():
             and len(rp.get("p", [])) == ds["rows"] and len(rp["p"][0]) == 20
         results.append(check("dataset", ok, "%d rows, forward moves %.0f%%, replay %d frames" % (
             ds.get("rows", 0), ds["moves"][3] if ds.get("moves") else 0, len(rp.get("p", [])))))
+
+        rk = json.loads(get(port, "/api/ranking")[1])
+        rows = rk.get("rows", [])
+        kinds = {r["kind"] for r in rows}
+        ok = len(rows) >= 21 and {"rules", "team"} <= kinds and all(r["lo"] <= r["elo"] <= r["hi"] for r in rows) \
+            and [r["rank"] for r in rows] == list(range(1, len(rows) + 1)) and all(rows[i]["elo"] >= rows[i + 1]["elo"] for i in range(len(rows) - 1))
+        results.append(check("ranking", ok, "%d teams (%s), %d matches stored" % (len(rows), ", ".join(sorted(kinds)), rk.get("matches", 0))))
 
         d = post(port, "/api/game/tournament", {"action": "new", "league": "rules", "user": "aurora", "count": 4, "format": 1,
                                                 "pitch": "classic", "size": 3, "duration": 60})
