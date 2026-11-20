@@ -275,7 +275,7 @@ const Game = (() => {
     function start() {
       const setup = { home: st.team[0].id, away: st.team[1].id, pitch: P[pitchIdx].id, size: SIZES[size.get()], duration: MINUTES[mins.get()] * 60,
         seed: Math.floor(Math.random() * 2147483647), human_team: 0, allow_draw: true, formations: ["", ""], ...pc.human() };
-      play({ setup, done: (res) => showReport(res, "#/game/quick"), quit: () => go("#/game/quick") });
+      play({ setup, rematch: true, done: (res) => showReport(res, "#/game/quick"), quit: () => go("#/game/quick") });
     }
     $("#ks-go", v).onclick = start;
     $(".ks-swap", v).addEventListener("mousedown", (e) => e.preventDefault());
@@ -577,30 +577,32 @@ const Game = (() => {
   // ---------- match report ----------
   function showReport(result, cont) { G.report = { result, cont }; G.pending = null; go("#/game/report"); }
   function report(res, cont) {
-    const T = res.teams.map((id) => G.byId[id] || { id, name: id, colors: ["ffffff", "000000"] });
+    const T = res.teams.map((id) => G.byId[id] || { id, name: id, colors: ["888888", "ffffff"], logo: {} });
     let note = "Full time";
-    if (res.shootout && res.shootout.length) note = `Decided on penalties: ${res.shootout[0]} - ${res.shootout[1]}`;
-    else if (res.overtime) note = "Golden goal in overtime";
-    else if (res.winner === -1) note = "Full time - draw";
-    const scorers = [0, 1].map((t) => {
-      const goals = res.events.filter((e) => e.team === t);
-      const lines = goals.map((e) => `<div>${Math.floor(e.clock / 60) + 1}' ${esc(e.scorer_name)}${e.own ? " (OG)" : ""}${e.assist_name ? `&nbsp;&nbsp;&nbsp;(assist ${esc(e.assist_name)})` : ""}</div>`).join("");
-      const col = Draw.css(Draw.lightened(Draw.rgb(T[t].colors[0]), 0.25));
-      return `<div style="text-align:${t === 0 ? "right" : "left"}"><div style="font-size:14px;color:${col}">${esc(T[t].name)}</div>${lines || '<div class="g-muted" style="font-size:15px">no goals</div>'}</div>`;
-    }).join("");
+    if (res.shootout && res.shootout.length) note = `Full time · penalties ${res.shootout[0]}–${res.shootout[1]}`;
+    else if (res.overtime) note = "Full time · golden goal in overtime";
+    else if (res.winner === -1) note = "Full time · draw";
+    const scorers = (t) => res.events.filter((e) => e.team === t).map((e) =>
+      `<div>${Math.floor(e.clock / 60) + 1}' ${esc(e.scorer_name)}${e.own ? " (OG)" : ""}${e.assist_name ? ` <span>· ${esc(e.assist_name)}</span>` : ""}</div>`).join("") || '<div class="none">no goals</div>';
     const ts = res.team_stats;
-    const rows = [["Possession", ts[0].possession.toFixed(0) + "%", ts[1].possession.toFixed(0) + "%", ts[0].possession, ts[1].possession],
+    const stat = (label, a, b, x, y) => {                           // a bar per stat: each side's share in its colour
+      const sum = Math.max(1e-9, x + y), pa = x + y > 0 ? (100 * x) / sum : 50;
+      return `<div class="rp-stat"><b class="${x > y ? "lead" : ""}">${a}</b><span>${label}</span><b class="${y > x ? "lead" : ""}">${b}</b>
+        <div class="rp-bar"><i style="width:${pa}%"></i><i style="width:${100 - pa}%"></i></div></div>`;
+    };
+    const stats = [["Possession", ts[0].possession.toFixed(0) + "%", ts[1].possession.toFixed(0) + "%", ts[0].possession, ts[1].possession],
       ["Shots", ts[0].shots, ts[1].shots, ts[0].shots, ts[1].shots], ["On target", ts[0].shots_on_target, ts[1].shots_on_target, ts[0].shots_on_target, ts[1].shots_on_target],
-      ["Passes (completed)", `${ts[0].passes} (${ts[0].passes_ok})`, `${ts[1].passes} (${ts[1].passes_ok})`, ts[0].passes_ok, ts[1].passes_ok],
-      ["Expected goals (xG)", ts[0].xg.toFixed(1), ts[1].xg.toFixed(1), ts[0].xg, ts[1].xg], ["Tackles / interceptions", ts[0].recoveries, ts[1].recoveries, ts[0].recoveries, ts[1].recoveries],
-      ["Dribbles won", ts[0].dribbles, ts[1].dribbles, ts[0].dribbles, ts[1].dribbles], ["Saves", ts[0].saves, ts[1].saves, ts[0].saves, ts[1].saves]];
-    const stats = rows.map(([label, a, b, x, y]) => `<span style="text-align:right;color:${x > y ? "var(--g-accent)" : "var(--g-text)"}">${a}</span><span class="mid">${label}</span><span style="color:${y > x ? "var(--g-accent)" : "var(--g-text)"}">${b}</span>`).join("");
-    const cols = [{ t: "#", w: 44 }, { t: "Player" }, { t: "Pos", w: 64 }, { t: "Grade", w: 80, a: "r" }, { t: "G", w: 48, a: "r" }, { t: "A", w: 48, a: "r" }, { t: "Shots", w: 80, a: "r" },
-      { t: "Passes", w: 90, a: "r" }, { t: "Key", w: 52, a: "r" }, { t: "Tkl", w: 52, a: "r" }, { t: "Int", w: 52, a: "r" }, { t: "Drb", w: 52, a: "r" }, { t: "Sv", w: 52, a: "r" }];
+      ["Expected goals (xG)", ts[0].xg.toFixed(1), ts[1].xg.toFixed(1), ts[0].xg, ts[1].xg],
+      ["Passes completed", `${ts[0].passes_ok} / ${ts[0].passes}`, `${ts[1].passes_ok} / ${ts[1].passes}`, ts[0].passes_ok, ts[1].passes_ok],
+      ["Tackles and interceptions", ts[0].recoveries, ts[1].recoveries, ts[0].recoveries, ts[1].recoveries],
+      ["Dribbles won", ts[0].dribbles, ts[1].dribbles, ts[0].dribbles, ts[1].dribbles], ["Saves", ts[0].saves, ts[1].saves, ts[0].saves, ts[1].saves]]
+      .map((r) => stat(...r)).join("");
+    const cols = [{ t: "#", w: 40 }, { t: "Player" }, { t: "Pos", w: 56 }, { t: "Grade", w: 66, a: "r" }, { t: "G", w: 40, a: "r" }, { t: "A", w: 40, a: "r" }, { t: "Shots", w: 64, a: "r" },
+      { t: "Passes", w: 72, a: "r" }, { t: "Key", w: 46, a: "r" }, { t: "Tkl", w: 46, a: "r" }, { t: "Int", w: 46, a: "r" }, { t: "Drb", w: 46, a: "r" }, { t: "Sv", w: 46, a: "r" }];
     const ptable = (team) => table(cols, res.players.filter((p) => p.team === team).map((p) => {
       const mom = p.uid === res.mom;
-      return { hl: mom, cells: [{ text: p.number, color: "var(--g-muted)" }, { text: (mom ? "★ " : "") + p.name, color: mom ? "var(--g-accent)" : "var(--g-text)" }, { text: p.played, color: "var(--g-muted)" },
-        { text: p.rating.toFixed(1), color: RAT(p.rating), size: 20 }, p.goals, p.assists, `${p.shots_on_target}/${p.shots}`, `${p.passes_ok}/${p.passes_ok + p.passes_failed}`,
+      return { hl: mom, cells: [{ text: p.number, color: "var(--g-muted)" }, { text: (mom ? "★ " : "") + p.name, color: mom ? "var(--g-accent)" : "" }, { text: p.played, color: "var(--g-muted)" },
+        { text: p.rating.toFixed(1), color: RAT(p.rating), bold: true }, p.goals, p.assists, `${p.shots_on_target}/${p.shots}`, `${p.passes_ok}/${p.passes_ok + p.passes_failed}`,
         p.key_passes, p.tackles, p.interceptions, p.dribbles, p.saves] };
     }));
     const mp = res.players.find((p) => p.uid === res.mom);
@@ -611,14 +613,19 @@ const Game = (() => {
       if (p.xg >= 0.5) parts.push(p.xg.toFixed(1) + " xG");
       return parts.slice(0, 5).join(", ");
     };
-    const v = mount(`<div class="g-page">
-      <div class="g-report-head">${Draw.logoTag(T[0].id, 84)}<span class="name" style="text-align:right">${esc(T[0].name)}</span><span class="score">${res.scores[0]} - ${res.scores[1]}</span><span class="name">${esc(T[1].name)}</span>${Draw.logoTag(T[1].id, 84)}</div>
-      <div class="g-muted g-center" style="font-size:18px">${esc(note)}</div>
-      <div class="g-scorers">${scorers}</div>
-      <div style="display:flex;justify-content:center">${card(`<div class="g-stats">${stats}</div>`)}</div>
-      ${[0, 1].map((t) => `<h2 style="font-size:22px;margin:0">${esc(T[t].name)} - player ratings</h2>${ptable(t)}`).join("")}
-      ${mp ? `<div class="g-accent g-center" style="font-size:20px">Man of the match:&nbsp;&nbsp;${esc(mp.name)} (${esc(T[mp.team].name)}) - ${mp.rating.toFixed(1)}</div><div class="g-caption g-center">${esc(why(mp))}</div>` : ""}
-      <div style="display:flex;justify-content:center">${btn("Continue&nbsp;&nbsp;(Enter)", 'id="r-go" style="width:260px"', "primary big")}</div></div>`);
+    const v = mount(shell(`<section class="rp-head" style="--c0:#${T[0].colors[0]};--c1:#${T[1].colors[0]}">
+        <div class="rp-team"><span class="rp-crest"></span><div class="rp-name">${esc(T[0].name)}</div><div class="rp-goals">${scorers(0)}</div></div>
+        <div class="rp-mid"><div class="rp-score">${res.scores[0]} – ${res.scores[1]}</div><div class="rp-note">${esc(note)}</div><button type="button" class="ks-go" id="r-go">Continue</button></div>
+        <div class="rp-team"><span class="rp-crest"></span><div class="rp-name">${esc(T[1].name)}</div><div class="rp-goals">${scorers(1)}</div></div></section>
+      <div class="rp-grid"><section class="gp-card rp-stats" style="--c0:#${T[0].colors[0]};--c1:#${T[1].colors[0]}"><h2>Match stats</h2>${stats}</section>
+        ${mp ? `<section class="gp-card rp-mom"><h2>Player of the match</h2><span class="rp-mom-crest"></span><div class="rp-mom-name">${esc(mp.name)}</div>
+          <div class="g-caption">${esc(T[mp.team].name)}</div><div class="rp-mom-grade" style="color:${RAT(mp.rating)}">${mp.rating.toFixed(1)}</div><div class="rp-mom-why">${esc(why(mp))}</div></section>` : ""}</div>
+      ${[0, 1].map((t) => `<section class="gp-card"><h2 class="rp-th"><span class="rp-tcrest" data-t="${t}"></span>${esc(T[t].name)} · player grades</h2>${ptable(t)}</section>`).join("")}`,
+      [["Enter", "continue"]], "rp"));
+    v.querySelectorAll(".rp-crest").forEach((el, t) => el.append(Draw.logoCanvas(T[t].logo, 88)));
+    v.querySelectorAll(".rp-tcrest").forEach((el) => el.append(Draw.logoCanvas(T[Number(el.dataset.t)].logo, 24)));
+    if (mp) $(".rp-mom-crest", v).append(Draw.logoCanvas(T[mp.team].logo, 56));
+    $(".ks-links a", v).remove();                                      // the report always continues (a tournament result is already saved)
     const cont2 = () => { G.report = null; go(cont); };
     $("#r-go", v).onclick = cont2;
     window.scrollTo(0, 0);
@@ -704,7 +711,7 @@ const Game = (() => {
   function drawPuzzleHud(ctx, M, f, W, H, intro) {
     const pz = M.p.session, R = pz.rounds, n = R.length + 1, pts = R.reduce((s, r) => s + r.pts, 0);
     const left = Math.max(0, pz.total - pzPlayed(pz) - (60 - f.tl));
-    text(ctx, `PUZZLE  ·  ROUND ${n}  ·  ${pts} PTS  ·  ${clockText(left)} LEFT`, 18, HUD_H + 26, "l", 600, 18, Draw.css(ACC), 4);
+    text(ctx, `PUZZLE  ·  ROUND ${n}  ·  ${pts} PTS  ·  ${clockText(left)} LEFT`, 18, TOP + 40, "l", 600, 16, Draw.css(ACC), 4, "rgba(0,0,0,0.9)", 700);
     if (intro > 0) {
       const a = Math.min(1, intro / 20);
       ctx.fillStyle = `rgba(0,0,0,${0.45 * a})`; ctx.fillRect(0, H / 2 - 190, W, 96);
@@ -774,13 +781,56 @@ const Game = (() => {
       sendInput(M); return;
     }
     if (!down || e.repeat) return;
-    const f = M.frames[M.frames.length - 1];
-    if (c === "Escape" || c === "KeyP") { M.paused = !M.paused; wsSend(M, { pause: M.paused }); }
-    else if (M.paused && c === "KeyM") { const q = M.p.quit; G.pending = null; stopMatch(); q(); }
+    const f = M.frames[M.frames.length - 1], ended = f && f.st === 2 && !M.p.session, ok = c === "Enter" || c === "NumpadEnter";
+    if (M.error) { if (ok || c === "Escape") act(M, "quit"); }
+    else if (ended) { if ((ok || c === "Escape") && M.result) act(M, "report"); else if (c === "KeyR" && M.p.rematch) act(M, "restart"); }
+    else if (c === "Escape" || c === "KeyP") act(M, "pause");
+    else if (M.paused && c === "KeyM") act(M, "quit");
+    else if (M.paused && c === "KeyR" && !M.p.session) act(M, "restart");
     else if (c === "KeyT") { M.speed = M.speed === 1 ? 2 : M.speed === 2 ? 4 : M.speed === 4 ? 8 : 1; wsSend(M, { speed: M.speed }); }
     else if (c === "KeyQ") wsSend(M, { switch: 1 });
-    else if ((c === "Enter" || c === "NumpadEnter") && f && f.st === 2 && M.result && !M.p.session) { const res = M.result, done = M.p.done; G.pending = null; stopMatch(); done(res); }
-    else if (M.error && (c === "Enter" || c === "Escape")) { const q = M.p.quit; G.pending = null; stopMatch(); q(); }
+  }
+  // what a key or a card button does: pause / resume, restart (same teams, new seed), quit, the report after the final whistle
+  function act(M, a) {
+    if (a === "pause") { M.paused = !M.paused; wsSend(M, { pause: M.paused }); }
+    else if (a === "restart") { const p = { ...M.p, setup: { ...M.p.setup, seed: Math.floor(Math.random() * 2147483647) } }; G.pending = null; stopMatch(); G.pending = p; match(p); }
+    else if (a === "quit") { const q = M.p.quit; G.pending = null; stopMatch(); q(); }
+    else if (a === "report" && M.result) { const res = M.result, done = M.p.done; G.pending = null; stopMatch(); done(res); }
+  }
+  // ---------- the cards over the match: pause, full time, error (HTML, so they have real buttons) ----------
+  function overlayKind(M, f) {
+    if (M.error) return "error";
+    if (f && f.st === 2 && !M.p.session) return M.result ? "end" : "wait";
+    return M.paused ? "pause" : "";
+  }
+  function syncOverlay(M, f) {
+    const kind = overlayKind(M, f);
+    if (kind === M.ovKind) return;
+    M.ovKind = kind;
+    if (!kind) { if (M.ov) M.ov.hidden = true; return; }
+    if (!M.ov) { M.ov = document.createElement("div"); M.ov.className = "mo"; M.cv.parentElement.append(M.ov); }
+    const ov = M.ov, m = M.meta;
+    ov.hidden = false;
+    const k = (x) => `<kbd>${x}</kbd>`;
+    if (kind === "error") ov.innerHTML = `<div class="mo-card"><div class="mo-k">The match stopped</div><p class="mo-msg">${esc(M.error)}</p>
+      <div class="mo-btns"><button type="button" class="ks-go" data-act="quit">Back ${k("Enter")}</button></div></div>`;
+    else if (kind === "pause") ov.innerHTML = `<div class="mo-card"><div class="mo-k">Paused · ${f.ot ? "overtime " + clockText(f.otl) : clockText(f.tl) + " left"}</div>
+      <div class="mo-sc small">${esc(m.teams[0].name)} <b>${f.sc[0]} – ${f.sc[1]}</b> ${esc(m.teams[1].name)}</div>
+      <div class="mo-btns col"><button type="button" class="ks-go" data-act="pause">Resume ${k("Esc")}</button>
+        ${M.p.session ? "" : `<button type="button" class="ks-btn2" data-act="restart">Restart ${k("R")}</button>`}<button type="button" class="ks-btn2" data-act="quit">Quit the match ${k("M")}</button></div>
+      <div class="mo-keys"><span>${k("WASD")} ${k("↑↓←→")} move</span><span>${k("Space")} ${k("X")} kick</span>${m.control === 2 ? `<span>${k("Q")} switch player</span>` : ""}<span>${k("T")} speed</span></div></div>`;
+    else {
+      const res = M.result, w = f.w, ev = res ? res.events : [];
+      const verdict = w === -1 ? "Draw" : `${esc(m.teams[w].name)} win${f.so ? ` on penalties ${f.so[0]}–${f.so[1]}` : res?.overtime ? " with a golden goal" : ""}`;
+      const goals = (t) => ev.filter((e) => e.team === t).map((e) => `<div>${Math.floor(e.clock / 60) + 1}' ${esc(e.scorer_name)}${e.own ? " (OG)" : ""}</div>`).join("");
+      ov.innerHTML = `<div class="mo-card end" style="--c0:#${m.teams[0].kit[0]};--c1:#${m.teams[1].kit[0]}"><div class="mo-k">Full time</div>
+        <div class="mo-final"><span class="mo-crest"></span><span class="mo-name r">${esc(m.teams[0].name)}</span><span class="mo-big">${f.sc[0]} – ${f.sc[1]}</span><span class="mo-name">${esc(m.teams[1].name)}</span><span class="mo-crest"></span></div>
+        <div class="mo-verdict">${verdict}</div>
+        <div class="mo-goals"><div class="r">${goals(0)}</div><div>${goals(1)}</div></div>
+        <div class="mo-btns">${res ? `<button type="button" class="ks-go" data-act="report">Match report ${k("Enter")}</button>${M.p.rematch ? `<button type="button" class="ks-btn2" data-act="restart">Rematch ${k("R")}</button>` : ""}` : '<span class="mo-msg">Final whistle…</span>'}</div></div>`;
+      ov.querySelectorAll(".mo-crest").forEach((el, t) => el.append(Draw.logoCanvas(m.teams[t].logo, 56)));
+    }
+    for (const b of ov.querySelectorAll("[data-act]")) { b.addEventListener("mousedown", (e) => e.preventDefault()); b.onclick = () => act(M, b.dataset.act); }
   }
   function prepareMeta(M, m) {
     M.meta = m;
@@ -791,13 +841,14 @@ const Game = (() => {
     m.byUid = {}; m.players.forEach((pl, i) => { pl.i = i; pl.last = pl.name.split(" ")[1] || ""; m.byUid[pl.uid] = pl; });
   }
 
-  const BASE_W = 1280, BASE_H = 720, HUD_H = 72, CAM_ZOOM = 1.15, CAM_SMOOTH = 0.08, INTRO = 130, INTRO_FROM = 0.86;
+  // the camera uses the whole window (no HUD strip); TOP = below the scorebug, where the small chips and the puzzle line go
+  const BASE_W = 1280, BASE_H = 720, TOP = 64, CAM_ZOOM = 1.15, CAM_SMOOTH = 0.08, INTRO = 130, INTRO_FROM = 0.86;
   let FAMILY = "";
-  const FONT = (px) => { if (!FAMILY) FAMILY = getComputedStyle(document.documentElement).getPropertyValue("--g-font").trim() || "sans-serif"; return `${px}px ${FAMILY}`; };
-  const ACC = [1, 213 / 255, 74 / 255], MUTED = Draw.rgb("8d98ab");
+  const FONT = (px, wt = 400) => { if (!FAMILY) FAMILY = getComputedStyle(document.documentElement).getPropertyValue("--g-font").trim() || "sans-serif"; return `${wt} ${px}px ${FAMILY}`; };
+  const ACC = [1, 213 / 255, 74 / 255];
   // Godot's draw_string: (x, y) = baseline start; align c / r inside [x, x + w]
-  function text(ctx, s, x, y, align, w, px, color, outline = 0, outCol = "rgba(0,0,0,0.9)") {
-    ctx.font = FONT(px); ctx.textBaseline = "alphabetic";
+  function text(ctx, s, x, y, align, w, px, color, outline = 0, outCol = "rgba(0,0,0,0.9)", wt = 400) {
+    ctx.font = FONT(px, wt); ctx.textBaseline = "alphabetic";
     let tx = x;
     if (align === "c") { ctx.textAlign = "center"; tx = x + w / 2; } else if (align === "r") { ctx.textAlign = "right"; tx = x + w; } else ctx.textAlign = "left";
     if (outline) { ctx.lineJoin = "round"; ctx.lineWidth = outline; ctx.strokeStyle = outCol; ctx.strokeText(s, tx, y); }
@@ -853,8 +904,8 @@ const Game = (() => {
     ctx.fillStyle = "#0b0e13"; ctx.fillRect(0, 0, W, H);
     const m = M.meta, fr = M.frames;
     if (!m || !fr.length) {
-      text(ctx, M.error ? "The match could not start: " + M.error : "Starting the match…", 0, H / 2, "c", W, 26, M.error ? "#ef6a5b" : "#8d98ab");
-      if (M.error) text(ctx, "Enter / Esc - back", 0, H / 2 + 34, "c", W, 16, "#8d98ab");
+      if (!M.error) text(ctx, "Starting the match…", 0, H / 2, "c", W, 22, "#8d98ab");
+      syncOverlay(M, null);
       return;
     }
     // positions: interpolated between the two frames around (now - one tick), so the 60 Hz stream looks smooth at any refresh rate
@@ -872,7 +923,7 @@ const Game = (() => {
     const ball = [L(a.b[0], b.b[0]), L(a.b[1], b.b[1])];
     if (!M.cam || intro > 0) M.cam = ball.slice();
     else if (!M.paused) { const s = 1 - Math.pow(1 - CAM_SMOOTH, dt * 60); M.cam[0] += (ball[0] - M.cam[0]) * s; M.cam[1] += (ball[1] - M.cam[1]) * s; }
-    const centre = [W / 2, HUD_H + (H - HUD_H) / 2], half = [W / 2 / zoom, (H - HUD_H) / 2 / zoom], bound = [P.out_x + 8, P.out_y + 4];
+    const centre = [W / 2, H / 2], half = [W / 2 / zoom, H / 2 / zoom], bound = [P.out_x + 8, P.out_y + 4];
     const cam = [half[0] >= bound[0] ? 0 : Math.max(-bound[0] + half[0], Math.min(bound[0] - half[0], M.cam[0])),
       half[1] >= bound[1] ? 0 : Math.max(-bound[1] + half[1], Math.min(bound[1] - half[1], M.cam[1]))];
     ctx.save();
@@ -881,7 +932,9 @@ const Game = (() => {
     drawPlayers(ctx, M, m, a, b, L, f);
     drawNets(ctx, m);
     ctx.restore();
+    if (M.me) drawOffscreen(ctx, M, m, [centre[0] + (M.me.x - cam[0]) * zoom, centre[1] + (M.me.y - cam[1]) * zoom], W, H);
     drawHud(ctx, M, m, f, W, H, intro);
+    syncOverlay(M, f);
   }
   function drawPitch(ctx, m) {
     const P = m.pitch, hw = P.half_w, hh = P.half_h, C = Draw.css;
@@ -920,16 +973,22 @@ const Game = (() => {
     }
   }
   function drawPlayers(ctx, M, m, a, b, L, f) {
+    M.me = null;
     m.players.forEach((pl, i) => {
       if (2 * i + 1 >= b.p.length) return;
       const x = L(a.p[2 * i], b.p[2 * i]), y = L(a.p[2 * i + 1], b.p[2 * i + 1]), r = pl.r, fl = b.h[i] || 0, kit = m.teams[pl.team];
+      if (fl & 1) {                                             // you: a yellow ring under the player
+        M.me = { x, y, pl };
+        ctx.beginPath(); ctx.arc(x, y, r + 6, 0, 2 * Math.PI); ctx.lineWidth = 4; ctx.strokeStyle = "rgba(0,0,0,0.55)"; ctx.stroke();
+        ctx.lineWidth = 2.5; ctx.strokeStyle = "#ffd54a"; ctx.stroke();
+      }
       Draw.kit(ctx, x, y, r, "#" + kit.kit[0], "#" + kit.kit[1], kit.pattern);
       ctx.beginPath(); ctx.arc(x, y, r - 1, 0, 2 * Math.PI); ctx.lineWidth = 2.5; ctx.strokeStyle = fl & 2 && !(fl & 4) ? "#fff" : "#000"; ctx.stroke();
       text(ctx, String(pl.number), x - r, y + 5.5, "c", 2 * r, 14, "#fff", 5);
-      if (fl & 1) {                                             // the human's player: a marker and the surname
-        const tx = x, ty = y - r - 6;
-        ctx.beginPath(); ctx.moveTo(tx, ty); ctx.lineTo(tx - 6, ty - 9); ctx.lineTo(tx + 6, ty - 9); ctx.closePath(); ctx.fillStyle = "#ffd54a"; ctx.fill();
-        text(ctx, pl.last, x - 60, y - r - 14, "c", 120, 13, "#ffd54a", 4, "rgba(0,0,0,0.8)");
+      if (fl & 1) {                                             // ... and a small arrow above it
+        const ty = y - r - 9;
+        ctx.beginPath(); ctx.moveTo(x, ty); ctx.lineTo(x - 7, ty - 10); ctx.lineTo(x + 7, ty - 10); ctx.closePath();
+        ctx.lineWidth = 3; ctx.strokeStyle = "rgba(0,0,0,0.6)"; ctx.stroke(); ctx.fillStyle = "#ffd54a"; ctx.fill();
       }
     });
     if (f.st === 1 && f.gs >= 0 && m.byUid[f.gs]) {             // celebration: pulsing rings and confetti around the scorer
@@ -950,55 +1009,88 @@ const Game = (() => {
     ctx.beginPath(); ctx.arc(bx, by, br, 0, 2 * Math.PI); ctx.fillStyle = "#fff"; ctx.fill();
     ctx.beginPath(); ctx.arc(bx, by, br - 1, 0, 2 * Math.PI); ctx.lineWidth = 2; ctx.strokeStyle = "#000"; ctx.stroke();
   }
+  // you cannot be seen (off screen, on its very edge, or under the scorebug): an arrow on the window edge pointing at you, with your number
+  function drawOffscreen(ctx, M, m, sp, W, H) {
+    const pad = 30, top = TOP + 10, e = 12, b = M.bug;
+    const underBug = b && sp[0] < b.x + b.w + 14 && sp[1] < b.y + b.h + 14;
+    if (sp[0] >= e && sp[0] <= W - e && sp[1] >= e && sp[1] <= H - e && !underBug) return;
+    const cx = W / 2, cy = H / 2, dx = sp[0] - cx, dy = sp[1] - cy;
+    const k = Math.min(Math.abs((W / 2 - pad) / (dx || 1e-6)), Math.abs((H / 2 - pad) / (dy || 1e-6)));
+    const x = cx + dx * k, y = Math.max(top, cy + dy * k), ang = Math.atan2(dy, dx);
+    ctx.save(); ctx.translate(x, y);
+    ctx.beginPath(); ctx.arc(0, 0, 17, 0, 2 * Math.PI); ctx.fillStyle = "rgba(11,14,19,0.85)"; ctx.fill(); ctx.lineWidth = 2.5; ctx.strokeStyle = "#ffd54a"; ctx.stroke();
+    ctx.rotate(ang);
+    ctx.beginPath(); ctx.moveTo(27, 0); ctx.lineTo(18, -8); ctx.lineTo(18, 8); ctx.closePath(); ctx.fillStyle = "#ffd54a"; ctx.fill();
+    ctx.restore();
+    text(ctx, String(M.me.pl.number), x - 17, y + 5.5, "c", 34, 15, "#ffd54a", 0, "", 700);
+  }
+  function roundRect(ctx, x, y, w, h, r, fill) { ctx.beginPath(); ctx.roundRect(x, y, w, h, r); ctx.fillStyle = fill; ctx.fill(); }
+  // the TV scorebug, top left: crest CODE | score | CODE crest | clock
+  function drawScorebug(ctx, M, m, f) {
+    const x0 = 16, y0 = 14, h = 38, pad = 12, crest = 13, bar = 5;
+    ctx.font = FONT(15, 700);
+    const codes = m.teams.map((t) => (t.short || t.name.slice(0, 3)).toUpperCase());
+    const cw = codes.map((c) => ctx.measureText(c).width);
+    ctx.font = FONT(20, 800);
+    const score = `${f.sc[0]} – ${f.sc[1]}`, sw = ctx.measureText(score).width;
+    const clock = f.ot ? "OT " + clockText(f.otl) : clockText(f.tl);
+    ctx.font = FONT(15, 700);
+    const kw = ctx.measureText(clock).width;
+    const segT = (i) => pad + crest * 2 + 8 + cw[i] + pad;
+    const total = segT(0) + bar + sw + 2 * pad + bar + segT(1) + kw + 2 * pad;
+    ctx.save();
+    ctx.shadowColor = "rgba(0,0,0,0.35)"; ctx.shadowBlur = 14; ctx.shadowOffsetY = 4;
+    roundRect(ctx, x0, y0, total, h, 9, "#12161d");
+    ctx.restore();
+    ctx.save(); ctx.beginPath(); ctx.roundRect(x0, y0, total, h, 9); ctx.clip();
+    let x = x0;
+    // home: crest, code, colour bar
+    Draw.logo(ctx, x + pad + crest, y0 + h / 2, crest, m.teams[0].logo);
+    text(ctx, codes[0], x + pad + crest * 2 + 8, y0 + 25, "l", 0, 15, "#fff", 0, "", 700);
+    x += segT(0);
+    ctx.fillStyle = Draw.css(m.kits[0][0]); ctx.fillRect(x, y0, bar, h); x += bar;
+    ctx.fillStyle = "#0b0e13"; ctx.fillRect(x, y0, sw + 2 * pad, h);
+    text(ctx, score, x, y0 + 27, "c", sw + 2 * pad, 20, "#fff", 0, "", 800); x += sw + 2 * pad;
+    ctx.fillStyle = Draw.css(m.kits[1][0]); ctx.fillRect(x, y0, bar, h); x += bar;
+    text(ctx, codes[1], x + pad, y0 + 25, "l", 0, 15, "#fff", 0, "", 700);
+    Draw.logo(ctx, x + pad + cw[1] + 8 + crest, y0 + h / 2, crest, m.teams[1].logo);
+    x += segT(1);
+    ctx.fillStyle = f.ot ? "#ef6a5b" : "#ffd54a"; ctx.fillRect(x, y0, kw + 2 * pad, h);
+    text(ctx, clock, x, y0 + 25, "c", kw + 2 * pad, 15, "#12161d", 0, "", 700);
+    ctx.restore();
+    M.bug = { x: x0, y: y0, w: total, h };
+    // chips under the bug: recording, speed
+    let cxp = x0;
+    const chip = (label, col, dot) => {
+      ctx.font = FONT(12, 700); const w = ctx.measureText(label).width + (dot ? 30 : 20);
+      roundRect(ctx, cxp, y0 + h + 8, w, 22, 11, "rgba(11,14,19,0.75)");
+      if (dot) { ctx.beginPath(); ctx.arc(cxp + 12, y0 + h + 19, 4, 0, 2 * Math.PI); ctx.fillStyle = dot; ctx.fill(); }
+      text(ctx, label, cxp + (dot ? 21 : 10), y0 + h + 23, "l", 0, 12, col, 0, "", 700);
+      cxp += w + 6;
+    };
+    if (m.rec && f.cu >= 0 && f.st !== 2) chip("REC", "#ef6a5b", Math.floor(performance.now() / 700) % 2 ? "#ef6a5b" : "#b8463b");
+    if (M.speed > 1) chip(`×${M.speed}`, "#ffd54a");
+  }
   function drawHud(ctx, M, m, f, W, H, intro) {
-    const cx = W / 2;
-    ctx.fillStyle = "rgba(0,0,0,0.55)"; ctx.fillRect(0, 0, W, HUD_H);
-    for (let t = 0; t < 2; t++) {
-      const tm = m.teams[t], sgn = t === 0 ? -1 : 1;
-      Draw.logo(ctx, cx + sgn * 150, 34, 24, tm.logo);
-      const nx = cx + sgn * 190;
-      if (t === 0) { text(ctx, tm.name, nx - 320, 40, "r", 320, 28, "#fff"); text(ctx, tm.style, nx - 320, 62, "r", 320, 15, Draw.css(MUTED)); }
-      else { text(ctx, tm.name, nx, 40, "l", 320, 28, "#fff"); text(ctx, tm.style, nx, 62, "l", 320, 15, Draw.css(MUTED)); }
-      ctx.fillStyle = Draw.css(m.kits[t][0]); ctx.fillRect(cx + sgn * 118 - 3, 8, 6, 52);
-    }
-    text(ctx, `${f.sc[0]} - ${f.sc[1]}`, cx - 90, 44, "c", 180, 40, "#fff");
-    text(ctx, f.ot ? "OVERTIME  " + clockText(f.otl) : clockText(f.tl), cx - 90, 66, "c", 180, 18, Draw.css(ACC));
-    let msg = "", col2 = "#fff";
-    if (M.error) { msg = "The match could not go on: " + M.error; col2 = "#ef6a5b"; }
-    else if (f.st === 1) drawGoalBanner(ctx, M, f, W, H);
-    else if (f.st === 2 && M.p.session) { /* a puzzle round: drawPuzzleHud shows the outcome */ }
-    else if (f.st === 2) {
-      if (f.w === -1) msg = "FULL TIME - DRAW";
-      else { msg = `FULL TIME - ${m.teams[f.w].name.toUpperCase()} WIN`; col2 = Draw.css(m.kits[f.w][0]); }
-      if (f.so) msg += `  (pens ${f.so[0]}-${f.so[1]})`;
-    } else if (intro > 0 && !M.p.session) drawKickoff(ctx, m, f, W, H, intro);
-    if (msg) {
-      ctx.fillStyle = "rgba(0,0,0,0.55)"; ctx.fillRect(0, H / 2 - 30, W, 70);
-      text(ctx, msg, 0, H / 2 + 18, "c", W, 40, col2);
-      if (f.st === 2 && !M.error) text(ctx, M.result ? "Enter - match report" : "…", 0, H / 2 + 38, "c", W, 16, Draw.css(MUTED));
-      if (M.error) text(ctx, "Enter / Esc - back", 0, H / 2 + 38, "c", W, 16, Draw.css(MUTED));
-    }
+    if (f.st === 1) drawGoalBanner(ctx, M, f, W, H);
+    else if (intro > 0 && !M.p.session && f.st !== 2) drawKickoff(ctx, m, f, W, H, intro);
     drawParticles(ctx, M);
+    drawScorebug(ctx, M, m, f);
     if (M.p.session && !M.error) drawPuzzleHud(ctx, M, f, W, H, intro);
-    if (m.rec && f.cu >= 0 && f.st !== 2) {             // this match is being recorded (game/recorder.py)
-      ctx.beginPath(); ctx.arc(24, 22, 6, 0, 2 * Math.PI); ctx.fillStyle = Math.floor(performance.now() / 700) % 2 ? "#ef6a5b" : "#b8463b"; ctx.fill();
-      text(ctx, "REC", 36, 28, "l", 60, 15, "#ef6a5b");
-    }
-    if (M.speed > 1) text(ctx, `x${M.speed}`, W - 70, HUD_H + 26, "r", 56, 18, Draw.css(ACC));
-    if (M.paused) {
-      ctx.fillStyle = "rgba(0,0,0,0.6)"; ctx.fillRect(0, 0, W, H);
-      text(ctx, "PAUSED", 0, H / 2, "c", W, 56, "#fff");
-      text(ctx, "Esc / P resume    M quit to menu", 0, H / 2 + 34, "c", W, 20, Draw.css(MUTED));
-    }
   }
   function drawKickoff(ctx, m, f, W, H, intro) {
-    const k = 1 - intro / INTRO, a = Math.max(0, Math.min(1, k / 0.2)) * Math.max(0, Math.min(1, (1 - k) / 0.2));
+    const k = 1 - intro / INTRO, a = Math.max(0, Math.min(1, k / 0.15)) * Math.max(0, Math.min(1, (1 - k) / 0.2));
     if (a <= 0) return;
-    const col = Draw.lightened(m.kits[f.kt][0], 0.25), cy = H / 2 - 170, spread = 18 * (1 - a);
-    ctx.fillStyle = Draw.css(col, a);
-    ctx.fillRect(W / 2 - 150 - spread, cy - 36, 300 + spread * 2, 2); ctx.fillRect(W / 2 - 150 - spread, cy + 38, 300 + spread * 2, 2);
-    text(ctx, "KICK OFF", 0, cy + 14, "c", W, 52, `rgba(255,255,255,${a})`, 8, `rgba(0,0,0,${a})`);
-    text(ctx, m.teams[f.kt].name.toUpperCase() + " TO KICK OFF", 0, cy + 62, "c", W, 16, Draw.css(col, a));
+    const col = m.kits[f.kt][0], name = m.teams[f.kt].name, w = 300, h = 74, x = W / 2 - w / 2, y = H / 2 - 230 + (1 - a) * -12;
+    ctx.save(); ctx.globalAlpha = a;
+    ctx.shadowColor = "rgba(0,0,0,0.4)"; ctx.shadowBlur = 20; ctx.shadowOffsetY = 6;
+    roundRect(ctx, x, y, w, h, 12, "rgba(11,14,19,0.88)");
+    ctx.shadowColor = "transparent";
+    ctx.save(); ctx.beginPath(); ctx.roundRect(x, y, w, h, 12); ctx.clip(); ctx.fillStyle = Draw.css(col); ctx.fillRect(x, y, w, 5); ctx.restore();
+    Draw.logo(ctx, x + 38, y + h / 2 + 2, 20, m.teams[f.kt].logo);
+    text(ctx, "KICK OFF", x + 70, y + 38, "l", 0, 26, "#fff", 0, "", 800);
+    text(ctx, name, x + 70, y + 59, "l", 0, 14, Draw.css(Draw.lightened(col, 0.35)), 0, "", 600);
+    ctx.restore();
   }
   const easeOutBack = (t) => { const c1 = 1.9, c3 = c1 + 1; return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2); };
   // "GOAL" in big letters that pop in one by one, an accent band, team + scorer lines underneath
@@ -1007,16 +1099,16 @@ const Game = (() => {
     const age = f.gp - f.gtm, fade = Math.max(0, Math.min(1, f.gtm / 22)), cy = H / 2 + 5, col = g.col;
     let open = Math.max(0, Math.min(1, age / 12)); open = 1 - Math.pow(1 - open, 3);
     const hh = 92 * open;
-    ctx.fillStyle = `rgba(0,0,0,${0.62 * fade})`; ctx.fillRect(0, cy - hh, W, hh * 2);
-    ctx.fillStyle = Draw.css(col, fade); ctx.fillRect(0, cy - hh - 3, W, 3); ctx.fillRect(0, cy + hh, W, 3);
+    ctx.fillStyle = `rgba(11,14,19,${0.72 * fade})`; ctx.fillRect(0, cy - hh, W, hh * 2);
+    ctx.fillStyle = Draw.css(col, fade); ctx.fillRect(0, cy - hh - 5, W, 5); ctx.fillRect(0, cy + hh, W, 5);
     const sw = Math.max(0, Math.min(1, (age - 4) / 40));
     if (sw > 0 && sw < 1) {
       const sx = -200 + (W + 400) * sw;
       ctx.fillStyle = `rgba(255,255,255,${0.16 * fade})`;
       Draw.path(ctx, [[sx - 40, cy - hh], [sx + 20, cy - hh], [sx - 10, cy + hh], [sx - 70, cy + hh]]); ctx.fill();
     }
-    const word = "GOAL", fs = 104, track = 10;
-    ctx.font = FONT(fs);
+    const word = "GOAL", fs = 100, track = 8;
+    ctx.font = FONT(fs, 800);
     const widths = [...word].map((ch) => ctx.measureText(ch).width);
     const total = widths.reduce((s, w) => s + w + track, 0) - track;
     let x = W / 2 - total / 2;
@@ -1027,9 +1119,9 @@ const Game = (() => {
         const sc = easeOutBack(t), drop = (1 - t) * -50, wob = Math.sin(age * 0.12 + i) * 2 * t;
         ctx.save(); ctx.translate(x + widths[i] / 2, baseY - fs * 0.3 + drop + wob); ctx.scale(sc, sc);
         const ox = -widths[i] / 2, oy = fs * 0.3;
-        text(ctx, word[i], ox + 4, oy + 5, "l", 0, fs, `rgba(0,0,0,${0.55 * fade})`);
+        text(ctx, word[i], ox + 4, oy + 5, "l", 0, fs, `rgba(0,0,0,${0.55 * fade})`, 0, "", 800);
         const fill = Draw.mix([1, 1, 1], col, Math.max(0, Math.min(0.45, (age - 30) / 30)));
-        text(ctx, word[i], ox, oy, "l", 0, fs, Draw.css(fill, fade * t), 10, `rgba(0,0,0,${fade * t})`);
+        text(ctx, word[i], ox, oy, "l", 0, fs, Draw.css(fill, fade * t), 10, `rgba(0,0,0,${fade * t})`, 800);
         ctx.restore();
       }
       x += widths[i] + track;
@@ -1038,10 +1130,10 @@ const Game = (() => {
     if (ul > 0) { ctx.fillStyle = Draw.css(col, fade); ctx.fillRect(W / 2 - (total * ul) / 2, cy + 12, total * ul, 4); }
     const ta = Math.max(0, Math.min(1, (age - 28) / 12));
     if (ta > 0) {
-      text(ctx, g.name, 0, cy + 44 + (1 - ta) * 18, "c", W, 26, Draw.css(Draw.lightened(col, 0.25), ta * fade));
+      text(ctx, g.name, 0, cy + 44 + (1 - ta) * 18, "c", W, 24, Draw.css(Draw.lightened(col, 0.25), ta * fade), 0, "", 700);
       if (g.scorer) {
         const sa = Math.max(0, Math.min(1, (age - 36) / 12));
-        text(ctx, g.scorer + (g.own ? "  (own goal)" : ""), 0, cy + 74 + (1 - sa) * 18, "c", W, 20, `rgba(255,255,255,${sa * fade})`);
+        text(ctx, g.scorer + (g.own ? "  (own goal)" : ""), 0, cy + 74 + (1 - sa) * 18, "c", W, 19, `rgba(255,255,255,${sa * fade})`, 0, "", 600);
       }
     }
   }
