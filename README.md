@@ -46,15 +46,15 @@ There are no difficulty levels. A bot is exactly as good as its player's attribu
   ranking, `exp/ladder_ratings.jsonl`) and one sentence on **how the team plays**, measured, not designed: `game/profiles.py` plays
   every team 16 scouting matches and stores the statistics in `data/team_profiles.json`; `game/api.py` `describe` turns what sets a
   team apart from its league (with the ball; without it; how it scores) into the sentence. Re-run `python3 game/profiles.py` after
-  adding teams or nets. Formations use each team's default. The bar underneath: players per side, minutes, control (one player /
+  adding teams or nets (on the Pi too: nets that only exist in `out_5v5/ckpt/` are profiled there; until then they show "Play style not measured yet"). Formations use each team's default. The bar underneath: players per side, minutes, control (one player /
   whole team / watch), which player, recording; More: the pitch. With one player, "Play as"
   picks which one (auto = the forward, or the first goalkeeper / defender / midfielder / forward of the lineup; a picked keeper does
   not take kickoffs).
 - **Dataset** ("Record my play", on by default, remembered in the browser): every match you play is saved as a training file for
   imitation learning (`data/human/`, see "Recording your play" below). A red REC mark shows in the corner while it records.
 - Two leagues: the **Rule Based League** (16 fictional teams driven by the handmade AI styles) and the **Reinforcement Learning League** (the RL Teams, plus every net of the Elo ranking as its own team: the best checkpoint of each finished run, jit8, t48_u100, ...; they play with RL Team 5's squad, as in the ranking, with generated names, colours and crests). Each side picks a league (a list, so more leagues fit), then a team from it; teams are ordered by Elo.
-- Teams browser: teams grouped by league, with logos, kits, rosters, play styles and a tier (Elite / Strong / Average / Weak).
-- Tournament: pick a league or **All leagues** (a mixed tournament of every team), then league, knockout, or groups + knockout among its teams (saved in the browser, so it continues where you left it). Knockout and groups need 4, 8 or 16 teams; other counts play a round robin. Knockout draws: golden goal, then penalties.
+- Teams and squads: one league at a time (the league list at the top, or Left / Right), strongest first; the picked team in its colours with its Elo, how it plays and its squad. Enter starts a quick match with it.
+- Tournament: pick your team (Left / Right, R random), a league or **All leagues** (a mixed tournament of every team), then league, knockout, or groups + knockout among its teams (saved in the browser, so it continues where you left it). Knockout and groups need 4, 8 or 16 teams; other counts play a round robin. Knockout draws: golden goal, then penalties.
 - Report after each match: score, scorers, team stats, player grades (3.0-10.0), man of the match.
 
 ## Architecture
