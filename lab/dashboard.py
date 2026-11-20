@@ -1,6 +1,8 @@
 """The Lab part of the web app (web/app.py serves it): the experiment pipeline's JSON API. The pages are web/lab.js.
 Open http://<pi-address>:8080/#/ from another computer; the Lab pages poll the API below every 10 s.
-  /api/overview       Pi state, the running experiment (progress, ETA), queue, every run with its latest evaluation, Pi health
+  /api/overview       Pi state, the running experiment (progress, ETA), queue, every run with its latest evaluation, its Elo (lab/ladder.py)
+                      and what it changes against its control; the imitation trainings (out_il/); Pi health. Runs listed in
+                      exp/hidden_runs.json carry "hidden" (the reason): the Runs table leaves them out unless "Show hidden" is ticked
   /api/run/<name>     one run: spec and settings, training curve, PPO health, reward terms, every evaluation, heatmaps
   /api/health         Pi health log (throttling, temperature, load, memory) of the last hours
   /api/live           server-sent events: the match the Pi's viewer is showing (relayed from UDP 127.0.0.1:7310, sent by lab/live.py)
@@ -64,16 +66,140 @@ def heatmaps(path):
     return out
 
 
+_elo_cache = {"t": 0, "rows": {}}
+
+
+def elo_table(ttl=60):
+    """The Elo ladder's ratings by entry id (lab/ladder.py fit()), recomputed at most once a minute: it hashes every model file.
+    A run's best net whose weights are not on this machine (out_5v5/ckpt/ stays on the Pi; models/ holds only the copied ones) is
+    still rated from its stored ladder matches, with the file version of its newest match ("stored": True)."""
+    if time.time() - _elo_cache["t"] > ttl:
+        try:
+            import ladder
+            ros, res = ladder.roster(), ladder.results()
+            have = {e["id"] for e in ros}
+            newest = {}
+            for m in res:
+                if m.get("protocol") == ladder.PROTOCOL:
+                    for side in "ab":
+                        newest[m[side]] = m[side + "_sha"]
+            extra = [{"id": k, "name": k[4:], "league": "rl", "kind": "net", "sha": sha, "stored": True} for k, sha in newest.items()
+                     if k not in have and k.startswith("net:x_") and k.endswith("_best") and os.path.isdir(os.path.join(EXP, "runs", k[6:-5]))]
+            ros = ros + extra
+            rat = ladder.fit(ros, res)
+            rows = sorted(({**e, **rat[e["id"]], "placed": rat[e["id"]]["games"] >= ladder.PLACEMENT} for e in ros), key=lambda r: -r["elo"])
+            for i, r in enumerate(rows):
+                r["rank"] = i + 1
+            _elo_cache["rows"] = {r["id"]: r for r in rows}
+        except Exception:                              # no numpy, unreadable files: the Runs page simply shows no Elo
+            _elo_cache["rows"] = {}
+        _elo_cache["t"] = time.time()
+    return _elo_cache["rows"]
+
+
+def elo_of(name, rows, st=None):
+    """The ladder entry of a run: its best checkpoint (net:x_<run>_best), the net it imports (start:<stem>, old_<tag>), its team."""
+    if name.startswith("team:"):
+        ids = [k for k, r in rows.items() if r["kind"] == "team" and r["name"] == name[5:]]
+    elif name.startswith("start:"):
+        ids = ["net:" + name[6:]]
+    else:
+        ids = ["net:" + lab.tag_of(name, st) + "_best", "net:" + name]
+    r = next((rows[i] for i in ids if i in rows), None)
+    return {k: r.get(k) for k in ("id", "elo", "se", "lo", "hi", "rank", "games", "placed", "w", "d", "l", "gf", "ga", "stored")} if r else None
+
+
+OPERATIONAL = ("ckpt_every", "fast_every", "learn_threads", "envs_per_worker")   # how fast it trains, not what it learns
+
+
+def settings(st, spec):
+    """What a run trains with, flattened: {"start": ..., "<reward>": v, "<option>": v} (effective values: defaults included)."""
+    rew, args = st.get("effective_rewards"), st.get("effective_args")
+    if rew is None or args is None:                    # queued: as it would start now
+        rew, args = tracker.effective(spec)
+    rew = {**tracker.minimal_for(lab_time(st.get("started"))), **rew}   # older status files lack rewards added later
+    args = {**tracker.DEFAULTS, **args}
+    out = {"start": ("start", spec.get("start"))}
+    out.update({k: ("reward", v) for k, v in rew.items()})
+    out.update({k: ("option", v) for k, v in args.items() if k not in OPERATIONAL})
+    return out
+
+
+def changes(st, spec):
+    """What a run tests: [{k, v, was, kind}] against its control's settings, or against the defaults when it has no control.
+    vs = the control's name, or None (then the run is judged against the net it starts from)."""
+    mine = settings(st, spec)
+    ctrl = spec.get("control")
+    cst = tracker.run_status(ctrl) if ctrl else {}
+    if ctrl and cst.get("spec"):
+        ref = settings(cst, cst["spec"])
+        skip = ()
+    else:
+        ctrl = None
+        mn = tracker.minimal_for(lab_time(st.get("started")))
+        ref = {**{k: ("reward", v) for k, v in mn.items()}, **{k: ("option", v) for k, v in tracker.DEFAULTS.items()}}
+        skip = ("start",)                              # the start net is the reference itself
+    out = []
+    for k, (kind, v) in mine.items():
+        if k in skip or k == "updates":                # updates: the Update column
+            continue
+        was = ref.get(k, (kind, None))[1]
+        if v != was and not (v in (0, None) and was in (0, None)):
+            out.append({"k": k, "v": v, "was": was, "kind": kind})
+    for k, (kind, was) in ref.items():                 # options the control set and this run leaves at the default
+        if k not in mine and k not in skip and kind == "option" and k not in tracker.DEFAULTS:
+            out.append({"k": k, "v": None, "was": was, "kind": kind})
+    return out, ctrl
+
+
+def lab_time(started):
+    """A status time (epoch seconds, or ISO text in older files) as epoch seconds."""
+    return started if isinstance(started, (int, float)) else (time.mktime(time.strptime(started[:19], "%Y-%m-%dT%H:%M:%S")) if started else None)
+
+
+def imitation_runs(elo):
+    """The imitation trainings on the recorded play (il/train.py -> out_il/<name>.metrics.json), as rows of the Runs table."""
+    out = []
+    for f in sorted(glob.glob(os.path.join(ROOT, "out_il", "*.metrics.json"))):
+        m = rj(f, {})
+        meta, pooled = m.get("meta") or {}, m.get("pooled") or {}
+        name = meta.get("name") or os.path.basename(f)[:-13]
+        model = "linear" if meta.get("model") == "linear" else "mlp %s" % meta.get("hidden", "")
+        notes = "behaviour cloning on %d recorded matches (%s decisions)" % (len(meta.get("matches") or []), "{:,}".format(meta.get("rows") or 0))
+        if pooled.get("move_acc") is not None:
+            notes += " · held-out move accuracy %.0f%% (most common move %.0f%%)" % (100 * pooled["move_acc"], 100 * pooled.get("baseline_most_common_move", 0))
+        ch = [{"k": "model", "v": model.strip(), "kind": "option"}, {"k": "lag", "v": meta.get("lag"), "kind": "option"}]
+        if meta.get("hide_self_vel"):
+            ch.append({"k": "hide_self_vel", "v": True, "kind": "option"})
+        if meta.get("mirror") is False:
+            ch.append({"k": "mirror", "v": False, "kind": "option"})
+        out.append({"name": name, "type": "imitation", "state": "done", "notes": notes, "changes": ch, "vs": None, "start": None,
+                    "update": meta.get("epochs"), "update_unit": "epochs", "finished": meta.get("trained"), "il": pooled or None,
+                    "elo": elo_of(name, elo), "latest_full": None, "verdict": None})
+    return out
+
+
 def overview():
-    """Everything the Now page needs, in one request (polled every 10 s)."""
+    """Everything the Now and Runs pages need, in one request (polled every 10 s)."""
     status = lab.cmd_status(None)
     runs = lab.cmd_runs(ns(state=None))
+    elo = elo_table()
+    hidden = (rj(os.path.join(EXP, "hidden_runs.json"), {}) or {}).get("runs", {})   # hidden in the Runs table, never deleted
     for r in runs:
-        tr = lab.training(lab.tag_of(r["name"]))
-        r["spark"] = [[x["upd"], x["rules"]] for x in lab.thin(tr, 60) if x["rules"] is not None]
+        st = tracker.run_status(r["name"])
+        if r["name"] in hidden:
+            r["hidden"] = hidden[r["name"]]
+        r["type"] = "rl"                               # RL Team 4 / 5 (the reference teams) were trained with RL too
+        r["elo"] = elo_of(r["name"], elo, st)
+        if st.get("spec"):
+            r["changes"], r["vs"] = changes(st, st["spec"])
+    queue = lab.cmd_queue(ns(action="list"))
+    for q in queue["queued"]:
+        spec = next((rj(f) for f in lab.queue_files() if os.path.basename(f) == q["file"]), None) or {}
+        q["changes"], q["vs"] = changes({}, spec)
     since = time.strftime("%Y-%m-%dT%H:%M:%S", time.localtime(time.time() - 86400))
     hl = lab.health(3)
-    return {"status": status, "runs": runs, "queue": lab.cmd_queue(ns(action="list")), "events": lab.cmd_events(ns(since=since))[-40:][::-1],
+    return {"status": status, "runs": runs, "imitation": imitation_runs(elo), "queue": queue, "events": lab.cmd_events(ns(since=since))[-40:][::-1],
             "health": lab.thin(hl, 120), "now": int(time.time())}
 
 

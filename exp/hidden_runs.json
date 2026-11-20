@@ -1,0 +1,15 @@
+{
+ "about": "Runs the dashboard's Runs table hides by default ('Show hidden' brings them back). Nothing is deleted: exp/runs/, the results and lab.py keep every run. Decided by the user 2026-11-20.",
+ "runs": {
+  "control_seed11": "cancelled after 2 updates",
+  "kickstart_persist_long": "cancelled before the first update",
+  "control_long": "cancelled after 50 updates",
+  "minimal": "diverged at u242, no usable checkpoint (evidence for the teacher anchor)",
+  "wall": "diverged at u194, no usable checkpoint",
+  "strong_opponents": "diverged at u194, no usable checkpoint",
+  "anchor_corner": "cancelled at u234, redone as anchor_corner2",
+  "start:x_kickstart_u600": "intermediate start checkpoint, no Elo",
+  "start:x_kickstart_persist_u400": "intermediate start checkpoint, no Elo",
+  "start:x_wide_kickstart_u600": "intermediate start checkpoint, no Elo"
+ }
+}
