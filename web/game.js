@@ -709,9 +709,8 @@ const Game = (() => {
     G.keyHandler = (e, down) => { if (!down || e.repeat) return; if (e.key === "Enter") { e.preventDefault(); again(); } else if (e.key === "Escape") { G.pz = null; go("#/game"); } };
   }
   function drawPuzzleHud(ctx, M, f, W, H, intro) {
-    const pz = M.p.session, R = pz.rounds, n = R.length + 1, pts = R.reduce((s, r) => s + r.pts, 0);
-    const left = Math.max(0, pz.total - pzPlayed(pz) - (60 - f.tl));
-    text(ctx, `PUZZLE  ·  ROUND ${n}  ·  ${pts} PTS  ·  ${clockText(left)} LEFT`, 18, TOP + 40, "l", 600, 16, Draw.css(ACC), 4, "rgba(0,0,0,0.9)", 700);
+    const n = M.p.session.rounds.length + 1;
+    drawPuzzleCard(ctx, M, f, W);
     if (intro > 0) {
       const a = Math.min(1, intro / 20);
       ctx.fillStyle = `rgba(0,0,0,${0.45 * a})`; ctx.fillRect(0, H / 2 - 190, W, 96);
@@ -724,6 +723,45 @@ const Game = (() => {
       ctx.fillStyle = "rgba(0,0,0,0.6)"; ctx.fillRect(0, H - 120, W, 64);
       text(ctx, msg, 0, H - 76, "c", W, 34, col);
     }
+  }
+
+  // the puzzle card, top right, in the scorebug's style: round, points, session time left (bar), one dot per round played
+  function drawPuzzleCard(ctx, M, f, W) {
+    const pz = M.p.session, R = pz.rounds, n = R.length + 1, pts = R.reduce((s, r) => s + r.pts, 0);
+    const left = Math.max(0, pz.total - pzPlayed(pz) - (60 - f.tl)), used = Math.min(1, 1 - left / pz.total);
+    const w = 248, pad = 14, h = 112, x0 = W - 16 - w, y0 = 14, xr = x0 + w - pad, MUTED = "#8d98ab";
+    ctx.save();
+    ctx.shadowColor = "rgba(0,0,0,0.35)"; ctx.shadowBlur = 14; ctx.shadowOffsetY = 4;
+    roundRect(ctx, x0, y0, w, h, 9, "#12161d");
+    ctx.restore();
+    ctx.save(); ctx.beginPath(); ctx.roundRect(x0, y0, w, h, 9); ctx.clip();
+    ctx.fillStyle = "#ffd54a"; ctx.fillRect(x0, y0, w, 4);
+    ctx.restore();
+    // row 1: PUZZLE | ROUND n
+    ctx.letterSpacing = "1.5px";
+    text(ctx, "PUZZLE", x0 + pad, y0 + 26, "l", 0, 11, MUTED, 0, "", 700);
+    ctx.letterSpacing = "0px";
+    text(ctx, `ROUND ${n}`, x0 + pad, y0 + 26, "r", w - 2 * pad, 13, "#fff", 0, "", 700);
+    // row 2: points (big, accent) | time left
+    const by = y0 + 66;
+    text(ctx, String(pts), x0 + pad, by, "l", 0, 36, "#ffd54a", 0, "", 800);
+    const pw = ctx.measureText(String(pts)).width;
+    text(ctx, pts === 1 ? "PT" : "PTS", x0 + pad + pw + 6, by, "l", 0, 13, MUTED, 0, "", 700);
+    const low = left < 30;
+    text(ctx, "LEFT", x0 + pad, by, "r", w - 2 * pad, 11, MUTED, 0, "", 700);
+    const lw = ctx.measureText("LEFT").width;
+    text(ctx, clockText(left), x0 + pad, by, "r", w - 2 * pad - lw - 6, 22, low ? "#ef6a5b" : "#fff", 0, "", 800);
+    // row 3: session progress
+    const bw = w - 2 * pad, bar = 5;
+    roundRect(ctx, x0 + pad, y0 + 78, bw, bar, bar / 2, "rgba(255,255,255,0.08)");
+    if (used > 0) roundRect(ctx, x0 + pad, y0 + 78, Math.max(bar, bw * used), bar, bar / 2, low ? "#ef6a5b" : "#ffd54a");
+    // row 4: one dot per round (green = you scored, grey = no goal, red = they scored), the current one hollow; the newest that fit
+    const step = 13, r = 4.5, fit = Math.floor((bw + step - 2 * r) / step), shown = R.slice(-(fit - 1)), cy = y0 + 98;
+    const col = { W: "#46c98d", D: "#5b6577", L: "#ef6a5b" };
+    shown.forEach((rd, i) => { ctx.beginPath(); ctx.arc(x0 + pad + r + i * step, cy, r, 0, 2 * Math.PI); ctx.fillStyle = col[rd.outcome]; ctx.fill(); });
+    const pulse = 0.55 + 0.45 * Math.abs(Math.sin(performance.now() / 400));
+    ctx.beginPath(); ctx.arc(x0 + pad + r + shown.length * step, cy, r - 0.75, 0, 2 * Math.PI); ctx.lineWidth = 1.5; ctx.strokeStyle = Draw.css(ACC, pulse); ctx.stroke();
+    M.pzCard = { x: x0, y: y0, w, h };
   }
 
   // ---------- the live match ----------
@@ -841,7 +879,7 @@ const Game = (() => {
     m.byUid = {}; m.players.forEach((pl, i) => { pl.i = i; pl.last = pl.name.split(" ")[1] || ""; m.byUid[pl.uid] = pl; });
   }
 
-  // the camera uses the whole window (no HUD strip); TOP = below the scorebug, where the small chips and the puzzle line go
+  // the camera uses the whole window (no HUD strip); TOP = just below the scorebug (the off-screen marker stays under it)
   const BASE_W = 1280, BASE_H = 720, TOP = 64, CAM_ZOOM = 1.15, CAM_SMOOTH = 0.08, INTRO = 130, INTRO_FROM = 0.86;
   let FAMILY = "";
   const FONT = (px, wt = 400) => { if (!FAMILY) FAMILY = getComputedStyle(document.documentElement).getPropertyValue("--g-font").trim() || "sans-serif"; return `${wt} ${px}px ${FAMILY}`; };
@@ -977,19 +1015,13 @@ const Game = (() => {
     m.players.forEach((pl, i) => {
       if (2 * i + 1 >= b.p.length) return;
       const x = L(a.p[2 * i], b.p[2 * i]), y = L(a.p[2 * i + 1], b.p[2 * i + 1]), r = pl.r, fl = b.h[i] || 0, kit = m.teams[pl.team];
-      if (fl & 1) {                                             // you: a yellow ring under the player
+      if (fl & 1) {                                             // you: a translucent yellow ring around the player (off screen: drawOffscreen)
         M.me = { x, y, pl };
-        ctx.beginPath(); ctx.arc(x, y, r + 6, 0, 2 * Math.PI); ctx.lineWidth = 4; ctx.strokeStyle = "rgba(0,0,0,0.55)"; ctx.stroke();
-        ctx.lineWidth = 2.5; ctx.strokeStyle = "#ffd54a"; ctx.stroke();
+        ctx.beginPath(); ctx.arc(x, y, r + 6, 0, 2 * Math.PI); ctx.lineWidth = 3; ctx.strokeStyle = "rgba(255,213,74,0.5)"; ctx.stroke();
       }
       Draw.kit(ctx, x, y, r, "#" + kit.kit[0], "#" + kit.kit[1], kit.pattern);
       ctx.beginPath(); ctx.arc(x, y, r - 1, 0, 2 * Math.PI); ctx.lineWidth = 2.5; ctx.strokeStyle = fl & 2 && !(fl & 4) ? "#fff" : "#000"; ctx.stroke();
       text(ctx, String(pl.number), x - r, y + 5.5, "c", 2 * r, 14, "#fff", 5);
-      if (fl & 1) {                                             // ... and a small arrow above it
-        const ty = y - r - 9;
-        ctx.beginPath(); ctx.moveTo(x, ty); ctx.lineTo(x - 7, ty - 10); ctx.lineTo(x + 7, ty - 10); ctx.closePath();
-        ctx.lineWidth = 3; ctx.strokeStyle = "rgba(0,0,0,0.6)"; ctx.stroke(); ctx.fillStyle = "#ffd54a"; ctx.fill();
-      }
     });
     if (f.st === 1 && f.gs >= 0 && m.byUid[f.gs]) {             // celebration: pulsing rings and confetti around the scorer
       const sc = m.byUid[f.gs], i = sc.i, x = L(a.p[2 * i], b.p[2 * i]), y = L(a.p[2 * i + 1], b.p[2 * i + 1]);
@@ -1011,12 +1043,12 @@ const Game = (() => {
   }
   // you cannot be seen (off screen, on its very edge, or under the scorebug): an arrow on the window edge pointing at you, with your number
   function drawOffscreen(ctx, M, m, sp, W, H) {
-    const pad = 30, top = TOP + 10, e = 12, b = M.bug;
-    const underBug = b && sp[0] < b.x + b.w + 14 && sp[1] < b.y + b.h + 14;
-    if (sp[0] >= e && sp[0] <= W - e && sp[1] >= e && sp[1] <= H - e && !underBug) return;
+    const pad = 30, top = TOP + 10, e = 12, b = M.bug, c = M.pzCard;
+    const under = (q) => q && sp[0] > q.x - 14 && sp[0] < q.x + q.w + 14 && sp[1] < q.y + q.h + 14;
+    if (sp[0] >= e && sp[0] <= W - e && sp[1] >= e && sp[1] <= H - e && !under(b) && !under(c)) return;
     const cx = W / 2, cy = H / 2, dx = sp[0] - cx, dy = sp[1] - cy;
     const k = Math.min(Math.abs((W / 2 - pad) / (dx || 1e-6)), Math.abs((H / 2 - pad) / (dy || 1e-6)));
-    const x = cx + dx * k, y = Math.max(top, cy + dy * k), ang = Math.atan2(dy, dx);
+    const x = cx + dx * k, y = Math.max(c && x > c.x - 30 ? c.y + c.h + 27 : top, cy + dy * k), ang = Math.atan2(dy, dx);
     ctx.save(); ctx.translate(x, y);
     ctx.beginPath(); ctx.arc(0, 0, 17, 0, 2 * Math.PI); ctx.fillStyle = "rgba(11,14,19,0.85)"; ctx.fill(); ctx.lineWidth = 2.5; ctx.strokeStyle = "#ffd54a"; ctx.stroke();
     ctx.rotate(ang);
@@ -1059,13 +1091,14 @@ const Game = (() => {
     text(ctx, clock, x, y0 + 25, "c", kw + 2 * pad, 15, "#12161d", 0, "", 700);
     ctx.restore();
     M.bug = { x: x0, y: y0, w: total, h };
-    // chips under the bug: recording, speed
-    let cxp = x0;
+    // chips to the right of the bug: recording, speed
+    let cxp = x0 + total + 8;
+    const cyc = y0 + h / 2;
     const chip = (label, col, dot) => {
       ctx.font = FONT(12, 700); const w = ctx.measureText(label).width + (dot ? 30 : 20);
-      roundRect(ctx, cxp, y0 + h + 8, w, 22, 11, "rgba(11,14,19,0.75)");
-      if (dot) { ctx.beginPath(); ctx.arc(cxp + 12, y0 + h + 19, 4, 0, 2 * Math.PI); ctx.fillStyle = dot; ctx.fill(); }
-      text(ctx, label, cxp + (dot ? 21 : 10), y0 + h + 23, "l", 0, 12, col, 0, "", 700);
+      roundRect(ctx, cxp, cyc - 11, w, 22, 11, "rgba(11,14,19,0.75)");
+      if (dot) { ctx.beginPath(); ctx.arc(cxp + 12, cyc, 4, 0, 2 * Math.PI); ctx.fillStyle = dot; ctx.fill(); }
+      text(ctx, label, cxp + (dot ? 21 : 10), cyc + 4, "l", 0, 12, col, 0, "", 700);
       cxp += w + 6;
     };
     if (m.rec && f.cu >= 0 && f.st !== 2) chip("REC", "#ef6a5b", Math.floor(performance.now() / 700) % 2 ? "#ef6a5b" : "#b8463b");
