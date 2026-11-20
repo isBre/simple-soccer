@@ -1,0 +1,118 @@
+{
+  "id": "opus_high",
+  "name": "Opus 5.5 High",
+  "short": "OPS",
+  "colors": {
+    "primary": "d97757",
+    "secondary": "1f1e1d"
+  },
+  "kit": "band",
+  "logo": {
+    "shape": "hex",
+    "pattern": "halves",
+    "symbol": "star",
+    "c1": "d97757",
+    "c2": "1f1e1d",
+    "c3": "f5f0e8"
+  },
+  "style": "opus_high",
+  "league": "rules",
+  "rl_eval": false,
+  "formations": {
+    "5": "1-2-1-1"
+  },
+  "players": [
+    {
+      "id": "opus_high_0",
+      "name": "Elio Varga",
+      "number": 1,
+      "pos": "GK",
+      "attrs": {
+        "finishing": 65,
+        "passing": 79,
+        "defending": 83,
+        "positioning": 89,
+        "reaction": 96
+      }
+    },
+    {
+      "id": "opus_high_1",
+      "name": "Nils Ardent",
+      "number": 4,
+      "pos": "DEF",
+      "attrs": {
+        "finishing": 82,
+        "passing": 91,
+        "defending": 96,
+        "positioning": 88,
+        "reaction": 82
+      }
+    },
+    {
+      "id": "opus_high_2",
+      "name": "Teo Marlow",
+      "number": 5,
+      "pos": "DEF",
+      "attrs": {
+        "finishing": 80,
+        "passing": 70,
+        "defending": 96,
+        "positioning": 93,
+        "reaction": 79
+      }
+    },
+    {
+      "id": "opus_high_3",
+      "name": "Iker Sollen",
+      "number": 8,
+      "pos": "MID",
+      "attrs": {
+        "finishing": 83,
+        "passing": 95,
+        "defending": 86,
+        "positioning": 88,
+        "reaction": 89
+      }
+    },
+    {
+      "id": "opus_high_4",
+      "name": "Ravi Okafor",
+      "number": 10,
+      "pos": "MID",
+      "attrs": {
+        "finishing": 85,
+        "passing": 96,
+        "defending": 78,
+        "positioning": 85,
+        "reaction": 86
+      }
+    },
+    {
+      "id": "opus_high_5",
+      "name": "Luca Brandt",
+      "number": 9,
+      "pos": "FWD",
+      "attrs": {
+        "finishing": 91,
+        "passing": 84,
+        "defending": 72,
+        "positioning": 87,
+        "reaction": 88
+      }
+    },
+    {
+      "id": "opus_high_6",
+      "name": "Mika Strand",
+      "number": 11,
+      "pos": "FWD",
+      "attrs": {
+        "finishing": 82,
+        "passing": 84,
+        "defending": 81,
+        "positioning": 89,
+        "reaction": 92
+      }
+    }
+  ],
+  "version": 2
+}

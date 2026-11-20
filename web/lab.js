@@ -511,7 +511,59 @@ function resolveDoc(href, base) {          // a relative link of a document -> a
   const dir = base.includes("/") ? base.slice(0, base.lastIndexOf("/") + 1) : "";
   return (dir + href).split("/").reduce((a, p) => { if (p === "..") a.pop(); else if (p && p !== ".") a.push(p); return a; }, []).join("/");
 }
+// ---------- maths in the docs: a small TeX subset ($inline$, $$display$$) rendered to HTML, no external library ----------
+// Only for documents with a display formula (a line starting with $$), so a stray $ elsewhere is never touched.
+let mdMath = false;
+const TEX_SYM = { alpha: "α", beta: "β", gamma: "γ", delta: "δ", epsilon: "ε", theta: "θ", lambda: "λ", mu: "μ", pi: "π", sigma: "σ",
+  tau: "τ", phi: "φ", Sigma: "Σ", sum: "Σ", le: "≤", leq: "≤", ge: "≥", geq: "≥", cdot: "·", times: "×", sim: "∼", in: "∈",
+  propto: "∝", leftarrow: "←", rightarrow: "→", to: "→", infty: "∞", approx: "≈", ne: "≠", pm: "±", top: "⊤", ldots: "…",
+  lfloor: "⌊", rfloor: "⌋", ln: "ln", log: "log", exp: "exp", min: "min", max: "max", cos: "cos", sin: "sin",
+  quad: "\u2003", qquad: "\u2003\u2003", ",": "\u2009", ";": "\u2005", " ": " ", "!": "", "{": "{", "}": "}", "|": "‖", "%": "%" };
+function tex(s) {
+  let i = 0;
+  const skip = () => { while (s[i] === " ") i++; };
+  const raw = () => {                       // the argument as plain text (\text, \mathrm)
+    skip();
+    if (s[i] !== "{") return esc(s[i++] || "");
+    let d = 0, j = i;
+    for (; j < s.length; j++) { if (s[j] === "{") d++; else if (s[j] === "}" && --d === 0) break; }
+    const t = s.slice(i + 1, j); i = j + 1; return esc(t);
+  };
+  const arg = () => { skip(); if (s[i] === "{") { i++; return parse(true); } if (s[i] === "\\") return cmd(); return atom(s[i++] || ""); };
+  const atom = (c) => (/[a-zA-Z]/.test(c) ? `<i>${c}</i>` : esc(c));
+  function cmd() {
+    i++;
+    let name;
+    if (/[a-zA-Z]/.test(s[i])) { let j = i; while (j < s.length && /[a-zA-Z]/.test(s[j])) j++; name = s.slice(i, j); i = j; } else name = s[i++];
+    switch (name) {
+      case "frac": case "tfrac": case "dfrac": { const a = arg(), b = arg(); return `<span class="tx-frac"><span>${a}</span><span>${b}</span></span>`; }
+      case "sqrt": return `√<span class="tx-sqrt">${arg()}</span>`;
+      case "mathbf": case "boldsymbol": return `<b class="tx-bf">${arg().replace(/<\/?i>/g, "")}</b>`;
+      case "mathrm": case "text": case "operatorname": return `<span class="tx-rm">${raw()}</span>`;
+      case "mathcal": return `<span class="tx-cal">${raw()}</span>`;
+      case "overline": case "bar": return `<span class="tx-over">${arg()}</span>`;
+      case "left": case "right": case "big": case "Big": case "bigg": case "Bigg": return "";
+      default: return TEX_SYM[name] !== undefined ? TEX_SYM[name] : esc("\\" + name);
+    }
+  }
+  function parse(inGroup) {
+    let out = "";
+    while (i < s.length) {
+      const c = s[i];
+      if (c === "}") { i++; if (inGroup) return out; continue; }
+      if (c === "{") { i++; out += parse(true); continue; }
+      if (c === "^") { i++; out += `<sup>${arg()}</sup>`; continue; }
+      if (c === "_") { i++; out += `<sub>${arg()}</sub>`; continue; }
+      if (c === "\\") { out += cmd(); continue; }
+      out += atom(c); i++;
+    }
+    return out;
+  }
+  return parse(false);
+}
 function mdInline(t, base) {
+  const maths = [];
+  if (mdMath) t = t.replace(/\$([^$]+?)\$/g, (_, m) => { maths.push(m); return "\u0000" + (maths.length - 1) + "\u0000"; });
   t = esc(t);
   t = t.replace(/`([^`]+)`/g, (_, c) => `<code>${c}</code>`);
   t = t.replace(/\*\*([^*]+)\*\*/g, "<b>$1</b>").replace(/(^|[\s(])\*([^*\s][^*]*)\*(?=[\s).,;:]|$)/g, "$1<i>$2</i>");
@@ -524,10 +576,12 @@ function mdInline(t, base) {
     const d = (docs.list || []).find((x) => x.path === norm);
     return d ? `<a href="#/docs/${esc(d.id)}">${label}</a>` : label;
   });
+  if (maths.length) t = t.replace(/\u0000(\d+)\u0000/g, (_, k) => `<span class="tx">${tex(maths[+k])}</span>`);
   return t;
 }
 function md(src, base) {
   src = src.replace(/<img\s[^>]*?src="([^"]+)"[^>]*?alt="([^"]*)"[^>]*>/g, "![$2]($1)").replace(/<\/?p[^>]*>/g, "");   // the few HTML tags of the READMEs
+  mdMath = /^\s*\$\$/m.test(src);
   const lines = src.replace(/\r/g, "").split("\n"), out = [];
   let i = 0, para = [];
   const flush = () => { if (para.length) { out.push(`<p>${mdInline(para.join(" "), base)}</p>`); para = []; } };
@@ -535,6 +589,8 @@ function md(src, base) {
   while (i < lines.length) {
     const l = lines[i];
     if (/^```/.test(l)) { flush(); const buf = []; i++; while (i < lines.length && !/^```/.test(lines[i])) buf.push(lines[i++]); i++; out.push(`<pre>${esc(buf.join("\n"))}</pre>`); continue; }
+    const dm = mdMath && /^\s*\$\$(.+)\$\$\s*$/.exec(l);
+    if (dm) { flush(); out.push(`<div class="tx tx-display">${tex(dm[1])}</div>`); i++; continue; }
     const h = /^(#{1,4})\s+(.*)$/.exec(l);
     if (h) { flush(); const n = h[1].length; out.push(`<h${n} id="${esc(h[2].toLowerCase().replace(/[^a-z0-9]+/g, "-"))}">${mdInline(h[2], base)}</h${n}>`); i++; continue; }
     if (/^\s*---+\s*$/.test(l)) { flush(); out.push("<hr>"); i++; continue; }
@@ -666,7 +722,20 @@ function viewDataset(id) {
   const sit = d.situations.map((s) => `<tr><td>${esc(s.label)}</td><td class="r">${secs(s.rows)}</td><td>${s.rows ? compass(s.moves, css("--c3"), 64, false) : '<span class="muted">none</span>'}</td><td class="r">${s.rows ? f(s.toward_pct, 0) + "%" : "–"}</td><td class="r">${s.rows ? f(s.idle_pct, 0) + "%" : "–"}</td></tr>`).join("");
   const situations = `<section class="card flush"><div class="card-h pad"><h2>What you do, by situation</h2><span class="muted small">"possession" = your team has the player nearest the ball</span></div><div class="tbl-wrap"><table class="mini"><thead><tr><th>Situation</th><th class="r">time</th><th>moves (→ goal)</th><th class="r">towards ball</th><th class="r">standing</th></tr></thead><tbody>${sit}</tbody></table></div></section>`;
   const oc = { W: "pos", L: "neg", D: "", left: "muted" };
-  const rows = d.matches.slice().reverse().map((m) => m.error ? `<tr><td colspan="9" class="neg">${esc(m.id)}: ${esc(m.error)}</td></tr>` :
+  // puzzle rounds (game: Puzzle) are grouped by session: one row per session, its rounds in a fold-out
+  const groups = [];
+  for (const m of d.matches) {
+    const g = m.puzzle && m.session ? groups.find((x) => x.session === m.session) : null;
+    if (g) g.rounds.push(m); else groups.push(m.puzzle && m.session ? { session: m.session, rounds: [m], started: m.started } : m);
+  }
+  const roundLine = (m) => `<a href="#/dataset/${encodeURIComponent(m.id)}">${m.round || "?"}: ${esc(m.team.name)} ${m.gf}–${m.ga} ${esc(m.opponent.name)}</a>`;
+  const sessionRow = (g) => { const R = g.rounds, cnt = (o) => R.filter((r) => r.outcome === o).length, mins = R.reduce((s, r) => s + r.minutes, 0), pts = 3 * cnt("W") + cnt("D");
+    return `<tr><td class="nowrap">${esc(new Date(g.started).toLocaleString([], { dateStyle: "short", timeStyle: "short" }))}</td><td><b>Puzzle</b> <span class="muted">${R.length} rounds, random teams</span>
+      <details><summary class="small muted">rounds</summary><div class="small" style="display:grid;gap:2px">${R.map(roundLine).join("")}</div></details></td>
+      <td class="r"><b>${pts} pts</b> <span class="small">${cnt("W")}W ${cnt("D")}D ${cnt("L")}L</span></td><td>${esc(R[0].control)} <span class="muted small">${esc([...new Set(R.flatMap((r) => Object.keys(r.roles)))].join(" "))}</span></td>
+      <td class="r">${f(mins, 1)}</td><td class="r">${f(R.reduce((s, r) => s + r.dir_changes_s * r.minutes, 0) / mins, 1)}</td><td class="r">${f(R.reduce((s, r) => s + r.kick_presses_min * r.minutes, 0) / mins, 1)}</td>
+      <td class="r">${f(R.reduce((s, r) => s + r.on_ball_pct * r.minutes, 0) / mins, 0)}%</td><td></td></tr>`; };
+  const rows = groups.slice().reverse().map((m) => m.rounds ? sessionRow(m) : m.error ? `<tr><td colspan="9" class="neg">${esc(m.id)}: ${esc(m.error)}</td></tr>` :
     `<tr><td class="nowrap">${esc(new Date(m.started).toLocaleString([], { dateStyle: "short", timeStyle: "short" }))}</td><td>${esc(m.team.name)} <span class="muted">vs</span> ${esc(m.opponent.name)} <span class="muted small">${esc(m.opponent.league)}</span></td>
      <td class="r"><b class="${oc[m.outcome]}">${m.gf}–${m.ga}${m.shootout?.length ? ` (p ${m.shootout.join("–")})` : ""}</b> <span class="small ${oc[m.outcome]}">${m.outcome === "left" ? "left early" : m.outcome}</span></td>
      <td>${esc(m.control)}${m.picked ? ` · ${esc(m.picked)}` : ""} <span class="muted small">${esc(Object.keys(m.roles).join(" "))}</span></td><td class="r">${f(m.minutes, 1)}</td><td class="r">${f(m.dir_changes_s, 1)}</td><td class="r">${f(m.kick_presses_min, 1)}</td><td class="r">${f(m.on_ball_pct, 0)}%</td><td><a href="#/dataset/${encodeURIComponent(m.id)}">replay ▶</a></td></tr>`).join("");
@@ -885,15 +954,11 @@ function liveDraw(ts) {
   ctx.fillStyle = "#" + P.outer; ctx.fillRect(-P.out_x, -P.out_y, 2 * P.out_x, 2 * P.out_y);
   const n = Math.max(P.stripes, 1), sw = (2 * hw) / n;
   for (let i = 0; i < n; i++) { ctx.fillStyle = P.stripes > 0 && i % 2 === 0 ? shade("#" + P.pitch, -0.07) : "#" + P.pitch; ctx.fillRect(-hw + i * sw, -hh, sw + 0.5, 2 * hh); }
-  for (let t = 0; t < 2; t++) {
+  for (let t = 0; t < 2; t++) {                               // goal floor and goal line; the net goes on top after the ball
     const sx = t === 0 ? -1 : 1, x0 = sx * hw, x1 = sx * (hw + P.net_depth), col = "#" + m.teams[t].primary;
     ctx.fillStyle = shade("#" + P.pitch, -0.2); ctx.fillRect(Math.min(x0, x1), -P.goal_half, P.net_depth, 2 * P.goal_half);
-    ctx.strokeStyle = col; ctx.globalAlpha = 0.45; ctx.lineWidth = 1; ctx.beginPath();
-    for (let gg = 0; gg <= P.net_depth; gg += 10) { ctx.moveTo(x0 + sx * gg, -P.goal_half); ctx.lineTo(x0 + sx * gg, P.goal_half); }
-    for (let gg = -P.goal_half; gg <= P.goal_half; gg += 10) { ctx.moveTo(x0, gg); ctx.lineTo(x1, gg); }
-    ctx.stroke(); ctx.globalAlpha = 1;
-    ctx.lineWidth = 6; ctx.strokeStyle = "rgba(0,0,0,.7)"; ctx.strokeRect(Math.min(x0, x1), -P.goal_half, P.net_depth, 2 * P.goal_half);
-    ctx.lineWidth = 3; ctx.strokeStyle = col; ctx.strokeRect(Math.min(x0, x1), -P.goal_half, P.net_depth, 2 * P.goal_half);
+    ctx.beginPath(); ctx.moveTo(x0, -P.goal_half); ctx.lineTo(x0, P.goal_half);
+    ctx.lineWidth = 6; ctx.strokeStyle = "rgba(0,0,0,.7)"; ctx.stroke(); ctx.lineWidth = 3; ctx.strokeStyle = col; ctx.stroke();
   }
   ctx.strokeStyle = "#" + P.line; ctx.lineWidth = 3;
   ctx.strokeRect(-hw, -hh, 2 * hw, 2 * hh);
@@ -901,7 +966,6 @@ function liveDraw(ts) {
   ctx.beginPath(); ctx.arc(0, 0, P.center_r, 0, 2 * Math.PI); ctx.stroke();
   ctx.fillStyle = "#" + P.line; ctx.beginPath(); ctx.arc(0, 0, 4, 0, 2 * Math.PI); ctx.fill();
   if (P.box_depth > 0) { ctx.lineWidth = 2.5; ctx.strokeRect(-hw, -P.box_half, P.box_depth, 2 * P.box_half); ctx.strokeRect(hw - P.box_depth, -P.box_half, P.box_depth, 2 * P.box_half); }
-  for (const px of [-hw, hw]) for (const py of [-P.goal_half, P.goal_half]) disc(ctx, px, py, P.post_r, "#f2f2f2", "#000", 2);
   live.trail.push(ball); if (live.trail.length > 14) live.trail.shift();
   for (let i = 0; i < live.trail.length - 1; i++) { ctx.globalAlpha = (i / live.trail.length) * 0.35; disc(ctx, live.trail[i][0], live.trail[i][1], m.ball_r * (0.4 + 0.5 * i / live.trail.length), "#fff"); }
   ctx.globalAlpha = 1;
@@ -923,6 +987,16 @@ function liveDraw(ts) {
     ctx.strokeText(txt, x, ty); ctx.fillStyle = "#fff"; ctx.fillText(txt, x, ty);
   });
   disc(ctx, ball[0], ball[1], m.ball_r, "#fff", "#000", 2);
+  for (let t = 0; t < 2; t++) {                               // nets over the ball and players
+    const sx = t === 0 ? -1 : 1, x0 = sx * hw, x1 = sx * (hw + P.net_depth), col = "#" + m.teams[t].primary, gh = P.goal_half;
+    ctx.strokeStyle = col; ctx.globalAlpha = 0.45; ctx.lineWidth = 1; ctx.beginPath();
+    for (let gg = 0; gg <= P.net_depth; gg += 10) { ctx.moveTo(x0 + sx * gg, -gh); ctx.lineTo(x0 + sx * gg, gh); }
+    for (let gg = -gh; gg <= gh; gg += 10) { ctx.moveTo(x0, gg); ctx.lineTo(x1, gg); }
+    ctx.stroke(); ctx.globalAlpha = 1;
+    ctx.beginPath(); ctx.moveTo(x0, -gh); ctx.lineTo(x1, -gh); ctx.lineTo(x1, gh); ctx.lineTo(x0, gh); ctx.lineJoin = "miter";
+    ctx.lineWidth = 6; ctx.strokeStyle = "rgba(0,0,0,.7)"; ctx.stroke(); ctx.lineWidth = 3; ctx.strokeStyle = col; ctx.stroke();
+  }
+  for (const px of [-hw, hw]) for (const py of [-P.goal_half, P.goal_half]) disc(ctx, px, py, P.post_r, "#f2f2f2", "#000", 2);
   const sb = $("#lv-sb");
   if (sb) {
     const runName = m.tag && m.tag.startsWith("x_") ? m.tag.slice(2) : m.tag;

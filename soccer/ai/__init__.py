@@ -4,6 +4,7 @@ import random
 
 from ..vec import clamp, lerpf, roundi
 from . import nets
+from .opus import OpusBot, OpusBrain
 from .rules import StyleBot, TeamBrain
 
 
@@ -35,7 +36,7 @@ class MatchAI:
         self.warnings = []
         self.kinds = []
         self.resets = m.reset_count
-        m.brains = [TeamBrain(t, m.styles[t]) for t in (0, 1)]
+        m.brains = [(OpusBrain if m.styles[t].brain == "opus" else TeamBrain)(t, m.styles[t]) for t in (0, 1)]
         for p in m.players:
             attach_attributes(p)
         for t in (0, 1):
@@ -52,7 +53,8 @@ class MatchAI:
                     self.warnings.append("team %d: cannot load net %s (%s); rule-based instead" % (t, spec, e))
                     net = None
             for p in m.team_lists[t]:
-                p.bot_ai = nets.NetBot(net, m.cfg.net_temperature) if net is not None else StyleBot(m.styles[t])
+                rule_bot = OpusBot if m.styles[t].brain == "opus" else StyleBot
+                p.bot_ai = nets.NetBot(net, m.cfg.net_temperature) if net is not None else rule_bot(m.styles[t])
             self.kinds.append({"kind": "net", "n_in": net.n_in} if net is not None else {"kind": "rules"})
 
     def decide(self, m, update):

@@ -243,6 +243,13 @@ body.g-playing .bar { display: none; }
 .gn-form .ks-lg-btn { background: var(--g-panel2); }
 .gn-form .ks-lg-menu { left: 0; transform: none; }
 .gn-foot { margin-top: auto; padding-top: 12px; display: flex; align-items: center; gap: 16px; justify-content: space-between; border-top: 1px solid var(--g-line); }
+/* puzzle */
+.pz .gp-card { min-height: 0; }
+.pz-intro { margin: 0; font-size: 16px; line-height: 1.5; color: color-mix(in srgb, var(--g-text) 85%, transparent); }
+.pz-pts { display: flex; gap: 10px; flex-wrap: wrap; }
+.pz-pts > div { flex: 1; min-width: 140px; background: var(--g-panel2); border-radius: 10px; padding: 12px 14px; font-size: 13.5px; color: var(--g-muted); display: flex; flex-direction: column; gap: 2px; }
+.pz-pts b { font-size: 28px; color: var(--g-accent); line-height: 1.1; }
+.gn-form .ks-rec { align-self: flex-start; }
 /* tournament hub */
 .gh-head { padding: 18px 24px; gap: 20px; }
 .gh-crest { flex: none; }
