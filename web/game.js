@@ -52,7 +52,7 @@ const Game = (() => {
   const btn = (label, attrs = "", cls = "") => `<button class="g-btn ${cls}" ${attrs}>${label}</button>`;
   const card = (body, title = "", cls = "", style = "") => `<div class="g-card ${cls}" style="${style}">${title ? `<h2>${esc(title)}</h2>` : ""}${body}</div>`;
   const header = (title, sub) => `<div><h1 class="g-h1">${esc(title)}</h1>${sub ? `<p class="g-sub">${esc(sub)}</p>` : ""}</div>`;
-  const rating = (t, numPx, starPx) => `<div class="g-rating"><b style="font-size:${numPx}px">${Math.round(t.strength)}</b>${Draw.stars(t.stars, starPx)}</div>`;
+  const rating = (t, numPx) => `<div class="g-rating"><span class="g-caption">Elo</span><b style="font-size:${numPx}px">${t.elo ?? "–"}</b></div>`;
   function select(items, sel, onChange, disabled = new Set()) {
     const s = document.createElement("select");
     s.className = "g-select";
@@ -98,7 +98,7 @@ const Game = (() => {
     try { await catalog(); }
     catch (e) { mount(`<div class="g-page">${header("Simple Soccer")}<p class="g-error">The game server is not available: ${esc(e.message)}</p></div>`); return; }
     const [a, b] = parts;
-    if (a === "quick") return quick();
+    if (a === "quick") return teamSelect();
     if (a === "teams") return teams(b ? decodeURIComponent(b) : "");
     if (a === "tournament" && b === "new") return tourNew();
     if (a === "tournament") return tourHub();
@@ -115,100 +115,191 @@ const Game = (() => {
   });
   document.addEventListener("keyup", (e) => { if (document.body.dataset.area === "game" && G.keyHandler) G.keyHandler(e, false); });
 
-  // ---------- main menu ----------
+  // ---------- main menu: Quick match (the team select), the tournament, the teams. Up / Down move, Enter opens.
   function menu() {
     const save = loadT();
-    const v = mount(`<div class="g-menu"><div class="in"><div class="title">SIMPLE SOCCER</div><div class="sub">Haxball-style football vs AI</div>
-      ${save ? btn("Continue Tournament", 'data-go="#/game/tournament"', "primary") + btn("Quick Match", 'data-go="#/game/quick"') : btn("Quick Match", 'data-go="#/game/quick"', "primary")}
-      ${btn("New Tournament", 'data-go="#/game/tournament/new"')}${btn("Teams &amp; Squads", 'data-go="#/game/teams"')}
-      <div class="note">Add pitches, teams and play styles by dropping JSON files in data/</div></div></div>`);
-    for (const b of v.querySelectorAll("[data-go]")) b.addEventListener("click", () => go(b.dataset.go));
-    v.querySelector(".g-btn")?.focus();
+    const items = [["Quick match", "#/game/quick", "Pick two teams and play"]]
+      .concat(save ? [["Continue tournament", "#/game/tournament", save.title || ""]] : [])
+      .concat([["New tournament", "#/game/tournament/new", "One league or all of them"], ["Teams and squads", "#/game/teams", `${G.cat.teams.length} teams in ${G.cat.leagues.length} leagues`]]);
+    const v = mount(`<div class="gm"><div class="gm-in"><div class="gm-title">Simple Soccer</div><div class="gm-sub">Football against handmade and trained AI teams</div>
+      <nav class="gm-list">${items.map(([label, href, sub], k) => `<a class="gm-item${k ? "" : " primary"}" href="${href}"><b>${esc(label)}</b><span>${esc(sub)}</span></a>`).join("")}</nav></div></div>`);
+    const links = [...v.querySelectorAll(".gm-item")];
+    links[0].focus({ preventScroll: true });
+    G.keyHandler = (e, down) => {
+      if (!down || (e.key !== "ArrowDown" && e.key !== "ArrowUp")) return;
+      e.preventDefault();
+      const k = Math.max(0, links.indexOf(document.activeElement));
+      links[(k + (e.key === "ArrowDown" ? 1 : -1) + links.length) % links.length].focus();
+    };
   }
 
-  // ---------- quick match ----------
-  function quick() {
-    const C = G.cat, P = C.pitches;
-    let pitchIdx = Math.max(0, P.findIndex((p) => p.id === "arena"));
-    const st = { league: [0, 0], team: [0, 1], side: [[], []] };
-    const v = mount(`<div class="g-page">${header("Quick Match", "Pick a pitch, a league and a team for each side, and how you want to play.")}
-      <div class="g-row"><div class="g-card" style="width:300px;flex:none"><h2>Match</h2><div class="g-col" id="q-left" style="gap:8px"></div></div>
-        <div class="g-row g-grow" style="gap:16px" id="q-teams"></div></div>
-      <div class="g-buttons">${btn("Back", 'id="q-back" style="width:140px"', "ghost big")}<span class="g-spacer"></span>${btn("Random teams&nbsp;&nbsp;(R)", 'id="q-rand" style="width:220px"', "big")}${btn("Kick Off", 'id="q-go" style="width:260px"', "primary big")}</div></div>`);
-    const left = $("#q-left", v);
-    const pitchSel = select(P.map((p) => p.name), pitchIdx, (i) => { pitchIdx = i; onPitch(); });
-    const info = document.createElement("div"); info.className = "g-caption";
-    const sizeSel = select(["1v1", "2v2", "3v3", "4v4", "5v5"], 2, () => refreshForm());
-    const modeSel = select(["Play (one player)", "Play (whole team, Q to switch)", "Watch (AI vs AI)"], 0, () => hf.sync());
-    const hf = humanFields(() => CONTROLS[modeSel.selectedIndex]);
-    const durSel = select(["1 minute", "2 minutes", "3 minutes", "5 minutes"], 2, () => {});
-    left.append(field("Pitch", pitchSel), info, field("Team size", sizeSel), field("Control", modeSel), field("Your player", hf.player),
-      field("Dataset", hf.rec), field("Duration", durSel));
-    const ui = [0, 1].map((i) => {
-      const c = document.createElement("div");
-      c.className = "g-card g-team-card";
-      c.innerHTML = `<h2>${i === 0 ? "Home team" : "Away team"}</h2><span class="lg"></span>`;
-      const lg = picker(C.leagues.map((l) => l.name), 0, () => { st.league[i] = lg.selected; fill(i, 0); refresh(i); });
-      const tm = picker([], 0, () => { st.team[i] = tm.selected; refresh(i); }, true);
-      const style = document.createElement("div"); style.className = "style";
-      const rat = document.createElement("div");
-      const fo = picker(["-"], 0, null);
-      c.append(field("League", lg.el), field("Team", tm.el), style, rat, field("Formation", fo.el));
-      $("#q-teams", v).append(c);
-      return { c, lg, tm, style, rat, fo };
-    });
-    const size = () => sizeSel.selectedIndex + 1;
-    const team = (i) => st.side[i][ui[i].tm.selected];
-    function fill(i, pick) {
-      st.side[i] = leagueTeams(C.leagues[ui[i].lg.selected].id);
-      ui[i].tm.set(st.side[i].map((t) => t.name), pick);
+  // ---------- team select: the quick match screen (kit split). Each half is one side: its league, its team (crest, Elo, how it plays);
+  // the bar underneath holds the match settings. Keys: Tab / click picks the side, Left / Right its team, Up / Down its league,
+  // R random teams, Enter kick off, Esc back to the menu. Every choice is remembered in this browser (prefs).
+  const SIZES = [1, 2, 3, 4, 5], MINUTES = [1, 2, 3, 5];
+  function seg(name, items, sel, onPick, hint = "") {
+    const el = document.createElement("div");
+    el.className = "ks-seg";
+    el.innerHTML = `<span class="ks-seg-l">${esc(name)}</span><span class="ks-seg-b" role="radiogroup" aria-label="${esc(name)}">${items.map((x, i) =>
+      `<button type="button" role="radio" data-i="${i}"${hint ? ` title="${esc(hint)}"` : ""}>${esc(x)}</button>`).join("")}</span>`;
+    const set = (i) => { sel = i; for (const b of el.querySelectorAll("button")) { const on = Number(b.dataset.i) === i; b.classList.toggle("on", on); b.setAttribute("aria-checked", on); } };
+    for (const b of el.querySelectorAll("button")) {
+      b.addEventListener("mousedown", (e) => e.preventDefault());        // a click does not keep the focus: Enter still kicks off
+      b.addEventListener("click", () => { set(Number(b.dataset.i)); onPick(sel); });
     }
-    function refreshForm() {
-      for (const i of [0, 1]) {
-        const opts = C.formations[String(size())] || [], t = team(i);
-        ui[i].fo.set(opts.length ? opts : ["-"], Math.max(0, opts.indexOf(t?.formation_for[String(size())])));
-      }
+    set(sel);
+    return { el, set, get: () => sel };
+  }
+  function teamSelect() {
+    const C = G.cat, P = C.pitches, L = C.leagues;
+    const byLeague = L.map((l) => leagueTeams(l.id));
+    const save = loadT();
+    const first = (i) => { const id = prefs.sides?.[i]; const t = id && G.byId[id]; return t ? t : (byLeague[0][i] || C.teams[i]); };
+    const st = { side: 0, team: [first(0), first(1)] };
+    let pitchIdx = Math.max(0, P.findIndex((p) => p.id === (prefs.pitch || "arena")));
+    const v = mount(`<div class="ks">
+      <div class="ks-top"><nav class="ks-links"><a href="#/game">‹ Menu</a><a id="ks-teams" href="#/game/teams">Teams and squads</a></nav>
+        <div class="ks-keys" id="ks-keys"></div></div>
+      <div class="ks-split">${[0, 1].map((i) => `<section class="ks-side" data-side="${i}" tabindex="0" aria-label="${i ? "Away" : "Home"} team">
+          <div class="ks-mark" aria-hidden="true"></div><div class="ks-role"><span class="ks-who"></span><span>${i ? "Away" : "Home"}</span></div>
+          <div class="ks-league"><button type="button" class="ks-lg-btn" aria-haspopup="listbox" aria-expanded="false" title="League (↑ ↓)"><span></span><svg width="10" height="6" viewBox="0 0 10 6" aria-hidden="true"><polyline points="1,1 5,5 9,1" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+            <div class="ks-lg-menu" role="listbox" aria-label="League" hidden>${L.map((l, k) => `<button type="button" role="option" data-lg="${k}"><span>${esc(l.name)}</span><small>${l.count}</small></button>`).join("")}</div></div>
+          <div class="ks-pick"><button type="button" class="ks-chev" data-d="-1" aria-label="Previous team" tabindex="-1">${CHEV(-1)}</button><span class="ks-reel"></span><button type="button" class="ks-chev" data-d="1" aria-label="Next team" tabindex="-1">${CHEV(1)}</button></div>
+          <div class="ks-name"></div><div class="ks-elo"></div><p class="ks-plays"></p></section>`).join('<div class="ks-vs"><div class="ks-vs-badge" aria-hidden="true"></div><button type="button" class="ks-swap" title="Swap the teams (S)" aria-label="Swap the teams">⇄</button></div>')}</div>
+      <div class="ks-more" id="ks-more" hidden></div>
+      <div class="ks-bar" id="ks-bar"><div class="ks-opts"></div><button type="button" class="ks-more-btn" id="ks-more-btn" aria-expanded="false">More</button><button type="button" class="ks-go" id="ks-go">Kick off</button></div></div>`);
+    const sides = [...v.querySelectorAll(".ks-side")];
+    const leagueOf = (t) => Math.max(0, L.findIndex((l) => l.id === t.league));
+    // the crest carousel: the team in the middle, its neighbours in the league smaller and fainter (click one to jump to it)
+    const REEL = [[-1, 88, 0.45], [0, 200, 1], [1, 88, 0.45]];
+    function reel(i, d) {
+      const list = byLeague[leagueOf(st.team[i])], k = list.indexOf(st.team[i]), n = list.length, reach = Math.floor((n - 1) / 2);
+      const box = $(".ks-reel", sides[i]);
+      box.replaceChildren(...REEL.map(([off, px, op]) => {
+        const slot = document.createElement("span");
+        slot.className = "ks-slot" + (off ? "" : " mid");
+        slot.style.width = slot.style.height = px + "px";
+        const reachOk = off === 0 || (off < 0 ? -off <= reach : off <= n - 1 - reach);
+        if (reachOk && n > 1 || off === 0) {
+          const t = list[(k + off + n) % n];
+          slot.append(Draw.logoCanvas(t.logo, px));
+          slot.style.opacity = op;
+          if (off) { slot.title = t.name; slot.addEventListener("click", (e) => { e.stopPropagation(); step(i, off); }); }
+        }
+        return slot;
+      }));
+      if (d) { box.classList.remove("slide-l", "slide-r"); void box.offsetWidth; box.classList.add(d > 0 ? "slide-l" : "slide-r"); }
     }
-    function refresh(i) {
-      const t = team(i); if (!t) return;
-      const slot = $(".lg", ui[i].c); slot.replaceChildren(Draw.logoCanvas(t.logo, 60)); slot.style.alignSelf = "center";
-      ui[i].style.textContent = t.style_label;
-      ui[i].rat.innerHTML = rating(t, 30, 22);
-      refreshForm();
+    function paint(i, d = 0) {
+      const t = st.team[i], el = sides[i];
+      el.style.setProperty("--kc", "#" + t.colors[0]);
+      reel(i, d);
+      $(".ks-mark", el).replaceChildren(Draw.logoCanvas(t.logo, 620));
+      $(".ks-split", v).style.setProperty("--c" + i, "#" + t.colors[0]);
+      $(".ks-name", el).textContent = t.name;
+      $(".ks-elo", el).textContent = t.elo != null ? `Elo ${t.elo}` : "Elo not rated yet";
+      $(".ks-plays", el).textContent = t.plays || "";
+      $(".ks-lg-btn span", el).textContent = L[leagueOf(t)].name;
+      for (const b of el.querySelectorAll("[data-lg]")) { const on = Number(b.dataset.lg) === leagueOf(t); b.classList.toggle("on", on); b.setAttribute("aria-selected", on); }
+      if (i === st.side) $("#ks-teams", v).href = "#/game/teams/" + encodeURIComponent(t.id);
+      prefs.sides = st.team.map((x) => x.id); savePrefs();
     }
-    function onPitch() {
-      const p = P[pitchIdx];
-      sizeSel.selectedIndex = Math.max(1, Math.min(5, p.recommended)) - 1;
-      info.textContent = `${Math.round(p.half_w * 2)} x ${Math.round(p.half_h * 2)}  -  goal ${Math.round(p.goal_half * 2)} wide`;
-      refreshForm();
+    function focusSide(i) {
+      st.side = i;
+      sides.forEach((el, k) => el.classList.toggle("on", k === i));
+      $("#ks-teams", v).href = "#/game/teams/" + encodeURIComponent(st.team[i].id);
     }
+    function step(i, d) {
+      const list = byLeague[leagueOf(st.team[i])], k = list.indexOf(st.team[i]);
+      st.team[i] = list[(k + d + list.length) % list.length]; paint(i, d);
+    }
+    function league(i, k) {
+      k = (k + L.length) % L.length;
+      if (k === leagueOf(st.team[i]) || !byLeague[k].length) return;
+      st.team[i] = byLeague[k][0]; paint(i);
+    }
+    function swap() { st.team.reverse(); paint(0); paint(1); }   // you always play the home side: swap to play the other team
     function randomize() {
       const all = C.teams; if (all.length < 2) return;
       const a = Math.floor(Math.random() * all.length); let b = Math.floor(Math.random() * (all.length - 1)); if (b >= a) b += 1;
-      [a, b].forEach((k, i) => {
-        const t = all[k];
-        ui[i].lg.select(Math.max(0, C.leagues.findIndex((l) => l.id === t.league)));
-        fill(i, 0); ui[i].tm.select(st.side[i].indexOf(t)); refresh(i);
+      st.team = [all[a], all[b]]; paint(0); paint(1);
+    }
+    sides.forEach((el, i) => {
+      el.addEventListener("mousedown", () => focusSide(i));
+      el.addEventListener("focus", () => focusSide(i));
+      for (const b of el.querySelectorAll(".ks-chev")) b.addEventListener("click", () => step(i, Number(b.dataset.d)));
+      // the league: its name; a click opens the list of every league (more can be added in data/), Up / Down cycles through them
+      const lgBtn = $(".ks-lg-btn", el), menu = $(".ks-lg-menu", el);
+      lgBtn.addEventListener("mousedown", (e) => e.preventDefault());
+      lgBtn.addEventListener("click", (e) => { e.stopPropagation(); const open = menu.hidden; closeMenus(); if (open) { menu.hidden = false; lgBtn.setAttribute("aria-expanded", "true"); } });
+      for (const b of menu.querySelectorAll("[data-lg]")) {
+        b.addEventListener("mousedown", (e) => e.preventDefault());
+        b.addEventListener("click", (e) => { e.stopPropagation(); closeMenus(); league(i, Number(b.dataset.lg)); });
+      }
+    });
+    function closeMenus() {
+      for (const m of v.querySelectorAll(".ks-lg-menu")) m.hidden = true;
+      for (const b of v.querySelectorAll(".ks-lg-btn")) b.setAttribute("aria-expanded", "false");
+    }
+    v.addEventListener("click", closeMenus);
+    // the bar: players, minutes, control (+ which player, recording); More: the pitch
+    const opts = $(".ks-opts", v);
+    const pref = (k, d, n) => (Number.isInteger(prefs[k]) && prefs[k] >= 0 && prefs[k] < n ? prefs[k] : d);
+    const size = seg("Players", SIZES.map((n) => `${n}v${n}`), pref("size", Math.max(1, Math.min(5, P[pitchIdx].recommended)) - 1, 5), (i) => { prefs.size = i; savePrefs(); });
+    const mins = seg("Minutes", MINUTES.map(String), pref("minutes", 2, MINUTES.length), (i) => { prefs.minutes = i; savePrefs(); });
+    const ctl = seg("Control", ["One player", "Whole team", "Watch"], pref("control", 0, 3), (i) => { prefs.control = i; savePrefs(); sync(); });
+    const as = seg("Play as", ["Auto", "GK", "DEF", "MID", "FWD"], pref("player", 0, 5), (i) => { prefs.player = i; savePrefs(); }, "Auto = the forward");
+    const rec = { el: document.createElement("button") };                // one toggle: record my play for the dataset (imitation learning)
+    rec.el.type = "button"; rec.el.className = "ks-rec"; rec.el.title = "Save my play to the dataset (imitation learning)";
+    const recPaint = () => { rec.el.classList.toggle("on", !!prefs.record); rec.el.setAttribute("aria-pressed", String(!!prefs.record)); rec.el.innerHTML = `<i></i>Record ${prefs.record ? "on" : "off"}`; };
+    rec.el.addEventListener("mousedown", (e) => e.preventDefault());
+    rec.el.onclick = () => { prefs.record = !prefs.record; savePrefs(); recPaint(); };
+    recPaint();
+    opts.append(size.el, mins.el, ctl.el, as.el, rec.el);
+    const pitch = seg("Pitch", P.map((p) => p.name), pitchIdx, (i) => {
+      pitchIdx = i; prefs.pitch = P[i].id; savePrefs();
+      const n = Math.max(1, Math.min(5, P[i].recommended)) - 1; size.set(n); prefs.size = n; savePrefs(); pitchInfo();
+    });
+    const info = document.createElement("span"); info.className = "ks-info";
+    const pitchInfo = () => { const p = P[pitchIdx]; info.textContent = `${Math.round(p.half_w * 2)} x ${Math.round(p.half_h * 2)}, goal ${Math.round(p.goal_half * 2)} wide`; };
+    $("#ks-more", v).append(pitch.el, info); pitchInfo();
+    const moreBtn = $("#ks-more-btn", v);
+    moreBtn.addEventListener("mousedown", (e) => e.preventDefault());
+    moreBtn.onclick = () => { const m = $("#ks-more", v); m.hidden = !m.hidden; moreBtn.setAttribute("aria-expanded", String(!m.hidden)); moreBtn.classList.toggle("on", !m.hidden); };
+    function sync() {
+      const c = CONTROLS[ctl.get()];
+      as.el.hidden = c !== "single"; rec.el.hidden = c === "none";
+      sides.forEach((el, k) => {                                        // who plays which side: you are always the home team
+        const you = c !== "none" && k === 0, who = $(".ks-who", el);
+        who.textContent = you ? "You" : "AI"; who.classList.toggle("you", you);
       });
+      $("#ks-keys", v).innerHTML = [["Tab", "side"], ["← →", "team"], ["↑ ↓", "league"], ["S", "swap"], ["R", "random"], ["Enter", "kick off"], ["Esc", "menu"]].concat(c === "team" ? [["Q", "switch player in the match"]] : [])
+        .map(([k, d]) => `<span><kbd>${k}</kbd> ${d}</span>`).join("");
     }
     function start() {
-      const fs = [0, 1].map((i) => ui[i].fo.items[ui[i].fo.selected]).map((f) => (f && f !== "-" ? f : ""));
-      const setup = { home: team(0).id, away: team(1).id, pitch: P[pitchIdx].id, size: size(), duration: DURATIONS[durSel.selectedIndex],
-        seed: Math.floor(Math.random() * 2147483647), control: CONTROLS[modeSel.selectedIndex], human_team: 0, allow_draw: true, formations: fs,
-        ...hf.setup() };
-      play({ setup, done: (res) => showReport(res, "#/game"), quit: () => go("#/game") });
+      const control = CONTROLS[ctl.get()];
+      const setup = { home: st.team[0].id, away: st.team[1].id, pitch: P[pitchIdx].id, size: SIZES[size.get()], duration: MINUTES[mins.get()] * 60,
+        seed: Math.floor(Math.random() * 2147483647), control, human_team: 0, allow_draw: true, formations: ["", ""],
+        player: control === "single" ? PLAYERS[as.get()] : "", record: control !== "none" && prefs.record };
+      play({ setup, done: (res) => showReport(res, "#/game/quick"), quit: () => go("#/game/quick") });
     }
-    for (const i of [0, 1]) fill(i, i);           // both sides start in the first league, on different teams
-    onPitch(); refresh(0); refresh(1);
-    $("#q-back", v).onclick = () => go("#/game");
-    $("#q-rand", v).onclick = randomize;
-    $("#q-go", v).onclick = start;
-    ui[0].lg.el.focus();
+    $("#ks-go", v).onclick = start;
+    $(".ks-swap", v).addEventListener("mousedown", (e) => e.preventDefault());
+    $(".ks-swap", v).onclick = swap;
+    paint(0); paint(1); sync(); focusSide(0); sides[0].focus({ preventScroll: true });
     G.keyHandler = (e, down) => {
-      if (!down || e.repeat) return;
-      if (e.key === "Escape") go("#/game");
-      else if (e.key === "r" || e.key === "R") { if (document.activeElement?.tagName !== "SELECT") randomize(); }
-      else if (e.key === "Enter" && document.activeElement?.tagName !== "BUTTON") { e.preventDefault(); start(); }
+      if (!down) return;
+      const tag = document.activeElement?.tagName, inBar = document.activeElement?.closest?.(".ks-bar, .ks-more, .ks-links");   // the bar keeps its own keys
+      if (e.key === "ArrowLeft" || e.key === "ArrowRight") { if (inBar) return; e.preventDefault(); step(st.side, e.key === "ArrowLeft" ? -1 : 1); }
+      else if (e.key === "ArrowUp" || e.key === "ArrowDown") { if (inBar) return; e.preventDefault(); closeMenus(); league(st.side, leagueOf(st.team[st.side]) + (e.key === "ArrowUp" ? -1 : 1)); }
+      else if (e.repeat) return;
+      else if (e.key === "Tab" && !inBar && document.activeElement?.classList.contains("ks-side")) {
+        const k = st.side + (e.shiftKey ? -1 : 1);
+        if (k === 0 || k === 1) { e.preventDefault(); sides[k].focus(); }
+      } else if (e.key === "r" || e.key === "R") randomize();
+      else if (e.key === "s" || e.key === "S") swap();
+      else if (e.key === "Escape") { if (v.querySelector(".ks-lg-menu:not([hidden])")) closeMenus(); else go("#/game"); }
+      else if (e.key === "Enter" && !(tag === "BUTTON" && inBar) && tag !== "A") { e.preventDefault(); start(); }
     };
   }
 
@@ -270,7 +361,7 @@ const Game = (() => {
           <div class="g-muted g-center" id="n-desc" style="font-size:18px;max-width:560px"></div><div id="n-rat"></div></div></div>
       <div class="g-buttons">${btn("Back", 'id="n-back" style="width:140px"', "ghost big")}<span class="g-spacer"></span>${btn("Start Tournament", 'id="n-go" style="width:280px"', "primary big")}</div></div>`);
     const form = $("#n-form", v);
-    const leagueSel = select(C.leagues.map((l) => `${l.name}  (${l.count} teams)`), 0, (i) => { li = i; onLeague(); });
+    const leagueSel = select(C.leagues.map((l) => `${l.name}  (${l.count} teams)`).concat([`All leagues  (${C.teams.length} teams)`]), 0, (i) => { li = i; onLeague(); });
     const team = picker([], 0, () => refresh(), true);
     let formatSel = select(FORMATS, fmt, (i) => { fmt = i; });
     const countWrap = document.createElement("div");
@@ -283,7 +374,9 @@ const Game = (() => {
     const fmtField = field("Format", formatSel);
     form.append(field("League", leagueSel), field("Your team", team.el), pair(fmtField, field("Teams in tournament", countWrap)), field("Pitch", pitchSel),
       pair(field("Team size", sizeSel), field("Match length", durSel)));
-    const teamsOf = () => leagueTeams(C.leagues[li].id);
+    const ALL = C.leagues.length;                                   // the last entry: every league, a mixed tournament
+    const leagueId = () => (li === ALL ? "all" : C.leagues[li].id);
+    const teamsOf = () => (li === ALL ? C.teams : leagueTeams(C.leagues[li].id));
     const count = () => counts[countSel.selectedIndex];
     function syncFormat() {
       const ok = pow2(count());
@@ -312,7 +405,7 @@ const Game = (() => {
       const t = teamsOf()[team.selected]; if (!t) return;
       G.busy = true;
       try {
-        const d = await api("/api/game/tournament", { action: "new", league: C.leagues[li].id, user: t.id, count: count(), format: fmt, pitch: P[pi].id,
+        const d = await api("/api/game/tournament", { action: "new", league: leagueId(), user: t.id, count: count(), format: fmt, pitch: P[pi].id,
           size: sizeSel.selectedIndex + 1, duration: [60, 120, 180][durSel.selectedIndex] });
         saveT(d.t); G.tab = 0; go("#/game/tournament");
       } catch (e) { alert("The tournament could not be created: " + e.message); }

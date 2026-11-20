@@ -1,0 +1,19 @@
+{
+ "name": "persist_wallcorner",
+ "start": "out_5v5/ckpt/x_kickstart_u600.pt",
+ "updates": 400,
+ "lr": 5e-05,
+ "rewards": {
+  "w_wall": 0.02,
+  "w_corner": 0.04
+ },
+ "args": {
+  "teacher": "out_5v5/ckpt/jit8_best.pt",
+  "kl_coef": 0.2,
+  "kl_decay": 1000,
+  "opp_models": "out_5v5/ckpt/jit8_best.pt,data/models/rl_5v5_arena_v4.json,data/models/rl_5v5_arena_v5.json",
+  "pfsp": 0.75
+ },
+ "notes": "kickstart_persist recipe (128-wide, strong opponents, persistent teacher pull) + w_wall 0.02 + w_corner 0.04 together. On the 128-wide anchored nets each term worked alone (wall 8.4%, corner 10.0%) at no cost in points; on the wide net (wide_wallcorner) they were much weaker. Tests the combination on the net where they worked, in the best recipe for RL4/RL5.",
+ "control": "kickstart_persist"
+}
