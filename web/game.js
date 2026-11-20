@@ -725,42 +725,42 @@ const Game = (() => {
     }
   }
 
-  // the puzzle card, top right, in the scorebug's style: round, points, session time left (bar), one dot per round played
+  // the puzzle card, top right, one row as tall as the scorebug: ROUND n | one dot per round played | points | session time left
+  // (a thin bar along its bottom edge fills as the session goes)
   function drawPuzzleCard(ctx, M, f, W) {
     const pz = M.p.session, R = pz.rounds, n = R.length + 1, pts = R.reduce((s, r) => s + r.pts, 0);
-    const left = Math.max(0, pz.total - pzPlayed(pz) - (60 - f.tl)), used = Math.min(1, 1 - left / pz.total);
-    const w = 248, pad = 14, h = 112, x0 = W - 16 - w, y0 = 14, xr = x0 + w - pad, MUTED = "#8d98ab";
+    const left = Math.max(0, pz.total - pzPlayed(pz) - (60 - f.tl)), used = Math.min(1, 1 - left / pz.total), low = left < 30;
+    const h = 38, pad = 12, y0 = 14, MUTED = "#8d98ab", step = 12, r = 4, MAXD = 8;
+    const round = `ROUND ${n}`, clock = clockText(left), shown = R.slice(-MAXD);
+    ctx.font = FONT(15, 700); const rw = ctx.measureText(round).width;
+    ctx.font = FONT(20, 800); const pw = ctx.measureText(String(pts)).width;
+    ctx.font = FONT(11, 700); const uw = ctx.measureText("PTS").width;
+    ctx.font = FONT(15, 700); const kw = ctx.measureText(clock).width;
+    const segR = rw + 2 * pad, segD = (shown.length + 1) * step - (step - 2 * r) + 2 * pad - 2, segP = pw + 5 + uw + 2 * pad, segK = kw + 2 * pad;
+    const w = segR + segD + segP + segK, x0 = W - 16 - w;
     ctx.save();
     ctx.shadowColor = "rgba(0,0,0,0.35)"; ctx.shadowBlur = 14; ctx.shadowOffsetY = 4;
     roundRect(ctx, x0, y0, w, h, 9, "#12161d");
     ctx.restore();
     ctx.save(); ctx.beginPath(); ctx.roundRect(x0, y0, w, h, 9); ctx.clip();
-    ctx.fillStyle = "#ffd54a"; ctx.fillRect(x0, y0, w, 4);
-    ctx.restore();
-    // row 1: PUZZLE | ROUND n
-    ctx.letterSpacing = "1.5px";
-    text(ctx, "PUZZLE", x0 + pad, y0 + 26, "l", 0, 11, MUTED, 0, "", 700);
-    ctx.letterSpacing = "0px";
-    text(ctx, `ROUND ${n}`, x0 + pad, y0 + 26, "r", w - 2 * pad, 13, "#fff", 0, "", 700);
-    // row 2: points (big, accent) | time left
-    const by = y0 + 66;
-    text(ctx, String(pts), x0 + pad, by, "l", 0, 36, "#ffd54a", 0, "", 800);
-    const pw = ctx.measureText(String(pts)).width;
-    text(ctx, pts === 1 ? "PT" : "PTS", x0 + pad + pw + 6, by, "l", 0, 13, MUTED, 0, "", 700);
-    const low = left < 30;
-    text(ctx, "LEFT", x0 + pad, by, "r", w - 2 * pad, 11, MUTED, 0, "", 700);
-    const lw = ctx.measureText("LEFT").width;
-    text(ctx, clockText(left), x0 + pad, by, "r", w - 2 * pad - lw - 6, 22, low ? "#ef6a5b" : "#fff", 0, "", 800);
-    // row 3: session progress
-    const bw = w - 2 * pad, bar = 5;
-    roundRect(ctx, x0 + pad, y0 + 78, bw, bar, bar / 2, "rgba(255,255,255,0.08)");
-    if (used > 0) roundRect(ctx, x0 + pad, y0 + 78, Math.max(bar, bw * used), bar, bar / 2, low ? "#ef6a5b" : "#ffd54a");
-    // row 4: one dot per round (green = you scored, grey = no goal, red = they scored), the current one hollow; the newest that fit
-    const step = 13, r = 4.5, fit = Math.floor((bw + step - 2 * r) / step), shown = R.slice(-(fit - 1)), cy = y0 + 98;
-    const col = { W: "#46c98d", D: "#5b6577", L: "#ef6a5b" };
-    shown.forEach((rd, i) => { ctx.beginPath(); ctx.arc(x0 + pad + r + i * step, cy, r, 0, 2 * Math.PI); ctx.fillStyle = col[rd.outcome]; ctx.fill(); });
+    let x = x0;
+    text(ctx, round, x, y0 + 25, "c", segR, 15, "#fff", 0, "", 700); x += segR;
+    // dots: green = you scored, grey = no goal, red = they scored; the current round hollow (the newest MAXD rounds)
+    const col = { W: "#46c98d", D: "#5b6577", L: "#ef6a5b" }, cy = y0 + h / 2 - 1;
+    let dx = x + pad - 1 + r;
+    for (const rd of shown) { ctx.beginPath(); ctx.arc(dx, cy, r, 0, 2 * Math.PI); ctx.fillStyle = col[rd.outcome]; ctx.fill(); dx += step; }
     const pulse = 0.55 + 0.45 * Math.abs(Math.sin(performance.now() / 400));
-    ctx.beginPath(); ctx.arc(x0 + pad + r + shown.length * step, cy, r - 0.75, 0, 2 * Math.PI); ctx.lineWidth = 1.5; ctx.strokeStyle = Draw.css(ACC, pulse); ctx.stroke();
+    ctx.beginPath(); ctx.arc(dx, cy, r - 0.75, 0, 2 * Math.PI); ctx.lineWidth = 1.5; ctx.strokeStyle = Draw.css(ACC, pulse); ctx.stroke();
+    x += segD;
+    ctx.fillStyle = "#0b0e13"; ctx.fillRect(x, y0, segP, h);
+    text(ctx, String(pts), x + pad, y0 + 27, "l", 0, 20, "#ffd54a", 0, "", 800);
+    text(ctx, "PTS", x + pad + pw + 5, y0 + 26, "l", 0, 11, MUTED, 0, "", 700); x += segP;
+    ctx.fillStyle = low ? "#ef6a5b" : "#ffd54a"; ctx.fillRect(x, y0, segK, h);
+    text(ctx, clock, x, y0 + 25, "c", segK, 15, "#12161d", 0, "", 700);
+    // session progress along the bottom edge
+    ctx.fillStyle = "rgba(255,255,255,0.08)"; ctx.fillRect(x0, y0 + h - 3, w, 3);
+    ctx.fillStyle = low ? "#ef6a5b" : "#ffd54a"; ctx.fillRect(x0, y0 + h - 3, w * used, 3);
+    ctx.restore();
     M.pzCard = { x: x0, y: y0, w, h };
   }
 
