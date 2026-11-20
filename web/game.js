@@ -1,29 +1,25 @@
 // The Game area: Simple Soccer in the browser. The pages are those of the Godot game (main menu, quick match, teams & squads,
 // tournaments, match report) and the match itself is played by the Python match core on the server: game/session.py streams
 // every tick over a WebSocket, this page draws it and sends the keyboard back.
-// Routes: #/game · #/game/quick · #/game/teams[/<id>] · #/game/tournament/new · #/game/tournament · #/game/match · #/game/report
+// Routes: #/game · #/game/quick · #/game/puzzle · #/game/teams[/<id>] · #/game/tournament/new · #/game/tournament · #/game/match · #/game/report
 // lab.js owns the router and calls Game.show(parts) for #/game/... ; the tournament is kept in this browser (localStorage).
 "use strict";
 
 const Game = (() => {
-  const G = { cat: null, byId: {}, keyHandler: null, match: null, pending: null, report: null, tab: 0, control: 0, busy: false };
+  const G = { cat: null, byId: {}, keyHandler: null, match: null, pending: null, report: null, tab: 0, control: 0, busy: false, pz: null };
   const SAVE = "soccer.tournament";
   const DURATIONS = [60, 120, 180, 300];
   const CONTROLS = ["single", "team", "none"];
-  // single control: which player the user takes (GK..FWD = the first player with that role); "Record my play": the match is saved as
-  // a dataset file for imitation learning (game/recorder.py). Both remembered in this browser.
-  const PLAYERS = ["", "GK", "DEF", "MID", "FWD"];
-  const PLAYER_NAMES = ["Auto (forward)", "Goalkeeper", "Defender", "Midfielder", "Forward"];
+  // "Record my play": the match is saved as a dataset file for imitation learning (game/recorder.py), remembered in this browser
   const PREFS = "soccer.prefs";
-  const prefs = (() => { try { return { player: 0, record: true, ...JSON.parse(localStorage.getItem(PREFS) || "{}") }; } catch (e) { return { player: 0, record: true }; } })();
+  const prefs = (() => { try { return { record: true, ...JSON.parse(localStorage.getItem(PREFS) || "{}") }; } catch (e) { return { record: true }; } })();
   const savePrefs = () => { try { localStorage.setItem(PREFS, JSON.stringify(prefs)); } catch (e) {} };
-  // the two selects of the match setup (quick match and tournament): your player (single control only) and recording
+  // the recording select of the match setup (quick match, tournament, puzzle)
   function humanFields(controlOf) {
-    const player = select(PLAYER_NAMES, prefs.player, (i) => { prefs.player = i; savePrefs(); });
     const rec = select(["Record my play", "Do not record"], prefs.record ? 0 : 1, (i) => { prefs.record = i === 0; savePrefs(); });
-    const sync = () => { const c = controlOf(); player.disabled = c !== "single"; rec.disabled = c === "none"; };
+    const sync = () => { rec.disabled = controlOf() === "none"; };
     sync();
-    return { player, rec, sync, setup: () => ({ player: controlOf() === "single" ? PLAYERS[prefs.player] : "", record: controlOf() !== "none" && prefs.record }) };
+    return { rec, sync, setup: () => ({ record: controlOf() !== "none" && prefs.record }) };
   }
   const $ = (s, el = document) => el.querySelector(s);
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -99,6 +95,7 @@ const Game = (() => {
     catch (e) { mount(`<div class="g-page">${header("Simple Soccer")}<p class="g-error">The game server is not available: ${esc(e.message)}</p></div>`); return; }
     const [a, b] = parts;
     if (a === "quick") return quick();
+    if (a === "puzzle") return puzzlePage();
     if (a === "teams") return teams(b ? decodeURIComponent(b) : "");
     if (a === "tournament" && b === "new") return tourNew();
     if (a === "tournament") return tourHub();
@@ -120,7 +117,7 @@ const Game = (() => {
     const save = loadT();
     const v = mount(`<div class="g-menu"><div class="in"><div class="title">SIMPLE SOCCER</div><div class="sub">Haxball-style football vs AI</div>
       ${save ? btn("Continue Tournament", 'data-go="#/game/tournament"', "primary") + btn("Quick Match", 'data-go="#/game/quick"') : btn("Quick Match", 'data-go="#/game/quick"', "primary")}
-      ${btn("New Tournament", 'data-go="#/game/tournament/new"')}${btn("Teams &amp; Squads", 'data-go="#/game/teams"')}
+      ${btn("Puzzle", 'data-go="#/game/puzzle"')}${btn("New Tournament", 'data-go="#/game/tournament/new"')}${btn("Teams &amp; Squads", 'data-go="#/game/teams"')}
       <div class="note">Add pitches, teams and play styles by dropping JSON files in data/</div></div></div>`);
     for (const b of v.querySelectorAll("[data-go]")) b.addEventListener("click", () => go(b.dataset.go));
     v.querySelector(".g-btn")?.focus();
@@ -142,8 +139,8 @@ const Game = (() => {
     const modeSel = select(["Play (one player)", "Play (whole team, Q to switch)", "Watch (AI vs AI)"], 0, () => hf.sync());
     const hf = humanFields(() => CONTROLS[modeSel.selectedIndex]);
     const durSel = select(["1 minute", "2 minutes", "3 minutes", "5 minutes"], 2, () => {});
-    left.append(field("Pitch", pitchSel), info, field("Team size", sizeSel), field("Control", modeSel), field("Your player", hf.player),
-      field("Dataset", hf.rec), field("Duration", durSel));
+    left.append(field("Pitch", pitchSel), info, field("Team size", sizeSel), field("Control", modeSel), field("Dataset", hf.rec),
+      field("Duration", durSel));
     const ui = [0, 1].map((i) => {
       const c = document.createElement("div");
       c.className = "g-card g-team-card";
@@ -359,9 +356,9 @@ const Game = (() => {
           const ctl = select(["One player", "Whole team (Q to switch)", "Watch (AI vs AI)"], G.control, (i) => { G.control = i; hf.sync(); });
           ctl.style.width = "260px";
           const hf = humanFields(() => CONTROLS[G.control]);
-          hf.player.style.width = "190px"; hf.rec.style.width = "190px";
+          hf.rec.style.width = "190px";
           const cap = document.createElement("span"); cap.className = "g-caption"; cap.textContent = "Control";
-          acts.prepend(cap, ctl, hf.player, hf.rec);
+          acts.prepend(cap, ctl, hf.rec);
         }
         $("#h-play", v)?.addEventListener("click", () => playUser(t));
         $("#h-sim", v)?.addEventListener("click", () => simulateRound(t));
@@ -451,7 +448,7 @@ const Game = (() => {
     let fx;
     try { fx = await api("/api/game/tournament", { action: "fixture", t }); } catch (e) { alert(e.message); return; }
     const control = CONTROLS[G.control];
-    const setup = { ...fx.setup, control, player: control === "single" ? PLAYERS[prefs.player] : "", record: control !== "none" && prefs.record };
+    const setup = { ...fx.setup, control, record: control !== "none" && prefs.record };
     play({ setup, quit: () => go("#/game/tournament"), done: async (res) => {
       try { const d = await api("/api/game/tournament", { action: "record", t, index: fx.index, result: res }); saveT(d.t); }
       catch (e) { alert("The result could not be recorded: " + e.message); }
@@ -510,6 +507,101 @@ const Game = (() => {
     G.keyHandler = (e, down) => { if (down && !e.repeat && e.key === "Enter") { e.preventDefault(); cont2(); } };
   }
 
+  // ---------- puzzle: rounds of at most 1 minute from a random layout, random teams every round, until the session time is used ----------
+  // Every round: two random teams (any league), random sides, every player and the ball at random places (game/session.py), over at
+  // the first goal. Points: you score first 3, nobody scores in 60 s 1, they score first 0. Recorded for the dataset when "Record my
+  // play" is on (one file per round, grouped by session on the Lab's Dataset page).
+  const PZ_LENGTHS = [300, 600, 900];
+  const PZ_BEST = "soccer.puzzleBest";
+  const pzBest = () => { try { return JSON.parse(localStorage.getItem(PZ_BEST) || "{}"); } catch (e) { return {}; } };
+  const pzPlayed = (pz) => pz.rounds.reduce((s, r) => s + r.secs, 0);
+  function puzzlePage() {
+    const pz = G.pz;
+    if (pz && pz.done) return puzzleSummary(pz);
+    const best = pzBest();
+    const st = { control: prefs.pzControl ?? 0, len: prefs.pzLen ?? 1 };
+    const v = mount(`<div class="g-page">${header("Puzzle", "Rounds of at most one minute: random teams, every player and the ball at a random place, over at the first goal. Keep going until the time is up.")}
+      <div class="g-row"><div class="g-card" style="width:340px;flex:none"><h2>Session</h2><div class="g-col" id="pz-left" style="gap:8px"></div></div>
+      <div class="g-card g-grow"><h2>How it scores</h2><div class="g-col" style="gap:10px;font-size:18px">
+        <div><b class="g-accent">3</b> you score first</div><div><b class="g-accent">1</b> nobody scores in 60 s</div><div><b class="g-accent">0</b> they score first</div>
+        <div class="g-caption">Every round picks two new teams from every league and puts all ten players and the ball somewhere random, so each round starts from a different situation: attacking, defending, or the last one back. That is what makes it good data for the models: turn on "Record my play".</div>
+        <div class="g-caption">Best: ${PZ_LENGTHS.map((l) => `${l / 60} min <b>${best[l] != null ? best[l] : "–"}</b>`).join(" &nbsp;·&nbsp; ")}</div></div></div></div>
+      <div class="g-buttons">${btn("Back", 'id="pz-back" style="width:140px"', "ghost big")}<span class="g-spacer"></span>${btn("Start&nbsp;&nbsp;(Enter)", 'id="pz-go" style="width:260px"', "primary big")}</div></div>`);
+    const ctl = select(["One player (random each round)", "Whole team (Q to switch)"], st.control, (i) => { st.control = i; prefs.pzControl = i; savePrefs(); });
+    const len = select(PZ_LENGTHS.map((l) => `${l / 60} minutes`), st.len, (i) => { st.len = i; prefs.pzLen = i; savePrefs(); });
+    const hf = humanFields(() => "single");
+    $("#pz-left", v).append(field("Control", ctl), field("Length", len), field("Dataset", hf.rec));
+    const start = () => {
+      G.pz = { id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), total: PZ_LENGTHS[st.len], control: ["single", "team"][st.control], rounds: [], done: false };
+      nextRound();
+    };
+    $("#pz-back", v).onclick = () => go("#/game");
+    $("#pz-go", v).onclick = start;
+    G.keyHandler = (e, down) => {
+      if (!down || e.repeat) return;
+      if (e.key === "Escape") go("#/game");
+      else if (e.key === "Enter" && document.activeElement?.tagName !== "BUTTON") { e.preventDefault(); start(); }
+    };
+  }
+  function nextRound() {
+    const pz = G.pz, all = G.cat.teams;
+    const a = Math.floor(Math.random() * all.length); let b = Math.floor(Math.random() * (all.length - 1)); if (b >= a) b += 1;
+    const setup = { home: all[a].id, away: all[b].id, pitch: "arena", size: 5, duration: 60, seed: Math.floor(Math.random() * 2147483647), control: pz.control,
+      human_team: Math.random() < 0.5 ? 0 : 1, allow_draw: true, player: "random", record: prefs.record, session: pz.id, round: pz.rounds.length + 1 };
+    const p = { setup, puzzle: Math.floor(Math.random() * 2147483647), session: pz, done: (res) => roundOver(res, setup), quit: () => { pz.done = true; pz.quit = true; finishPuzzle(); } };
+    if (location.hash === "#/game/match") { stopMatch(); G.pending = p; match(p); }
+    else play(p);
+  }
+  function roundOver(res, setup) {
+    const pz = G.pz; if (!pz || pz.done) return;
+    const h = setup.human_team, gf = res.scores[h], ga = res.scores[1 - h], goal = res.puzzle?.end === "goal";
+    const outcome = goal ? (gf > ga ? "W" : "L") : "D";
+    pz.rounds.push({ home: setup.home, away: setup.away, h, gf, ga, outcome, secs: Math.min(60, res.puzzle?.seconds ?? 60), pts: { W: 3, D: 1, L: 0 }[outcome] });
+    if (pzPlayed(pz) >= pz.total) { pz.done = true; finishPuzzle(); } else nextRound();
+  }
+  function finishPuzzle() {
+    const pz = G.pz;
+    if (!pz.quit) { const best = pzBest(), score = pz.rounds.reduce((s, r) => s + r.pts, 0); if (best[pz.total] == null || score > best[pz.total]) { best[pz.total] = score; pz.newBest = true; try { localStorage.setItem(PZ_BEST, JSON.stringify(best)); } catch (e) {} } }
+    stopMatch();
+    G.pending = null;
+    if (location.hash === "#/game/puzzle") puzzlePage(); else go("#/game/puzzle");
+  }
+  function puzzleSummary(pz) {
+    const R = pz.rounds, score = R.reduce((s, r) => s + r.pts, 0), n = R.length, cnt = (o) => R.filter((r) => r.outcome === o).length;
+    const wins = R.filter((r) => r.outcome === "W"), avgWin = wins.length ? wins.reduce((s, r) => s + r.secs, 0) / wins.length : null;
+    const team = (id) => G.byId[id] || { id, name: id };
+    const rows = R.map((r, i) => { const me = team(r.h === 0 ? r.home : r.away), them = team(r.h === 0 ? r.away : r.home);
+      return { cells: [{ text: i + 1, color: "var(--g-muted)" }, teamCell(me, me.name), teamCell(them, them.name), { text: r.outcome === "W" ? "you scored" : r.outcome === "L" ? "they scored" : "no goal", color: r.outcome === "W" ? "var(--g-good)" : r.outcome === "L" ? "var(--g-bad)" : "var(--g-muted)" }, `${r.secs.toFixed(1)} s`, { text: `+${r.pts}`, color: "var(--g-accent)" }] }; });
+    const v = mount(`<div class="g-page">${header(pz.quit ? "Puzzle - stopped early" : "Puzzle - final score", `${pz.total / 60} minute session · ${n} rounds · ${Math.round(pzPlayed(pz))} s played`)}
+      <div class="g-card g-center" style="padding:24px"><div style="font-size:84px;line-height:1;color:var(--g-accent);font-weight:600">${score}</div><div style="font-size:20px;margin-top:6px">points${pz.newBest ? ' &nbsp;<span class="g-accent">NEW BEST</span>' : ""}</div>
+        <div class="g-row" style="justify-content:center;gap:36px;margin-top:18px;font-size:20px"><span><b>${cnt("W")}</b> won</span><span><b>${cnt("D")}</b> no goal</span><span><b>${cnt("L")}</b> lost</span>
+        <span>goals <b>${R.reduce((s, r) => s + r.gf, 0)}–${R.reduce((s, r) => s + r.ga, 0)}</b></span><span>points / round <b>${n ? (score / n).toFixed(2) : "–"}</b></span><span>time to score <b>${avgWin != null ? avgWin.toFixed(1) + " s" : "–"}</b></span></div></div>
+      ${n ? table([{ t: "#", w: 44 }, { t: "You" }, { t: "Opponent" }, { t: "Round" }, { t: "Time", w: 90, a: "r" }, { t: "Pts", w: 70, a: "r" }], rows) : ""}
+      <div class="g-buttons">${btn("Menu", 'id="pz-menu" style="width:140px"', "ghost big")}<span class="g-spacer"></span>${btn("Play again&nbsp;&nbsp;(Enter)", 'id="pz-again" style="width:260px"', "primary big")}</div></div>`);
+    const again = () => { G.pz = null; puzzlePage(); };
+    $("#pz-menu", v).onclick = () => { G.pz = null; go("#/game"); };
+    $("#pz-again", v).onclick = again;
+    window.scrollTo(0, 0);
+    G.keyHandler = (e, down) => { if (!down || e.repeat) return; if (e.key === "Enter") { e.preventDefault(); again(); } else if (e.key === "Escape") { G.pz = null; go("#/game"); } };
+  }
+  function drawPuzzleHud(ctx, M, f, W, H, intro) {
+    const pz = M.p.session, R = pz.rounds, n = R.length + 1, pts = R.reduce((s, r) => s + r.pts, 0);
+    const left = Math.max(0, pz.total - pzPlayed(pz) - (60 - f.tl));
+    text(ctx, `PUZZLE  ·  ROUND ${n}  ·  ${pts} PTS  ·  ${clockText(left)} LEFT`, 18, HUD_H + 26, "l", 600, 18, Draw.css(ACC), 4);
+    if (intro > 0) {
+      const a = Math.min(1, intro / 20);
+      ctx.fillStyle = `rgba(0,0,0,${0.45 * a})`; ctx.fillRect(0, H / 2 - 190, W, 96);
+      text(ctx, `ROUND ${n}`, 0, H / 2 - 132, "c", W, 46, `rgba(255,255,255,${a})`, 6, `rgba(0,0,0,${a})`);
+      text(ctx, M.meta.control === 1 ? "GET READY - FIND YOUR PLAYER" : "GET READY", 0, H / 2 - 104, "c", W, 18, Draw.css(ACC, a));
+    }
+    if (M.result) {
+      const h = M.meta.human_team, sc = M.result.scores, goal = M.result.puzzle?.end === "goal";
+      const [msg, col] = !goal ? ["TIME UP - NO GOAL   +1", "#fff"] : sc[h] > sc[1 - h] ? ["YOU SCORED   +3", "#46c98d"] : ["THEY SCORED   +0", "#ef6a5b"];
+      ctx.fillStyle = "rgba(0,0,0,0.6)"; ctx.fillRect(0, H - 120, W, 64);
+      text(ctx, msg, 0, H - 76, "c", W, 34, col);
+    }
+  }
+
   // ---------- the live match ----------
   function play(p) { G.pending = p; go("#/game/match"); }
   function stopMatch() {
@@ -536,7 +628,10 @@ const Game = (() => {
         d.at = performance.now();
         M.frames.push(d); if (M.frames.length > 8) M.frames.shift();
         for (const ev of d.ev || []) onGoal(M, ev);
-      } else if (d.k === "r") M.result = d.result;
+      } else if (d.k === "r") {
+        M.result = d.result;
+        if (p.session) setTimeout(() => { if (G.match === M && !M.stopped && !M.doneCalled) { M.doneCalled = true; p.done(d.result); } }, 1700);   // puzzle: the next round starts by itself
+      }
       else if (d.k === "e") M.error = d.error;
     };
     M.ws.onclose = () => { if (!M.result && !M.stopped && !M.error) M.error = "the connection to the game server closed"; };
@@ -567,7 +662,7 @@ const Game = (() => {
     else if (M.paused && c === "KeyM") { const q = M.p.quit; G.pending = null; stopMatch(); q(); }
     else if (c === "KeyT") { M.speed = M.speed === 1 ? 2 : M.speed === 2 ? 4 : M.speed === 4 ? 8 : 1; wsSend(M, { speed: M.speed }); }
     else if (c === "KeyQ") wsSend(M, { switch: 1 });
-    else if ((c === "Enter" || c === "NumpadEnter") && f && f.st === 2 && M.result) { const res = M.result, done = M.p.done; G.pending = null; stopMatch(); done(res); }
+    else if ((c === "Enter" || c === "NumpadEnter") && f && f.st === 2 && M.result && !M.p.session) { const res = M.result, done = M.p.done; G.pending = null; stopMatch(); done(res); }
     else if (M.error && (c === "Enter" || c === "Escape")) { const q = M.p.quit; G.pending = null; stopMatch(); q(); }
   }
   function prepareMeta(M, m) {
@@ -746,11 +841,12 @@ const Game = (() => {
     let msg = "", col2 = "#fff";
     if (M.error) { msg = "The match could not go on: " + M.error; col2 = "#ef6a5b"; }
     else if (f.st === 1) drawGoalBanner(ctx, M, f, W, H);
+    else if (f.st === 2 && M.p.session) { /* a puzzle round: drawPuzzleHud shows the outcome */ }
     else if (f.st === 2) {
       if (f.w === -1) msg = "FULL TIME - DRAW";
       else { msg = `FULL TIME - ${m.teams[f.w].name.toUpperCase()} WIN`; col2 = Draw.css(m.kits[f.w][0]); }
       if (f.so) msg += `  (pens ${f.so[0]}-${f.so[1]})`;
-    } else if (intro > 0) drawKickoff(ctx, m, f, W, H, intro);
+    } else if (intro > 0 && !M.p.session) drawKickoff(ctx, m, f, W, H, intro);
     if (msg) {
       ctx.fillStyle = "rgba(0,0,0,0.55)"; ctx.fillRect(0, H / 2 - 30, W, 70);
       text(ctx, msg, 0, H / 2 + 18, "c", W, 40, col2);
@@ -758,6 +854,7 @@ const Game = (() => {
       if (M.error) text(ctx, "Enter / Esc - back", 0, H / 2 + 38, "c", W, 16, Draw.css(MUTED));
     }
     drawParticles(ctx, M);
+    if (M.p.session && !M.error) drawPuzzleHud(ctx, M, f, W, H, intro);
     if (m.rec && f.cu >= 0 && f.st !== 2) {             // this match is being recorded (game/recorder.py)
       ctx.beginPath(); ctx.arc(24, 22, 6, 0, 2 * Math.PI); ctx.fillStyle = Math.floor(performance.now() / 700) % 2 ? "#ef6a5b" : "#b8463b"; ctx.fill();
       text(ctx, "REC", 36, 28, "l", 60, 15, "#ef6a5b");

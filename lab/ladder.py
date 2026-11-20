@@ -46,6 +46,7 @@ NET_SQUAD = "rl_team_5"
 PROTOCOL = "ladder/d90"
 DURATION = 90.0
 PLACEMENT = 6                    # games before an entry counts as placed
+MAX_TICKS = int(DURATION * 60 * 4)   # the clock stops until a kickoff is taken: a net that never touches the ball would hang the match
 BASE, PRIOR_SD = 1500.0, 400.0
 K = 400.0 / math.log(10.0)       # Elo points per unit of the logistic scale
 
@@ -219,17 +220,19 @@ def _setup(e, side_cfg, side):
 def play_pair(job):
     """Worker: both legs of one pair (same seed, sides swapped). Returns two result records."""
     ea, eb, seed = job
-    from soccer.match import Match, make_config
+    from soccer.match import ENDED, Match, make_config
     out = []
     for home, away in ((ea, eb), (eb, ea)):
         c = make_config(home["team"], away["team"], "arena", 5, DURATION, seed)
         _setup(home, c, 0)
         _setup(away, c, 1)
         m = Match(c)
-        m.run_to_end()
+        while m.state != ENDED and m.tick < MAX_TICKS:
+            m.step()
         g = {home["id"]: m.scores[0], away["id"]: m.scores[1]}
         out.append({"t": time.strftime("%Y-%m-%dT%H:%M:%S"), "protocol": PROTOCOL, "seed": seed, "a": ea["id"], "b": eb["id"],
-                    "a_sha": ea["sha"], "b_sha": eb["sha"], "a_side": 0 if home is ea else 1, "ga": g[ea["id"]], "gb": g[eb["id"]]})
+                    "a_sha": ea["sha"], "b_sha": eb["sha"], "a_side": 0 if home is ea else 1, "ga": g[ea["id"]], "gb": g[eb["id"]],
+                    **({"stalled": True} if m.state != ENDED else {})})
     return out
 
 

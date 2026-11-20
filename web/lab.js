@@ -666,7 +666,20 @@ function viewDataset(id) {
   const sit = d.situations.map((s) => `<tr><td>${esc(s.label)}</td><td class="r">${secs(s.rows)}</td><td>${s.rows ? compass(s.moves, css("--c3"), 64, false) : '<span class="muted">none</span>'}</td><td class="r">${s.rows ? f(s.toward_pct, 0) + "%" : "–"}</td><td class="r">${s.rows ? f(s.idle_pct, 0) + "%" : "–"}</td></tr>`).join("");
   const situations = `<section class="card flush"><div class="card-h pad"><h2>What you do, by situation</h2><span class="muted small">"possession" = your team has the player nearest the ball</span></div><div class="tbl-wrap"><table class="mini"><thead><tr><th>Situation</th><th class="r">time</th><th>moves (→ goal)</th><th class="r">towards ball</th><th class="r">standing</th></tr></thead><tbody>${sit}</tbody></table></div></section>`;
   const oc = { W: "pos", L: "neg", D: "", left: "muted" };
-  const rows = d.matches.slice().reverse().map((m) => m.error ? `<tr><td colspan="9" class="neg">${esc(m.id)}: ${esc(m.error)}</td></tr>` :
+  // puzzle rounds (game: Puzzle) are grouped by session: one row per session, its rounds in a fold-out
+  const groups = [];
+  for (const m of d.matches) {
+    const g = m.puzzle && m.session ? groups.find((x) => x.session === m.session) : null;
+    if (g) g.rounds.push(m); else groups.push(m.puzzle && m.session ? { session: m.session, rounds: [m], started: m.started } : m);
+  }
+  const roundLine = (m) => `<a href="#/dataset/${encodeURIComponent(m.id)}">${m.round || "?"}: ${esc(m.team.name)} ${m.gf}–${m.ga} ${esc(m.opponent.name)}</a>`;
+  const sessionRow = (g) => { const R = g.rounds, cnt = (o) => R.filter((r) => r.outcome === o).length, mins = R.reduce((s, r) => s + r.minutes, 0), pts = 3 * cnt("W") + cnt("D");
+    return `<tr><td class="nowrap">${esc(new Date(g.started).toLocaleString([], { dateStyle: "short", timeStyle: "short" }))}</td><td><b>Puzzle</b> <span class="muted">${R.length} rounds, random teams</span>
+      <details><summary class="small muted">rounds</summary><div class="small" style="display:grid;gap:2px">${R.map(roundLine).join("")}</div></details></td>
+      <td class="r"><b>${pts} pts</b> <span class="small">${cnt("W")}W ${cnt("D")}D ${cnt("L")}L</span></td><td>${esc(R[0].control)} <span class="muted small">${esc([...new Set(R.flatMap((r) => Object.keys(r.roles)))].join(" "))}</span></td>
+      <td class="r">${f(mins, 1)}</td><td class="r">${f(R.reduce((s, r) => s + r.dir_changes_s * r.minutes, 0) / mins, 1)}</td><td class="r">${f(R.reduce((s, r) => s + r.kick_presses_min * r.minutes, 0) / mins, 1)}</td>
+      <td class="r">${f(R.reduce((s, r) => s + r.on_ball_pct * r.minutes, 0) / mins, 0)}%</td><td></td></tr>`; };
+  const rows = groups.slice().reverse().map((m) => m.rounds ? sessionRow(m) : m.error ? `<tr><td colspan="9" class="neg">${esc(m.id)}: ${esc(m.error)}</td></tr>` :
     `<tr><td class="nowrap">${esc(new Date(m.started).toLocaleString([], { dateStyle: "short", timeStyle: "short" }))}</td><td>${esc(m.team.name)} <span class="muted">vs</span> ${esc(m.opponent.name)} <span class="muted small">${esc(m.opponent.league)}</span></td>
      <td class="r"><b class="${oc[m.outcome]}">${m.gf}–${m.ga}${m.shootout?.length ? ` (p ${m.shootout.join("–")})` : ""}</b> <span class="small ${oc[m.outcome]}">${m.outcome === "left" ? "left early" : m.outcome}</span></td>
      <td>${esc(m.control)}${m.picked ? ` · ${esc(m.picked)}` : ""} <span class="muted small">${esc(Object.keys(m.roles).join(" "))}</span></td><td class="r">${f(m.minutes, 1)}</td><td class="r">${f(m.dir_changes_s, 1)}</td><td class="r">${f(m.kick_presses_min, 1)}</td><td class="r">${f(m.on_ball_pct, 0)}%</td><td><a href="#/dataset/${encodeURIComponent(m.id)}">replay ▶</a></td></tr>`).join("");

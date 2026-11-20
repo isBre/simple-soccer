@@ -14,7 +14,8 @@ Rows are taken from the state BEFORE the tick in which the input is applied; the
 (the training code shifts the labels).
 
 One file per match: data/human/<UTC time>_<home>-<away>.npz (numpy, compressed, no pickles: meta is a JSON string), written when
-the match ends, or when the player quits / closes the page after at least MIN_ROWS rows (meta "complete": false).
+the match ends, or when the player quits / closes the page after at least MIN_ROWS rows (meta "complete": false). A puzzle round
+(game/session.py) is kept from 30 rows (1 s): it is short by design, and ends at the first goal.
 $SOCCER_HUMAN_DIR overrides the folder (tests)."""
 import datetime as dt
 import json
@@ -47,8 +48,9 @@ def move_index(d: complex, attack: float) -> int:
 
 
 class Recorder:
-    def __init__(self, m, setup):
+    def __init__(self, m, setup, min_rows=MIN_ROWS):
         self.m = m
+        self.min_rows = min_rows
         self.setup = dict(setup)
         self.started = dt.datetime.now(dt.timezone.utc)
         self.rows = {k: [] for k in ("obs", "state", "ctrl", "move", "kick", "dir", "tick", "time_left", "score", "kickoff", "speed")}
@@ -84,7 +86,7 @@ class Recorder:
 
     def save(self, result=None):
         """Writes the file (once). Returns its path, or None when there is too little to keep."""
-        if self.saved or len(self) < MIN_ROWS:
+        if self.saved or len(self) < self.min_rows:
             return self.saved
         m, cfg = self.m, self.m.cfg
         pd = m.pitch
@@ -103,7 +105,7 @@ class Recorder:
                       "out_y": pd.out_y},
             "state_layout": "per player in uid order (team 0 slots, team 1 slots): x, y, vx, vy; then ball x, y, vx, vy",
             "result": None if result is None else {"scores": result["scores"], "shootout": result["shootout"], "winner": result["winner"],
-                                                   "team_stats": result["team_stats"], "ticks": result["ticks"]},
+                                                   "team_stats": result["team_stats"], "ticks": result["ticks"], "puzzle": result.get("puzzle")},
             "scores_at_save": list(m.scores),
         }
         r = self.rows
