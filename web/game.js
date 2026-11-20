@@ -882,6 +882,7 @@ const Game = (() => {
   function stopMatch() {
     const M = G.match; if (!M) return;
     M.stopped = true; cancelAnimationFrame(M.raf);
+    Sound.crowdOff(); if (M.paused) Sound.pause(false);
     window.removeEventListener("blur", M.onBlur);
     try { M.ws.send(JSON.stringify({ quit: 1 })); } catch (e) {}
     try { M.ws.close(); } catch (e) {}
@@ -890,6 +891,7 @@ const Game = (() => {
   const KEYS = { ArrowLeft: [-1, 0], KeyA: [-1, 0], ArrowRight: [1, 0], KeyD: [1, 0], ArrowUp: [0, -1], KeyW: [0, -1], ArrowDown: [0, 1], KeyS: [0, 1] };
   function match(p) {
     document.body.classList.add("g-playing");
+    Sound.unlock();
     const v = mount('<div class="g-match"><canvas></canvas></div>');
     const cv = $("canvas", v);
     const M = G.match = { p, cv, ws: null, meta: null, frames: [], held: new Set(), sentIn: "", paused: false, speed: 1, result: null, error: "", stopped: false,
@@ -901,6 +903,7 @@ const Game = (() => {
       if (d.k === "m") prepareMeta(M, d);
       else if (d.k === "f") {
         d.at = performance.now();
+        sfx(M, d);
         M.frames.push(d); if (M.frames.length > 8) M.frames.shift();
         for (const ev of d.ev || []) onGoal(M, ev);
       } else if (d.k === "r") {
@@ -940,10 +943,11 @@ const Game = (() => {
     else if (M.paused && c === "KeyR" && !M.p.session) act(M, "restart");
     else if (c === "KeyT") { M.speed = M.speed === 1 ? 2 : M.speed === 2 ? 4 : M.speed === 4 ? 8 : 1; wsSend(M, { speed: M.speed }); }
     else if (c === "KeyQ") wsSend(M, { switch: 1 });
+    else if (c === "KeyN") { Sound.unlock(); M.toast = { text: Sound.toggle() ? "Sound on" : "Sound off", at: performance.now() }; }
   }
   // what a key or a card button does: pause / resume, restart (same teams, new seed), quit, the report after the final whistle
   function act(M, a) {
-    if (a === "pause") { M.paused = !M.paused; wsSend(M, { pause: M.paused }); }
+    if (a === "pause") { M.paused = !M.paused; wsSend(M, { pause: M.paused }); Sound.pause(M.paused); }
     else if (a === "restart") { const p = { ...M.p, setup: { ...M.p.setup, seed: Math.floor(Math.random() * 2147483647) } }; G.pending = null; stopMatch(); G.pending = p; match(p); }
     else if (a === "quit") { const q = M.p.quit; G.pending = null; stopMatch(); q(); }
     else if (a === "report" && M.result) { const res = M.result, done = M.p.done; G.pending = null; stopMatch(); done(res); }
@@ -969,7 +973,7 @@ const Game = (() => {
       <div class="mo-sc small">${esc(m.teams[0].name)} <b>${f.sc[0]} – ${f.sc[1]}</b> ${esc(m.teams[1].name)}</div>
       <div class="mo-btns col"><button type="button" class="ks-go" data-act="pause">Resume ${k("Esc")}</button>
         ${M.p.session ? "" : `<button type="button" class="ks-btn2" data-act="restart">Restart ${k("R")}</button>`}<button type="button" class="ks-btn2" data-act="quit">Quit the match ${k("M")}</button></div>
-      <div class="mo-keys"><span>${k("WASD")} ${k("↑↓←→")} move</span><span>${k("Space")} ${k("X")} kick</span>${m.control === 2 ? `<span>${k("Q")} switch player</span>` : ""}<span>${k("T")} speed</span></div></div>`;
+      <div class="mo-keys"><span>${k("WASD")} ${k("↑↓←→")} move</span><span>${k("Space")} ${k("X")} kick</span>${m.control === 2 ? `<span>${k("Q")} switch player</span>` : ""}<span>${k("T")} speed</span><span>${k("N")} sound ${Sound.on ? "on" : "off"}</span></div></div>`;
     else {
       const res = M.result, w = f.w, ev = res ? res.events : [];
       const verdict = w === -1 ? "Draw" : `${esc(m.teams[w].name)} win${f.so ? ` on penalties ${f.so[0]}–${f.so[1]}` : res?.overtime ? " with a golden goal" : ""}`;
@@ -990,6 +994,7 @@ const Game = (() => {
     P.cPitch = Draw.rgb(P.pitch); P.cOuter = Draw.rgb(P.outer); P.cLine = Draw.rgb(P.line);
     m.goalCols = m.kits.map((k) => Draw.goalColour(k, P.cPitch));
     m.byUid = {}; m.players.forEach((pl, i) => { pl.i = i; pl.last = pl.name.split(" ")[1] || ""; m.byUid[pl.uid] = pl; });
+    Sound.crowdOn();
   }
 
   // the camera uses the whole window (no HUD strip); TOP = just below the scorebug (the off-screen marker stays under it)
@@ -1021,6 +1026,31 @@ const Game = (() => {
     }
     for (let i = 0; i < 70; i++)
       M.parts.push({ x: R(0, W), y: -R(10, 400), vx: R(-1, 1), vy: R(2, 4.5), life: Math.floor(R(120, 191)), age: 0, col: pal[i % 4], sz: R(4, 8), rot: Math.random() * 6.283, spin: R(-0.2, 0.2), grav: 0, kind: 0 });
+  }
+  // the sounds of a new frame d, from what changed since the frames before it (web/sound.js makes them)
+  function sfx(M, d) {
+    const m = M.meta, fr = M.frames, a = fr[fr.length - 1], z = fr[fr.length - 2];
+    if (!m || !a || d.t < a.t) return;                                                  // (the tick stands still during the kickoff intro)
+    const P = m.pitch, pan = d.b[0] / (P.out_x || P.half_w) * 0.7;
+    if (a.in > 0 && !d.in && d.st === 0) Sound.whistle(Sound.WHISTLE.kickoff);          // the kickoff intro is over: play
+    if (!a.ot && d.ot) Sound.whistle(Sound.WHISTLE.overtime);
+    if (a.st !== 1 && d.st === 1) Sound.roar(d.gt === m.human_team ? 1 : 0.6);
+    if (a.st !== 2 && d.st === 2) { Sound.whistle(Sound.WHISTLE.fulltime); setTimeout(() => G.match === M && Sound.roar(0.4), 1300); }
+    // a kick: a player's "kick used" flag (it is set only when the kick reached the ball) goes on
+    let kicked = false;
+    for (let i = 0; i < d.h.length && !kicked; i++) if ((d.h[i] & 4) && !(a.h[i] & 4)) {
+      const v = Math.hypot(d.b[0] - a.b[0], d.b[1] - a.b[1]) / (M.speed || 1);
+      Sound.kick(Math.min(1, Math.max(0.45, v / 7)) * (d.h[i] & 1 ? 1 : 0.75), pan); kicked = true;
+    }
+    // the ball changed direction without a kick: off a post, the boards / net, or a player
+    if (kicked || !z || M.speed !== 1 || d.st === 2 || performance.now() - (M.bounceAt || 0) < 90) return;
+    const v1 = [a.b[0] - z.b[0], a.b[1] - z.b[1]], v2 = [d.b[0] - a.b[0], d.b[1] - a.b[1]], s1 = Math.hypot(...v1);
+    if (s1 < 1.2 || Math.hypot(...v2) > 40 || !((v1[0] * v2[0] < 0 && Math.abs(v1[0]) > 0.8) || (v1[1] * v2[1] < 0 && Math.abs(v1[1]) > 0.8))) return;
+    const br = m.ball_r, [bx, by] = a.b;
+    const post = P.statics.some(([sx, sy, sr]) => Math.hypot(bx - sx, by - sy) < sr + br + 6);
+    const wall = Math.abs(by) > P.half_h - br - 6 || Math.abs(bx) > P.half_w - br - 6;
+    M.bounceAt = performance.now();
+    Sound.bounce(post ? "post" : wall ? "wall" : "body", Math.min(1, s1 / 6), pan);
   }
   function stepParticles(M, f) {
     const P = M.parts;
@@ -1223,6 +1253,13 @@ const Game = (() => {
     drawParticles(ctx, M);
     drawScorebug(ctx, M, m, f);
     if (M.p.session && !M.error) drawPuzzleHud(ctx, M, f, W, H, intro);
+    const ta = M.toast ? 1 - (performance.now() - M.toast.at) / 1400 : 0;                  // "Sound on / off" after N
+    if (ta > 0) {
+      ctx.save(); ctx.globalAlpha = Math.min(1, ta * 4);
+      roundRect(ctx, W / 2 - 80, H - 64, 160, 36, 18, "rgba(11,14,19,0.85)");
+      text(ctx, M.toast.text, W / 2 - 80, H - 40, "c", 160, 16, "#fff", 0, "", 700);
+      ctx.restore();
+    }
   }
   function drawKickoff(ctx, m, f, W, H, intro) {
     const k = 1 - intro / INTRO, a = Math.max(0, Math.min(1, k / 0.15)) * Math.max(0, Math.min(1, (1 - k) / 0.2));

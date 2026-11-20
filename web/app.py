@@ -5,7 +5,7 @@
 
   python3 web/app.py [--port 8080]       then open http://<this machine>:8080  (#/game = Game, #/ = Lab)
 
-Pages: web/index.html (shell), web/style.css, web/lab.js, web/game.js, web/game.css, web/draw.js.
+Pages: web/index.html (shell), web/style.css, web/lab.js, web/game.js, web/game.css, web/draw.js, web/sound.js.
 Routes: everything of lab/dashboard.py (/api/overview, /api/v1/..., /api/live, ...), plus /api/game/... (game/routes.py) and
 /ws/match (a live match over a WebSocket, game/session.py). The game needs numpy (net teams); without it the Lab still works.
 No login: use it on a trusted network only."""
