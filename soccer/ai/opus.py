@@ -11,8 +11,9 @@ different is how it thinks:
   clearances) by who reaches the ball first and what that is worth, including his own aim error, and compares the best kick
   with carrying the ball on.
 - Defending goal-side: the presser approaches the ball from between it and our goal, so a touch or a kick sends it away.
-- Finishing: in the final third the carrier drives at goal and shoots like the handmade bots (StyleBot._decide_action with
-  this team's style), which converted better than the simulated choice there; the Opus shape stays around him.
+- Finishing: in the opponents' half the carrier drives at goal and shoots like the handmade bots (StyleBot._decide_action with
+  this team's style), which converted better than the simulated choice there; the Opus shape stays around him (the simulated
+  kicks decide the build-up in our half).
 
 Plugged in through the style (data/styles/opus_high.json: "brain": "opus"); see soccer/ai/__init__.py."""
 import math
@@ -29,26 +30,27 @@ TS = np.arange(1.0, 151.0, 2.0)                    # ticks after the kick at whi
 QS = (1.0 - DAMP ** TS) / (1.0 - DAMP)             # distance travelled per unit of initial speed
 DECAY = DAMP ** TS
 N_DIRS = 40                                        # kick directions scanned (9 degrees apart)
-# position value (pos_value), calibrated on what an attack from there really yields (a few % per final-third entry)
-VAL0, VALXG, VALPROG = 0.01, 0.2, 0.03
-HOLD_K = 0.5            # carrying the ball on is discounted: most dribbles in the final third end in a loss
-WALL_PEN = 0.01         # carrying the ball into the touchline or a corner
-RECV_SHOT = 0.9         # a free team-mate near goal is worth this share of his shot's xG
-SHOT_READ = 24.0        # px of reach a defender (keeper included) loses reading where a shot goes
-KICK_REL = 0.6          # take the kick on offer when it is worth this share of the plan (no waiting for the perfect angle)
-PRESSED = 45.0          # px: an opponent this close to the ball = take any kick better than keeping it
-FINAL_FROM = 0.35       # share of the half beyond halfway from which the carrier drives at goal and shoots (StyleBot)
-BOX_FROM = 0.3          # from here on the most advanced supporter attacks the far-post area ...
-BOX_DEPTH, BOX_Y = 80.0, 45.0   # ... this far from the goal line and from the middle
-ATTACK_NEED_OWN = 12.0  # extra ticks of head start needed before switching to attack deep in our own half
-REST_BACK = 330.0       # px the rest defender stays behind the ball
-SUPPORT_MIN, SUPPORT_MAX = 110.0, 330.0   # px: support spots not closer to / further from the ball than this
-SPACING = 170.0         # px: support spots push each other apart within this distance
-COVER_FROM = 0.35       # a cover player drops goal-side when the ball is below this share of the half beyond halfway
-COVER_DIST = 115.0      # px the cover stands behind the ball, towards our goal
-MARK_GAP_FAR, MARK_GAP_NEAR = 55.0, 28.0  # px a marker stays from a harmless / a dangerous receiver
-GUARD_TRIGGER = 85.0    # px: a marker whose spot is this close to the ball near our goal guards the goal mouth instead
-POKE_RADIUS = 260.0     # px from our goal within which the presser pokes the ball away when he cannot play it
+# Tuned with tools/tune_opus.py (CMA-ES against 10 trained nets, 2026-11-20; see docs/opus_5_5_high.md, section 8).
+# position value (pos_value): roughly the chance a possession at that point ends in a goal
+VAL0, VALXG, VALPROG = 0.01, 0.327, 0.0425
+HOLD_K = 0.265          # carrying the ball on is discounted: most dribbles in the final third end in a loss
+WALL_PEN = 0.025        # carrying the ball into the touchline or a corner
+RECV_SHOT = 1.35        # a free team-mate near goal is worth this share of his shot's xG
+SHOT_READ = 38.6        # px of reach a defender (keeper included) loses reading where a shot goes
+KICK_REL = 0.428        # take the kick on offer when it is worth this share of the plan (no waiting for the perfect angle)
+PRESSED = 61.8          # px: an opponent this close to the ball = take any kick better than keeping it
+FINAL_FROM = -0.028     # share of the half beyond halfway from which the carrier drives at goal and shoots (StyleBot)
+BOX_FROM = 0.1          # from here on the most advanced supporter attacks the goal ...
+BOX_DEPTH, BOX_Y = 61.5, 0.0    # ... this far from the goal line and from the middle (0 = in front of goal)
+ATTACK_NEED_OWN = 21.8  # extra ticks of head start needed before switching to attack deep in our own half
+REST_BACK = 373.0       # px the rest defender stays behind the ball
+SUPPORT_MIN, SUPPORT_MAX = 84.2, 307.0   # px: support spots not closer to / further from the ball than this
+SPACING = 184.0         # px: support spots push each other apart within this distance
+COVER_FROM = 0.746      # a cover player drops goal-side when the ball is below this share of the half beyond halfway
+COVER_DIST = 140.0      # px the cover stands behind the ball, towards our goal
+MARK_GAP_FAR, MARK_GAP_NEAR = 73.0, 44.1  # px a marker stays from a harmless / a dangerous receiver
+GUARD_TRIGGER = 103.0   # px: a marker whose spot is this close to the ball near our goal guards the goal mouth instead
+POKE_RADIUS = 312.0     # px from our goal within which the presser pokes the ball away when he cannot play it
 SUPPORT_EVERY = 6                                  # ticks between two support-spot searches
 
 
@@ -282,7 +284,7 @@ class OpusBrain:
             return
         self.striker = None
         if bx > hw * BOX_FROM and len(free) >= 2:
-            # final third: the most advanced supporter attacks the far-post area (rebounds, balls across the box)
+            # attacking: the most advanced supporter attacks the goal (rebounds, balls across the box)
             st_ = max(free, key=lambda sp: sp.pos.real * ax + (40.0 if sp is self.striker else 0.0))
             self.striker = st_
             sy = -1.0 if ball.imag > 0.0 else 1.0

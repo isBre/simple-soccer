@@ -14,19 +14,22 @@ short.
 
 ## In one minute
 
-- **Plays as a team.** At any moment exactly one outfield player plays the ball; the other three have jobs (rest defence, far-post
-  striker, support / cover, marking). It has 3+ outfield players around the ball **3 % of the time** (Silver Arrows 5 %, RL Team 5
-  28 %) and plays **~33 passes a match at 80 %** (Silver Arrows ~10 at 59 %).
+- **Plays as a team.** At any moment exactly one outfield player plays the ball; the other three have jobs (rest defence,
+  striker, support / cover, marking). It has 3+ outfield players around the ball **4 % of the time** (Silver Arrows 5 %, RL Team 5
+  28 %) and plays **~23 passes a match at 79 %** (Silver Arrows ~10 at 59 %).
 - **Thinks with physics.** In build-up it simulates ~50 kicks per decision (three aim samples each) and every player's exact
   reach, and picks the kick by who gets to the ball first and what that is worth.
+- **Tuned against the nets.** 27 of its numbers were tuned overnight with CMA-ES against 10 trained nets; on fresh seeds that
+  added +0.33 points and +0.55 goal difference per match against the nets (z = 3.2 and 4.9).
 - **Strength:**
-  - **Rule teams:** top rule team on the Lab ranking at **1471 ± 171 Elo** (22nd of 42); next rule team Silver Arrows at 1284.
-  - **Trained nets:** clearly behind the strong ones (RL Team 5 ~1908, jit8 ~1878). It beats the weaker nets (t46, t48_best,
-    RL Team 1), but most strong nets beat it.
-  - **Against the 16 rule teams:** ~1.9 points per match, level with Silver Arrows head to head.
+  - **Lab ranking:** **1664 ± 154 Elo, 17th of 42**: the top rule team by ~380 points (Silver Arrows 1284), above RL Team 2 and
+    RL Team 3, level with the team46 nets.
+  - **Trained nets:** still behind the best ones (RL Team 5 ~1897, jit8 ~1879), but it now takes points off them: in its 60
+    ladder games it is 21-19-20, including a win and a draw against RL Team 5.
+  - **Against the 16 rule teams:** ~1.9 points per match, positive record against every one of them.
 
 ![Live match: defending](opus/screen_defending.jpg)
-*A live match in the browser (Opus in orange defends the left goal). One player (#5) engages the man on the ball; the others hold
+*A live match in the browser, before tuning (Opus in orange defends the left goal). One player (#5) engages the man on the ball; the others hold
 cover and marking positions and the keeper stays in goal: no swarm.*
 
 ---
@@ -75,7 +78,7 @@ team.
 **Who plays the ball.** For each player the brain computes the earliest tick he can touch the ball on its predicted path
 (`intercept`): $t_{us}$ for our best, $t_{them}$ for theirs. The phase:
 
-$$\text{attack if } t_{us} + 4 + 12\,\delta < t_{them},\qquad \text{defend if } t_{them} + 4 < t_{us},\qquad \text{otherwise contest}$$
+$$\text{attack if } t_{us} + 4 + 21.8\,\delta < t_{them},\qquad \text{defend if } t_{them} + 4 < t_{us},\qquad \text{otherwise contest}$$
 
 where $\delta \in [0,1]$ is how deep the ball is in our own half. Deep in our half the team only switches to attack when the
 ball is clearly ours; a scramble near our goal keeps the defensive shape. Only the first player to the ball plays it (with a
@@ -85,11 +88,11 @@ small bonus for whoever already had the job, so it doesn't flicker).
 |---|---|---|
 | **B** ball player | always one | attack: picks a kick or carries the ball (section 3); defend: presses from the goal side |
 | **K** keeper | always | the nominal goalkeeper; shot-stopping from the handmade bots; plays the ball only in his own box when he is first |
-| **R** rest defence | attack | the deepest free player stays ~330 px behind the ball against the counter |
-| **X** far-post striker | attack, final third | attacks the far post, 80 px from the goal line |
+| **R** rest defence | attack | the deepest free player stays ~370 px behind the ball against the counter |
+| **X** striker | attack, beyond halfway | goes to the goal, ~60 px in front of the goal line |
 | **S** support | attack | best open spot on a 55 px grid (below) |
-| **C** cover | defend, ball in our 2/3 | goal-side behind the presser, 115 px towards our goal |
-| **M** marker | defend | goal-side of the most dangerous receivers, 28 to 55 px off them |
+| **C** cover | defend, ball not deep in their half | goal-side behind the presser, 140 px towards our goal |
+| **M** marker | defend | goal-side of the most dangerous receivers, 44 to 73 px off them |
 | **G** guard | defend, scramble near our goal | the far half of the goal mouth instead of joining the pile |
 
 The support spot for each free player maximises
@@ -97,15 +100,16 @@ The support spot for each free player maximises
 $$S(\mathbf p) = 1.6\,\tfrac{V(\mathbf p)}{0.35} + 0.22\,\min\!\big(\tfrac{d_{opp}}{130},1\big) + 0.22\,\min\!\big(\tfrac{\ell}{70},1\big) - \text{(too close / too far from the ball)} - \text{(near team-mates)} - 0.0006\,|\mathbf p - \mathbf x|$$
 
 with $V$ the position value (section 3), $d_{opp}$ the distance to the nearest opponent, $\ell$ the clearance of the pass lane from
-the ball; team-mates already placed push each other apart within 170 px.
+the ball (spots between 84 and 307 px from the ball); team-mates already placed push each other apart within 184 px. The numbers
+in this document are the tuned values (section 8 lists the hand-set ones they replaced).
 
 ![The shapes in real moments](opus/shapes.png)
-*Real moments from a match against Silver Arrows, drawn from the simulation. Dashed lines go to where the brain sends each player.*
+*Real moments from a match against Silver Arrows (tuned version), drawn from the simulation. Dashed lines go to where the brain sends each player.*
 
 | | |
 |---|---|
 | ![Build-up](opus/screen_buildup.jpg) | ![Attack](opus/screen_attack.jpg) |
-| *Build-up on the touchline: #8 on the ball, #5 and #9 offer passes, #4 stays back.* | *Attacking the box: #8 and #5 inside, #9 at the edge, #4 at halfway marking the counter.* |
+| *Before tuning. Build-up on the touchline: #8 on the ball, #5 and #9 offer passes, #4 stays back.* | *Attacking the box: #8 and #5 inside, #9 at the edge, #4 at halfway marking the counter.* |
 
 ---
 
@@ -133,26 +137,26 @@ $$P_{\text{keep}} = \sigma\!\left(\frac{2(k_o-k_m) - 6}{5}\right),\qquad \text{v
 
 $V$ is the **position value**, an estimate of how likely possession at a point ends in a goal:
 
-$$V(\mathbf p) = 0.01 + 0.2\,\mathrm{xG}(\mathbf p) + 0.03\,\pi^2,\qquad \mathrm{xG}(\mathbf p) = \mathrm{clip}\!\left(0.75\,(\theta/1.8)^{1.6},\,0.01,\,0.8\right)$$
+$$V(\mathbf p) = 0.01 + 0.327\,\mathrm{xG}(\mathbf p) + 0.0425\,\pi^2,\qquad \mathrm{xG}(\mathbf p) = \mathrm{clip}\!\left(0.75\,(\theta/1.8)^{1.6},\,0.01,\,0.8\right)$$
 
 where $\theta$ is the angle the goal mouth subtends from $\mathbf p$ (the game's own xG, `soccer/rating.py`) and $\pi \in [0,1]$ is
-progress up the pitch. The weights were calibrated to what attacks really yield (a few % per final-third entry; an early version
-valued them about 5× too high and never shot). A free team-mate near goal is worth the shot he gets:
-$V_{\text{recv}} = \max\big(V\cdot(0.55 + 0.45\,\sigma(\cdot)),\; 0.9\,\mathrm{xG}\cdot\sigma(\tfrac{\text{space}-25}{12})\big)$.
+progress up the pitch. The weights were first calibrated by hand to what attacks really yield (a few % per final-third entry;
+an early version valued them about 5× too high and never shot), then tuned. A free team-mate near goal is worth the shot he gets:
+$V_{\text{recv}} = \max\big(V\cdot(0.55 + 0.45\,\sigma(\cdot)),\; 1.35\,\mathrm{xG}\cdot\sigma(\tfrac{\text{space}-25}{12})\big)$.
 
 **Shots.** A path that crosses the goal line before any team-mate touches it is a shot. Its margin $m$ is the opponents' smallest
-deficit before the line, plus 24 px because defenders need a moment to read a shot's direction:
+deficit before the line, plus 38.6 px because defenders need a moment to read a shot's direction:
 
-$$P_{\text{clean}} = \sigma\!\left(\frac{m + 24 - 2}{7}\right),\qquad \text{value} = 0.97\,P_{\text{clean}} + (1-P_{\text{clean}})\cdot\big(0.04 + 0.05\,n_{\text{box}}\big)$$
+$$P_{\text{clean}} = \sigma\!\left(\frac{m + 38.6 - 2}{7}\right),\qquad \text{value} = 0.97\,P_{\text{clean}} + (1-P_{\text{clean}})\cdot\big(0.04 + 0.05\,n_{\text{box}}\big)$$
 
 The last term is the rebound, worth more with team-mates near goal. A path that runs over **our own** goal line is never an option.
 
 **Carrying the ball** is compared against the best kick: 16 headings, the value 70 px on, times the chance we are still first to
-the ball there, discounted by 0.5 (most dribbles in the final third end in a loss) and penalised into the touchline or a corner.
+the ball there, discounted by 0.265 (most dribbles end in a loss) and penalised into the touchline or a corner.
 
 **Kicking what is really on.** The plan is refreshed every few ticks, but the kick itself is decided at contact: the direction the
 contact would give *right now* (contact normal plus the ball's velocity) is evaluated fresh. It is taken when it beats keeping the
-ball and is close to the plan (or ≥ 60 % of it, or straight away when an opponent is within 45 px). Without this the player
+ball and is close to the plan (or ≥ 43 % of it, or straight away when an opponent is within 62 px). Without this the player
 circled the ball while the defenders closed in.
 
 ![One decision](opus/decision.png)
@@ -164,15 +168,15 @@ kept 90 % of the time (261 passes):
 
 ![Pass calibration](opus/pass_calibration.png)
 
-Shots, after adding the reading delay: predicted 0.5 to 0.8 → 44 % scored (9 shots), predicted over 0.8 → 60 % (5 shots),
-predicted 0.2 to 0.5 → 8 % (13 shots).
+Shots, after adding the reading delay (24 px at the time): predicted 0.5 to 0.8 → 44 % scored (9 shots), predicted over 0.8 →
+60 % (5 shots), predicted 0.2 to 0.5 → 8 % (13 shots).
 
 ---
 
 ## 4. Defending
 
 - **Pressing from the goal side.** The presser runs round the ball to the side of our goal before engaging, so a touch or a kick
-  sends the ball away from our goal. He only kicks when the evaluated kick is worth it; a blind poke is allowed only within 260 px of
+  sends the ball away from our goal. He only kicks when the evaluated kick is worth it; a blind poke is allowed only within 312 px of
   our goal. Before this rule the presser poked ~27 times a match and gave the ball back 89 % of the time.
 - **Cover and markers.** The cover stands between ball and goal; markers take the most dangerous receivers by
   $V_{\text{them}}(\text{position}) + 0.15\,(\text{closeness to the ball})$ and stand goal-side, leaning towards the ball to cut
@@ -183,9 +187,9 @@ predicted 0.2 to 0.5 → 8 % (13 shots).
 
 ## 5. Finishing
 
-In the final third (beyond 35 % of the opponents' half) the ball player switches to the handmade bots' direct finishing
-(`StyleBot._decide_action`: drive at goal, shoot at the open part of the mouth, long shots when the lane is open), with the Opus
-shape around him: far-post striker, support, rest defence. The simulated choice was better at keeping the ball but worse at
+In the opponents' half the ball player switches to the handmade bots' direct finishing (`StyleBot._decide_action`: drive at goal,
+shoot at the open part of the mouth, long shots when the lane is open), with the Opus shape around him: striker, support, rest
+defence. (By hand this started at 35 % of the opponents' half; the tuning moved it to the halfway line.) The simulated choice was better at keeping the ball but worse at
 scoring: before the switch Opus reached the final third more often than Silver Arrows (28.7 vs 23.4 times a match) but shot from
 close range far less:
 
@@ -229,40 +233,43 @@ but 0.77 → 0.19 against nets).
 
 ![Team play](opus/teamplay.png)
 
-**Against the rule teams** (`tools/team_bench.py opus_high --rl`, 3-minute matches): positive record against all 16, ~1.9
-points per match on average. Silver Arrows, with the same players, averages about the same against the other teams, and the two
-are level head to head. Opus is the more solid of the two (0.83 goals conceded per match vs Arrows' 1.17, RL Team 4/5 included) but scores less
-(1.16 vs 1.38).
+**Against the rule teams** (`tools/team_bench.py opus_high --rl`, 3-minute matches): positive record against all 16, 1.94 points
+per match on average (1.88 before tuning), 0.33 goals conceded per match. Silver Arrows, with the same players, averages a similar
+number of points against the other teams but concedes almost twice as many (0.58); head to head the two are close (Opus 4-5-3 in 12).
 
 **Against the trained nets.** The real test, because league points against rule bots saturate:
 
 | Opponents | Opus 5.5 High | Silver Arrows |
 |---|---|---|
-| RL Team 4 / 5 (pts per match, conceded) | 0.17, 3.4 | 0.13, 5.8 |
-| t48_u100, kickstart, persist_lr, wide_persist, jit8, RL Team 5 | 0.77 pts, 2.4 conceded | 0.08 pts, 4.6 conceded |
+| RL Team 4 / 5, 3-minute matches (pts per match, conceded) | 0.17, 3.1 (before tuning 0.17, 3.4) | 0.13, 5.8 |
+| t48_u100, kickstart, persist_lr, wide_persist, jit8, RL Team 5 (before tuning) | 0.77 pts, 2.4 conceded | 0.08 pts, 4.6 conceded |
+| 10 nets of the tuning, 90 s matches, fresh seeds (360 matches) | 0.97 pts, −0.41 goal difference (defaults: 0.71, −0.87) | |
 
 **The Lab ranking** (`lab/ladder.py`: everyone against everyone, 90-second matches, Bradley–Terry on the Elo scale with 95 %
 intervals):
 
 ![Ladder](opus/ladder.png)
 
-Opus is 22nd of 42 at 1471 ± 171 after 40 games: above every handmade team (Silver Arrows 1284), level with t48_u100 and RL Team 1,
-below RL Team 2/3 and every recent run's best net. Its own record there: 2–0 against t46_best, t48_best, RL Team 1, Teal Tide
-and Harbor Sharks; 0–2–0 against RL Team 3; mostly one-goal defeats against the stronger nets. A one-off full round robin
-(3-minute matches, [docs/elo_ranking.md](elo_ranking.md)) gives the same picture.
+After tuning, Opus is **17th of 42 at 1664 ± 154** after 60 games (the team file got a new version, so the ranking re-rated it
+from scratch; before tuning it was 22nd at 1471 ± 171). That is ~380 points above every handmade team, above RL Team 2 and RL Team 3
+and six of the trained nets, level with the team46 nets, and still ~230 below the top (RL Team 5 1897, jit8 1879). Its record:
+21 wins, 19 draws, 20 defeats, 35–34 in goals; 1-1-0 against RL Team 5, 0-1-1 against jit8, 2-0-0 against x_anchor_ctrl and
+x_kickstart, 2-1-1 against RL Team 3, 0-0-2 against RL Team 4 and x_anchor_wall_strong. The one-off full round robin made before
+tuning ([docs/elo_ranking.md](elo_ranking.md), 3-minute matches) put the old version at the same place as the ladder did then.
 
-**It isn't the players.** Giving Opus perfect attributes (99: no reaction delay, almost no aim error) only moves it from 0.65 to
-0.81 points per match against six nets (90-second matches). The gap to the nets is in the decisions, not in the senses.
+**It isn't the players.** Before tuning, giving Opus perfect attributes (99: no reaction delay, almost no aim error) only moved it
+from 0.65 to 0.81 points per match against six nets (90-second matches). The gap to the nets is in the decisions, not in the
+senses, which is why tuning the decisions paid off more than better players would.
 
 ---
 
 ## 8. Auto-tuning against the nets
 
-*Running overnight; this section gets its numbers when it finishes.*
-
-The structure stays fixed (jobs, one player on the ball); 27 numbers are tuned: the value weights, shot reading, the kick-now
-thresholds, where the finishing and the far-post job start, the rest-defence, cover, marking and guard distances, the support
-spacing, and four style values of the finisher (long shots, pass bias, risk, keeper sweeping).
+The hand-built version plateaued at 1471 on the ladder, so the numbers were handed to an optimiser
+([`tools/tune_opus.py`](../tools/tune_opus.py)). The structure stays fixed (jobs, one player on the ball, no swarm); 27 numbers are
+tuned: the value weights, shot reading, the kick-now thresholds, where the finishing and the striker job start, the rest-defence,
+cover, marking and guard distances, the support spacing, and four style values of the finisher (long shots, pass bias, risk, keeper
+sweeping).
 
 **Objective.** A parameter vector $\theta$ (scaled to $[0,1]^{27}$) is played against 10 nets around and above Opus (RL Team
 2/4/5, jit8, the best `x_*` runs, t48_best, team46_w256), both sides, 90-second matches:
@@ -281,18 +288,53 @@ $$\mathbf m \leftarrow \sum_{i=1}^{\mu} w_i\,\theta_{i:\lambda},\qquad w_i \prop
 The covariance $\mathbf C = \mathbf B\mathbf D^2\mathbf B^\top$ learns which parameters move together (rank-one update from the
 evolution path, rank-$\mu$ update from the selected steps), and the step size $\sigma$ grows or shrinks with the length of its own
 evolution path. Every 4 generations the mean is played on fixed validation seeds (160 matches); the best validated mean is the
-result. Defaults on the validation set: $f = 0.18$ (0.64 points, −0.92 goal difference per 90-second match).
+result.
 
----
+**The run.** 24 generations, 13 × 40 matches each, about 2.8 hours on 3 low-priority cores of a fanless laptop (~13,000 matches).
+Every validated mean beat the defaults (0.18); the best, at generation 16, scored 0.69 (0.94 points, −0.50 goal difference):
+
+![Tuning](opus/tuning.png)
+
+**Checked on fresh seeds.** The best of six validations is optimistic by construction, so tuned and hand-set versions then played the
+same new seeds (paired: same opponent, side and seed):
+
+| Fresh seeds | Matches | Points per match (hand-set → tuned) | Goal difference per match | z (points / goal difference) |
+|---|---|---|---|---|
+| 10 nets, block 1 | 120 | 0.76 → 0.88 | −0.81 → −0.53 | 0.8 / 1.7 |
+| 10 nets, block 2 | 240 | 0.69 → 1.02 | −0.90 → −0.35 | **3.2 / 4.9** |
+| 6 rule teams | 48 | 1.63 → 1.77 | +0.27 → +0.56 | 0.7 / 1.6 |
+
+Better in every block, clearly so on the larger one. On the Lab ladder the tuned version went from 1471 to 1664.
+
+**What changed** (the largest moves):
+
+| Parameter | Hand-set | Tuned | Reading |
+|---|---|---|---|
+| where direct finishing starts | 35 % into their half | the halfway line | attack the goal directly as soon as the ball crosses halfway |
+| striker position | far post, 45 px off centre | centre, 61 px from the line | stand in front of goal for rebounds and cut-backs |
+| shot reading delay | 24 px | 38.6 px | shoot more: defenders react later than the model assumed |
+| long shots (style) | 0.5 | 0.71 | shoot from further out |
+| carry discount | 0.5 | 0.265 | keep the ball less, pass or shoot sooner |
+| receiver's shot value | 0.9 | 1.35 | value passes to a free man near goal more |
+| head start needed to attack in our half | 12 ticks | 21.8 ticks | stay compact longer after winning the ball deep |
+| cover depth / marking gap | 115 / 28–55 px | 140 / 44–73 px | defend a little deeper and looser, protect the space behind |
+| rest defence | 330 px behind the ball | 373 px | keep the last man deeper |
+| keeper sweeping (style) | 0.3 | 0.12 | the keeper stays on his line |
+
+The direction is consistent: **more direct and more willing to shoot in attack, deeper and more patient in defence**. The team
+play is intact: 3+ players around the ball 4.1 % of the time (3.2 % before, Silver Arrows 5.4 %), the same spacing, fewer passes
+(23 instead of 33 a match) because the finishing now starts at halfway.
 
 ## 9. Limits and next steps
 
-- **Scoring is the weak point.** 1.07 goals per match in the full round robin against all 41 other teams. The direct finishing borrowed from the handmade bots
+- **Scoring is still the weak point.** Before tuning: 1.07 goals per match in the full round robin against all 41 other teams; the
+  tuning helped mostly by making it shoot earlier. The direct finishing borrowed from the handmade bots
   works, but a finishing model of its own (one-timers across the box, cut-backs) is the obvious next lever.
-- **The strong nets are 250 to 450 Elo higher.** They win goal-line scrambles with numbers; Opus refuses to swarm by design.
-  Closing that gap under the realism rule probably needs a planner that simulates whole sequences in the real match engine
-  (a rollout of each candidate action for ~1 s with all ten players), not single kicks.
-- **Its interval on the ladder is still wide** (40 games); the runner narrows it once this branch is on `main` and the Pi plays more
+- **The strongest nets are still ~230 Elo higher.** They win goal-line scrambles with numbers; Opus refuses to swarm by design.
+  Closing the rest of the gap under the realism rule probably needs a planner that simulates whole sequences in the real match
+  engine (a rollout of each candidate action for ~1 s with all ten players), not single kicks. A longer tuning run (more matches per
+  candidate, more generations) is the cheaper next step.
+- **Its interval on the ladder is still wide** (60 games); the runner narrows it once this branch is on `main` and the Pi plays more
   rounds.
 
 ## Reproduce
@@ -301,7 +343,7 @@ result. Defaults on the validation set: $f = 0.18$ (0.64 points, −0.92 goal di
 python3 tools/team_bench.py opus_high --rl                    # vs every rule team and RL Team 4/5
 python3 tools/team_bench.py opus_high --vs net:models/jit8_best.json,net:data/models/rl_5v5_arena_v5.json
 python3 lab/ladder.py round --pairs 10 --workers 4             # more ladder games (the Lab ranking)
-python3 tools/tune_opus.py --gens 24 --seeds 2 --workers 3     # the auto-tuning (resumes; logs/tune/)
+python3 tools/tune_opus.py --gens 24 --seeds 2 --workers 3     # the auto-tuning (resumes; logs/tune/); its defaults are now the tuned values
 ```
 
 Watch it: `python3 web/app.py`, then Quick Match → Rule Based League → Opus 5.5 High, control "Watch".

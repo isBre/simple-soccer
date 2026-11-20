@@ -76,6 +76,7 @@ def main():
     ap.add_argument("--size", type=int, default=5)
     ap.add_argument("--rl", action="store_true", help="also play the RL league teams")
     ap.add_argument("--vs", default="", help="comma-separated opponents instead of the whole league")
+    ap.add_argument("--workers", type=int, default=os.cpu_count() or 2, help="parallel matches (fewer = cooler laptop)")
     a = ap.parse_args()
     db = database()
     if a.vs:
@@ -88,7 +89,7 @@ def main():
     jobs = [(a.team, o, side, a.seed0 + s * 7 + i * 101, a.duration, a.pitch, a.size)
             for i, o in enumerate(opps) for side in (0, 1) for s in range(a.seeds)]
     t0 = time.time()
-    with mp.get_context("fork").Pool(os.cpu_count() or 2) as pool:
+    with mp.get_context("fork").Pool(a.workers) as pool:
         res = pool.map(play, jobs, chunksize=1)
     by = {}
     for r in res:

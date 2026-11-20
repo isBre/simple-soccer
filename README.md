@@ -86,6 +86,7 @@ data/     pitches, styles, teams, formations, shipped nets (JSON)
 - Ball carrier (`soccer/ai/rules.py` `StyleBot._decide_action`): shoots at the goal-mouth point whose line is furthest from every opponent (keeper included), takes longer shots when the lane is open, dribbles by scoring 7 headings against opponents' positions and momentum, and rates passes by receiver space plus whether an opponent can reach the lane before the ball (`_pass_margin`, ball travel time from the real kick speed and damping).
 - Ball physics is fixed (a kick adds exactly 5 px/tick to the ball's current velocity, damping 0.99/tick), so the bots predict the ball: `intercept` (`soccer/ai/rules.py`) finds the earliest point on the ball's path a player can reach (chasers run to it, and an off-ball *interceptor* is sent onto an opponent's pass/shot, `style.intercept`); `_compensated_dir` corrects the kick direction for the ball's velocity so passes/shots on a moving ball go where intended.
 - Game management (`TeamBrain.urgency`): in the last ~45 % of the match a team that is behind pushes up, shoots earlier and presses with one more player; a team that is ahead drops deeper.
+- Team strength comes from `tools/generate_data.py` (`base`). The UI shows the team rating (average of the best 5 players) as a number with 0-5 stars (`game/api.py` `stars`). Teams are picked with `<` / `>` pickers (Left / Right keys) instead of dropdowns.
 
 ### Opus 5.5 High (`soccer/ai/opus.py`)
 Full write-up with the maths, plots and screenshots: [docs/opus_5_5_high.md](docs/opus_5_5_high.md).
@@ -94,7 +95,7 @@ A Rule Based League team with its own team brain (`OpusBrain` + `OpusBot`, chose
 and limits as every bot (perception delay, aim error, position noise and decision speed from the attributes, which are those of
 Silver Arrows, the strongest handmade team), so the difference is only how it plays:
 - **Jobs, not a swarm**: exactly one outfield player plays the ball (whoever gets there first). With the ball, one player stays
-  back as the rest defence, the most advanced supporter attacks the far post in the final third and the others take open
+  back as the rest defence, the most advanced supporter goes to the goal as striker beyond halfway and the others take open
   support spots (value of the spot, pass lane, distance to opponents, spread from team-mates). Without it, one presser
   approaches goal-side, one covers between ball and goal, the others mark the most dangerous receivers; near our goal a marker
   whose man is already in a scramble guards the far half of the goal mouth instead of piling in. The keeper keeps goal and only
@@ -105,17 +106,17 @@ Silver Arrows, the strongest handmade team), so the difference is only how it pl
   it; shots: chance nobody reaches it before the line, with a reading delay for defenders and a rebound value). The kick that is
   actually taken is the one the contact gives right now, evaluated fresh, so a pass never goes off by the line-up tolerance.
   Pass predictions are calibrated: passes rated over 95 % safe are kept about 90 % of the time.
-- **Final third** (from 35 % of the half beyond halfway): the carrier drives at goal and shoots like the handmade bots
-  (`StyleBot._decide_action` with the Opus style), with the Opus shape around him.
-- Elo: it joins the Lab's ranking (`lab/ladder.py`) as `rules:opus_high`. A one-off full round robin of 42 teams and nets before
-  that ([docs/elo_ranking.md](docs/elo_ranking.md), 3-minute matches, not on the ladder's scale) put it 24th at 1331, the top rule
-  team (Silver Arrows 1079) and above two trained nets.
-- Measured with `python3 tools/team_bench.py opus_high --rl` (5v5 arena, 3 min, both sides): about 1.9 points per match against
-  the 16 rule teams (it beats every one of them on balance; level with Silver Arrows head to head), 3.4 goals conceded per match
-  against RL Team 4/5 (Silver Arrows: 5.8), and wins games against several of the trained nets in `models/`. It plays as a team:
-  3+ of its outfield players are within 120 px of the ball only ~3 % of the time (Silver Arrows ~5 %, RL Team 5 ~28 %),
-  ~35 passes per match at ~80 % completion (Silver Arrows ~10 at ~60 %).
-- Team strength comes from `tools/generate_data.py` (`base`). The UI shows the team rating (average of the best 5 players) as a number with 0-5 stars (`game/api.py` `stars`). Teams are picked with `<` / `>` pickers (Left / Right keys) instead of dropdowns.
+- **Opponents' half**: the carrier drives at goal and shoots like the handmade bots (`StyleBot._decide_action` with the Opus
+  style), with the Opus shape around him.
+- **Tuned**: its 27 constants (distances, margins, value weights, four style values) were tuned with CMA-ES against 10 trained nets
+  (`tools/tune_opus.py`): +0.33 points and +0.55 goal difference per match against the nets on fresh seeds (z 3.2 / 4.9).
+- Elo (the Lab's ranking, `lab/ladder.py`, as `rules:opus_high`): **1664 ± 154, 17th of 42** after tuning (1471 before): the top rule
+  team by ~380 points, above RL Team 2 and 3, ~230 below RL Team 5. The one-off round robin before tuning is in
+  [docs/elo_ranking.md](docs/elo_ranking.md).
+- Measured with `python3 tools/team_bench.py opus_high --rl` (5v5 arena, 3 min, both sides): 1.94 points per match against the 16
+  rule teams (positive record against every one, 0.33 goals conceded per match), 3.1 goals conceded per match against RL Team 4/5
+  (Silver Arrows: 5.8). It plays as a team: 3+ of its outfield players are within 120 px of the ball ~4 % of the time (Silver
+  Arrows ~5 %, RL Team 5 ~28 %), ~23 passes per match at ~79 % completion (Silver Arrows ~10 at ~60 %).
 
 Physics is identical for every team. Attributes (finishing, passing, defending, positioning, reaction) and styles only change AI behaviour.
 

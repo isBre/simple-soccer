@@ -29,7 +29,8 @@ DURATION = 90.0
 VALIDATE_EVERY = 4
 VAL_SEEDS = 8
 
-# (name, default, low, high); "style." = an attribute of the opus_high style, else a module constant of soccer.ai.opus
+# (name, hand-set value, low, high); "style." = an attribute of the opus_high style, else a module constant of soccer.ai.opus.
+# A run starts from the CURRENT values (current()), so tuning again continues from the last result.
 PARAMS = [
     ("VALXG", 0.2, 0.05, 0.6), ("VALPROG", 0.03, 0.0, 0.15), ("HOLD_K", 0.5, 0.1, 1.2), ("WALL_PEN", 0.01, 0.0, 0.05),
     ("RECV_SHOT", 0.9, 0.2, 1.5), ("SHOT_READ", 24.0, 0.0, 50.0), ("KICK_REL", 0.6, 0.2, 1.0), ("PRESSED", 45.0, 25.0, 90.0),
@@ -44,7 +45,18 @@ PARAMS = [
 N = len(PARAMS)
 LO = np.array([p[2] for p in PARAMS])
 HI = np.array([p[3] for p in PARAMS])
-X0 = np.array([(p[1] - p[2]) / (p[3] - p[2]) for p in PARAMS])
+HAND_SET = {p[0]: p[1] for p in PARAMS}      # the values before the first tuning run (2026-11-20)
+
+
+def current():
+    """The values the code and the style use now: a new run starts from them."""
+    from soccer.ai import opus
+    from soccer.data import database
+    st = database().styles["opus_high"]
+    return {n: float(getattr(st, n[6:]) if n.startswith("style.") else getattr(opus, n)) for n, *_ in PARAMS}
+
+
+X0 = np.clip(np.array([(current()[p[0]] - p[2]) / (p[3] - p[2]) for p in PARAMS]), 0.0, 1.0)
 
 
 def decode(x):
