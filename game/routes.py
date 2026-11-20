@@ -1,7 +1,7 @@
 """The game's HTTP API (served by web/app.py under /api/game/):
   GET  /api/game/catalog          leagues, teams (logos, kits, squads, ratings), pitches, formations per team size
   POST /api/game/tournament       {"action": ..., "t": tournament?, ...} -> {"t": tournament, "view": {...}} (game/tournament.py)
-       new       {"league", "user", "count", "format", "pitch", "size", "duration"}: a new tournament (random opponents and seed)
+       new       {"league" ("all" = every league, mixed), "user", "count", "format", "pitch", "size", "duration"}: a new tournament (random opponents and seed)
        view      the derived view of a stored tournament
        simulate  plays every unplayed match of the current round (all cores), then records them
        fixture   -> {"setup", "index"}: the player's next match, to play live (/ws/match)
@@ -21,7 +21,7 @@ def _pow2(n):
 
 
 def new_tournament(b):
-    teams = [t for t in api.team_list() if t.league == b.get("league")]
+    teams = [t for t in api.team_list() if b.get("league") == api.ALL_LEAGUES or t.league == b.get("league")]   # "all": mixed
     ids = [t.id for t in teams]
     user = b.get("user")
     if user not in ids or len(ids) < 2:
