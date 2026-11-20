@@ -47,6 +47,7 @@ class Style:
         self.id = str(d.get("id", "balanced"))
         self.name = str(d.get("name", self.id))
         self.description = str(d.get("description", ""))
+        self.brain = str(d.get("brain", "rules"))       # "rules" (TeamBrain + StyleBot) or "opus" (soccer/ai/opus.py)
         for k in STYLE_KEYS:
             setattr(self, k, float(d.get(k, STYLE_DEFAULTS[k])))
 
@@ -111,6 +112,9 @@ class Team:
         self.formations = d.get("formations", {})
         self.ml_model = str(d.get("ml_model", ""))
         self.league = str(d.get("league", "rl" if self.ml_model else "rules"))
+        # part of the RL evaluation league (rl/evaluate.py: the 16 original rule teams); teams added later set "rl_eval": false
+        # so the RL protocol and every earlier evaluation stay comparable
+        self.rl_eval = bool(d.get("rl_eval", not self.ml_model))
         self.players = [PlayerDef(p) for p in d.get("players", [])]
 
     def strength(self):

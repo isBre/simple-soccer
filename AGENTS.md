@@ -22,6 +22,7 @@ python3 lab/lab.py best                    # checkpoints ranked by the lower 95%
 python3 lab/lab.py compare A B             # paired difference A - B with se, z, p, MDE and a verdict (same protocol only)
 python3 lab/lab.py ablation                # each finished run vs its reference, Holm-corrected over the batch
 python3 lab/lab.py events --since 2026-11-16T20:00   # what happened (starts, resumes, stops, evaluations, reboots)
+python3 lab/lab.py ranking [--league rl]   # Elo ranking of every team of every league (lab/ladder.py), with 95% intervals
 ```
 Style / tactics: every full evaluation (and `python3 rl/eval_checkpoint.py --model M --out F --mode scout`, ~2 min) stores a `scout`
 summary: possession, field tilt, PPDA, pressing distances, how often the goal is guarded or empty, shape by depth rank in and out of

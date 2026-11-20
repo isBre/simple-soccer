@@ -1,6 +1,6 @@
 // The Lab area of the web app (web/app.py): dashboard of the experiment pipeline (API: lab/dashboard.py). Polls the JSON API every 10 s.
 // It also owns the router: #/game/... routes go to the Game area (web/game.js).
-// Routes: #/ now · #/live · #/runs · #/run/<name>[/<tab>] · #/compare?runs=a,b&kind=full · #/dataset[/<match>] · #/pi
+// Routes: #/ now · #/live · #/runs · #/run/<name>[/<tab>] · #/compare?runs=a,b&kind=full · #/ranking · #/dataset[/<match>] · #/pi
 // Charts are plain SVG (no libraries, no internet). Run colours are hashed from the run name, so they never change.
 "use strict";
 
@@ -511,7 +511,59 @@ function resolveDoc(href, base) {          // a relative link of a document -> a
   const dir = base.includes("/") ? base.slice(0, base.lastIndexOf("/") + 1) : "";
   return (dir + href).split("/").reduce((a, p) => { if (p === "..") a.pop(); else if (p && p !== ".") a.push(p); return a; }, []).join("/");
 }
+// ---------- maths in the docs: a small TeX subset ($inline$, $$display$$) rendered to HTML, no external library ----------
+// Only for documents with a display formula (a line starting with $$), so a stray $ elsewhere is never touched.
+let mdMath = false;
+const TEX_SYM = { alpha: "α", beta: "β", gamma: "γ", delta: "δ", epsilon: "ε", theta: "θ", lambda: "λ", mu: "μ", pi: "π", sigma: "σ",
+  tau: "τ", phi: "φ", Sigma: "Σ", sum: "Σ", le: "≤", leq: "≤", ge: "≥", geq: "≥", cdot: "·", times: "×", sim: "∼", in: "∈",
+  propto: "∝", leftarrow: "←", rightarrow: "→", to: "→", infty: "∞", approx: "≈", ne: "≠", pm: "±", top: "⊤", ldots: "…",
+  lfloor: "⌊", rfloor: "⌋", ln: "ln", log: "log", exp: "exp", min: "min", max: "max", cos: "cos", sin: "sin",
+  quad: "\u2003", qquad: "\u2003\u2003", ",": "\u2009", ";": "\u2005", " ": " ", "!": "", "{": "{", "}": "}", "|": "‖", "%": "%" };
+function tex(s) {
+  let i = 0;
+  const skip = () => { while (s[i] === " ") i++; };
+  const raw = () => {                       // the argument as plain text (\text, \mathrm)
+    skip();
+    if (s[i] !== "{") return esc(s[i++] || "");
+    let d = 0, j = i;
+    for (; j < s.length; j++) { if (s[j] === "{") d++; else if (s[j] === "}" && --d === 0) break; }
+    const t = s.slice(i + 1, j); i = j + 1; return esc(t);
+  };
+  const arg = () => { skip(); if (s[i] === "{") { i++; return parse(true); } if (s[i] === "\\") return cmd(); return atom(s[i++] || ""); };
+  const atom = (c) => (/[a-zA-Z]/.test(c) ? `<i>${c}</i>` : esc(c));
+  function cmd() {
+    i++;
+    let name;
+    if (/[a-zA-Z]/.test(s[i])) { let j = i; while (j < s.length && /[a-zA-Z]/.test(s[j])) j++; name = s.slice(i, j); i = j; } else name = s[i++];
+    switch (name) {
+      case "frac": case "tfrac": case "dfrac": { const a = arg(), b = arg(); return `<span class="tx-frac"><span>${a}</span><span>${b}</span></span>`; }
+      case "sqrt": return `√<span class="tx-sqrt">${arg()}</span>`;
+      case "mathbf": case "boldsymbol": return `<b class="tx-bf">${arg().replace(/<\/?i>/g, "")}</b>`;
+      case "mathrm": case "text": case "operatorname": return `<span class="tx-rm">${raw()}</span>`;
+      case "mathcal": return `<span class="tx-cal">${raw()}</span>`;
+      case "overline": case "bar": return `<span class="tx-over">${arg()}</span>`;
+      case "left": case "right": case "big": case "Big": case "bigg": case "Bigg": return "";
+      default: return TEX_SYM[name] !== undefined ? TEX_SYM[name] : esc("\\" + name);
+    }
+  }
+  function parse(inGroup) {
+    let out = "";
+    while (i < s.length) {
+      const c = s[i];
+      if (c === "}") { i++; if (inGroup) return out; continue; }
+      if (c === "{") { i++; out += parse(true); continue; }
+      if (c === "^") { i++; out += `<sup>${arg()}</sup>`; continue; }
+      if (c === "_") { i++; out += `<sub>${arg()}</sub>`; continue; }
+      if (c === "\\") { out += cmd(); continue; }
+      out += atom(c); i++;
+    }
+    return out;
+  }
+  return parse(false);
+}
 function mdInline(t, base) {
+  const maths = [];
+  if (mdMath) t = t.replace(/\$([^$]+?)\$/g, (_, m) => { maths.push(m); return "\u0000" + (maths.length - 1) + "\u0000"; });
   t = esc(t);
   t = t.replace(/`([^`]+)`/g, (_, c) => `<code>${c}</code>`);
   t = t.replace(/\*\*([^*]+)\*\*/g, "<b>$1</b>").replace(/(^|[\s(])\*([^*\s][^*]*)\*(?=[\s).,;:]|$)/g, "$1<i>$2</i>");
@@ -524,10 +576,12 @@ function mdInline(t, base) {
     const d = (docs.list || []).find((x) => x.path === norm);
     return d ? `<a href="#/docs/${esc(d.id)}">${label}</a>` : label;
   });
+  if (maths.length) t = t.replace(/\u0000(\d+)\u0000/g, (_, k) => `<span class="tx">${tex(maths[+k])}</span>`);
   return t;
 }
 function md(src, base) {
   src = src.replace(/<img\s[^>]*?src="([^"]+)"[^>]*?alt="([^"]*)"[^>]*>/g, "![$2]($1)").replace(/<\/?p[^>]*>/g, "");   // the few HTML tags of the READMEs
+  mdMath = /^\s*\$\$/m.test(src);
   const lines = src.replace(/\r/g, "").split("\n"), out = [];
   let i = 0, para = [];
   const flush = () => { if (para.length) { out.push(`<p>${mdInline(para.join(" "), base)}</p>`); para = []; } };
@@ -535,6 +589,8 @@ function md(src, base) {
   while (i < lines.length) {
     const l = lines[i];
     if (/^```/.test(l)) { flush(); const buf = []; i++; while (i < lines.length && !/^```/.test(lines[i])) buf.push(lines[i++]); i++; out.push(`<pre>${esc(buf.join("\n"))}</pre>`); continue; }
+    const dm = mdMath && /^\s*\$\$(.+)\$\$\s*$/.exec(l);
+    if (dm) { flush(); out.push(`<div class="tx tx-display">${tex(dm[1])}</div>`); i++; continue; }
     const h = /^(#{1,4})\s+(.*)$/.exec(l);
     if (h) { flush(); const n = h[1].length; out.push(`<h${n} id="${esc(h[2].toLowerCase().replace(/[^a-z0-9]+/g, "-"))}">${mdInline(h[2], base)}</h${n}>`); i++; continue; }
     if (/^\s*---+\s*$/.test(l)) { flush(); out.push("<hr>"); i++; continue; }
@@ -563,6 +619,47 @@ function md(src, base) {
   flush();
   return out.join("\n");
 }
+// ---------- RANKING: the Elo ranking of every team of every league (lab/ladder.py) ----------
+const LEAGUES = [["all", "All"], ["rules", "Rule Based"], ["rl", "Reinforcement Learning"], ["ml", "Machine Learning"], ["dl", "Deep Learning"]];
+const LEAGUE_COLOR = { rules: "--c5", rl: "--c1", ml: "--c3", dl: "--c4" };
+const rk = { data: null, t: 0, league: "all" };
+function loadRanking(force) {
+  if (pending._rk || (!force && rk.data && Date.now() - rk.t < POLL_MS)) return;
+  pending._rk = true;
+  getJSON("/api/ranking").then((d) => { rk.data = d; rk.t = Date.now(); render(); })
+    .catch(() => { rk.data = { error: true }; rk.t = Date.now(); render(); }).finally(() => { delete pending._rk; });
+}
+const LEAGUE_SHORT = { rules: "Rules", rl: "RL", ml: "ML", dl: "DL" };
+const leagueChip = (lg) => `<span class="chip" title="${esc((LEAGUES.find((l) => l[0] === lg) || [lg, lg])[1])} League" style="border-color:${css(LEAGUE_COLOR[lg] || "--muted")};color:${css(LEAGUE_COLOR[lg] || "--muted")}">${esc(LEAGUE_SHORT[lg] || lg)}</span>`;
+function viewRanking() {
+  loadRanking();
+  const d = rk.data;
+  if (!d) return '<div class="empty">Loading…</div>';
+  if (d.error) return '<div class="empty">The ranking could not be computed (see the web app\'s log).</div>';
+  const head = `<div class="head"><div><h1>Ranking</h1><p>One Elo rating for every team of every league, from matches between them (5v5 on the arena, 90 s, every pair from both sides with the same seed). 1500 is the middle; 400 points more means 10:1 odds. The bar is the 95% interval. New teams play ${6} placement games first.</p></div>
+    <div class="pills">${LEAGUES.map(([k, l]) => { const n = k === "all" ? d.rows.length : d.rows.filter((r) => r.league === k).length; return n || k === "all" ? `<button class="pill ${rk.league === k ? "on" : ""}" data-league="${k}">${esc(l)} <span class="muted">${n}</span></button>` : ""; }).join("")}</div></div>`;
+  const rows = d.rows.filter((r) => rk.league === "all" || r.league === rk.league);
+  const played = d.rows.filter((r) => r.games), lead = played[0];
+  const kpis = `<div class="kpis">${kpi("Matches", d.matches.toLocaleString(), d.stale ? `${d.stale} no longer count (a file changed)` : "all count")}${kpi("Teams ranked", `${played.length}<small>/ ${d.rows.length}</small>`, `${d.rows.filter((r) => r.placed).length} placed`)}${kpi("Top", lead ? esc(lead.name) : "–", lead ? `${f(lead.elo, 0)} · ${esc(lead.league)}` : "")}${kpi("Last match", d.last ? ago(d.last) : "–", d.off ? "ladder off (exp/ladder_off)" : "the Pi plays rounds when the queue is empty")}</div>`;
+  if (!d.matches) return head + kpis + '<div class="card"><h2>No matches yet</h2><p class="muted">Run <span class="mono">python3 lab/ladder.py round</span>, or wait for the runner: it plays a round whenever the queue is empty.</p></div>';
+  const lo = Math.min(...rows.map((r) => r.lo)), hi = Math.max(...rows.map((r) => r.hi)), W = 200;
+  const X = (v) => 6 + ((v - lo) / (hi - lo || 1)) * (W - 12);
+  const axis = niceTicks(lo, hi, 5);
+  const bar = (r) => `<svg width="${W}" height="16" viewBox="0 0 ${W} 16" class="rkbar">${axis.map((t) => `<line x1="${X(t)}" x2="${X(t)}" y1="0" y2="16" stroke="var(--grid)"/>`).join("")}<line x1="${X(r.lo)}" x2="${X(r.hi)}" y1="8" y2="8" stroke="${css(LEAGUE_COLOR[r.league] || "--muted")}" stroke-width="3" stroke-linecap="round" opacity="${r.placed ? 0.55 : 0.25}"/><circle cx="${X(r.elo)}" cy="8" r="4.5" fill="${css(LEAGUE_COLOR[r.league] || "--muted")}" opacity="${r.placed ? 1 : 0.5}"><title>${f(r.lo, 0)} – ${f(r.hi, 0)}</title></circle></svg>`;
+  const body = rows.map((r) => `<tr class="${r.placed ? "" : "dim"}"><td class="r muted">${r.rank}</td><td title="${esc(r.kind === "rules" ? "handmade AI" : r.model || "")}"><b>${esc(r.name)}</b>${r.kind === "net" ? ' <span class="muted small">checkpoint</span>' : ""}</td><td>${leagueChip(r.league)}</td>
+    <td class="r"><b>${f(r.elo, 0)}</b><span class="pm">±${f(1.96 * r.se, 0)}</span></td><td>${bar(r)}</td><td class="r">${r.games}${r.placed ? "" : ' <span class="small muted">placing</span>'}</td>
+    <td class="r nowrap">${r.w}–${r.d}–${r.l}</td><td class="r">${r.pts == null ? "–" : f(r.pts, 2)}</td><td class="r">${r.games ? sgn((r.gf - r.ga) / r.games, 2) : "–"}</td></tr>`).join("");
+  const table = `<section class="card flush"><div class="tbl-wrap"><table class="rank"><thead><tr><th class="r">#</th><th>Team</th><th>League</th><th class="r">Elo</th><th><span class="small muted">${f(lo, 0)} … ${f(hi, 0)}</span></th><th class="r">Games</th><th class="r">W–D–L</th><th class="r">Pts / game</th><th class="r">GD / game</th></tr></thead><tbody>${body}</tbody></table></div></section>`;
+  // history: the rating after each round, for the top teams of the filter
+  const top = rows.filter((r) => r.games).slice(0, 8);
+  const series = top.map((r, i) => ({ name: r.name, color: css(PALETTE[i % PALETTE.length]), points: d.history.filter((h) => h.elo[r.id] != null).map((h) => ({ x: parseT(h.t), y: h.elo[r.id] })) }));
+  const hist = `<section class="card"><div class="card-h"><h2>Rating history</h2><span class="muted small">top ${top.length} of the list above, after every round</span></div>${lineChart(series, { height: 220, time: true, key: "rkh", fmt: (v) => f(v, 0), emptyText: "the history starts with the next round" })}</section>`;
+  const name = Object.fromEntries(d.rows.map((r) => [r.id, r.name]));
+  const recent = d.recent.slice(-15).reverse().map((m) => `<tr><td class="muted small nowrap">${esc(ago(m.t))}</td><td class="r">${esc(name[m.a] || m.a)}</td><td class="r"><b>${m.ga}–${m.gb}</b></td><td>${esc(name[m.b] || m.b)}</td></tr>`).join("");
+  const rec = `<section class="card flush"><div class="card-h pad"><h2>Latest matches</h2><span class="muted small">left team's goals first</span></div><div class="tbl-wrap"><table class="mini"><tbody>${recent}</tbody></table></div></section>`;
+  return head + kpis + table + `<div class="grid g2">${hist}${rec}</div>`;
+}
+
 // ---------- DATASET: the user's recorded play (data/human/, game/recorder.py), analysed by il/analysis.py ----------
 const MOVE_NAMES = ["stand", "up", "up + forward", "forward", "down + forward", "down", "down + back", "back", "up + back"];
 const MOVE_VEC = [[0, 0], [0, -1], [0.707, -0.707], [1, 0], [0.707, 0.707], [0, 1], [-0.707, 0.707], [-1, 0], [-0.707, -0.707]];
@@ -625,7 +722,20 @@ function viewDataset(id) {
   const sit = d.situations.map((s) => `<tr><td>${esc(s.label)}</td><td class="r">${secs(s.rows)}</td><td>${s.rows ? compass(s.moves, css("--c3"), 64, false) : '<span class="muted">none</span>'}</td><td class="r">${s.rows ? f(s.toward_pct, 0) + "%" : "–"}</td><td class="r">${s.rows ? f(s.idle_pct, 0) + "%" : "–"}</td></tr>`).join("");
   const situations = `<section class="card flush"><div class="card-h pad"><h2>What you do, by situation</h2><span class="muted small">"possession" = your team has the player nearest the ball</span></div><div class="tbl-wrap"><table class="mini"><thead><tr><th>Situation</th><th class="r">time</th><th>moves (→ goal)</th><th class="r">towards ball</th><th class="r">standing</th></tr></thead><tbody>${sit}</tbody></table></div></section>`;
   const oc = { W: "pos", L: "neg", D: "", left: "muted" };
-  const rows = d.matches.slice().reverse().map((m) => m.error ? `<tr><td colspan="9" class="neg">${esc(m.id)}: ${esc(m.error)}</td></tr>` :
+  // puzzle rounds (game: Puzzle) are grouped by session: one row per session, its rounds in a fold-out
+  const groups = [];
+  for (const m of d.matches) {
+    const g = m.puzzle && m.session ? groups.find((x) => x.session === m.session) : null;
+    if (g) g.rounds.push(m); else groups.push(m.puzzle && m.session ? { session: m.session, rounds: [m], started: m.started } : m);
+  }
+  const roundLine = (m) => `<a href="#/dataset/${encodeURIComponent(m.id)}">${m.round || "?"}: ${esc(m.team.name)} ${m.gf}–${m.ga} ${esc(m.opponent.name)}</a>`;
+  const sessionRow = (g) => { const R = g.rounds, cnt = (o) => R.filter((r) => r.outcome === o).length, mins = R.reduce((s, r) => s + r.minutes, 0), pts = 3 * cnt("W") + cnt("D");
+    return `<tr><td class="nowrap">${esc(new Date(g.started).toLocaleString([], { dateStyle: "short", timeStyle: "short" }))}</td><td><b>Puzzle</b> <span class="muted">${R.length} rounds, random teams</span>
+      <details><summary class="small muted">rounds</summary><div class="small" style="display:grid;gap:2px">${R.map(roundLine).join("")}</div></details></td>
+      <td class="r"><b>${pts} pts</b> <span class="small">${cnt("W")}W ${cnt("D")}D ${cnt("L")}L</span></td><td>${esc(R[0].control)} <span class="muted small">${esc([...new Set(R.flatMap((r) => Object.keys(r.roles)))].join(" "))}</span></td>
+      <td class="r">${f(mins, 1)}</td><td class="r">${f(R.reduce((s, r) => s + r.dir_changes_s * r.minutes, 0) / mins, 1)}</td><td class="r">${f(R.reduce((s, r) => s + r.kick_presses_min * r.minutes, 0) / mins, 1)}</td>
+      <td class="r">${f(R.reduce((s, r) => s + r.on_ball_pct * r.minutes, 0) / mins, 0)}%</td><td></td></tr>`; };
+  const rows = groups.slice().reverse().map((m) => m.rounds ? sessionRow(m) : m.error ? `<tr><td colspan="9" class="neg">${esc(m.id)}: ${esc(m.error)}</td></tr>` :
     `<tr><td class="nowrap">${esc(new Date(m.started).toLocaleString([], { dateStyle: "short", timeStyle: "short" }))}</td><td>${esc(m.team.name)} <span class="muted">vs</span> ${esc(m.opponent.name)} <span class="muted small">${esc(m.opponent.league)}</span></td>
      <td class="r"><b class="${oc[m.outcome]}">${m.gf}–${m.ga}${m.shootout?.length ? ` (p ${m.shootout.join("–")})` : ""}</b> <span class="small ${oc[m.outcome]}">${m.outcome === "left" ? "left early" : m.outcome}</span></td>
      <td>${esc(m.control)}${m.picked ? ` · ${esc(m.picked)}` : ""} <span class="muted small">${esc(Object.keys(m.roles).join(" "))}</span></td><td class="r">${f(m.minutes, 1)}</td><td class="r">${f(m.dir_changes_s, 1)}</td><td class="r">${f(m.kick_presses_min, 1)}</td><td class="r">${f(m.on_ball_pct, 0)}%</td><td><a href="#/dataset/${encodeURIComponent(m.id)}">replay ▶</a></td></tr>`).join("");
@@ -934,6 +1044,7 @@ async function poll() {
     if (r.view === "run" && state.detail[r.arg]) state.detail[r.arg]._t = 0;
     if (r.view === "pi") state.health = null;
     if (r.view === "dataset" && !r.arg) loadDataset(true);
+    if (r.view === "ranking") loadRanking(true);
     if (r.view === "compare") for (const n of (r.params.get("runs") || "").split(",")) if (state.detail[n]) state.detail[n]._t = 0;
     const run = state.ov.status.runner.running;
     if (run && state.detail[run.run]) state.detail[run.run]._t = 0;
@@ -960,7 +1071,7 @@ function route() {
   if (parts[0] === "dataset") return { view: "dataset", arg: parts[1] ? decodeURIComponent(parts[1]) : "", params };
   if (parts[0] === "docs") return { view: "docs", arg: parts[1] ? decodeURIComponent(parts[1]) : "", params };
   if (parts[0] === "game") return { view: "game", parts: parts.slice(1), params };
-  return { view: ["runs", "compare", "pi", "live"].includes(parts[0]) ? parts[0] : "now", params };
+  return { view: ["runs", "compare", "pi", "live", "ranking"].includes(parts[0]) ? parts[0] : "now", params };
 }
 let lastHTML = "";
 function render() {
@@ -982,7 +1093,7 @@ function render() {
   if (r.view !== "live") { stopLive(); document.body.classList.remove("live-ctl"); }
   if (!(r.view === "dataset" && r.arg)) stopReplay();
   const before = new Set(Object.keys(chartData));
-  const html = r.view === "live" ? viewLive() : r.view === "runs" ? viewRuns() : r.view === "run" ? viewRun(r.arg, r.tab) : r.view === "compare" ? viewCompare(r.params) : r.view === "pi" ? viewPi() : r.view === "docs" ? viewDocs(r.arg) : r.view === "dataset" ? viewDataset(r.arg) : viewNow();
+  const html = r.view === "live" ? viewLive() : r.view === "runs" ? viewRuns() : r.view === "run" ? viewRun(r.arg, r.tab) : r.view === "compare" ? viewCompare(r.params) : r.view === "pi" ? viewPi() : r.view === "docs" ? viewDocs(r.arg) : r.view === "dataset" ? viewDataset(r.arg) : r.view === "ranking" ? viewRanking() : viewNow();
   const cleaned = html.replace(/data-chart="c[a-z0-9]+"/g, "");
   const drop = (keep) => { for (const k of Object.keys(chartData)) if (before.has(k) !== keep) delete chartData[k]; };
   if (cleaned === lastHTML) { drop(true); return; }
@@ -1019,6 +1130,8 @@ document.addEventListener("click", (e) => {
   if (pill) { state.stateFilter = pill.dataset.state; rerender(); return; }
   const kd = t.closest("[data-kind]");
   if (kd) { const p = route().params; p.set("kind", kd.dataset.kind); location.hash = "#/compare?" + p.toString(); return; }
+  const lgp = t.closest("[data-league]");
+  if (lgp) { rk.league = lgp.dataset.league; rerender(); return; }
   const hrs = t.closest("[data-hours]");
   if (hrs) { state.piHours = +hrs.dataset.hours; state.health = null; rerender(); return; }
   const rm = t.closest("[data-rmrun]");

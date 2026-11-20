@@ -39,7 +39,7 @@ def fake(t_seed, ri, idx, fix):
 
 
 def play_python():
-    ids = sorted(t.id for t in database().teams.values() if not t.ml_model)
+    ids = sorted(t.id for t in database().teams.values() if t.rl_eval)
     out = []
     for fmt, n, seed in CASES:
         t = tn.create(fmt, ids[:n], ids[0], "arena", 3, 60.0, seed)
@@ -61,7 +61,7 @@ def play_python():
 
 def play_python_names():
     """The rounds of a 16-team knockout (Python), for the names."""
-    ids = sorted(t.id for t in database().teams.values() if not t.ml_model)
+    ids = sorted(t.id for t in database().teams.values() if t.rl_eval)
     t = tn.create(tn.KNOCKOUT, ids[:16], ids[0], "arena", 3, 60.0, 3)
     while not t["finished"]:
         ri = t["round_index"]

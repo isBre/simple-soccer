@@ -76,7 +76,7 @@ def _cfg(teams, side_nets, seed, duration, temperature=1.0):
 def league_teams():
     """The rule-based teams sorted by strength, with tier and held-out flag (rl/teams_info.json)."""
     db = database()
-    teams = [t for t in db.teams.values() if not t.ml_model]
+    teams = [t for t in db.teams.values() if t.rl_eval]
     teams.sort(key=lambda t: t.strength())
     tiers = ["weak", "average", "strong", "elite"]
     ids, info = [], {}

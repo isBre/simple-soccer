@@ -11,6 +11,7 @@ Open http://<pi-address>:8080/#/ from another computer; the Lab pages poll the A
   /api/dataset        the user's recorded play (data/human/, game/recorder.py) analysed for the Dataset page (il/analysis.py), plus
                       the nets' and the rule bots' behaviour numbers of the newest full evaluation as references
   /api/dataset/match/<id>  one recorded match, every decision, for the replay
+  /api/ranking        the Elo ranking (lab/ladder.py ranking(): every team of every league, rating history, recent matches)
   /api/live/opponents GET the opponents the Live page can play (rule teams, RL Team 4/5, older checkpoints) and the chosen one
   /api/live/mode      POST {"mode": "match"|"puzzle"}: puzzle = random layout of all players and the ball, 60 s, over at the first goal
   /api/live/opponent  POST {"id": ...}: with the mode, the ONLY writes of this server: which opponent the Pi's demo match plays next
@@ -110,7 +111,8 @@ def health_view(hours=12.0):
 
 DOC_FILES = [("Experiments", "AGENTS.md"), ("Experiments", "docs/experiment_log.md"), ("Experiments", "docs/rewards.md"), ("Experiments", "docs/experiment_pipeline.md"),
              ("Experiments", "exp/results.md"), ("Experiments", "lab/README.md"),
-             ("Project", "README.md"), ("Project", "rl/README.md"), ("Project", "docs/design.md")]
+             ("Project", "README.md"), ("Project", "rl/README.md"), ("Project", "docs/design.md"),
+             ("Teams", "docs/opus_5_5_high.md"), ("Teams", "docs/elo_ranking.md")]
 
 
 def doc_list():
@@ -269,6 +271,9 @@ class Handler(BaseHTTPRequestHandler):
             if path == "/api/version":                              # the page reloads itself when the dashboard's files changed (the kiosk has no keyboard)
                 v = max(os.path.getmtime(f) for f in glob.glob(os.path.join(STATIC, "*")))
                 return self.send(json.dumps({"v": v}).encode(), "application/json")
+            if path == "/api/ranking":
+                import ladder
+                return self.send(json.dumps(ladder.ranking(), default=float).encode(), "application/json")
             if path == "/api/dataset":
                 return self.send(json.dumps(dataset_view(), default=float).encode(), "application/json")
             if path.startswith("/api/dataset/match/"):
@@ -324,7 +329,7 @@ class Handler(BaseHTTPRequestHandler):
         from urllib.parse import parse_qsl
         parts = [p for p in path[len("/api/v1"):].split("/") if p]
         if not parts:
-            body = {"commands": ["status", "runs", "run/<name>", "evals", "best", "compare?a=&b=", "ablation", "events?since=", "queue", "schema"],
+            body = {"commands": ["status", "runs", "run/<name>", "evals", "best", "compare?a=&b=", "ablation", "events?since=", "queue", "schema", "ranking?league="],
                     "docs": "AGENTS.md, exp/schema.json", "cli": "python3 lab/lab.py -h"}
             return self.send(json.dumps(lab.envelope(body)).encode(), "application/json")
         cmd, pos = parts[0], parts[1:]

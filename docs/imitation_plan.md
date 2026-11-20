@@ -1,6 +1,6 @@
 # Plan: learning from the user's play (ML League, DL League)
 
-Status: agreed plan, 2026-11-19. **Phase 1 (recorder) and Phase 2 (Dataset page) built**; the rest not yet. The user's decisions are at the end.
+Status: agreed plan, 2026-11-19. **Phase 1 (recorder), Phase 2 (Dataset page) and the Elo ranking (Evaluation 3) built**; the rest not yet. The user's decisions are at the end.
 
 ## The idea in one paragraph
 
@@ -119,6 +119,11 @@ distillation reached 86% agreement and still played much worse than its teacher)
    - Optional fun: **"You"** in the ranking, from the user's recorded matches. Only indicative, because the user's teammates are the
      team's AI.
    - Points vs rule bots stay as the floor check (level 2). Whether the RL runs' verdicts switch to the ranking is decided once it runs.
+   - **Built (2026-11-19):** `lab/ladder.py` (roster from the files, informative pairs, Bradley-Terry fit with a N(1500, 400) prior and
+     95% intervals, results in `exp/ladder.jsonl`, snapshots in `exp/ladder_ratings.jsonl`; a changed file starts that entry over),
+     rounds played by the runner whenever the queue is empty (`exp/ladder_off` stops it), `lab.py ranking`, `/api/ranking`, the Lab's
+     **Ranking** page. Nets of the `models/` folder and finished runs' `out_5v5/ckpt/x_*_best.json` play with RL Team 5's squad.
+     Seeded on the Mac with about 1,900 matches. Not yet: "You" in the ranking, the ratings in the game's team picker.
 4. **Likeness: "does it play like you"**, only for ML/DL: distance between the model's scouting numbers and the user's dataset (direction
    changes/s, kick rate, distance to the ball, heatmap overlap, passes and shots per minute). One score 0-100 plus the per-metric gaps.
 5. **The user**: every recorded match already stores the opponent and the result, so the user's record against each team is free.

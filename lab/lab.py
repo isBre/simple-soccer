@@ -10,6 +10,7 @@ so it works even when the dashboard is down. Every command prints one JSON objec
   python3 lab/lab.py compare A B [--kind full] [--group league|greedy|h2h]   paired difference, z, p, MDE, verdict (same protocol only)
   python3 lab/lab.py ablation [--kind full]          every run vs its reference, Holm-corrected over the batch
   python3 lab/lab.py events [--since 2026-11-16T20:00]   runs started/resumed/finished, evaluations, reboots
+  python3 lab/lab.py ranking [--league rl]           Elo ranking of every team of every league (lab/ladder.py), 95% intervals
   python3 lab/lab.py queue list | validate F | add F [--position N] | cancel NAME | move NAME N
   python3 lab/lab.py schema                          what every metric means (unit, direction, protocol)
 Definitions: AGENTS.md and exp/schema.json.
@@ -401,12 +402,22 @@ def cmd_queue(a):
     raise LabError("unknown queue action %r" % a.action, "list | validate | add | cancel | move")
 
 
+def cmd_ranking(a):
+    """The Elo ranking of every team of every league (lab/ladder.py): rating with 95% interval, games, record."""
+    import ladder
+    r = ladder.ranking()
+    rows = r["rows"] if not a.league else [x for x in r["rows"] if x["league"] == a.league]
+    keep = ("rank", "id", "name", "league", "kind", "elo", "lo", "hi", "games", "w", "d", "l", "gf", "ga", "pts", "placed")
+    return {"protocol": r["protocol"], "matches": r["matches"], "stale": r["stale"], "last": r["last"], "ladder_off": r["off"],
+            "rows": [{k: x.get(k) for k in keep} for x in rows]}
+
+
 def cmd_schema(_a):
     return json.load(open(os.path.join(EXP, "schema.json")))
 
 
 COMMANDS = {"status": cmd_status, "runs": cmd_runs, "run": cmd_run, "evals": cmd_evals, "best": cmd_best, "compare": cmd_compare,
-            "ablation": cmd_ablation, "events": cmd_events, "queue": cmd_queue, "schema": cmd_schema}
+            "ablation": cmd_ablation, "events": cmd_events, "queue": cmd_queue, "schema": cmd_schema, "ranking": cmd_ranking}
 
 
 def envelope(data):
@@ -445,6 +456,8 @@ def parser():
     p.add_argument("arg", nargs="?")
     p.add_argument("--position", type=int)
     sub.add_parser("schema")
+    p = sub.add_parser("ranking")
+    p.add_argument("--league", help="rules | rl | ml | dl")
     return ap
 
 

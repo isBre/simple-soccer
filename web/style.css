@@ -343,6 +343,14 @@ body.kiosk .live-side .ctl-close { display: block; flex: 1 1 100%; font: inherit
 .doc-body table.md { border-collapse: collapse; font-size: 13px; margin: 10px 0; width: 100%; }
 .doc-body table.md th, .doc-body table.md td { border: 1px solid var(--line); padding: 6px 9px; text-align: left; vertical-align: top; }
 .doc-body table.md th { background: var(--panel-2); }
+.doc-body table.md:has(.md-img) { table-layout: fixed; } .doc-body table.md:has(.md-img) td { white-space: normal; overflow-wrap: anywhere; } .doc-body table.md td .md-img { width: 100%; max-width: 100%; height: auto; }
+.tx { font-family: "Cambria Math", "STIX Two Math", "Times New Roman", serif; font-size: 1.06em; white-space: nowrap; }
+.tx-display { display: block; text-align: center; margin: 14px 0; font-size: 18px; overflow-x: auto; overflow-y: hidden; padding: 4px 0; white-space: nowrap; }
+.tx i { font-style: italic; } .tx-rm { font-style: normal; } .tx-bf { font-weight: 700; font-style: normal; } .tx-cal { font-style: italic; font-family: "Apple Chancery", cursive; }
+.tx sup, .tx sub { font-size: 0.72em; line-height: 0; }
+.tx-frac { display: inline-flex; flex-direction: column; vertical-align: middle; text-align: center; margin: 0 2px; font-size: 0.92em; }
+.tx-frac > span:first-child { border-bottom: 1px solid currentColor; padding: 0 3px 1px; } .tx-frac > span:last-child { padding: 1px 3px 0; }
+.tx-sqrt { border-top: 1px solid currentColor; padding: 0 2px; } .tx-over { border-top: 1px solid currentColor; }
 .doc-body hr { border: 0; border-top: 1px solid var(--line); margin: 16px 0; }
 .doc-body table.md td, .doc-body table.md th { overflow-wrap: anywhere; }
 .doc-body table.md td code { white-space: normal; overflow-wrap: anywhere; }
@@ -353,3 +361,7 @@ tr.thin td:first-child::after { content: " · thin"; color: var(--warn, var(--ba
 .nowrap { white-space: nowrap; }
 .bh.vs { grid-template-columns: 150px 1fr 220px; }
 @media (max-width: 600px) { .bh.vs { grid-template-columns: minmax(0, 1fr); gap: 4px; } .bh.vs .bv { text-align: left; } }
+/* Ranking page (web/lab.js viewRanking) */
+table.rank td { vertical-align: middle; }
+table.rank tr.dim td { opacity: .6; }
+.rkbar { display: block; }

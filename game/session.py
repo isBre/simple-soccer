@@ -3,7 +3,11 @@ sends the keyboard back. One WebSocket per match (web/ws.py).
 
 Page -> server (JSON):
   {"setup": {...}, "puzzle": seed?}        first message: the match (game/api.py setup; "record": true saves the human's play as a
-                                           dataset file, game/recorder.py)
+                                           dataset file, game/recorder.py). With "puzzle": a random layout of every player and the
+                                           ball (Match.puzzle_layout), a short "get ready" hold, and the round ends PUZZLE_GOAL_TICKS
+                                           after the first goal (or at the final whistle); setup "player": "random" = the human
+                                           controls a random player of their team (keeper included). The Puzzle page plays rounds of
+                                           these back to back.
   {"in": [dx, dy, kick]}                   the human's keys (direction normalised by the page), sent when they change
   {"switch": 1}                            TEAM control: hand control to the teammate nearest the ball
   {"pause": true|false}  {"speed": 1|2|4|8}  {"quit": 1}
@@ -15,13 +19,16 @@ Server -> page:
 
 Kickoff intro (as the Godot game): at every kickoff the match is held for INTRO_TICKS while the page zooms in."""
 import math
+import random
 import time
 
 from game import api, recorder
-from soccer.match import ENDED, PLAYING, Match
+from soccer.match import ENDED, GOAL, PLAYING, SINGLE, Match
 
 TICK = 1.0 / 60.0
 INTRO_TICKS = 130
+PUZZLE_READY = 75                 # ticks the puzzle's random layout is shown before play starts
+PUZZLE_GOAL_TICKS = 100           # a puzzle round ends this long after the first goal (the banner is half shown)
 
 
 def meta(m):
@@ -85,17 +92,21 @@ def _run(ws, rec):
         first = next((x for x in msgs if isinstance(x, dict) and "setup" in x), None)
     try:
         m = Match(api.config(first["setup"]))
-        if first.get("puzzle") is not None:
+        puzzle = first.get("puzzle") is not None
+        if puzzle:
             m.puzzle_layout(int(first["puzzle"]))
+            if first["setup"].get("player") == "random" and m.cfg.control == SINGLE:
+                m.set_controlled(random.Random(int(first["puzzle"])).choice(m.team_lists[m.cfg.human_team]))
     except Exception as e:                                  # bad setup: tell the page
         ws.send({"k": "e", "error": "%s: %s" % (type(e).__name__, e)})
         ws.close()
         return
     if recorder.wanted(first["setup"], m):
-        rec.append(recorder.Recorder(m, {**first["setup"], "puzzle": first.get("puzzle")}))
+        rec.append(recorder.Recorder(m, {**first["setup"], "puzzle": first.get("puzzle")}, min_rows=30 if puzzle else recorder.MIN_ROWS))
     ws.send({**meta(m), "rec": bool(rec)})
     human, switch, paused, speed = (0j, False), False, False, 1
-    intro, intro_id, result_sent = 0, -1, False
+    intro, intro_id, result_sent = (PUZZLE_READY if puzzle else 0), -1, False
+    goal_end = None
     next_t = time.monotonic()
     ws.send(frame(m, intro, []))
     while True:
@@ -143,10 +154,14 @@ def _run(ws, rec):
                 if rec and rec[0].due():
                     rec[0].sample(*human, speed)
                 m.step()
+                if puzzle and goal_end is None and m.state == GOAL:
+                    goal_end = m.tick + PUZZLE_GOAL_TICKS
             events = m.events[n_ev:]
         ws.send(frame(m, intro, events))
-        if m.state == ENDED and not result_sent:
+        if (m.state == ENDED or goal_end is not None and m.tick >= goal_end) and not result_sent:
             result = m.make_result()
+            if puzzle:
+                result["puzzle"] = {"end": "goal" if goal_end is not None else "time", "seconds": round(m.elapsed(), 2)}
             if rec:
                 try:
                     rec[0].save(result)

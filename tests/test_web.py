@@ -7,6 +7,7 @@
   dataset    the Lab's Dataset page API analyses that file (/api/dataset) and serves it for the replay (/api/dataset/match/<id>)
   record     a match with "record" saves the human's play (game/recorder.py): the picked keeper is the one recorded, the keys become
              the right net moves, the observation can be rebuilt from the stored state (il/human_data.py), a match without it saves nothing
+  ranking    the Elo ranking (/api/ranking, lab/ladder.py) lists every team, sorted, each rating inside its interval
   tournament new -> simulate a round -> fixture -> record a result -> view, through /api/game/tournament
 
   python3 tests/test_web.py"""
@@ -102,6 +103,16 @@ def main():
         cat = json.loads(get(port, "/api/game/catalog")[1])
         results.append(check("catalog", len(cat["leagues"]) == 2 and len(cat["teams"]) >= 16 and cat["pitches"] and cat["formations"]["5"],
                              "%d teams, %d pitches" % (len(cat["teams"]), len(cat["pitches"]))))
+        # the team select: every ranked net is an RL team (lab/ladder.py roster), each team has its Elo and a one-line description
+        nets = [t for t in cat["teams"] if t["id"].startswith(api.NET_PREFIX)]
+        rated = [t for t in cat["teams"] if t["elo"] is not None]
+        described = [t for t in cat["teams"] if t["plays"]]
+        net_ok = True
+        if nets:
+            r = api.play({"home": nets[0]["id"], "away": "cobalt", "pitch": "arena", "size": 5, "duration": 20.0, "seed": 5, "control": "none"})
+            net_ok = r["teams"][0] == nets[0]["id"]
+        results.append(check("team select", all(t["league"] == "rl" for t in nets) and net_ok and all("plays" in t and "elo" in t for t in cat["teams"]),
+                             "%d nets as teams, %d rated, %d described" % (len(nets), len(rated), len(described))))
 
         setup = {"home": "cobalt", "away": "rl_team_4", "pitch": "arena", "size": 5, "duration": 40.0, "seed": 21, "control": "none",
                  "allow_draw": False}
@@ -174,6 +185,13 @@ def main():
         results.append(check("dataset", ok, "%d rows, forward moves %.0f%%, replay %d frames" % (
             ds.get("rows", 0), ds["moves"][3] if ds.get("moves") else 0, len(rp.get("p", [])))))
 
+        rk = json.loads(get(port, "/api/ranking")[1])
+        rows = rk.get("rows", [])
+        kinds = {r["kind"] for r in rows}
+        ok = len(rows) >= 21 and {"rules", "team"} <= kinds and all(r["lo"] <= r["elo"] <= r["hi"] for r in rows) \
+            and [r["rank"] for r in rows] == list(range(1, len(rows) + 1)) and all(rows[i]["elo"] >= rows[i + 1]["elo"] for i in range(len(rows) - 1))
+        results.append(check("ranking", ok, "%d teams (%s), %d matches stored" % (len(rows), ", ".join(sorted(kinds)), rk.get("matches", 0))))
+
         d = post(port, "/api/game/tournament", {"action": "new", "league": "rules", "user": "aurora", "count": 4, "format": 1,
                                                 "pitch": "classic", "size": 3, "duration": 60})
         t = d["t"]
@@ -184,6 +202,13 @@ def main():
         rounds = d["t"]["rounds"]
         results.append(check("tournament", len(rounds) >= 2 or d["t"]["finished"],
                              "%s: %s" % (d["t"]["title"], ", ".join("%s %d-%d %s" % (f["home"], f["hg"], f["ag"], f["away"]) for f in rounds[0]["fixtures"]))))
+        # a mixed tournament: "all" draws its teams from every league
+        d = post(port, "/api/game/tournament", {"action": "new", "league": "all", "user": "aurora", "count": len(cat["teams"]), "format": 0,
+                                                "pitch": "arena", "size": 5, "duration": 60})
+        ids = {x for r in d["t"]["rounds"] for f in r["fixtures"] for x in (f["home"], f["away"]) if x}
+        leagues = {next(c["league"] for c in cat["teams"] if c["id"] == i) for i in ids}
+        results.append(check("mixed cup", len(ids) == len(cat["teams"]) and leagues == {lg["id"] for lg in cat["leagues"]},
+                             "%s: %d teams from %s" % (d["t"]["title"], len(ids), ", ".join(sorted(leagues)))))
     finally:
         srv.terminate()
         shutil.rmtree(rec_dir, ignore_errors=True)

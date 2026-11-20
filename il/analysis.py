@@ -97,7 +97,11 @@ def match_row(path, d, F):
     res = m["result"]
     sc = res["scores"] if res else m["scores_at_save"]
     gf, ga = sc[h], sc[1 - h]
-    if res:
+    setup = m["setup"]
+    puzzle = setup.get("puzzle") is not None
+    if res and puzzle:                                          # a puzzle round ends at the first goal (or after 60 s without one)
+        outcome = "W" if gf > ga else ("L" if gf < ga else "D")
+    elif res:
         w = res["winner"]
         outcome = "D" if w == -1 else ("W" if w == h else "L")
     else:
@@ -110,7 +114,8 @@ def match_row(path, d, F):
     return {"id": os.path.basename(path)[:-4], "started": m["started"], "control": m["control"], "complete": m["complete"],
             "team": m["teams"][h], "opponent": m["teams"][1 - h], "gf": gf, "ga": ga, "outcome": outcome,
             "shootout": res["shootout"] if res else [], "rows": F["N"], "minutes": F["N"] / PER_SEC / 60.0,
-            "picked": m["setup"].get("player", ""), "roles": roles, "duration": m["setup"].get("duration"),
+            "picked": setup.get("player", ""), "roles": roles, "duration": setup.get("duration"),
+            "puzzle": puzzle, "session": setup.get("session"), "round": setup.get("round"),
             "dir_changes_s": b["dir_changes_s"], "kick_presses_min": b["kick_presses_s"] * 60.0, "idle_pct": b["idle_pct"],
             "on_ball_pct": 100.0 * float((F["dist"] < ON_BALL).mean())}
 
