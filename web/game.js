@@ -6,7 +6,7 @@
 "use strict";
 
 const Game = (() => {
-  const G = { cat: null, byId: {}, keyHandler: null, match: null, pending: null, report: null, tab: 0, busy: false, pz: null };
+  const G = { cat: null, byId: {}, keyHandler: null, match: null, pending: null, report: null, tab: 0, busy: false, pz: null, showcase: null };
   const SAVE = "soccer.tournament";
   const CONTROLS = ["single", "team", "none"];
   // "Record my play": the match is saved as a dataset file for imitation learning (game/recorder.py), remembered in this browser
@@ -53,6 +53,7 @@ const Game = (() => {
   // ---------- entry (called by lab.js for every #/game/... route) ----------
   async function show(parts) {
     stopMatch();
+    if (G.showcase) G.showcase.stop();
     document.body.classList.remove("g-playing");
     for (const o of document.querySelectorAll(".g-overlay")) o.remove();
     G.keyHandler = null;
@@ -77,8 +78,8 @@ const Game = (() => {
   });
   document.addEventListener("keyup", (e) => { if (document.body.dataset.area === "game" && G.keyHandler) G.keyHandler(e, false); });
 
-  // ---------- main menu: a title screen. Behind it a small AI match plays on its own (attract(), drawn here, no server), between
-  // the two teams of your last quick match; Quick match leads, then the other pages; every crest along the bottom opens its team.
+  // ---------- main menu: a title screen. Behind it a real match plays between the two teams of your last quick match (showcase());
+  // Quick match leads, then the other pages; every crest along the bottom opens its team.
   // Keys: Up / Down move, Enter opens, 1-9 jump to an entry.
   const ICON = {
     resume: '<path d="M7 5v14l12-7z"/>',
@@ -106,7 +107,7 @@ const Game = (() => {
     const bug = (t) => `${Draw.logoTag(t.id, 20)}<b>${esc(t.short || t.name.slice(0, 3).toUpperCase())}</b>`;
     const v = mount(`<div class="gm">
       <div class="gm-stage" aria-hidden="true"><canvas class="gm-pitch"></canvas></div><div class="gm-shade" aria-hidden="true"></div>
-      <div class="gm-bug" aria-hidden="true"><span class="gm-bug-l">AI vs AI</span>${bug(pair[0])}<span class="gm-score" id="gm-score">0 – 0</span>${bug(pair[1])}</div>
+      <div class="gm-bug" aria-hidden="true" hidden><span class="gm-bug-l">Live</span>${bug(pair[0])}<span class="gm-score" id="gm-score">0 – 0</span>${bug(pair[1])}<span class="gm-clock" id="gm-clock"></span></div>
       <div class="gm-in">
         <div class="gm-kicker">5-a-side football</div>
         <h1 class="gm-title"><span>Simple</span><span>Soccer</span></h1>
@@ -120,11 +121,14 @@ const Game = (() => {
     </div>`);
     const links = [...v.querySelectorAll(".gm-link")];
     links[0].focus({ preventScroll: true });
-    const score = [0, 0], scoreEl = $("#gm-score", v), bugEl = $(".gm-bug", v);
-    attract($(".gm-pitch", v), pair, pitchOf(prefs.pitch || "arena"), (side) => {
-      score[side]++; scoreEl.textContent = `${score[0]} – ${score[1]}`;
-      bugEl.classList.remove("goal"); void bugEl.offsetWidth; bugEl.classList.add("goal");
-    });
+    const scoreEl = $("#gm-score", v), clockEl = $("#gm-clock", v), bugEl = $(".gm-bug", v);
+    let shown = "";
+    showcase($(".gm-pitch", v), pair, (f) => {
+      if (!f) { bugEl.hidden = true; return; }
+      const s = `${f.sc[0]} – ${f.sc[1]}|${f.st === 2 ? "FT" : f.ot ? "OT " + clockText(f.otl) : clockText(f.tl)}`;
+      if (s === shown) return;
+      shown = s; bugEl.hidden = false; [scoreEl.textContent, clockEl.textContent] = s.split("|");
+    }, () => { bugEl.classList.remove("goal"); void bugEl.offsetWidth; bugEl.classList.add("goal"); });
     G.keyHandler = (e, down) => {
       if (!down || e.metaKey || e.ctrlKey || e.altKey) return;
       const n = Number(e.key);
@@ -136,148 +140,71 @@ const Game = (() => {
     };
   }
 
-  // the menu's background match: five a side, played by a few lines of make-believe (dribble, pass, tackle, shoot), not by the core.
-  // It runs while its canvas is on the page; with reduced motion it draws one still frame.
-  function attract(cv, teams, pitch, onGoal) {
-    const hw = 520, hh = 240, gh = 90, nd = 28, R = 13, BR = 6.5;
-    const pc = Draw.rgb(pitch.colors.pitch), oc = Draw.rgb(pitch.colors.outer), lc = "#" + pitch.colors.line;
-    // kits as soccer/data.py resolve_kits: the second team wears its secondary colour (then white) when the primaries look alike
-    const cols = teams.map((t) => [t.colors[0], t.colors[1] || "ffffff"]), far = (x, y) => Draw.dist(Draw.rgb(x), Draw.rgb(y)) >= 0.35;
-    if (!far(cols[0][0], cols[1][0])) { cols[1].reverse(); if (!far(cols[0][0], cols[1][0])) cols[1][0] = "e8e8e8"; }
-    const kit = teams.map((t, i) => ({ a: "#" + cols[i][0], b: "#" + cols[i][1], p: t.kit }));
-    const goalCol = cols.map((c) => Draw.css(Draw.goalColour(c.map(Draw.rgb), pc)));
-    const FORM = [[-0.94, 0], [-0.6, -0.42], [-0.6, 0.42], [-0.2, 0.08], [0.2, -0.22]];
-    const P = [];
-    for (let s = 0; s < 2; s++) for (let k = 0; k < 5; k++) {
-      const d = s ? -1 : 1, bx = d * FORM[k][0] * hw, by = d * FORM[k][1] * hh;
-      P.push({ s, k, d, bx, by, x: bx, y: by, vx: 0, vy: 0, wob: Math.random() * 6 });
-    }
-    const B = { x: 0, y: 0, vx: 0, vy: 0, owner: -1, kicker: -1, cool: 0, hold: 0, dead: 0, z: 0 };
-    const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
-    function kickoff(side) {
-      for (const p of P) { p.x = p.bx * (p.k ? 0.85 : 1); p.y = p.by; p.vx = p.vy = 0; if (p.d * p.x > -40 && p.k) p.x = -p.d * 40; }
-      B.x = B.y = B.vx = B.vy = 0; B.dead = 0; B.owner = side * 5 + 3; B.hold = 0.6; P[B.owner].x = -P[B.owner].d * 14; P[B.owner].y = 0;
-    }
-    function kick(i, tx, ty, speed, loft = 0) {
-      const p = P[i], dx = tx - B.x, dy = ty - B.y, l = Math.hypot(dx, dy) || 1;
-      B.vx = (dx / l) * speed; B.vy = (dy / l) * speed; B.owner = -1; B.kicker = i; B.cool = 0.3; B.z = loft;
-    }
-    function decide(i) {
-      const p = P[i], gx = p.d * hw, toGoal = Math.abs(gx - p.x);
-      if (toGoal < hw * 0.55 && Math.random() < 0.55) return kick(i, gx + p.d * 10, (Math.random() * 2 - 1) * gh * 0.8, 640 + Math.random() * 120);
-      const mates = P.filter((q) => q.s === p.s && q !== p && (q.k || p.d * (p.x - q.x) > 0 || Math.random() < 0.2));
-      let best = null, bw = -1;
-      for (const q of mates) {
-        const fwd = p.d * (q.x - p.x) / hw, dist = Math.hypot(q.x - p.x, q.y - p.y);
-        let free = 1e9; for (const o of P) if (o.s !== p.s) free = Math.min(free, Math.hypot(o.x - q.x, o.y - q.y));
-        const w = (1.2 + fwd) * Math.min(1, free / 90) * (dist > 60 ? 1 : 0.3) * (0.5 + Math.random());
-        if (w > bw) { bw = w; best = q; }
-      }
-      if (!best) return;
-      const tx = best.x + best.vx * 0.45 + p.d * 18, ty = best.y + best.vy * 0.45, dist = Math.hypot(tx - B.x, ty - B.y);
-      kick(i, tx, ty, 260 + dist * 0.9, dist > 300 ? 1 : 0);
-    }
-    function step(dt) {
-      const own = B.owner >= 0 ? P[B.owner] : null, att = own ? own.s : -1;
-      // who chases: per team, the outfield player nearest the ball (the team in possession does not chase its own carrier)
-      const chaser = [-1, -1];
-      for (let s = 0; s < 2; s++) {
-        if (att === s) continue;
-        let bd = 1e9; for (let i = s * 5 + 1; i < s * 5 + 5; i++) { const d = Math.hypot(P[i].x - B.x, P[i].y - B.y); if (d < bd) { bd = d; chaser[s] = i; } }
-      }
-      for (let i = 0; i < 10; i++) {
-        const p = P[i];
-        let tx, ty, sp = 92;
-        if (i === B.owner) {
-          p.wob += dt * 1.7;
-          tx = p.d * hw; ty = p.y * 0.55 + Math.sin(p.wob) * 70; sp = 74;
-        } else if (i === chaser[p.s] && !B.dead) {
-          tx = B.x + B.vx * 0.25; ty = B.y + B.vy * 0.25; sp = 112;
-        } else if (!p.k) {
-          tx = p.d * Math.max(-0.97, Math.min(-0.86, -1 + (p.d * B.x + hw) / hw * 0.08)) * hw; ty = clamp(B.y * 0.45, -gh * 0.75, gh * 0.75); sp = 80;
-        } else {
-          const push = att === p.s ? 0.2 : att === -1 ? 0.05 : -0.12;
-          tx = p.bx + B.x * 0.5 + p.d * push * hw; ty = p.by * 0.85 + B.y * 0.3;
-          tx = clamp(tx, -hw + 30, hw - 30); ty = clamp(ty, -hh + 20, hh - 20);
-        }
-        let dx = tx - p.x, dy = ty - p.y; const l = Math.hypot(dx, dy);
-        const want = Math.min(sp, l * 2.2); dx = l ? (dx / l) * want : 0; dy = l ? (dy / l) * want : 0;
-        const a = Math.min(1, dt * 5); p.vx += (dx - p.vx) * a; p.vy += (dy - p.vy) * a;
-        p.x += p.vx * dt; p.y += p.vy * dt;
-      }
-      for (let i = 0; i < 10; i++) for (let j = i + 1; j < 10; j++) {           // players do not overlap
-        const a = P[i], b = P[j], dx = b.x - a.x, dy = b.y - a.y, d = Math.hypot(dx, dy) || 0.01;
-        if (d < 2 * R + 2) { const k = (2 * R + 2 - d) / 2 / d; a.x -= dx * k; a.y -= dy * k; b.x += dx * k; b.y += dy * k; }
-      }
-      B.cool -= dt;
-      if (own) {
-        const sp = Math.hypot(own.vx, own.vy) || 1;
-        B.x = own.x + (own.vx / sp) * (R + BR + 1); B.y = own.y + (own.vy / sp) * (R + BR + 1); B.vx = own.vx; B.vy = own.vy;
-        B.hold -= dt;
-        for (const o of P) if (o.s !== own.s && Math.hypot(o.x - B.x, o.y - B.y) < R + BR + 5) { if (Math.random() < dt * 2.2) { B.owner = P.indexOf(o); B.hold = 0.5 + Math.random() * 0.6; B.cool = 0; return; } B.hold -= dt * 2; }
-        if (B.hold <= 0) decide(B.owner);
-        return;
-      }
-      B.x += B.vx * dt; B.y += B.vy * dt;
-      const f = Math.pow(0.55, dt); B.vx *= f; B.vy *= f; B.z = Math.max(0, B.z - dt * 1.6);
-      if (B.dead) { B.dead -= dt; if (Math.abs(B.x) > hw + nd - BR) { B.x = Math.sign(B.x) * (hw + nd - BR); B.vx *= -0.2; } if (B.dead <= 0) kickoff(B.x > 0 ? 1 : 0); return; }
-      if (Math.abs(B.x) > hw && Math.abs(B.y) < gh) { B.dead = 2.4; onGoal(B.x > 0 ? 0 : 1); return; }
-      if (Math.abs(B.x) > hw - BR && Math.abs(B.y) > gh - BR) { B.x = Math.sign(B.x) * (hw - BR); B.vx *= -0.55; }
-      if (Math.abs(B.y) > hh - BR) { B.y = Math.sign(B.y) * (hh - BR); B.vy *= -0.55; }
-      const fast = Math.hypot(B.vx, B.vy);
-      for (let i = 0; i < 10; i++) {
-        if (B.z > 0.35 || (i === B.kicker && B.cool > 0)) continue;
-        const p = P[i], mate = B.kicker >= 0 && P[B.kicker].s === p.s, reach = R + BR + (p.k ? 8 : 14);
-        if (Math.hypot(p.x - B.x, p.y - B.y) > reach) continue;
-        if (p.k ? (fast < 380 || Math.random() < 0.08) : mate ? fast < 650 : (fast < 180 || Math.random() < 0.07)) { B.owner = i; B.hold = P[i].k ? 0.25 + Math.random() * 1.1 : 0.9; B.z = 0; break; }
-      }
-    }
-    // drawing: the pitch fitted into the canvas (the CSS tilts it), players as kit discs with shadows, the ball on top
-    function draw() {
-      const dpr = Math.min(2, window.devicePixelRatio || 1), cw = cv.clientWidth, ch = cv.clientHeight;
-      if (!cw || !ch) return;
-      if (cv.width !== Math.round(cw * dpr) || cv.height !== Math.round(ch * dpr)) { cv.width = Math.round(cw * dpr); cv.height = Math.round(ch * dpr); }
-      const ctx = cv.getContext("2d"), u = Math.min(cw / (2 * hw + 140), ch / (2 * hh + 90));
-      ctx.setTransform(dpr * u, 0, 0, dpr * u, dpr * cw / 2, dpr * ch / 2);
-      ctx.clearRect(-cw / u, -ch / u, 2 * cw / u, 2 * ch / u);
-      const C = Draw.css, ox = hw + 60, oy = hh + 40;
-      ctx.fillStyle = C(oc); ctx.beginPath(); ctx.roundRect(-ox, -oy, 2 * ox, 2 * oy, 18); ctx.fill();
-      const n = 14, sw = (2 * hw) / n;
-      for (let i = 0; i < n; i++) { ctx.fillStyle = C(i % 2 ? pc : Draw.darkened(pc, 0.08)); ctx.fillRect(-hw + i * sw, -hh, sw + 0.5, 2 * hh); }
-      ctx.strokeStyle = lc; ctx.lineWidth = 3;
-      ctx.strokeRect(-hw, -hh, 2 * hw, 2 * hh);
-      ctx.beginPath(); ctx.moveTo(0, -hh); ctx.lineTo(0, hh); ctx.stroke();
-      ctx.beginPath(); ctx.arc(0, 0, 66, 0, 2 * Math.PI); ctx.stroke();
-      ctx.lineWidth = 2.5; for (const s of [-1, 1]) { ctx.strokeRect(s > 0 ? hw - 96 : -hw, -150, 96, 300); ctx.strokeRect(s > 0 ? hw - 36 : -hw, -gh - 14, 36, 2 * gh + 28); }
-      ctx.fillStyle = lc; ctx.beginPath(); ctx.arc(0, 0, 4, 0, 2 * Math.PI); ctx.fill();
-      for (const p of P) { ctx.fillStyle = "rgba(0,0,0,0.28)"; ctx.beginPath(); ctx.ellipse(p.x + 4, p.y + 6, R, R * 0.8, 0, 0, 2 * Math.PI); ctx.fill(); }
-      for (const p of P) {
-        const k = kit[p.s];
-        Draw.kit(ctx, p.x, p.y, R, k.a, k.b, k.p);
-        ctx.beginPath(); ctx.arc(p.x, p.y, R, 0, 2 * Math.PI); ctx.lineWidth = 2.2; ctx.strokeStyle = p.k ? "rgba(0,0,0,0.75)" : "#fff"; ctx.stroke();
-      }
-      const lift = B.z * 14;
-      ctx.fillStyle = "rgba(0,0,0,0.35)"; ctx.beginPath(); ctx.ellipse(B.x + 3 + lift * 0.4, B.y + 4 + lift * 0.6, BR, BR * 0.8, 0, 0, 2 * Math.PI); ctx.fill();
-      ctx.beginPath(); ctx.arc(B.x, B.y - lift, BR * (1 + B.z * 0.25), 0, 2 * Math.PI); ctx.fillStyle = "#fff"; ctx.fill(); ctx.lineWidth = 1.5; ctx.strokeStyle = "#111"; ctx.stroke();
-      for (let t = 0; t < 2; t++) {                       // goals: the frame and the net in the colour of the team defending it
-        const s = t ? 1 : -1, x0 = s * hw, x1 = s * (hw + nd);
-        ctx.strokeStyle = goalCol[t].replace(/,1\)$/, ",0.5)"); ctx.lineWidth = 1; ctx.beginPath();
-        for (let g = 0; g <= nd; g += 9) { ctx.moveTo(x0 + s * g, -gh); ctx.lineTo(x0 + s * g, gh); }
-        for (let g = -gh; g <= gh; g += 9) { ctx.moveTo(x0, g); ctx.lineTo(x1, g); }
-        ctx.stroke();
-        ctx.beginPath(); ctx.moveTo(x0, -gh); ctx.lineTo(x1, -gh); ctx.lineTo(x1, gh); ctx.lineTo(x0, gh);
-        ctx.lineWidth = 6; ctx.strokeStyle = "rgba(0,0,0,0.7)"; ctx.stroke(); ctx.lineWidth = 3; ctx.strokeStyle = goalCol[t]; ctx.stroke();
-      }
-    }
-    kickoff(Math.random() < 0.5 ? 0 : 1);
-    if (matchMedia("(prefers-reduced-motion: reduce)").matches) { for (let i = 0; i < 240; i++) step(1 / 60); draw(); return; }
-    let prev = 0;
-    const loop = (ts) => {
-      if (!cv.isConnected) return;
-      const dt = prev ? Math.min(0.05, (ts - prev) / 1000) : 0; prev = ts;
-      step(dt); draw();
-      requestAnimationFrame(loop);
+  // the menu's background: a real match between the two teams, played by the match core on the server exactly like Watch in
+  // Quick match, drawn with the match's own pitch, players and nets and a still camera on the whole pitch (the CSS tilts it).
+  // A new match starts after each final whistle; it is paused while the tab is hidden and closed when the menu goes.
+  // With reduced motion: the kickoff line-up only.
+  function showcase(cv, teams, onFrame, onGoalEv) {
+    const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const S = { ws: null, meta: null, frames: [], timer: 0, done: false };
+    const send = (o) => { try { if (S.ws && S.ws.readyState === 1) S.ws.send(JSON.stringify(o)); } catch (e) {} };
+    const vis = () => send({ pause: document.hidden });
+    S.stop = () => {
+      if (S.done) return;
+      S.done = true; clearTimeout(S.timer); document.removeEventListener("visibilitychange", vis);
+      send({ quit: 1 }); try { S.ws.close(); } catch (e) {}
+      if (G.showcase === S) G.showcase = null;
     };
+    if (G.showcase) G.showcase.stop();
+    G.showcase = S;
+    document.addEventListener("visibilitychange", vis);
+    function start() {
+      if (S.done) return;
+      const ws = S.ws = new WebSocket((location.protocol === "https:" ? "wss://" : "ws://") + location.host + "/ws/match");
+      let ended = false;
+      ws.onopen = () => {
+        ws.send(JSON.stringify({ setup: { home: teams[0].id, away: teams[1].id, pitch: "big", size: 5, duration: 300, control: "none", allow_draw: true, record: false } }));
+        if (document.hidden) send({ pause: true });
+      };
+      ws.onmessage = (e) => {
+        if (S.ws !== ws) return;
+        const d = JSON.parse(e.data);
+        if (d.k === "m") { prepareMeta(S, d); S.frames = []; }
+        else if (d.k === "f") {
+          d.at = performance.now();
+          S.frames.push(d); if (S.frames.length > 8) S.frames.shift();
+          for (const ev of d.ev || []) onGoalEv(ev);
+          onFrame(d);
+          if (still) { draw(); S.stop(); }
+        } else if (d.k === "r" && !ended) {
+          ended = true;
+          S.timer = setTimeout(() => { send({ quit: 1 }); try { ws.close(); } catch (er) {} start(); }, 6000);
+        } else if (d.k === "e") { onFrame(null); S.stop(); }
+      };
+      ws.onclose = () => { if (S.ws === ws && !ended && !S.done) S.timer = setTimeout(start, 5000); };   // the server went away: try again later
+    }
+    function draw() {
+      const m = S.meta, fr = S.frames;
+      const dpr = Math.min(2, window.devicePixelRatio || 1), cw = cv.clientWidth, ch = cv.clientHeight;
+      if (!m || !fr.length || !cw || !ch) return;
+      if (cv.width !== Math.round(cw * dpr) || cv.height !== Math.round(ch * dpr)) { cv.width = Math.round(cw * dpr); cv.height = Math.round(ch * dpr); }
+      const ctx = cv.getContext("2d"), P = m.pitch, bx = P.out_x + 6, by = P.out_y + 6, u = Math.min(cw / (2 * bx), ch / (2 * by));
+      ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, cv.width, cv.height);
+      ctx.setTransform(dpr * u, 0, 0, dpr * u, (dpr * cw) / 2, (dpr * ch) / 2);
+      // as drawMatch: positions interpolated between the two frames around (now - one tick)
+      const rt = performance.now() - 20;
+      let a = fr[fr.length - 1], b = a, k = 0;
+      for (let i = fr.length - 1; i > 0; i--) if (fr[i - 1].at <= rt) { a = fr[i - 1]; b = fr[i]; k = Math.min(1, Math.max(0, (rt - a.at) / Math.max(b.at - a.at, 1))); break; }
+      if (b.t < a.t || a.p.length !== b.p.length) { a = b; k = 0; }
+      const L = (x, y) => x + (y - x) * k;
+      ctx.save();
+      ctx.beginPath(); ctx.roundRect(-bx, -by, 2 * bx, 2 * by, 16); ctx.clip();
+      drawPitch(ctx, m); drawPlayers(ctx, S, m, a, b, L, b); drawNets(ctx, m);
+      ctx.restore();
+    }
+    start();
+    if (still) return;
+    const loop = () => { if (S.done) return; if (!cv.isConnected) { S.stop(); return; } draw(); requestAnimationFrame(loop); };
     requestAnimationFrame(loop);
   }
 
