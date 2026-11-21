@@ -2,7 +2,7 @@
 so it works even when the dashboard is down. Every command prints one JSON object ({"schema_version", "generated_at", "data"}),
 --pretty indents it. Exit code 1 on errors ({"error", "hint"}). The dashboard serves the same data under /api/v1/ (read-only).
 
-  python3 lab/lab.py status                          Pi, runner, running experiment (progress, ETA, stalled?), last reboot
+  python3 lab/lab.py status                          machine (Pi or Mac), runner, running experiment (progress, ETA, stalled?), last reboot
   python3 lab/lab.py runs [--state done]             one row per run: settings changed, progress, verdict, cost
   python3 lab/lab.py run NAME [--tail 20]            one run: status, evaluations (summaries), training / PPO tail
   python3 lab/lab.py evals [--run R] [--kind full] [--protocol full/g1/d90]
@@ -11,8 +11,10 @@ so it works even when the dashboard is down. Every command prints one JSON objec
   python3 lab/lab.py ablation [--kind full]          every run vs its reference, Holm-corrected over the batch
   python3 lab/lab.py events [--since 2026-11-16T20:00]   runs started/resumed/finished, evaluations, reboots
   python3 lab/lab.py ranking [--league rl]           Elo ranking of every team of every league (lab/ladder.py), 95% intervals
+  python3 lab/lab.py estimates [--run NAME]          estimated Elo of the checkpoints during training (lab/ladder.py estimate)
   python3 lab/lab.py queue list | validate F | add F [--position N] | cancel NAME | move NAME N
   python3 lab/lab.py schema                          what every metric means (unit, direction, protocol)
+  python3 lab/lab.py ladder archive [--label L] [--yes]   start the Elo ranking over (only when the user asks; matches kept)
 Definitions: AGENTS.md and exp/schema.json.
 """
 import argparse
@@ -26,14 +28,11 @@ import subprocess
 import sys
 import time
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import tracker  # noqa: E402
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))   # the project root BEFORE lab/ (lab/lab.py would hide the lab package)
+from lab import tracker  # noqa: E402
 
 ROOT, EXP = tracker.ROOT, tracker.EXP
 LOGS = os.path.join(ROOT, "logs")
-TRAIN_RE = re.compile(r"^\[(\d+:\d+:\d+)\] sp upd (\d+) \| pts/m vs rules (\S+?)(?:\((\d+)\))? \| vs frozen benchmark (\S+?)(?:\(\d+\))? \| "
-                      r"vs league (\S+?)(?:\(\d+\))? \| rew/step (\S+) \| ent (\S+) \| pool \d+ \| (\d+) dec/s sim (\S+)s learn (\S+)s \| (\d+)s")
-
 
 class LabError(Exception):
     def __init__(self, error, hint=""):
@@ -100,17 +99,8 @@ def tag_of(run, st=None):
 
 def training(tag):
     """Per logged update: training points vs rule bots / frozen start net / own snapshots, reward per step, entropy, speed, seconds
-    since the trainer's (re)start."""
-    rows = []
-    path = os.path.join(LOGS, tag + ".out")
-    if os.path.exists(path):
-        for line in open(path, errors="replace"):
-            m = TRAIN_RE.match(line)
-            if m:
-                rows.append({"upd": int(m.group(2)), "rules": num(m.group(3)), "n_rules": int(m.group(4) or 0), "bench": num(m.group(5)),
-                             "league": num(m.group(6)), "rew": num(m.group(7)), "ent": num(m.group(8)), "dps": int(m.group(9)),
-                             "sim": num(m.group(10)), "learn": num(m.group(11)), "elapsed": int(m.group(12)), "clock": m.group(1)})
-    return latest_segment(rows)
+    since the trainer's (re)start (tracker.train_rows)."""
+    return latest_segment(tracker.train_rows(tag))
 
 
 def speed(tr):
@@ -126,10 +116,10 @@ def speed(tr):
     return (b["elapsed"] - a["elapsed"]) / max(b["upd"] - a["upd"], 1)
 
 
-# ---------------------------------------------------------------- Pi health
+# ---------------------------------------------------------------- machine health
 def health(hours=12.0):
     """Health samples (every 10 s) of the last hours: time (ISO), boot id, throttle flags, temperature, load, free memory, clock."""
-    path = os.path.join(LOGS, "pi_health.log")
+    path = os.path.join(LOGS, "health.log")
     if not os.path.exists(path):
         return []
     rows = []
@@ -140,8 +130,30 @@ def health(hours=12.0):
         d = dict(re.findall(r"(\w+)=([^\s]*)", parts[1]))
         rows.append({"t": parts[0], "boot": d.get("boot"), "throttled": d.get("throttled"), "temp": num(d.get("temp", "").rstrip("'C")),
                      "load": num(d.get("load")), "mem_mb": num(d.get("memfree", "").rstrip("MB")), "clock_mhz": num(d.get("clock", "").rstrip("MHz")),
-                     "swap_mb": num(d.get("swapused", "").rstrip("MB"))})
+                     "swap_mb": num(d.get("swapused", "").rstrip("MB")), "thermal": num(d.get("thermal")), "battery": num(d.get("battery")),
+                     "power": d.get("power"), "kind": d.get("kind"), "machine": (d.get("machine") or "").replace("_", " ") or None,
+                     "chip": (d.get("chip") or "").replace("_", " ") or None, "cores": num(d.get("cores")),
+                     "mem_total_mb": num(d.get("memtotal", "").rstrip("MB")), "temp_src": d.get("temp_src")})
     return rows
+
+
+THERMAL = ["nominal", "moderate", "heavy", "trapping", "sleeping"]       # macOS thermal pressure levels (CPU slowed from "moderate" up)
+
+
+def machine(last):
+    """What the health box describes: the machine of the last health sample (the Pi when the sample has no machine keys)."""
+    kind = last.get("kind") or ("mac" if sys.platform == "darwin" else "pi")
+    mac = kind == "mac"
+    boot = None
+    if mac:
+        m = re.search(r"sec = (\d+)", subprocess.run(["sysctl", "-n", "kern.boottime"], capture_output=True, text=True).stdout)
+        boot = int(m.group(1)) if m else None
+    th = last.get("thermal")
+    return {"kind": kind, "name": last.get("machine") or ("Mac" if mac else "Raspberry Pi"), "chip": last.get("chip"),
+            "cores": int(last.get("cores") or os.cpu_count() or 4), "mem_total_mb": last.get("mem_total_mb") or (None if mac else 3800),
+            "temp_label": "Battery temp" if last.get("temp_src") == "battery" else "Temperature", "temp_warn": 40 if last.get("temp_src") == "battery" else 75,
+            "thermal": int(th) if th is not None else None, "thermal_text": THERMAL[int(th)] if th is not None and 0 <= th < len(THERMAL) else None,
+            "power": last.get("power"), "battery_pct": last.get("battery"), "boot_time": boot, "watchdog": kind == "pi"}
 
 
 def reboots(rows=None):
@@ -159,29 +171,44 @@ def cmd_status(_a):
     mem = dict(re.findall(r"(\w+):\s+(\d+)", open("/proc/meminfo").read())) if os.path.exists("/proc/meminfo") else {}
     hl = health(48)
     last = hl[-1] if hl else {}
+    mc = machine(last)
+    guard = {}
+    try:                                                # lab/thermal_guard.py (fanless laptop): the run is paused to cool down
+        guard = json.load(open(os.path.join(LOGS, "thermal_guard.json")))
+        guard = guard if time.time() - guard.get("updated", 0) < 120 else {}
+    except (OSError, ValueError):
+        pass
+    if up is None and mc["boot_time"]:
+        up = time.time() - mc["boot_time"]
     try:
         active = subprocess.run(["systemctl", "is-active", "soccer-exp"], capture_output=True, text=True).stdout.strip() or None
     except OSError:                                    # no systemd (not the Pi): the runner service is not installed here
         active = None
-    running = None
+    running, fresh = None, None
     for p in glob.glob(os.path.join(EXP, "runs", "*", "status.json")):
         st = tracker.run_status(os.path.basename(os.path.dirname(p)))
         if st.get("state") == "running":
             tag = st.get("tag", "x_" + st["name"])
+            log_path = os.path.join(LOGS, tag + ".out")
+            seen = max(os.path.getmtime(log_path) if os.path.exists(log_path) else 0, os.path.getmtime(p))
+            if fresh is not None and seen <= fresh:     # two "running" states (one copied from another computer): the newest output wins
+                continue
+            fresh = seen
             tr = training(tag)
             spu = speed(tr) if tr else None
-            log_path = os.path.join(LOGS, tag + ".out")
             age = time.time() - os.path.getmtime(log_path) if os.path.exists(log_path) else None
             ev = os.path.exists(os.path.join(LOGS, tag + "_eval_running.json"))
             running = {"run": st["name"], "update": st.get("update"), "target": st.get("target_updates"), "sec_per_update": round(spu, 1) if spu else None,
                        "eta_hours": round(spu * max(st.get("target_updates", 0) - (st.get("update") or 0), 0) / 3600, 2) if spu else None,
                        "train_pts_vs_rules": st.get("train_pts"), "train_pts_at_start": st.get("base_train"), "evaluating": ev,
-                       "log_age_s": round(age) if age is not None else None, "stalled": bool(age is not None and age > 900 and not ev),
+                       "log_age_s": round(age) if age is not None else None, "stalled": bool(age is not None and age > 900 and not ev and not guard.get("paused")),
+                       "thermal_pause": guard if guard.get("paused") else None,
                        "bad_checks": st.get("bad_checks", 0), "restarts": st.get("restarts", []), "started": iso(st.get("started"))}
     queue = sorted(os.path.basename(p) for p in glob.glob(os.path.join(EXP, "queue", "*.json")))
     rb = reboots(hl)
-    return {"pi": {"uptime_hours": round(up / 3600, 2) if up else None, "boot_id": tracker.boot_id(), "last_sample": last.get("t"),
-                   "temp_c": last.get("temp"), "load_1m": last.get("load"), "mem_free_mb": int(mem["MemAvailable"]) // 1024 if "MemAvailable" in mem else None,
+    return {"machine": {"uptime_hours": round(up / 3600, 2) if up else None, "boot_id": tracker.boot_id() or last.get("boot"), "last_sample": last.get("t"),
+                   "temp_c": last.get("temp"), "load_1m": last.get("load"),
+                   "mem_free_mb": int(mem["MemAvailable"]) // 1024 if "MemAvailable" in mem else last.get("mem_mb"), **mc,
                    "throttled": last.get("throttled"), "throttled_meaning": throttle_text(last.get("throttled"))},
             "runner": {"service": active, "running": running, "queue": queue},
             "last_reboot": rb[-1] if rb else None}
@@ -222,6 +249,8 @@ def run_row(name, rows):
     ev = [r for r in rows if r["run"] == name]
     full = next((r for r in reversed(ev) if r["kind"] == "full"), None)
     fast = next((r for r in reversed(ev) if r["kind"] == "fast"), None)
+    from lab import ladder
+    est = ladder.estimates(run=name)
     rewards = st.get("effective_rewards") or {}
     mn = tracker.minimal_for(st.get("started"))
     changed = {k: v for k, v in rewards.items() if mn.get(k) != v}
@@ -232,7 +261,18 @@ def run_row(name, rows):
             "update": st.get("update"), "target": st.get("target_updates"), "stop_reason": st.get("stop_reason"),
             "restarts": len(st.get("restarts", [])), "verdict": st.get("verdict"), "cost_hours": st.get("cost_hours"),
             "started": iso(st.get("started")), "finished": iso(st.get("finished")),
-            "latest_full": eval_row(full) if full else None, "latest_fast": eval_row(fast) if fast else None}
+            "latest_full": eval_row(full) if full else None, "latest_fast": eval_row(fast) if fast else None,
+            "elo_estimate": est_row(est[-1]) if est else None, "elo_estimates": len(est)}
+
+
+def est_row(e, matches=False):
+    """An estimated-Elo record without its match list (unless matches)."""
+    return {k: v for k, v in e.items() if matches or k != "matches"}
+
+
+def cmd_estimates(a):
+    from lab import ladder
+    return [est_row(e, a.matches) for e in ladder.estimates(run=a.run)]
 
 
 def cmd_runs(a):
@@ -313,7 +353,7 @@ def cmd_events(a):
             m = re.match(r"^\[(\d{4}-\d\d-\d\d) (\d\d:\d\d:\d\d)\] (.*)", l.rstrip())
             if m:
                 t = m.group(1) + "T" + m.group(2)
-                kind = next((k for k, pat in (("started", r"^started "), ("resumed", r"^resuming "), ("finished", r" finished: "), ("fast_check", r" fast: "),
+                kind = next((k for k, pat in (("started", r"^started "), ("resumed", r"^resuming "), ("finished", r" finished: "), ("fast_check", r" fast: "), ("estimate", r" estimated Elo \d"),
                                               ("stopped", r" - stopping"), ("error", r"^ERROR|exited with code"), ("baseline", r"^baseline "),
                                               ("full_eval", r"full evaluation")) if re.search(pat, m.group(3))), "info")
                 ev.append({"t": t, "kind": kind, "text": m.group(3)})
@@ -321,8 +361,8 @@ def cmd_events(a):
         ev.append({"t": iso(r.get("time")), "kind": "eval_recorded", "text": "%s u%d %s %s pts %s" % (r["run"], r["update"], r["kind"], r.get("protocol"),
                                                                                                     r["league"].get("all", {}).get("pts"))})
     for rb in reboots():
-        ev.append({"t": rb["back"], "kind": "reboot", "text": "Pi rebooted (last sample %s, load %s, free %s MB, temp %s)" % (
-            rb["last_seen"], rb["last_sample"]["load"], rb["last_sample"]["mem_mb"], rb["last_sample"]["temp"])})
+        ev.append({"t": rb["back"], "kind": "reboot", "text": "%s rebooted (last sample %s, load %s, free %s MB, temp %s)" % (
+            machine(rb["last_sample"])["name"], rb["last_seen"], rb["last_sample"]["load"], rb["last_sample"]["mem_mb"], rb["last_sample"]["temp"])})
     return sorted((e for e in ev if e["t"] and e["t"] >= since), key=lambda e: e["t"])
 
 
@@ -404,12 +444,28 @@ def cmd_queue(a):
 
 def cmd_ranking(a):
     """The Elo ranking of every team of every league (lab/ladder.py): rating with 95% interval, games, record."""
-    import ladder
+    from lab import ladder
     r = ladder.ranking()
     rows = r["rows"] if not a.league else [x for x in r["rows"] if x["league"] == a.league]
-    keep = ("rank", "id", "name", "league", "kind", "elo", "lo", "hi", "games", "w", "d", "l", "gf", "ga", "pts", "placed")
+    keep = ("rank", "id", "name", "league", "kind", "elo", "lo", "hi", "games", "w", "d", "l", "agf", "aga", "agf_se", "aga_se", "gf", "ga", "placed")
     return {"protocol": r["protocol"], "matches": r["matches"], "stale": r["stale"], "last": r["last"], "ladder_off": r["off"],
             "rows": [{k: x.get(k) for k in keep} for x in rows]}
+
+
+def cmd_ladder(a):
+    """Starts the Elo ranking over, when the user decides: `ladder archive` shows what would move, `ladder archive --yes` moves
+    every stored match and the rating history to exp/ladder_archive/<date>[_<label>]/ (kept, no longer counted; audited)."""
+    from lab import ladder
+    if a.action != "archive":
+        raise LabError("unknown ladder action %r" % a.action, "python3 lab/lab.py ladder archive [--label NAME] [--yes]")
+    info = ladder.archive(a.label or "", dry_run=not a.yes)
+    if not info["files"]:
+        raise LabError("nothing to archive: no exp/ladder.jsonl here", "run it on the machine that plays the ladder (lab/MAC.md)")
+    if not a.yes:
+        return {"dry_run": True, "would_archive": info,
+                "hint": "this starts the Elo ranking over (every team back to 1500, placement matches first); add --yes to do it"}
+    audit("ladder_archive", folder=info["folder"], matches=info["matches"], label=info["label"])
+    return {"archived": info}
 
 
 def cmd_schema(_a):
@@ -417,7 +473,8 @@ def cmd_schema(_a):
 
 
 COMMANDS = {"status": cmd_status, "runs": cmd_runs, "run": cmd_run, "evals": cmd_evals, "best": cmd_best, "compare": cmd_compare,
-            "ablation": cmd_ablation, "events": cmd_events, "queue": cmd_queue, "schema": cmd_schema, "ranking": cmd_ranking}
+            "ablation": cmd_ablation, "events": cmd_events, "queue": cmd_queue, "schema": cmd_schema, "ranking": cmd_ranking,
+            "estimates": cmd_estimates, "ladder": cmd_ladder}
 
 
 def envelope(data):
@@ -456,8 +513,15 @@ def parser():
     p.add_argument("arg", nargs="?")
     p.add_argument("--position", type=int)
     sub.add_parser("schema")
+    p = sub.add_parser("estimates")
+    p.add_argument("--run")
+    p.add_argument("--matches", action="store_true", help="with the match list of each estimate")
     p = sub.add_parser("ranking")
     p.add_argument("--league", help="rules | rl | ml | dl")
+    p = sub.add_parser("ladder", help="ladder archive [--label NAME] [--yes]: start the Elo ranking over (only when the user asks)")
+    p.add_argument("action", choices=["archive"])
+    p.add_argument("--label", help="a word for the archive folder, e.g. before_v2_rewards")
+    p.add_argument("--yes", action="store_true", help="really do it (without it: only show what would move)")
     return ap
 
 

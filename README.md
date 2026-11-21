@@ -11,7 +11,8 @@ python3 web/app.py
 ```
 
 Then open <http://localhost:8080/#/game> (from another computer: `http://<this machine>:8080`). It needs Python 3 with numpy; the
-same page has the **Lab** (the experiment dashboard) next to the **Game**. On the Raspberry Pi the service `soccer-dashboard` runs it.
+same page has the **Lab** (the experiment dashboard) next to the **Game**. Dependencies are listed in `pyproject.toml` (numpy;
+torch for training); nothing needs installing, every script runs from the checkout as `python3 <dir>/<script>.py`. On the Raspberry Pi the service `soccer-dashboard` runs it.
 
 ## Screenshots
 
@@ -60,8 +61,8 @@ Four parts, each using the one below it:
 
 ```
 web/      the web app: one server (app.py) and the page, with two areas: Game and Lab
-game/     the game's back end: catalog, match setup, tournaments, live matches (the pages are web/game.js)
-lab/      experiments on the Pi: queue, runner, Lab API, live demo match, agent CLI (the pages are web/lab.js)
+game/     the game's back end: catalog, match setup, tournaments, live matches (the pages are web/game/)
+lab/      experiments on the Pi: queue, runner, Lab API, live demo match, agent CLI (the pages are web/lab/)
 rl/       training and evaluation of the net teams (PPO, environment, league / head-to-head / scouting)
 soccer/   the match core (Python): physics, rules, stats, grades, rule-based and net AI
 data/     pitches, styles, teams, formations, shipped nets (JSON)
@@ -74,12 +75,14 @@ data/     pitches, styles, teams, formations, shipped nets (JSON)
   (fixtures, standings, statistics), `session.py` (a live match over a WebSocket), `routes.py` (the HTTP API).
 - `web/`: `app.py` (the server, standard library only: static files, `/api/game/...`, `/ws/match`, and the Lab's API from
   `lab/dashboard.py`), `ws.py` (a minimal WebSocket), `index.html` (the shell with the Game / Lab switch), `game.js` +
-  `game.css` + `draw.js` (the game: menus, match renderer, logos and kits), `lab.js` + `style.css` (the Lab).
-- `rl/` ([rl/README.md](rl/README.md)): `env.py`, `client.py`, `selfplay.py`, `ppo.py`, `distill.py`, `evaluate.py`,
-  `eval_checkpoint.py`, `export_team.py`, `net_server.py`.
+  `game/*.js` + `game.css` + `draw.js` (the game, ES modules: `game/core.js` state and helpers, one module per screen,
+  `game/render.js` the match on the canvas; logos and kits in `draw.js`), `lab/*.js` + `style.css` (the Lab: plain scripts
+  loaded in order, one per page, `lab/core.js` helpers and charts, `lab/app.js` routing and start-up).
+- `rl/` ([rl/README.md](rl/README.md)): `env.py`, `client.py`, `agent.py`, `selfplay.py`, `distill.py`, `evaluate.py`,
+  `eval_checkpoint.py`, `export_team.py`, `selfplay_args.py` (the training options, without torch).
 - `lab/` ([lab/README.md](lab/README.md)): `exp_runner.py`, `tracker.py`, `lab.py`, `dashboard.py` (Lab API), `live.py`,
   `systemd/`. Results and specs live in `exp/`, checkpoints in `out_5v5/`, logs in `logs/`.
-- `tests/` the core and the game against the Godot implementation they replaced, and the web app (see "Tests"); `tools/`
+- `tests/` regression tests of the core, training environment, evaluations, tournaments and the web app (see "Tests"); `tools/`
   `bench.py` (core speed), `team_bench.py` (one team against the league / RL teams / trained nets: points, goals, and how
   much it plays as a team), `tune_opus.py` (CMA-ES tuning of the Opus team brain against trained nets), `generate_data.py` (regenerates `data/`, seeded; style tuning lives there); `docs/` notebook,
   rewards, pipeline design, UI design guide, old results.
@@ -141,35 +144,46 @@ result, which the report shows. Tournament rounds are simulated in one request (
 - Recording your play (`game/recorder.py`): with `"record": true` in the setup, every 2 ticks while you control a player in play,
   one row: the 46-number observation of your player (the nets' input), the raw positions and speeds of everyone and the ball, your
   direction as one of the nets' 9 moves (in your player's own frame) and your kick. One compressed `.npz` per match in
-  `data/human/` (versioned in git, about 1 MB per 90 s), written at the final whistle, or when you quit after at least 10 s.
+  `data/human/` (versioned in git with Git LFS, about 1 MB per 90 s), written at the final whistle, or when you quit after at least 10 s.
   `python3 il/human_data.py [--check]` lists the files (and rebuilds every observation from the raw state). Plan:
   [docs/imitation_plan.md](docs/imitation_plan.md).
-- A net plays a team through `MatchConfig.nets[team]` (`{"model": path}`, `{"dict": model}` or `{"port": n}` for a running
-  `rl/net_server.py`); a team with `ml_model` in its JSON gets its net automatically.
+- A net plays a team through `MatchConfig.nets[team]` (`{"model": path}` or `{"dict": model}`, loaded in the match's own
+  process); a team with `ml_model` in its JSON gets its net automatically.
 - Speed (`python3 tools/bench.py`, on a Mac): rule-vs-rule 5v5 about 10,600 ticks/s (177x real time), the training
   environment about 5,700 steps/s per process. The Godot implementation did about 7,200 and 3,400.
 
 ## Tests
-The Python core is an exact copy of the Godot implementation it replaced (the last commit with `scripts/core/match_sim.gd`).
-The tests record that implementation in Godot and replay it in Python ($SOCCER_REF = a checkout of it, made with
-`git worktree add ../soccer-ref f25e81b`, imported once with `godot --headless --path ../soccer-ref --import`; `--record` runs
-Godot first, recordings in $SOCCER_REC):
-- `tests/test_rng.py`: the random generator, bit for bit against Godot's.
-- `tests/test_match.py`: 17 matches (all sizes, every pitch plus one with extra walls, net teams, a human player in single and
-  team control, overtime, shootouts, score limit), tick by tick: Python loads Godot's complete state, steps once with the
-  same AI inputs and must reach Godot's next state (positions within float32 rounding, everything else equal).
-  About 61,000 ticks and 29 million values: no mismatch.
-- `tests/test_env.py`: 7 training environments with every reward term, step by step (rewards, resets, random layouts,
-  ghosts, observations). 17,000 steps: identical except one contact decided at exactly touching distance, where Godot's
-  32-bit and Python's 64-bit positions round to opposite sides (reported as a precision flip).
-- `tests/test_evaluate.py`: league, head-to-head and behaviour / scouting reports, line for line.
-- `tests/test_tournament.py`: 8 tournaments of every format played with the same made-up results in the Godot game's
-  `Tournament` and in `game/tournament.py`: teams, fixtures, match seeds, standings and statistics identical (254 matches).
-- `tests/test_web.py` (no Godot needed): the web app serves its pages and APIs, a match played live over the WebSocket ends
-  exactly like the same setup simulated in one go, the keys move the player, a recorded match saves the right file (the picked
-  keeper, the keys as net moves, observations rebuildable from the state) and unrecorded ones save nothing, a tournament can be
-  created, played and simulated.
-The AI itself was checked earlier the same way (46,250 rule-bot and 12,422 net decisions identical).
+```bash
+python3 tests/run_all.py            # everything, about 40 s; no Godot or other setup needed
+sh .githooks/install.sh             # once per computer you write code on: runs the tests before every push that changes code
+```
+With the hook installed, a push whose commits change code runs the tests first and is stopped if one fails (`git push
+--no-verify` skips it once); pushes of results, notes or docs only (`exp/`, `docs/`, `*.md`) are not held up. Not on the Pi:
+its pushes are results, and another CPU / maths library may not reproduce the stored match results bit for bit.
+Regression tests: each one plays fixed, seeded cases with the current code and compares them with the reference results in
+`tests/golden/`. A FAIL means the code now behaves differently. If that is intended (a physics, AI, reward or report change),
+re-record with `--update` (one test or `run_all.py --update`) and commit the new files together with the change. Matches are
+chaotic, so on another machine (other CPU / maths library) a float difference in the last bit can grow into a FAIL; the files
+say where they were recorded.
+- `tests/test_rng.py`: the random generator's outputs for 6 seeds (every seed, kickoff and random start comes from it).
+- `tests/test_match.py`: the 17 matches of `tests/scenarios.json` (all sizes, every pitch plus one with extra walls, net teams,
+  a scripted human in single and team control, overtime, shootouts, score limit): score, ball position and speed every second
+  (a FAIL names the first second that differs) and the complete result (events, statistics, grades).
+- `tests/test_env.py`: the 7 training environments of `tests/env_scenarios.json` (every reward term, random layouts, curricula,
+  self-play with a net, external opponents) with seeded random actions: every step's reward, every episode end, every reward
+  term's total and the observation after each reset.
+- `tests/test_evaluate.py`: the league, head-to-head and behaviour / scouting reports of `rl/evaluate.py`, line for line (the
+  Lab parses these lines), and `rl/teams_info.json` against `data/teams`.
+- `tests/test_tournament.py`: 8 tournaments of every format with made-up results: teams, fixtures, match seeds, standings and
+  statistics, and the knockout round names.
+- `tests/test_web.py`: the web app serves its pages and APIs, a match played live over the WebSocket ends exactly like the same
+  setup simulated in one go, the keys move the player, a recorded match saves the right file (the picked keeper, the keys as net
+  moves, observations rebuildable from the state) and unrecorded ones save nothing, a tournament can be created, played and
+  simulated.
+
+The Python core started as an exact port of the Godot game (the last commit with `scripts/core/match_sim.gd` is `f25e81b`);
+until Godot was removed the tests replayed that implementation tick by tick (61,000 match ticks, 17,000 environment steps and
+58,000 AI decisions identical). Those Godot-based tests are in the git history before the switch to `tests/golden/`.
 
 ## Experiments
 RL experiments run unattended on the Raspberry Pi through a queue (`exp/queue/`), a runner service and a web dashboard on port 8080: see [lab/README.md](lab/README.md) and [docs/experiment_pipeline.md](docs/experiment_pipeline.md).

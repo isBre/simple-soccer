@@ -10,10 +10,10 @@ Extra reward terms (per player) push towards human-like play: completed progress
 
   /root/rl-venv/bin/python rl/selfplay.py --updates 1500
 """
-import argparse
 import copy
 import json
 import os
+import re
 import subprocess
 import sys
 import time
@@ -25,11 +25,44 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.distributions import Bernoulli, Categorical
 
-from client import ROOT, VecEnv
-from ppo import Agent, OUT, OUT_DRAW, OUT_LOSS, OUT_WIN, load_padded, save_model, team_pools
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if ROOT not in sys.path:                     # run as a script: the project root, for the package imports
+    sys.path.insert(0, ROOT)
+
+from rl.client import VecEnv                                                                   # noqa: E402
+from rl.agent import Agent, OUT, OUT_DRAW, OUT_WIN, load_padded, team_pools                     # noqa: E402
+from rl.selfplay_args import OBS_DIMS, parser                                                  # noqa: E402
+
+torch.distributions.Distribution.set_default_validate_args(False)    # argument checks only (no effect on any value): ~20% of the rollout inference
+
+
+class TrainerQos:
+    """macOS: lab/mac_run.sh starts the runner with `taskpolicy -b` (background mode: efficiency cores only, low clock), the
+    coolest way to run the long simulation. The trainer process itself only works in short bursts (the nets between two env
+    steps, the learning step) and otherwise waits for the env workers, so with --trainer_fg 1 it leaves background mode once its
+    workers are started (they inherit background mode and keep it): the bursts run about 4.5 times faster on the performance cores
+    and the workers stop waiting for them. Evaluations go back to background mode (child processes inherit it). No-op elsewhere
+    (Linux, or a trainer not started in background mode). Changes speed only, nothing that is computed."""
+    PRIO_DARWIN_PROCESS, PRIO_DARWIN_BG = 4, 0x1000
+
+    def __init__(self, enabled):
+        self.libc = None
+        if enabled and sys.platform == "darwin":
+            import ctypes
+            libc = ctypes.CDLL(None)
+            if libc.getpriority(self.PRIO_DARWIN_PROCESS, 0) == 1:     # started in background mode
+                self.libc = libc
+
+    def fg(self):
+        if self.libc is not None:
+            self.libc.setpriority(self.PRIO_DARWIN_PROCESS, 0, 0)
+
+    def bg(self):
+        if self.libc is not None:
+            self.libc.setpriority(self.PRIO_DARWIN_PROCESS, 0, self.PRIO_DARWIN_BG)
+
 
 CKPT = os.path.join(OUT, "ckpt")
-OBS_DIMS = {"legacy": 54, "team": 46}            # observation layouts (see soccer/ai/nets.py features_team): ego with player slot / role-free team observation
 
 
 N_TEAM, N_LEGACY = 46, 54                       # env obs "both" = the team observation followed by the legacy one
@@ -51,9 +84,10 @@ def load_net(path):
     return a
 
 
-def obs_cols(in_dim):
-    """Columns of the 'both' observation a net with this input size reads."""
-    return slice(0, N_TEAM) if in_dim == N_TEAM else slice(N_TEAM, N_TEAM + N_LEGACY)
+def obs_cols(in_dim, first=N_TEAM):
+    """Columns of the 'both' / 'both_rank' observation (first = 46 or 56 numbers, then the 54 legacy ones) a net with this
+    input size reads: the team observation is the first 46 of the rank one."""
+    return slice(first, first + N_LEGACY) if in_dim == N_LEGACY else slice(0, in_dim)
 
 
 def pts(o):
@@ -74,93 +108,62 @@ def make_cfgs(args):
     return {**base, "opp": pool}, {**base, "opp": "owls", "opp_external": True}
 
 
-def eval_blocking(model_path, tag, args, log, mode="full"):
-    """Complete evaluation of a snapshot (rl/eval_checkpoint.py: league, behaviour, head to head, ...) while training is PAUSED:
-    this call returns when it is done, the env workers just wait, so the evaluation gets the whole CPU (the viewer shows an
-    "evaluation running" banner meanwhile). Result: logs/sp_eval/<tag>.txt"""
+def eval_blocking(model_path, tag, args, log, mode="full", qos=None):
+    """Evaluation of a snapshot while training is PAUSED: this call returns when it is done, the env workers just wait, so the
+    evaluation gets the whole CPU (the viewer shows an "evaluation running" banner meanwhile).
+      full: rl/eval_checkpoint.py (league, behaviour, scouting, head to head): logs/sp_eval/<tag>.txt
+      fast: the check every --fast_every updates: the estimated Elo (--elo_pairs, lab/ladder.py estimate) and, with --fast_rules 1,
+            the older fixed check against the rule bots (logs/sp_eval/<tag>_fast.txt)"""
+    rules = mode == "full" or args.fast_rules
+    elo = mode == "fast" and args.elo_pairs > 0
+    if not rules and not elo:
+        return
     suffix = "_fast" if mode == "fast" else ""
     out = os.path.join(ROOT, "logs", "sp_eval", tag + suffix + ".txt")
     cmd = [sys.executable, os.path.join(ROOT, "rl", "eval_checkpoint.py"), "--model", model_path, "--out", out, "--paused", "--mode", mode,
            "--games", str(args.eval_games), "--duration", str(args.eval_duration), "--h2h_games", str(args.eval_h2h_games)]
     if args.fast_ref:
         cmd += ["--ref", "start=" + args.fast_ref]                  # head to head against the net this run started from
-    log("training paused: %s evaluation of %s (logs/sp_eval/%s%s.txt)" % (mode, tag, tag, suffix))
+    log("training paused: %s check of %s" % (mode, tag))
     t0 = time.time()
-    subprocess.run(cmd, cwd=os.path.join(ROOT, "rl"), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    log("evaluation of %s finished in %.0f min, training continues" % (tag, (time.time() - t0) / 60.0))
+    if qos is not None:
+        qos.bg()                                                    # the evaluation processes inherit background mode
+    try:
+        if rules:
+            subprocess.run(cmd, cwd=os.path.join(ROOT, "rl"), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        if elo:
+            elo_estimate(model_path, args, log)
+    finally:
+        if qos is not None:
+            qos.fg()
+    log("%s check of %s finished in %.1f min, training continues" % (mode, tag, (time.time() - t0) / 60.0))
+
+
+def elo_estimate(model_path, args, log):
+    """Estimated Elo of the snapshot (lab/ladder.py estimate: it plays placed ladder entries, its rating is fitted with theirs held
+    fixed; exp/elo_estimates.jsonl). The "evaluation running" flag is set meanwhile (the runner does not count it as training time,
+    the Lab shows "evaluating"). A failure only costs the estimate."""
+    upd = int(re.search(r"_u(\d+)\.json$", model_path).group(1))
+    flag = os.path.join(ROOT, "logs", "%s_eval_running.json" % args.tag)
+    t0 = time.time()
+    with open(flag, "w") as fh:
+        json.dump({"pid": os.getpid(), "checkpoint": os.path.basename(model_path)[:-5], "started": int(t0), "paused": True, "what": "elo estimate"}, fh)
+    try:
+        p = subprocess.run([sys.executable, os.path.join(ROOT, "lab", "ladder.py"), "estimate", "--model", model_path, "--tag", args.tag,
+                            "--update", str(upd), "--pairs", str(args.elo_pairs), "--workers", "3"], cwd=ROOT, stdout=subprocess.PIPE,
+                           stderr=subprocess.STDOUT, text=True)
+    finally:
+        if os.path.exists(flag):
+            os.remove(flag)
+    try:
+        r = json.loads(p.stdout.strip().splitlines()[-1])
+        log("estimated Elo of %s u%d: %.0f ± %.0f (GF %.2f, GA %.2f, %d games, %.0f s)" % (args.tag, upd, r["elo"], 1.96 * r["se"], r["gf"], r["ga"], r["games"], time.time() - t0))
+    except (ValueError, IndexError, KeyError, TypeError):
+        log("estimated Elo of %s u%d failed: %s" % (args.tag, upd, p.stdout.strip()[-300:]))
 
 
 def main():
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--updates", type=int, default=1500, help="final update number (absolute: with --start_update 200 and --updates 3000 it trains updates 201..3000)")
-    ap.add_argument("--obs", choices=list(OBS_DIMS), default="team", help="observation layout: team = 46 numbers, no player ID (default); legacy = 54 numbers with the slot (the first RL teams)")
-    ap.add_argument("--start_update", type=int, default=0, help="continue numbering from a restart: the checkpoint --start was saved at this update")
-    ap.add_argument("--workers_rule", type=int, default=8)
-    ap.add_argument("--workers_self", type=int, default=8)
-    ap.add_argument("--envs_per_worker", type=int, default=10)
-    ap.add_argument("--rollout", type=int, default=128)
-    ap.add_argument("--epochs", type=int, default=4)
-    ap.add_argument("--minibatch", type=int, default=8192)
-    ap.add_argument("--lr", type=float, default=1e-4)
-    ap.add_argument("--gamma", type=float, default=0.997)
-    ap.add_argument("--lam", type=float, default=0.95)
-    ap.add_argument("--ent", type=float, default=0.003)
-    ap.add_argument("--seed", type=int, default=7)
-    ap.add_argument("--start", default=os.path.join(OUT, "rl_agent_after_s9_all.pt"))
-    ap.add_argument("--baseline", default="", help="frozen benchmark opponent (.pt); default = --start")
-    ap.add_argument("--w_pass_prog", type=float, default=0.3)
-    ap.add_argument("--w_pass_ok", type=float, default=0.05)
-    ap.add_argument("--w_pass_fail", type=float, default=0.08)
-    ap.add_argument("--pass_individual", type=int, default=0, help="1: pass rewards go to the passer / receiver, not the whole team")
-    ap.add_argument("--w_recv", type=float, default=0.0)
-    ap.add_argument("--w_open", type=float, default=0.0)
-    ap.add_argument("--w_key_pass", type=float, default=0.0)
-    ap.add_argument("--w_xa", type=float, default=0.0)
-    ap.add_argument("--w_space", type=float, default=0.006)
-    ap.add_argument("--space_radius", type=float, default=140.0)
-    ap.add_argument("--w_kick", type=float, default=0.01)
-    ap.add_argument("--random_start", type=float, default=0.0, help="fraction of episodes that start from a fully random layout instead of a kickoff")
-    ap.add_argument("--coop_cap", type=float, default=0.0, help="max cooperation reward per episode (anti reward-farming)")
-    ap.add_argument("--w_jitter", type=float, default=0.0)
-    ap.add_argument("--w_keeper", type=float, default=0.0)
-    ap.add_argument("--shaping", type=float, default=1.0, help="weight of the ball shaping (ball towards the goal, teammate towards the ball); 0 = off")
-    ap.add_argument("--w_corner", type=float, default=0.0, help="penalty per decision while our team put the ball in a corner (last touch ours)")
-    ap.add_argument("--w_wall", type=float, default=0.0, help="penalty per decision for a player pressed against the outer wall for 2+ decisions in a row")
-    ap.add_argument("--w_far", type=float, default=0.0, help="penalty for an outfield player further than --far_radius px from the ball (the arena is 1280 x 600; full penalty at twice the radius)")
-    ap.add_argument("--far_radius", type=float, default=600.0)
-    ap.add_argument("--w_xg", type=float, default=0.0, help="reward per expected goal (xG) of the player's own shots (shot quality), at most --xg_cap per match")
-    ap.add_argument("--xg_cap", type=float, default=6.0)
-    ap.add_argument("--w_xga", type=float, default=0.0, help="team penalty per xG of the opponent's shots")
-    ap.add_argument("--w_win", type=float, default=0.0, help="team bonus at the end of a won match")
-    ap.add_argument("--w_draw", type=float, default=0.0, help="team bonus at the end of a drawn match")
-    ap.add_argument("--w_tackle", type=float, default=0.0, help="reward per tackle or interception, at most --def_cap per match")
-    ap.add_argument("--def_cap", type=float, default=2.0)
-    ap.add_argument("--w_goalside", type=float, default=0.0, help="per decision: outfield player between the ball and its own goal while the opponent has the ball")
-    ap.add_argument("--goalside_lane", type=float, default=120.0)
-    ap.add_argument("--w_opp_half", type=float, default=0.0, help="team penalty per decision while the opponent has the ball in our half")
-    ap.add_argument("--w_compact", type=float, default=0.0, help="team penalty per decision when the outfield players are stretched beyond --compact_len / --compact_wid px")
-    ap.add_argument("--compact_len", type=float, default=700.0)
-    ap.add_argument("--compact_wid", type=float, default=450.0)
-    ap.add_argument("--keeper_free", type=float, default=350.0)
-    ap.add_argument("--snapshot_every", type=int, default=40)
-    ap.add_argument("--resample_every", type=int, default=20)
-    ap.add_argument("--ckpt_every", type=int, default=100)
-    ap.add_argument("--eval_every", type=int, default=100, help="complete evaluation of the checkpoint every N updates (multiple of --ckpt_every; 0 = never); training is paused meanwhile")
-    ap.add_argument("--fast_every", type=int, default=0, help="FAST check (16 short matches + head to head vs --fast_ref) every N updates, training paused; 0 = never")
-    ap.add_argument("--fast_ref", default="", help="game-model JSON of the net the run started from (the fast check plays it head to head)")
-    ap.add_argument("--learn_threads", type=int, default=2, help="torch threads of the learning step (all 4 would fight the env workers for the CPU: the Pi froze)")
-    ap.add_argument("--base_port", type=int, default=7100, help="first port of the rule-group workers (self-play group: +100)")
-    ap.add_argument("--hidden", type=int, default=128, help="width of the two hidden layers (must match --start)")
-    ap.add_argument("--teacher", default="", help="kickstarting: a checkpoint (.pt/.json, e.g. the 54-input jit8) whose moves the learner is pulled towards")
-    ap.add_argument("--kl_coef", type=float, default=0.0, help="weight of KL(teacher || learner) in the loss at update 0, decaying linearly")
-    ap.add_argument("--kl_decay", type=int, default=300, help="update at which the teacher term reaches 0")
-    ap.add_argument("--opp_models", default="", help="comma-separated strong opponents for the self-play group (.pt or game-model .json, 46 or 54 inputs)")
-    ap.add_argument("--pfsp", type=float, default=0.5, help="share of the self-play slots 1-3 given to --opp_models, each picked more often the more it wins (PFSP)")
-    ap.add_argument("--eval_games", type=int, default=1, help="league games per team and side (1 = 32 matches)")
-    ap.add_argument("--eval_duration", type=float, default=90.0, help="seconds per evaluation match")
-    ap.add_argument("--eval_h2h_games", type=int, default=8, help="head-to-head games per side against each reference net")
-    ap.add_argument("--log_every", type=int, default=5)
-    ap.add_argument("--tag", default="sp")
+    ap = parser()
     args = ap.parse_args()
     os.makedirs(os.path.join(ROOT, "logs"), exist_ok=True)
     obs_dim = OBS_DIMS[args.obs]
@@ -168,13 +171,14 @@ def main():
               for p in args.opp_models.split(",") if p]
     teacher = load_net(args.teacher if os.path.isabs(args.teacher) else os.path.join(ROOT, args.teacher)) if args.teacher else None
     both = teacher is not None or any(n[0].in_features == N_LEGACY for _, n in strong)
-    assert not both or args.obs == "team", "a teacher / 54-input opponents need --obs team"
-    env_obs = "both" if both else args.obs
-    D_env = N_TEAM + N_LEGACY if both else obs_dim
+    assert not both or args.obs in ("team", "rank"), "a teacher / 54-input opponents need --obs team or rank"
+    env_obs = ("both" if args.obs == "team" else "both_rank") if both else args.obs
+    D_env = obs_dim + N_LEGACY if both else obs_dim
     L = slice(0, obs_dim)                                           # the learner's columns of the environment observation
     for _, n in strong:
         for p in n.parameters():
             p.requires_grad_(False)
+    T_cols = obs_cols(teacher.sizes[0], obs_dim) if teacher is not None else None    # the teacher's columns of the environment observation
     if teacher is not None:
         for p in teacher.parameters():
             p.requires_grad_(False)
@@ -195,6 +199,7 @@ def main():
         logf.write(line + "\n")
         logf.flush()
 
+    qos = TrainerQos(args.trainer_fg)
     agent = Agent(obs_dim, args.hidden)
     load_padded(agent, args.start)
     opt = torch.optim.Adam(agent.parameters(), lr=args.lr)
@@ -227,7 +232,7 @@ def main():
         for k in range(1, NSLOT):
             if strong and np.random.rand() < args.pfsp:
                 name, net = pfsp_pick()
-                slot_net[k], slot_cols[k], slot_name[k] = net, obs_cols(net[0].in_features), "strong:" + name
+                slot_net[k], slot_cols[k], slot_name[k] = net, obs_cols(net[0].in_features, obs_dim), "strong:" + name
             else:
                 snap_nets[k].load_state_dict(pool[np.random.randint(len(pool))])
                 slot_net[k], slot_cols[k], slot_name[k] = snap_nets[k], L, "league"
@@ -241,6 +246,7 @@ def main():
     try:
         er.configure(cfg_rule, seed=args.seed)
         es.configure(cfg_self, seed=args.seed + 1)
+        qos.fg()                                                    # the workers are started (in background mode): see TrainerQos
         Er, Es = er.E, es.E
         E, A, D, T = Er + Es, 5, D_env, args.rollout
         slot_of = np.arange(Es) * NSLOT // Es                      # envs of the self group -> opponent slot
@@ -356,7 +362,7 @@ def main():
                     loss = pg + 0.5 * vl - args.ent * ent
                     if teacher is not None:                         # kickstarting: stay close to the teacher's moves (weight decays to 0)
                         with torch.no_grad():
-                            zt = teacher.actor(x[:, N_TEAM:N_TEAM + N_LEGACY])
+                            zt = teacher.actor(x[:, T_cols])
                         klt = (F.softmax(zt[:, :9], -1) * (F.log_softmax(zt[:, :9], -1) - F.log_softmax(z[:, :9], -1))).sum(-1).mean()
                         pt, ps = torch.sigmoid(zt[:, 9]), torch.sigmoid(z[:, 9]).clamp(1e-6, 1 - 1e-6)
                         klt = klt + (pt * (torch.log(pt.clamp(1e-6)) - torch.log(ps)) + (1 - pt) * (torch.log((1 - pt).clamp(1e-6)) - torch.log(1 - ps))).mean()
@@ -380,10 +386,17 @@ def main():
 
             if upd % args.log_every == 0 or upd == args.start_update + 1:
                 f = lambda d: ("%.2f(%d)" % (np.mean(d), len(d))) if d else "-"
+                m2 = lambda d: float("%.2f" % np.mean(d)) if d else None
+                dps, elapsed = 2 * T * Er / t_sim, time.time() - t_start
                 log("sp upd %d | pts/m vs rules %s | vs frozen benchmark %s | vs league %s | rew/step %.4f | ent %.2f | pool %d | "
                     "%.0f dec/s sim %.1fs learn %.1fs | %.0fs" % (upd, f(stats["rule"]), f(stats["bench"]), f(stats["league"]),
-                                                              b_rew.mean().item(), ent.item(), len(pool), 2 * T * Er / t_sim,
-                                                              t_sim, t_learn, time.time() - t_start))
+                                                              b_rew.mean().item(), ent.item(), len(pool), dps,
+                                                              t_sim, t_learn, elapsed))
+                with open(os.path.join(ROOT, "logs", args.tag + "_train.jsonl"), "a") as tf:     # the same numbers for lab/tracker.py train_rows
+                    tf.write(json.dumps({"clock": time.strftime("%H:%M:%S"), "upd": upd, "rules": m2(stats["rule"]), "n_rules": len(stats["rule"]),
+                                         "bench": m2(stats["bench"]), "league": m2(stats["league"]), "rew": float("%.4f" % b_rew.mean().item()),
+                                         "ent": float("%.2f" % ent.item()), "dps": int("%.0f" % dps), "sim": float("%.1f" % t_sim),
+                                         "learn": float("%.1f" % t_learn), "elapsed": int("%.0f" % elapsed)}) + "\n")
             if strong and upd % (args.log_every * 5) == 0:
                 log("strong opponents (pts/match, last 60): " + ", ".join("%s %s" % (n, ("%.2f(%d)" % (np.mean(r), len(r))) if r else "-") for n, r in strong_res.items()))
             if upd % args.ckpt_every == 0:
@@ -393,9 +406,9 @@ def main():
                 torch.save(agent.state_dict(), os.path.join(CKPT, "%s_u%d.pt" % (args.tag, upd)))
                 torch.save({"opt": opt.state_dict(), "pool": pool}, os.path.join(CKPT, "%s_u%d.train_state" % (args.tag, upd)))  # for a faithful resume
                 if args.eval_every > 0 and upd % args.eval_every == 0:
-                    eval_blocking(path, "%s_u%d" % (args.tag, upd), args, log)
+                    eval_blocking(path, "%s_u%d" % (args.tag, upd), args, log, qos=qos)
                 elif args.fast_every > 0 and upd % args.fast_every == 0:
-                    eval_blocking(path, "%s_u%d" % (args.tag, upd), args, log, "fast")
+                    eval_blocking(path, "%s_u%d" % (args.tag, upd), args, log, "fast", qos=qos)
         log("selfplay finished")
     finally:
         er.close()

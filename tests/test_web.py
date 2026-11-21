@@ -1,4 +1,4 @@
-"""Smoke test of the web app (web/app.py), no Godot needed: starts it on a free port and checks
+"""Smoke test of the web app (web/app.py): starts it on a free port and checks
   pages      the shell, styles and scripts are served; the Lab API answers (/api/v1/runs, /api/docs)
   catalog    leagues, teams, pitches, formations
   live       a match played over the WebSocket (/ws/match, at 8x speed) ends with the same result as the same setup simulated
@@ -86,7 +86,7 @@ def main():
         s.bind(("127.0.0.1", 0))
         port = s.getsockname()[1]
     rec_dir = tempfile.mkdtemp(prefix="soccer_human_")
-    srv = subprocess.Popen([sys.executable, os.path.join(ROOT, "web", "app.py"), "--port", str(port), "--host", "127.0.0.1"],
+    srv = subprocess.Popen([sys.executable, os.path.join(ROOT, "web", "app.py"), "--port", str(port), "--host", "127.0.0.1", "--no-helpers"],
                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env={**os.environ, "SOCCER_HUMAN_DIR": rec_dir})
     results = []
     try:
@@ -96,7 +96,7 @@ def main():
                 break
             except OSError:
                 time.sleep(0.1)
-        pages = [get(port, p) for p in ("/", "/style.css", "/game.css", "/draw.js", "/game.js", "/lab.js", "/api/docs")]
+        pages = [get(port, p) for p in ("/", "/style.css", "/game.css", "/draw.js", "/game.js", "/game/core.js", "/game/render.js", "/lab/core.js", "/lab/app.js", "/api/docs")]
         runs = json.loads(get(port, "/api/v1/runs")[1])
         results.append(check("pages", all(c == 200 and len(b) > 100 for c, b in pages) and "data" in runs, "%d files, %d runs" % (len(pages), len(runs["data"]))))
 

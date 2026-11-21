@@ -1,12 +1,9 @@
-"""The game's tournaments (game/tournament.py) against the Godot game's Tournament (scripts/tournament/tournament.gd) in the
-reference checkout ($SOCCER_REF, see tests/test_match.py): 8 tournaments of every format (league with an odd number of
-teams, knockout of 4 / 8 / 16, groups + knockout) are played with the same made-up results on both sides
-(tests/reference/record_tournament.gd); the shuffled teams, every fixture, every match seed, the results, standings and
-player statistics must be identical. Knockout round names are the one intended difference (the Godot game called the final
-"Round of 2"; see game/tournament.py _ko_name).
+"""The tournaments (game/tournament.py) against stored ones (tests/golden/tournament.json): 8 tournaments of every format
+(league with an odd number of teams, knockout of 4 / 8 / 16, groups + knockout) played with made-up results; the shuffled
+teams, every fixture, every match seed, the results, standings and player statistics must be identical. Also checks the
+knockout round names.
 
-  python3 tests/test_tournament.py"""
-import json
+  python3 tests/test_tournament.py [--update]"""
 import os
 import sys
 
@@ -14,13 +11,13 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 from game import tournament as tn                         # noqa: E402
 from soccer.data import database                          # noqa: E402
-from tests.godot_run import install_reference, run_scene  # noqa: E402
+from tests import golden                                   # noqa: E402
 
 CASES = [[0, 5, 1], [0, 6, 12345], [0, 16, 777], [1, 4, 2], [1, 8, 99999], [1, 16, 31337], [2, 8, 4242], [2, 16, 5]]
 
 
 def fake(t_seed, ri, idx, fix):
-    """The made-up result of a match (the formula of record_tournament.gd)."""
+    """The made-up result of a match."""
     h = (t_seed * 31 + ri * 7 + idx * 13) % 11
     hg, ag = h % 3, (h * 5 + idx) % 3
     winner = 0 if hg > ag else 1 if ag > hg else -1
@@ -70,43 +67,14 @@ def play_python_names():
     return t["rounds"]
 
 
-def diff(a, b, path=""):
-    """Differences between two JSON values (numbers compared as numbers: Godot writes every number as a float)."""
-    if isinstance(a, dict) and isinstance(b, dict):
-        out = []
-        for k in sorted(set(a) | set(b)):
-            out += diff(a.get(k), b.get(k), path + "." + str(k))
-        return out
-    if isinstance(a, list) and isinstance(b, list):
-        if len(a) != len(b):
-            return [(path, "length", len(a), len(b))]
-        return [d for i, (x, y) in enumerate(zip(a, b)) for d in diff(x, y, "%s[%d]" % (path, i))]
-    if isinstance(a, (int, float)) and isinstance(b, (int, float)) and not isinstance(a, bool) and not isinstance(b, bool):
-        return [] if abs(a - b) <= 1e-9 * max(1.0, abs(a)) else [(path, a, b)]
-    return [] if a == b else [(path, a, b)]
-
-
 def main():
-    ref = os.environ.get("SOCCER_REF")
-    if not ref:
-        sys.exit("set SOCCER_REF to a checkout of the Godot implementation (see tests/test_match.py)")
-    install_reference(ref)
-    godot = json.loads(run_scene("res://tests/godot/record_tournament.tscn", "TOURNAMENTS ", project=ref, timeout=600))
     python = play_python()
-    ok = True
-    for (fmt, n, seed), g, p in zip(CASES, godot, python):
-        for side in (g, p):                                    # knockout round names: the one intended difference
-            for r in side["t"]["rounds"]:
-                if r["stage"] == "ko":
-                    r.pop("name", None)
-        d = diff(p, g)
-        rounds = len(p["t"]["rounds"])
-        print("%-18s %2d teams seed %5d  %s  %d rounds, %d matches, champion %s%s" % (tn.FORMAT_NAMES[fmt], n, seed, "OK  " if not d else "FAIL",
-              rounds, len(p["seeds"]), p["t"]["champion"], "" if not d else "\n   " + "\n   ".join(map(str, d[:8]))))
-        ok = ok and not d
+    labels = ["%s %d teams seed %d" % (tn.FORMAT_NAMES[fmt], n, seed) for fmt, n, seed in CASES]
+    ok = golden.check("tournament", {"cases": labels, "tournaments": python}, "--update" in sys.argv,
+                      "tournaments (%d)" % len(CASES))
     names = [r["name"] for r in play_python_names()]
     good = names == ["Round of 16", "Quarter-finals", "Semi-finals", "Final"]
-    print("knockout round names %s  %s" % ("OK  " if good else "FAIL", names))
+    print("%-24s %s  %s" % ("knockout round names", "OK  " if good else "FAIL", names))
     ok = ok and good
     print("TOTAL ->", "PASS" if ok else "FAIL")
     return 0 if ok else 1

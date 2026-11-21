@@ -1,11 +1,15 @@
 # Experiment log (lab notebook)
 
-What was tried, what came out, and what we concluded. Numbers are league points per match against the 16 rule-based teams
-(3 = always win), mean ± standard error, unless stated. Full evaluations use 90 s matches (32 matches); fast checks use 60 s matches
+What was tried, what came out, and what we concluded. Up to 2026-11-21 numbers are league points per match against the 16 rule-based teams
+(3 = always win), mean ± standard error, unless stated; from then on runs are judged by Elo and goals scored / conceded (standing decision below). Full evaluations use 90 s matches (32 matches); fast checks use 60 s matches
 against every 3rd team (24 matches) and are only comparable with other fast checks. Raw results: `exp/results.jsonl`, table: `exp/results.md`,
 dashboard: `http://<pi-address>:8080`. Newest entries at the bottom; the agent appends a review after every finished experiment.
 
 ## Standing decisions (read first)
+- **Runs are judged by Elo, goals scored and goals conceded** (user, 2026-11-21): the Elo ladder rating of the run's best checkpoint and
+  its opponent-adjusted goals per match against the average ladder team (`lab/ladder.py`). No better / worse verdict: a finished run is
+  placed in the ladder and its rating settles as the ladder plays. During training every check also gives an estimated Elo (24 matches
+  against mixed ladder entries, about ±140). Points against the rule bots saturate near 3 and are kept only as a health check.
 - **No fixed roles.** One net drives all 5 players; the observation has no player slot or ID, so roles must come from the situation (decided 2026-11-14).
 - **Observation `team` (46 numbers):** me, my 4 teammates nearest first, the 5 opponents nearest first, the ball (positions and velocities,
   normalised), a kickoff flag and a goal-celebration flag. No goal positions, no "ball relative to me", no score, no time.
@@ -13,11 +17,14 @@ dashboard: `http://<pi-address>:8080`. Newest entries at the bottom; the agent a
   Minimal set: goals, passing (progressive / ok / failed, individual credit, receive, key pass, xA), cooperation (capped at 8/match),
   "open for a pass", spacing **only while our team has the ball**, kick discipline. Off: shaping, twitching, keeper-far, too-far-from-ball,
   xG for/against, win/draw bonus, tackles, goal-side, opponent-in-our-half, compactness.
+- **Role-free derived observation features are allowed** (user yes, 2026-11-21): observation `rank` (56 numbers) = `team` + for me and my
+  4 teammates (nearest first) the rank in our team by distance to the ball and by depth (`soccer/ai/nets.py` `ranks`). No slot, no fixed role.
+  `team` stays the default; nets with 56 inputs pick the rank observation automatically everywhere (`features_for`).
 - **w_wall 0.02 is in the default reward set** (user yes, 2026-11-18; earlier runs and the specs of `persist_*` keep 0 so their controls stay valid). Full reward register with evidence: `docs/rewards.md`.
 - **No hand-made positioning terms for defence or the keeper** (goal-line cover, keeper position): the user wants the net to find its own
   solution, e.g. high pressing without a keeper (2026-11-16).
 - **Learning rate 5e-5** with a 30-update warm-up after every (re)start. 3e-4 and 1e-4 runs drifted away from the warm start.
-- **Raspberry Pi 4 (4 cores, 3.8 GB).** Training on 3 workers (2 rule + 1 self-play), learning step on 2 threads, net servers on 1 BLAS thread.
+- **Raspberry Pi 4 (4 cores, 3.8 GB).** Training on 3 workers (2 rule + 1 self-play), learning step on 2 threads, evaluation processes on 1 BLAS thread (the nets run inside them since 2026-11-21; before, in separate net servers).
   The live viewer runs on the Pi's touch screen (no keyboard) next to training.
 
 ## History before the pipeline
@@ -44,7 +51,7 @@ dashboard: `http://<pi-address>:8080`. Newest entries at the bottom; the agent a
 The Pi became unreachable with the fan still running (frozen, not a power cut), no kernel message. Before both freezes training slowed
 25-60x (a learning step took 622 s instead of 11). Found and fixed: the venv's numpy (OpenBLAS) started 28 busy threads per net server and
 starved the simulation; the learning step used 4 torch threads next to the Godot workers. Now: BLAS 1 thread, learn 2 threads, hardware
-watchdog (reboot after 15 s frozen), the runner resumes after a reboot, `logs/pi_health.log` records the state every 10 s.
+watchdog (reboot after 15 s frozen), the runner resumes after a reboot, `logs/health.log` records the state every 10 s.
 Not proven that this was the cause: if it freezes again, read the last lines of the health log first.
 
 ## Experiment queue (2026-11-16)
@@ -201,3 +208,28 @@ New scouting numbers `ball_corner_pct` / `ball_corner_ours_pct` (ball within 150
 - Style: wall time **18.1%** (u200 17.2%), ours-in-corner **12.1%** (12.0%), any corner 19.0%. So on the 128-wide net with the persistent teacher pull the terms act far less than on the pure anchored `anchor_wall_strong` / `anchor_corner_strong` runs (wall 8-9%, corner 10%): the teacher pull and the strong opponents pull the team back to the corner-prone style. Possession 46.7%, 24.8 passes, 10.2 shots.
 - h2h: u400 RL Team 4 1.00 (GD -0.62), RL Team 5 0.69 (-1.00), start net 2.56; u200 0.44 / 0.94. Same band as the four other checkpoints (0.76-1.09, large evaluation of 2026-11-20): no gain.
 - Meaning: the two penalties again cost nothing and add nothing in points, and in the persist recipe they do not even change the style much. Reward terms and net width are exhausted as levers against RL4/RL5. Queue: left empty on purpose. Another recipe variation under the 46-number observation would be a sixth run at the same plateau; the only untested lever (role-free derived observation features) needs the user's OK. The runner is idle (only the ladder rounds run).
+
+### Review 2026-11-21: `persist_long2` (kickstart_persist recipe, 600 more updates from kickstart_persist u400, net 46-128-128-10, KL 0.12 decaying slowly, strong opponents + PFSP, w_wall pinned to 0, Python core; finished 2026-11-20 13:55, reviewed late because the review prompts piled up)
+- Full evaluation u600: **2.94 ± 0.06**, GD +2.22, conceded 0.09 (greedy 3.00) vs control `kickstart_persist` u400 2.94 / +2.66 / 0.06: 0.00 ± 0.09, paired z 0.0; GD -0.44 (z -1.4): **no difference** (MDE 0.25). u200: 2.69 ± 0.15, GD +2.06.
+- h2h (16 games): u600 RL Team 4 **1.44** (GD 0.00), RL Team 5 1.12 (-0.25), vs its start (kickstart_persist u400) 2.38 (+1.00); u200 1.06 / 1.12. 1.44 is the best single value of a 46-number net so far, but on 16 games (se about 0.3) and against the 80-game band of the four best checkpoints (0.76-1.09) it is within noise; worth an 80-game check before believing it. Behaviour: wall 19.4%, ours-in-corner 12.2%, possession 47.7%, 29.4 passes, 9.1 shots.
+- Meaning: 600 more updates leave the rule league and the goal difference where they were; the RL4/RL5 head-to-head may have moved up a little (1.44 / 1.12 against 1.09 / 0.90 in the 80-game evaluation) but not provably. Queue decision: run the 80-game head-to-head of `x_persist_long2_u600` (`logs/h2h_big/`) now, since the runner is idle; no new training spec until the observation question is answered.
+
+### Note 2026-11-21 06:20: 80-game head-to-head of `persist_long2` u600 (`logs/h2h_big/x_persist_long2_u600.txt`)
+- RL Team 4 **1.07** (se 0.14, GD -0.38), RL Team 5 **1.00** (se 0.13, GD -0.41). The 16-game values of the review (1.44 / 1.12) were noise: with 80 games the checkpoint lands inside the same band as the four others (0.76-1.09 vs RL Team 4, 0.85-0.95 vs RL Team 5), at the top of it but not different from `kickstart_persist` u400 (1.09 / 0.90). 600 more updates of the best recipe gave nothing measurable: the plateau of 46-number nets against RL4/RL5 holds for every run so far.
+- Queue stays empty until the user decides on role-free derived observation features.
+
+### Note 2026-11-21 10:20: observation question answered, `rank_persist` queued (on the MacBook Air)
+- The user OK'd role-free derived features. New layout `rank` (56): `team` + 10 ranks (ball-distance rank and depth rank of me and my 4 teammates, nearest first, each /4). The ranks are a function of the 46 positions, so they add no information, only remove the need for a 128-wide MLP to sort 5 points; they fix no role (they change with the situation).
+- `rank_persist`: start = `kickstart_persist` u400 widened to 56 inputs with zero weights (`rl/pad_inputs.py`; identical outputs at u0), everything else exactly `persist_long2` (recipe, seed 7, 600 updates), control `persist_long2`. A single-variable test of the observation.
+- Runs on the user's MacBook Air (M4, fanless) instead of the Pi: same batch and worker settings as the Pi runs (so it stays comparable), started with background QoS (efficiency cores), nice 10, evaluations capped at 3 processes (`SOCCER_PROCS=3`, new in `rl/evaluate.py`), no ladder loop afterwards. The runner skips the Pi's kiosk browser off Linux.
+- Read-out: h2h vs RL Team 4 / 5 against the 80-game band of 46-number nets (0.76-1.09 / 0.85-1.00); if the 16-game h2h looks better, confirm with an 80-game run before believing it.
+
+### Note 2026-11-21: evaluation switched to Elo and goals
+- The user's call: comparing points against the rule bots no longer tells runs apart (every recent run 2.81-2.94 of 3). From now on a run
+  is judged by its Elo in the ladder and its goals scored / conceded; the runner writes no verdict.
+- Goals are opponent-adjusted (a Poisson attack / defence model of all ladder matches): raw goals per match depended on who an entry
+  played, and the ladder pairs close ratings, so strong nets met strong opponents. Example: RL Team 5 scores 1.43 raw but 2.34 adjusted.
+- The ladder's 95% intervals were about ±125 for everyone: that was the uncertainty of the level of the whole scale (the prior), not of
+  who is better. They are now relative to the average rating: about ±25-30 after 700-900 games.
+- During training every fast check adds an estimated Elo: 24 matches, half spread over the ranking, half near the checkpoint's level,
+  only its own rating fitted. Checked on three nets with known ladder ratings (4 estimates each): mean within 40 Elo of the ladder value.

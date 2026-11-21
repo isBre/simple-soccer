@@ -41,7 +41,7 @@ new **Deep Learning League**, next to the Rule Based and Reinforcement Learning 
 
 ## Phase 2: the Dataset page in the Lab
 
-New route `#/dataset` in `web/lab.js`, API `/api/dataset` in `lab/dashboard.py` (read-only, like the rest).
+New route `#/dataset` in `web/lab/dataset.js`, API `/api/dataset` in `lab/dashboard.py` (read-only, like the rest).
 
 - **Overview**: matches, minutes, decisions; by control mode and by opponent; the user's W/D/L and goals.
 - **Actions**: the 9-move compass (how often each direction), kick rate, standing still %, **direction changes per second** next to
@@ -55,7 +55,7 @@ New route `#/dataset` in `web/lab.js`, API `/api/dataset` in `lab/dashboard.py` 
   `web/draw.js`) with the user's input drawn as an arrow.
 - **You vs the leagues**: the user's results against every team they played, grouped by league (see Evaluation, level 4).
 - **Built (2026-11-19):** `il/analysis.py` (cached until a file changes), `/api/dataset` and `/api/dataset/match/<id>` in
-  `lab/dashboard.py`, the page `#/dataset` in `web/lab.js` (nav "Dataset", kiosk rail "Data"): KPIs, the moves as an octagon radar,
+  `lab/dashboard.py`, the page `#/dataset` in `web/lab/dataset.js` (nav "Dataset", kiosk rail "Data"): KPIs, the moves as an octagon radar,
   direction changes and standing still against the newest full evaluation's net and rule bots (same definitions as
   `rl/evaluate.py`), heatmaps (player, ball, kicks), coverage by distance to the ball and by depth rank among the user's 5 (keeper
   included) with "thin" marks under a minute of examples, moves by situation, the match table and a replay (play / pause, speed,

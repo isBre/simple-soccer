@@ -1,5 +1,5 @@
 // Match sounds, all synthesised with Web Audio (no audio files): kicks, the ball off a post / a wall / a body, the referee's whistle,
-// and a crowd that murmurs through the match and roars at a goal. game.js decides when (Game: sfx()); this file only makes the noise.
+// and a crowd that murmurs through the match and roars at a goal. web/game/render.js decides when (sfx()); this file only makes the noise.
 // On / off is remembered in this browser ("soccer.sound"); the audio starts on the first match, which always follows a key press or click.
 "use strict";
 

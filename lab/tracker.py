@@ -41,13 +41,56 @@ def minimal_for(started):
     return m
 
 DEFAULTS = {"lr": 5e-5, "updates": 300, "workers_rule": 2, "workers_self": 1, "envs_per_worker": 16, "rollout": 128, "minibatch": 4096,
-            "ckpt_every": 25, "fast_every": 50, "learn_threads": 2, "seed": 7}
+            "ckpt_every": 25, "fast_every": 50, "elo_pairs": 12, "fast_rules": 0, "learn_threads": 2, "seed": 7}
 FINISHED = ("done", "diverged", "regressed", "cancelled", "failed")
 
 
+TRAIN_RE = re.compile(r"^\[(\d+:\d+:\d+)\] sp upd (\d+) \| pts/m vs rules (\S+?)(?:\((\d+)\))? \| vs frozen benchmark (\S+?)(?:\(\d+\))? \| "
+                      r"vs league (\S+?)(?:\(\d+\))? \| rew/step (\S+) \| ent (\S+) \| pool \d+ \| (\d+) dec/s sim (\S+)s learn (\S+)s \| (\d+)s")
+
+
+def _float(s):
+    try:
+        return float(s)
+    except (TypeError, ValueError):
+        return None
+
+
+def train_rows(tag):
+    """The training progress of a run, one dict per logged update (clock, upd, rules, n_rules, bench, league, rew, ent, dps, sim,
+    learn, elapsed), in log order over every (re)start: logs/<tag>_train.jsonl (rl/selfplay.py), or for runs that started before
+    that file existed, the progress lines of logs/<tag>.out (whichever has more rows: a resumed old run has both)."""
+    rows = []
+    try:
+        with open(os.path.join(ROOT, "logs", tag + "_train.jsonl"), errors="replace") as f:
+            for line in f:
+                try:
+                    rows.append(json.loads(line))
+                except ValueError:
+                    pass
+    except OSError:
+        pass
+    old = []
+    try:
+        with open(os.path.join(ROOT, "logs", tag + ".out"), errors="replace") as f:
+            for line in f:
+                m = TRAIN_RE.match(line)
+                if m:
+                    old.append({"upd": int(m.group(2)), "rules": _float(m.group(3)), "n_rules": int(m.group(4) or 0), "bench": _float(m.group(5)),
+                                "league": _float(m.group(6)), "rew": _float(m.group(7)), "ent": _float(m.group(8)), "dps": int(m.group(9)),
+                                "sim": _float(m.group(10)), "learn": _float(m.group(11)), "elapsed": int(m.group(12)), "clock": m.group(1)})
+    except OSError:
+        pass
+    return rows if len(rows) >= len(old) else old
+
+
 def selfplay_options():
-    """Option names rl/selfplay.py accepts (read from its source, so this stays in sync without importing torch)."""
-    return set(re.findall(r'add_argument\("--(\w+)"', open(os.path.join(ROOT, "rl", "selfplay.py")).read()))
+    """Option names rl/selfplay.py accepts (rl/selfplay_args.py: the parser without torch)."""
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("selfplay_args", os.path.join(ROOT, "rl", "selfplay_args.py"))
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return {a.dest for a in mod.parser()._actions if a.option_strings and a.dest != "help"}
 
 
 def net_info(model):
@@ -112,8 +155,18 @@ def _num(pattern, text, cast=float):
     return cast(m.group(1)) if m else None
 
 
+def load_eval(path):
+    """An evaluation (rl/eval_checkpoint.py --out path) -> dict: its JSON record (<path without .txt>.json), else the parsed text."""
+    try:
+        with open(os.path.splitext(path)[0] + ".json") as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return parse_eval(path)
+
+
 def parse_eval(path):
-    """Evaluation text file (rl/eval_checkpoint.py) -> dict. Missing parts are simply absent."""
+    """Evaluation text file (rl/eval_checkpoint.py) -> dict, for files written before the JSON record. Missing parts are
+    simply absent."""
     text = open(path).read()
     r = {"league": {}, "greedy": {}, "h2h": {}, "behaviour": {}, "matches": []}
     for line in text.splitlines():
@@ -185,8 +238,10 @@ def file_hash(path):
 
 
 def add_result(run, update, kind, path, extra=None):
-    """Appends one evaluation to exp/results.jsonl (kind: 'fast' | 'full'), regenerates results.md, mirrors to MLflow if enabled."""
-    parsed = parse_eval(path)
+    """Appends one evaluation to exp/results.jsonl (kind: 'fast' | 'full'), regenerates results.md, mirrors to MLflow if enabled.
+    The numbers come from the JSON record rl/eval_checkpoint.py writes next to the text file; text files without one (written
+    before it existed) are parsed."""
+    parsed = load_eval(path)
     commit, dirty = git_commit()
     ck = parsed.get("checkpoint")
     rec = {"schema": SCHEMA_VERSION, "id": "%s@u%d:%s:%d" % (run, update, kind, int(time.time())), "time": int(time.time()), "run": run,

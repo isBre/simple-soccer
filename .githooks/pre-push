@@ -1,0 +1,25 @@
+#!/bin/sh
+# Runs the tests (python3 tests/run_all.py, ~40 s) before a push whose commits change code, and stops the push if they fail.
+# A push that only changes results, notes or docs (exp/, docs/, *.md, logs/) is not held up.
+# Installed by .githooks/install.sh (once per computer that writes code; not on the Pi). Skip once: git push --no-verify
+# git passes the refs being pushed on stdin: <local ref> <local sha> <remote ref> <remote sha>
+zero=0000000000000000000000000000000000000000
+files=""
+while read -r local_ref local_sha remote_ref remote_sha; do
+  [ "$local_sha" = "$zero" ] && continue                                  # deleting a branch: nothing to test
+  if [ "$remote_sha" = "$zero" ] || ! git cat-file -e "$remote_sha" 2>/dev/null; then
+    base=$(git merge-base "$local_sha" origin/main 2>/dev/null)             # a new branch: what it adds to main
+  else
+    base=$remote_sha
+  fi
+  if [ -n "$base" ]; then files="$files
+$(git diff --name-only "$base" "$local_sha")"; else files="$files
+(unknown)"; fi
+done
+code=$(printf '%s\n' "$files" | grep -v '^$' | grep -vE '^(exp|docs|logs)/|\.md$')
+[ -z "$code" ] && exit 0
+echo "pre-push: code changed, running the tests (python3 tests/run_all.py; skip once with git push --no-verify)" >&2
+if ! python3 tests/run_all.py >&2; then
+  echo "pre-push: tests failed, push stopped. A FAIL from an intended change: re-record with --update and commit the new tests/golden files." >&2
+  exit 1
+fi

@@ -25,6 +25,24 @@ def ball_at_t(m, bpos: complex, bvel: complex, q: float) -> complex:
                    clamp(bpos.imag + bvel.imag * q, -pd.half_h + 12.0, pd.half_h - 12.0))
 
 
+def _intercept_table(rd: float):
+    """(t, q, 2.4 * te, 1 - exp(-te / 24)) for every t of _Q, te = max(t - rd, 0): te is a whole number (t is, and so is the
+    reaction delay), so the values are exactly those computed in the loop. Cached per reaction delay."""
+    tab = _ITAB.get(rd)
+    if tab is None:
+        tab = []
+        for t, q in _Q:
+            te = t - rd
+            if te < 0.0:
+                te = 0.0
+            tab.append((t, q, 2.4 * te, 1.0 - math.exp(-te / 24.0)))
+        _ITAB[rd] = tab
+    return tab
+
+
+_ITAB = {}
+
+
 def intercept(m, p, bpos: complex, bvel: complex):
     """Earliest point on the ball's (predictable) path the player can get to: (point, ticks); ticks = INF if none within 160.
     A player accelerates at 0.1 with damping 0.96: top speed 2.4 px/tick, 24-tick time constant."""
@@ -32,19 +50,16 @@ def intercept(m, p, bpos: complex, bvel: complex):
     hw, hh = m.pitch.half_w - 12.0, m.pitch.half_h - 12.0
     bx, by, vx, vy = bpos.real, bpos.imag, bvel.real, bvel.imag
     px, py, pvx, pvy = p.pos.real, p.pos.imag, p.vel.real, p.vel.imag
-    rd = float(p.reaction_delay) + 2.0
-    for t, q in _Q:
+    sqrt = math.sqrt
+    for t, q, run, grow in _intercept_table(float(p.reaction_delay) + 2.0):
         x = bx + vx * q
         x = -hw if x < -hw else (hw if x > hw else x)
         y = by + vy * q
         y = -hh if y < -hh else (hh if y > hh else y)
         dx, dy = x - px, y - py
-        dl = math.sqrt(dx * dx + dy * dy)
+        dl = sqrt(dx * dx + dy * dy)
         along = (pvx * dx + pvy * dy) / (dl if dl > 1.0 else 1.0)
-        te = t - rd
-        if te < 0.0:
-            te = 0.0
-        if 2.4 * te + (along - 2.4) * 24.0 * (1.0 - math.exp(-te / 24.0)) >= dl - touch:
+        if run + (along - 2.4) * 24.0 * grow >= dl - touch:
             return complex(x, y), float(t)
     return ball_at_t(m, bpos, bvel, _Q160), INF
 

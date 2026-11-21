@@ -1,11 +1,11 @@
-"""The Lab part of the web app (web/app.py serves it): the experiment pipeline's JSON API. The pages are web/lab.js.
-Open http://<pi-address>:8080/#/ from another computer; the Lab pages poll the API below every 10 s.
-  /api/overview       Pi state, the running experiment (progress, ETA), queue, every run with its latest evaluation, its Elo (lab/ladder.py)
-                      and what it changes against its control; the imitation trainings (out_il/); Pi health. Runs listed in
+"""The Lab part of the web app (web/app.py serves it): the experiment pipeline's JSON API. The pages are web/lab/*.js.
+Open http://<this machine>:8080/#/ from another computer; the Lab pages poll the API below every 10 s.
+  /api/overview       this machine's state, the running experiment (progress, ETA), queue, every run with its latest evaluation, its Elo (lab/ladder.py)
+                      and what it changes against its control; the imitation trainings (out_il/); machine health. Runs listed in
                       exp/hidden_runs.json carry "hidden" (the reason): the Runs table leaves them out unless "Show hidden" is ticked
   /api/run/<name>     one run: spec and settings, training curve, PPO health, reward terms, every evaluation, heatmaps
-  /api/health         Pi health log (throttling, temperature, load, memory) of the last hours
-  /api/live           server-sent events: the match the Pi's viewer is showing (relayed from UDP 127.0.0.1:7310, sent by lab/live.py)
+  /api/health         this machine's health log (throttling, temperature, load, memory) of the last hours
+  /api/live           server-sent events: the live demo match of this machine's current run (relayed from UDP 127.0.0.1:7310, sent by lab/live.py)
   /results.md         the tracker's table as text
   /api/v1/<command>   the agent interface (lab/lab.py, read-only): status, runs, run/<name>, evals, best, compare?a=&b=, ablation, events?since=,
                       queue, schema; query parameters = the CLI options (e.g. /api/v1/evals?run=minimal&kind=full). See AGENTS.md.
@@ -16,9 +16,12 @@ Open http://<pi-address>:8080/#/ from another computer; the Lab pages poll the A
   /api/ranking        the Elo ranking (lab/ladder.py ranking(): every team of every league, rating history, recent matches)
   /api/live/opponents GET the opponents the Live page can play (rule teams, RL Team 4/5, older checkpoints) and the chosen one
   /api/live/mode      POST {"mode": "match"|"puzzle"}: puzzle = random layout of all players and the ball, 60 s, over at the first goal
-  /api/live/opponent  POST {"id": ...}: with the mode, the ONLY writes of this server: which opponent the Pi's demo match plays next
+  /api/live/opponent  POST {"id": ...}: with the mode, the ONLY writes of this server: which opponent the live demo match plays next
                       (logs/live_opponent.json, read by lab/live.py); ids come from the list above, requests from another web site are refused
 Standard library only and no internet needed (the charts are drawn in the browser as SVG). It reads exp/ and logs/; the one write is the opponent choice.
+Two helpers run beside the server (web/app.py starts them), so the Lab works on whatever machine serves it, Pi or Mac:
+  health_sampler()    a health line every 10 s (lab/health_log.py) while no other sampler writes logs/health.log
+  follow_live()       the live demo match (lab/live.py) of this machine's current run while no one else (the runner's --viewer) plays it
 There is NO login: use it on a trusted network only.
 
   python3 web/app.py [--port 8080]                       (service soccer-dashboard, lab/systemd/)
@@ -32,14 +35,16 @@ import re
 import socket
 import threading
 import time
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from http.server import BaseHTTPRequestHandler
 from urllib.parse import unquote
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 import sys  # noqa: E402
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import lab  # noqa: E402  (lab/lab.py: the agent CLI; /api/v1 serves the same functions)
-import tracker  # noqa: E402
+if ROOT not in sys.path:
+    sys.path.insert(0, ROOT)
+from lab import lab  # noqa: E402  (lab/lab.py: the agent CLI; /api/v1 serves the same functions)
+from lab import tracker  # noqa: E402
+from lab import ladder  # noqa: E402
 EXP = os.path.join(ROOT, "exp")
 LOGS = os.path.join(ROOT, "logs")
 STATIC = os.path.join(ROOT, "web")                 # the page shell, styles and scripts (Lab and Game)
@@ -75,7 +80,7 @@ def elo_table(ttl=60):
     still rated from its stored ladder matches, with the file version of its newest match ("stored": True)."""
     if time.time() - _elo_cache["t"] > ttl:
         try:
-            import ladder
+            from lab import ladder
             ros, res = ladder.roster(), ladder.results()
             have = {e["id"] for e in ros}
             newest = {}
@@ -86,8 +91,9 @@ def elo_table(ttl=60):
             extra = [{"id": k, "name": k[4:], "league": "rl", "kind": "net", "sha": sha, "stored": True} for k, sha in newest.items()
                      if k not in have and k.startswith("net:x_") and k.endswith("_best") and os.path.isdir(os.path.join(EXP, "runs", k[6:-5]))]
             ros = ros + extra
-            rat = ladder.fit(ros, res)
-            rows = sorted(({**e, **rat[e["id"]], "placed": rat[e["id"]]["games"] >= ladder.PLACEMENT} for e in ros), key=lambda r: -r["elo"])
+            rat, goals = ladder.fit(ros, res), ladder.goal_table(ros, res)
+            rows = sorted(({**e, **rat[e["id"]], "placed": rat[e["id"]]["games"] >= ladder.PLACEMENT,
+                            **{"a" + k: goals.get(e["id"], {}).get(k) for k in ("gf", "ga", "gf_se", "ga_se")}} for e in ros), key=lambda r: -r["elo"])
             for i, r in enumerate(rows):
                 r["rank"] = i + 1
             _elo_cache["rows"] = {r["id"]: r for r in rows}
@@ -106,10 +112,10 @@ def elo_of(name, rows, st=None):
     else:
         ids = ["net:" + lab.tag_of(name, st) + "_best", "net:" + name]
     r = next((rows[i] for i in ids if i in rows), None)
-    return {k: r.get(k) for k in ("id", "elo", "se", "lo", "hi", "rank", "games", "placed", "w", "d", "l", "gf", "ga", "stored")} if r else None
+    return {k: r.get(k) for k in ("id", "elo", "se", "lo", "hi", "rank", "games", "placed", "w", "d", "l", "gf", "ga", "agf", "aga", "agf_se", "aga_se", "stored")} if r else None
 
 
-OPERATIONAL = ("ckpt_every", "fast_every", "learn_threads", "envs_per_worker")   # how fast it trains, not what it learns
+OPERATIONAL = ("ckpt_every", "fast_every", "elo_pairs", "fast_rules", "learn_threads", "envs_per_worker", "trainer_fg")   # how fast it trains, not what it learns
 
 
 def settings(st, spec):
@@ -191,6 +197,7 @@ def overview():
             r["hidden"] = hidden[r["name"]]
         r["type"] = "rl"                               # RL Team 4 / 5 (the reference teams) were trained with RL too
         r["elo"] = elo_of(r["name"], elo, st)
+        r["start_elo"] = start_elo(st, r["name"])
         if st.get("spec"):
             r["changes"], r["vs"] = changes(st, st["spec"])
     queue = lab.cmd_queue(ns(action="list"))
@@ -225,9 +232,63 @@ def run_detail(run):
             "scout_ref": {"name": "RL Team 4", **ref_sc["scout"]} if ref_sc and run != "team:RL Team 4" else None, "config": rj(os.path.join(LOGS, tag + "_config.json"), {}),
             "training": lab.thin(lab.training(tag), 500), "ppo": lab.thin(lab.latest_segment(lab.jl(os.path.join(LOGS, tag + "_ppo.jsonl"))), 400),
             "terms": lab.thin(lab.latest_segment([{"upd": t["upd"], **t["terms"]} for t in lab.jl(os.path.join(LOGS, tag + "_terms.jsonl"))]), 300),
-            "evals": evals, "reference": {"name": ref_name, "evals": ref},
+            "evals": evals, "reference": {"name": ref_name, "evals": ref}, "estimates": ladder.estimates(run=run),
+            "start_elo": start_elo(st, run),
+            "behaviour_refs": behaviour_refs(run, rows, names, k=10),
+            "style_me": style_scalars(sc["scout"]) if sc else {},
             "heat": heatmaps(os.path.join(ROOT, last_full["file"])) if last_full and last_full.get("file") else [],
             "minimal": tracker.MINIMAL, "defaults": tracker.DEFAULTS}
+
+
+def style_scalars(sc):
+    """The numbers of a scouting summary the Behaviour tab compares: its scalar fields, plus per match xG for / against, xG per shot
+    and ball recoveries (from the stored shot and recovery lists)."""
+    if not sc:
+        return {}
+    out = {k: v for k, v in sc.items() if isinstance(v, (int, float)) and not isinstance(v, bool)}
+    m = max(sc.get("matches") or 0, 1)
+    shots, against = sc.get("shots") or [], sc.get("shots_against") or []
+    out["xg_match"] = round(sum(x[2] for x in shots) / m, 3)
+    out["xga_match"] = round(sum(x[2] for x in against) / m, 3)
+    out["xg_per_shot"] = round(sum(x[2] for x in shots) / len(shots), 3) if shots else None
+    out["recoveries_match"] = round(len(sc.get("recoveries") or []) / m, 2)
+    return out
+
+
+def behaviour_refs(run, rows, names, k=6):
+    """The strongest teams with measured behaviour, to compare a run's behaviour with: every run / reference team / imported net
+    whose ladder entry is placed (RL Team 4 and 5, jit8, the best checkpoint of each run), its newest record with behaviour (a full
+    evaluation, else a scouting one), the k highest rated. [{name, elo, update, kind, protocol, behaviour}]"""
+    table, out = elo_table(), []
+    for n in names:
+        if n == run:
+            continue
+        rec = next((r for r in reversed(rows) if r["run"] == n and r.get("behaviour") and r["kind"] == "full"), None) or \
+            next((r for r in reversed(rows) if r["run"] == n and r.get("behaviour")), None)
+        e = elo_of(n, table, tracker.run_status(n)) if rec else None
+        if e and e.get("placed"):
+            sc = next((r for r in reversed(rows) if r["run"] == n and r.get("scout")), None)
+            out.append({"name": n, "elo": e["elo"], "update": rec["update"], "kind": rec["kind"], "protocol": rec.get("protocol"), "behaviour": rec["behaviour"],
+                        "style": style_scalars(sc["scout"]) if sc else {}})
+    out.sort(key=lambda r: -r["elo"])
+    return out[:k]
+
+
+def start_elo(st, run=None):
+    """The Elo of the net a run started from: its ladder entry (models/<stem>.json, a run's best checkpoint), else the run's
+    estimate at update 0 (the runner estimates the start net before training; "estimate": True). None if neither exists."""
+    start = ((st.get("spec") or {}).get("start") or "")
+    if not start:
+        return None
+    stem = os.path.basename(start).rsplit(".", 1)[0]
+    r = elo_table().get("net:" + stem)
+    if r and r.get("games"):
+        return {"name": stem, **{k: r.get(k) for k in ("elo", "se", "lo", "hi", "agf", "aga", "games", "placed")}}
+    e0 = next((e for e in ladder.estimates(run=run) if e.get("update") == 0), None) if run else None
+    if e0:
+        return {"name": stem, "elo": e0["elo"], "se": e0["se"], "lo": e0["lo"], "hi": e0["hi"], "agf": e0.get("gf"), "aga": e0.get("ga"),
+                "games": e0["games"], "placed": False, "estimate": True}
+    return None
 
 
 def health_view(hours=12.0):
@@ -334,11 +395,17 @@ class Live:
     seq = 0
     meta_seq = 0
     received = 0.0
+    bound = False                 # this server receives the stream (another one on this machine may hold the port)
 
     @classmethod
     def listen(cls, port=7310):
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        sock.bind(("127.0.0.1", port))
+        try:
+            sock.bind(("127.0.0.1", port))
+        except OSError:
+            print("live demo: port %d is taken (another web app on this machine shows it)" % port, flush=True)
+            return
+        cls.bound = True
         while True:
             data = sock.recv(65535)
             try:
@@ -354,6 +421,49 @@ class Live:
                     cls.seq += 1
                 cls.received = time.time()
                 cls.cond.notify_all()
+
+
+def health_sampler():
+    """Health line every 10 s while no other sampler (lab/health_log.py, the Pi's soccer-health) keeps logs/health.log fresh."""
+    from lab import health_log
+    try:
+        health_log.sample(only_if_quiet=True)
+    except Exception as e:                                       # never takes the server down
+        print("health sampler stopped: %r" % e, flush=True)
+
+
+def follow_live(every=10):
+    """The live demo match (lab/live.py) of this machine's current run: the running experiment, else the most recently updated one
+    (lab/exp_runner.py viewer_target). Only while no other lab/live.py runs (the runner's --viewer owns it while it trains: started
+    and paused by it and by lab/thermal_guard.py); this one steps back as soon as another appears. Only the server that receives the
+    stream (Live.bound) plays it."""
+    import subprocess
+    from lab import exp_runner
+    own, cur = None, None
+    while True:
+        time.sleep(every)
+        if not Live.bound:
+            continue
+        if own is not None and own.poll() is not None:          # ours ended (crashed or was stopped): start it again below
+            own = cur = None
+        try:
+            pids = subprocess.run(["pgrep", "-f", "lab/live.py"], capture_output=True, text=True).stdout.split()
+        except OSError:
+            continue
+        others = [p for p in pids if own is None or int(p) != own.pid]
+        tag, model = exp_runner.viewer_target()
+        if tag and not (os.path.exists(os.path.join(ROOT, model)) or glob.glob(os.path.join(ROOT, "out_5v5", "ckpt", tag + "_u*.json"))):
+            tag = None                                           # its nets are not on this machine (results synced from elsewhere)
+        if own is not None and (others or tag != cur):
+            own.terminate()
+            try:
+                own.wait(10)
+            except subprocess.TimeoutExpired:
+                own.kill()
+            own = cur = None
+        if own is None and not others and tag:
+            own, cur = exp_runner.viewer_window(tag, model), tag
+            print("live demo: follows %s (pid %d)" % (tag, own.pid), flush=True)
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -395,10 +505,10 @@ class Handler(BaseHTTPRequestHandler):
                     return self.send(b"not found", "text/plain", 404)
                 return self.send(open(full, "rb").read(), ctype)
             if path == "/api/version":                              # the page reloads itself when the dashboard's files changed (the kiosk has no keyboard)
-                v = max(os.path.getmtime(f) for f in glob.glob(os.path.join(STATIC, "*")))
+                v = max(os.path.getmtime(f) for f in glob.glob(os.path.join(STATIC, "**", "*"), recursive=True))
                 return self.send(json.dumps({"v": v}).encode(), "application/json")
             if path == "/api/ranking":
-                import ladder
+                from lab import ladder
                 return self.send(json.dumps(ladder.ranking(), default=float).encode(), "application/json")
             if path == "/api/dataset":
                 return self.send(json.dumps(dataset_view(), default=float).encode(), "application/json")

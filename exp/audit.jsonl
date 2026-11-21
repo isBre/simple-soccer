@@ -20,3 +20,5 @@
 {"t": "2026-11-19T10:18:05", "action": "queue_add", "name": "wide_persist", "position": null}
 {"t": "2026-11-19T12:18:17", "action": "queue_add", "name": "wide_wallcorner", "position": null}
 {"t": "2026-11-19T20:18:11", "action": "queue_add", "name": "persist_wallcorner", "position": null}
+{"t": "2026-11-20T08:28:25", "action": "queue_add", "name": "persist_long2", "position": null}
+{"t": "2026-11-21T10:17:03", "action": "queue_add", "name": "rank_persist", "position": null}

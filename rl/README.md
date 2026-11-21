@@ -12,17 +12,19 @@ Two observation layouts exist (`selfplay.py --obs`, `env.py` config `obs`, chose
 - **`legacy` (54 numbers):** me first, ball, the 4 teammates and 5 opponents in slot order, ball and opponent goal relative to me, and a one-hot of the player's slot. The first RL teams (RL Team 1-5) use it.
 
 - `env.py`: the environment (episodes, random starts, every reward term) on the match core (`soccer/`); no Godot.
-  An exact copy of the earlier Godot environment (`tests/test_env.py`).
-- `client.py`: vector env over N worker processes (several envs each). `ppo.py`: PPO + curriculum + model export.
+  Started as an exact copy of the earlier Godot environment; `tests/test_env.py` guards it.
+- `client.py`: vector env over N worker processes (several envs each). `agent.py`: the net (actor + critic) and its export
+  to game JSON. Training is `selfplay.py` (below); its options are in `selfplay_args.py`.
 - `evaluate.py league_eval`: plays a model against all 16 teams on both sides (full matches, all cores) and
   writes `teams_info.json` (strengths, tiers, 4 held-out teams that are never trained against).
 
-Curriculum: empty goal -> rule-based keeper -> full 90 s matches vs weak / average / strong training teams.
+The first RL teams were trained from scratch with a curriculum (empty goal -> rule-based keeper -> full matches against weak /
+average / strong teams, `rl/ppo.py`); every run since continues from a trained net, so that trainer was removed (2026-11-21,
+it is in the git history).
 
 ```bash
 python3 -m venv ~/rl-venv && ~/rl-venv/bin/pip install torch numpy --index-url https://download.pytorch.org/whl/cpu
-~/rl-venv/bin/python rl/ppo.py --stages s4_five_empty s5_vs_keeper s6_weak s7_average s8_strong
-~/rl-venv/bin/python rl/evaluate.py league_eval --model res://out_5v5/rl_s8_strong_last.json --games 2
+~/rl-venv/bin/python rl/evaluate.py league_eval --model res://data/models/rl_5v5_arena_v5.json --games 2
 ```
 
 ## New observation, warm start by imitation (`rl/distill.py`)
@@ -31,7 +33,7 @@ A net with another observation cannot continue from an old checkpoint, so `disti
 gives both layouts of every state), the student learns its move distribution, kick probability and value estimate, then **DAgger rounds** let the student play and the teacher label the states
 the student really reaches (plain imitation alone gave a student that agreed 85% with the teacher but scored 0.9 instead of 2.9 league points per match).
 `python3 rl/distill.py --teacher out_5v5/ckpt/jit8_best.pt --out team46_start --rounds 4` writes `out_5v5/team46_start.pt/.json`; start the run with `selfplay.py --obs team --start out_5v5/team46_start.pt`.
-The net server announces the net's input size when the match core connects, so nets of both layouts can play side by side (evaluation against RL Team 4 / 5 works unchanged).
+Every net file carries its input size (`sizes[0]`), so nets of both layouts can play side by side (evaluation against RL Team 4 / 5 works unchanged).
 
 ## Self-play and cooperation fine-tuning
 
@@ -61,7 +63,7 @@ Results of the first teams: `docs/history/results_league_final.txt`, `docs/histo
 
 Tested setup, `jit` runs of Nov 2026:
 - Python venv with **torch 2.5.1** (`pip install torch==2.5.1 "numpy<2"`). The newest torch wheel (2.15) crashed with "illegal instruction" in the multi-threaded backward pass on this CPU.
-- The `.pt` checkpoints are not in git (`*.pt` is ignored). To start from a shipped model, convert its JSON (`data/models/*.json`: actor weights only, so the critic starts fresh and the first updates are noisy) into a `.pt` through `ppo.Agent` and `load_state_dict`.
+- The `.pt` checkpoints are not in git (`*.pt` is ignored). To start from a shipped model, convert its JSON (`data/models/*.json`: actor weights only, so the critic starts fresh and the first updates are noisy) into a `.pt` through `rl.agent.Agent` and `load_state_dict`.
 - Used for the `jit*` runs: `--workers_rule 3 --workers_self 1 --envs_per_worker 16 --minibatch 4096`. The limit is CPU, not memory (about 1.5 GB used): the Python loop steps all envs in turn and the PPO step uses all cores. Rollouts use one torch thread (tiny batches; more threads only steal CPU from the env workers), the learning step uses all of them.
 - Run training at low priority (`nice -n 15`) next to the live demo match (`lab/live.py`), so the demo keeps real time.
 
@@ -92,20 +94,13 @@ After each evaluation `eval_checkpoint.py` keeps the **best checkpoint** by leag
 `python3 rl/export_team.py --tag jit8 --number 6` turns it (or `--checkpoint jit8_u300`) into a playable "RL Team 6" (`data/models/rl_5v5_arena_v6.json`, `data/teams/rl_team_6.json`).
 An evaluation that hangs is killed after 3 hours (`TIMEOUT` line) so it cannot block later evaluations.
 
-All three serve the nets from numpy servers (`--remote PORT` in `evaluate.py`, `rl/net_server.py`); the match core builds the observations and asks them for the outputs.
+All three load the nets in the evaluation's own worker processes (`--model` / `--a` / `--b` take game-model JSON files; numpy on one BLAS thread). Next to the text `--out` file, `eval_checkpoint.py` writes `<out>.json`: the same numbers as one record (what `lab/tracker.py` stores).
 Cost on a Pi 4 with the CPU free: about 25-30 minutes with the defaults (a quick test with 20 s matches took 6 minutes). Run it by hand on any checkpoint:
 `python3 rl/eval_checkpoint.py --model out_5v5/ckpt/x.json --out logs/sp_eval/x.txt [--games 1] [--duration 90] [--h2h_games 3]`.
 Numbering across restarts: `--start_update N --updates TOTAL` continues a run (checkpoint names, logs and charts keep counting; append to the log with `>>`).
-`selfplay.py` also writes `logs/<tag>_ppo.jsonl` (PPO health per update: critic explained variance, approx. KL, clip fraction, value loss, gradient norm, entropy of the move and kick heads;
+`selfplay.py` also writes `logs/<tag>_train.jsonl` (the progress line of every logged update as JSON: what the runner and the Lab read), `logs/<tag>_ppo.jsonl` (PPO health per update: critic explained variance, approx. KL, clip fraction, value loss, gradient norm, entropy of the move and kick heads;
 shown on the dashboard's Training tab) and `logs/<tag>_config.json` (all its settings) at start, which the dashboard's Config tab reads, and `logs/<tag>_terms.jsonl` (one line per update:
 what the reward was made of, per reward term, mean per agent-decision). The terms are accumulated in `env.py` (`_acc`) and read from the workers with the `T` command (`VecEnv.terms()`).
-
-## Net server (`rl/net_server.py`)
-
-`eval_checkpoint.py` serves the nets it evaluates from small numpy servers; the match core connects to one for a team whose
-`MatchConfig.nets` entry is `{"port": n}` (`--remote PORT` in `evaluate.py`). `--tag TAG` serves the newest `<tag>_u*.json` each time a
-match connects; `--best-file` the run's best checkpoint. The server pins numpy/OpenBLAS to one thread (the venv's OpenBLAS otherwise
-spun 28 threads and starved the simulation).
 
 ## Speed
 

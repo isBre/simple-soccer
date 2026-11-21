@@ -13,14 +13,19 @@ that drifts into states the teacher never visited and plays much worse than its 
 """
 import argparse
 import os
+import sys
 import time
 
 import numpy as np
 import torch
 import torch.nn.functional as F
 
-from client import VecEnv
-from ppo import Agent, load_padded, save_model, team_pools, OUT
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if ROOT not in sys.path:                     # run as a script: the project root, for the package imports
+    sys.path.insert(0, ROOT)
+
+from rl.client import VecEnv                                         # noqa: E402
+from rl.agent import Agent, load_padded, save_model, team_pools, OUT   # noqa: E402
 
 N_TEAM, N_LEGACY = 46, 54
 

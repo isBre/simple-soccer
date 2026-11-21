@@ -2,15 +2,14 @@
 Godot scenes rl/league_eval.gd, rl/h2h_eval.gd and rl/behaviour_stats.gd, with the same printed lines (rl/eval_checkpoint.py
 and the dashboard parse them); checked against them by tests/test_evaluate.py.
 
-  python3 rl/evaluate.py league_eval --model res://out_5v5/x.json --games 4 [--duration 180] [--remote PORT] [--stride 2] [--greedy]
+  python3 rl/evaluate.py league_eval --model res://out_5v5/x.json --games 4 [--duration 180] [--stride 2] [--greedy]
       The net drives ALL 5 players (keeper included) against each of the 16 rule-based teams, on both sides. Also writes
       rl/teams_info.json (id, strength, style, tier, held_out) for the trainer. Held-out teams (never trained against): sorted
-      by strength, indices 1, 5, 9, 13 (one per tier). --remote PORT: the net is served by rl/net_server.py on that port
-      (--model is then only a label).
-  python3 rl/evaluate.py h2h_eval --a PORT --b PORT --name "RL Team 4" [--games 2] [--duration 90]
-      Head to head of two nets (both served by rl/net_server.py), both sides. Prints
+      by strength, indices 1, 5, 9, 13 (one per tier).
+  python3 rl/evaluate.py h2h_eval --a MODEL --b MODEL --name "RL Team 4" [--games 2] [--duration 90]
+      Head to head of two nets (game-model JSON files), both sides. Prints
       H2H <name>: W x D y L z | pts/m | GF/GA | N matches   (a = the net being evaluated, results from its side)
-  python3 rl/evaluate.py behaviour_stats [--model res://x.json | --remote PORT] [--greedy]
+  python3 rl/evaluate.py behaviour_stats [--model res://x.json] [--greedy]
       Behaviour per decision (jitter, kick presses, clumping, keeper position), heatmaps and one "SCOUT {json}" line for the
       scouting page (shape by depth rank in and out of possession, keeper presence, pressing, possession, territory, located
       events), positions normalised to [-1, 1] in the RL team's attacking frame."""
@@ -20,6 +19,9 @@ import multiprocessing as mp
 import os
 import sys
 import time
+
+for _v in ("OPENBLAS_NUM_THREADS", "OMP_NUM_THREADS", "MKL_NUM_THREADS"):   # before numpy: the nets' products are tiny, and BLAS
+    os.environ.setdefault(_v, "1")                                         # thread pools in every worker starve the simulation
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if ROOT not in sys.path:
@@ -42,8 +44,19 @@ def gd_round(x):
     return math.floor(x + 0.5) if x >= 0 else -math.floor(-x + 0.5)
 
 
+def _f(fmt, x):
+    """x as printed with fmt, back as a float: the JSON results carry exactly the printed numbers."""
+    return float(fmt % x)
+
+
+def result_line(d):
+    """The machine-readable line of an evaluation part (rl/eval_checkpoint.py collects them into <out>.json)."""
+    return "RESULT " + json.dumps(d, sort_keys=True)
+
+
 def _pool():
-    return mp.get_context("fork" if hasattr(os, "fork") else "spawn").Pool(os.cpu_count() or 2)
+    n = int(os.environ.get("SOCCER_PROCS", "0")) or os.cpu_count() or 2      # SOCCER_PROCS caps it (e.g. on a fanless laptop)
+    return mp.get_context("fork" if hasattr(os, "fork") else "spawn").Pool(n)
 
 
 def _play(cfg):
@@ -87,8 +100,9 @@ def league_teams():
     return ids, info
 
 
-def league_report(model_label, ids, info, matches, seconds):
-    """The LEAGUE table and SUMMARY lines from the matches [(opp, side, seed, gf, ga)] (league_eval.gd's output)."""
+def league_report(model_label, ids, info, matches, seconds, summary=None):
+    """The LEAGUE table and SUMMARY lines from the matches [(opp, side, seed, gf, ga)] (league_eval.gd's output). A `summary`
+    dict is filled with the SUMMARY numbers by group (all, tiers, train / held): pts, se, gf, ga, n, gd, gd_se."""
     lines = ["MATCH %s %d %d %d %d" % m for m in matches]
     tab = {}
     for opp, side, seed, gf, ga in matches:
@@ -129,6 +143,9 @@ def league_report(model_label, ids, info, matches, seconds):
         gd_se = math.sqrt(max(g[5] / g[1] - gd * gd, 0.0) / g[1])
         out.append("SUMMARY %s: pts/m %.2f  GF %.2f GA %.2f  (%d matches) se %.2f gd %.2f gdse %.2f" % (
             key.ljust(8), mean, g[2] / g[1], g[3] / g[1], g[1], se, gd, gd_se))
+        if summary is not None:
+            summary[key] = {"pts": _f("%.2f", mean), "se": _f("%.2f", se), "gf": _f("%.2f", g[2] / g[1]), "ga": _f("%.2f", g[3] / g[1]),
+                            "n": int(g[1]), "gd": _f("%.2f", gd), "gd_se": _f("%.2f", gd_se)}
     return lines, out
 
 
@@ -145,7 +162,7 @@ def league_eval(a):
         ids = [i for k, i in enumerate(ids) if k % a.stride == 0]
     if not a.model:
         return
-    spec = {"port": a.remote} if a.remote > 0 else {"model": res_abs(a.model)}
+    spec = {"model": res_abs(a.model)}
     cfgs, meta = [], []
     seed_i = 0
     for tid in ids:
@@ -162,10 +179,12 @@ def league_eval(a):
     print("[league] %d matches vs %d teams, model %s" % (len(cfgs), len(ids), a.model), flush=True)
     results = play_all(cfgs)
     matches = [(opp, side, seed, r["scores"][side], r["scores"][1 - side]) for (opp, side, seed), r in zip(meta, results)]
-    lines, table = league_report(a.model, ids, info, matches, time.time() - t0)
+    summary = {}
+    lines, table = league_report(a.model, ids, info, matches, time.time() - t0, summary)
     print("\n".join(lines))
     text = "\n".join(table)
     print(text)
+    print(result_line({"part": "league", "summary": summary, "matches": [list(m) for m in matches]}))
     os.makedirs(os.path.join(ROOT, "logs"), exist_ok=True)
     with open(os.path.join(ROOT, "logs", "league_last.txt"), "w") as f:
         f.write(text + "\n")
@@ -217,8 +236,9 @@ def _godot_json(v):
 
 # ------------------------------------------------------------------ head to head
 
-def h2h_report(name, matches):
-    """matches [(side, seed, gf, ga)] -> the MATCH lines and the H2H line (h2h_eval.gd's output)."""
+def h2h_report(name, matches, summary=None):
+    """matches [(side, seed, gf, ga)] -> the MATCH lines and the H2H line (h2h_eval.gd's output). A `summary` dict is filled
+    with the H2H numbers: pts, se, gf, ga, n, w, d, l, gd, gd_se."""
     lines = []
     w = d = l = gf = ga = 0
     gd2 = 0.0
@@ -240,6 +260,9 @@ def h2h_report(name, matches):
     gd_se = math.sqrt(max(gd2 / n - gd * gd, 0.0) / n)
     lines.append("H2H %s: W %d D %d L %d | pts/m %.2f | GF/GA %.2f/%.2f | %d matches | se %.2f | gd %.2f gdse %.2f" % (
         name, w, d, l, mean, gf / n, ga / n, n, se, gd, gd_se))
+    if summary is not None:
+        summary.update({"pts": _f("%.2f", mean), "se": _f("%.2f", se), "gf": _f("%.2f", gf / n), "ga": _f("%.2f", ga / n), "n": n,
+                        "w": w, "d": d, "l": l, "gd": _f("%.2f", gd), "gd_se": _f("%.2f", gd_se)})
     return lines
 
 
@@ -251,13 +274,16 @@ def h2h_eval(a):
         for g in range(a.games):
             teams = ["owls", "rl_team_4"] if side == 0 else ["rl_team_4", "owls"]
             nets = [None, None]
-            nets[side] = {"port": a.a}
-            nets[1 - side] = {"port": a.b}
+            nets[side] = {"model": res_abs(a.a)}
+            nets[1 - side] = {"model": res_abs(a.b)}
             seed = 70000 + side * 1000 + g
             cfgs.append(_cfg(teams, nets, seed, a.duration))
             meta.append((side, seed))
     results = play_all(cfgs)
-    print("\n".join(h2h_report(a.name, [(s, sd, r["scores"][s], r["scores"][1 - s]) for (s, sd), r in zip(meta, results)])))
+    matches = [(s, sd, r["scores"][s], r["scores"][1 - s]) for (s, sd), r in zip(meta, results)]
+    summary = {}
+    print("\n".join(h2h_report(a.name, matches, summary)))
+    print(result_line({"part": "h2h", "name": a.name, "summary": summary, "matches": [list(m) for m in matches]}))
 
 
 # ------------------------------------------------------------------ behaviour and scouting
@@ -517,8 +543,10 @@ def scout_summary(results):
             "shots": shots, "shots_against": shots_against, "recoveries": recov}
 
 
-def behaviour_report(results):
-    """The printed lines of behaviour_stats.gd from the per-match measurements."""
+def behaviour_report(results, summary=None):
+    """The printed lines of behaviour_stats.gd from the per-match measurements. A `summary` dict is filled with the printed
+    numbers: {"rl": {...}, "rule": {...}} (dir_changes_s, idle_pct, spacing_px, keeper_dist_px, passes_match, shots_match,
+    key_passes_match, xa_match) and "scout" (the SCOUT JSON)."""
     out = []
     agg = [{}, {}]
     for r in results:
@@ -533,6 +561,10 @@ def behaviour_report(results):
             ["RL Team", "rule-based"][t], a["dir_change"] / n_dec * per_sec, a["turn180"] / n_dec * per_sec, a["kick_rise"] / n_dec * per_sec,
             100.0 * a["kick_hold"] / n_dec, 100.0 * a["idle"] / n_dec, a["speed"] / n_dec, a["spacing"] / (n_dec / 5.0), a["near_ball"] / (n_dec / 5.0),
             a["gk_dist"] / a["gk_n"]))
+        if summary is not None:
+            summary.setdefault(["rl", "rule"][t], {}).update({
+                "dir_changes_s": _f("%.2f", a["dir_change"] / n_dec * per_sec), "idle_pct": _f("%.0f", 100.0 * a["idle"] / n_dec),
+                "spacing_px": _f("%.0f", a["spacing"] / (n_dec / 5.0)), "keeper_dist_px": _f("%.0f", a["gk_dist"] / a["gk_n"])})
     for t in (0, 1):
         a = agg[t]
         n_dec = a["n"] / 5.0               # team-decisions
@@ -540,6 +572,10 @@ def behaviour_report(results):
             ["RL Team", "rule-based"][t], a["near250"] / (a["n"] / 5.0) * 5.0 / 5.0 * 5.0 / 5.0, a["nn_dist"] / n_dec, a["close_pairs"] / n_dec,
             a["passes"] / len(results), 100.0 * a["passes_ok"] / max(1.0, a["passes"]), a["shots"] / len(results), a["key_passes"] / len(results),
             a["xa"] / len(results)))
+        if summary is not None:
+            summary.setdefault(["rl", "rule"][t], {}).update({
+                "passes_match": _f("%.1f", a["passes"] / len(results)), "shots_match": _f("%.1f", a["shots"] / len(results)),
+                "key_passes_match": _f("%.2f", a["key_passes"] / len(results)), "xa_match": _f("%.2f", a["xa"] / len(results))})
     # heatmaps (RL team): "HEAT <slot|ball> <role> <w> <h> v..." with v in per mille of that player's time, row by row from the top
     for k in range(6):
         cells = [0.0] * (GX * GY)
@@ -551,7 +587,10 @@ def behaviour_report(results):
         vals = [str(int(cells[c] / max(total, 1.0) * 1000.0)) for c in range(GX * GY)]
         out.append("HEAT %s %s %d %d %s" % ("ball" if k == 5 else str(k), "-" if k == 5 else str(results[0]["roles"][k]), GX, GY, " ".join(vals)))
     out.append("scores (RL first): " + "".join("[%d, %d] " % tuple(r["score"]) for r in results))
-    out.append("SCOUT " + _godot_compact(scout_summary(results)))
+    scout = _godot_compact(scout_summary(results))
+    out.append("SCOUT " + scout)
+    if summary is not None:
+        summary["scout"] = json.loads(scout)
     return out
 
 
@@ -561,10 +600,12 @@ def _godot_compact(v):
 
 
 def behaviour_stats(a):
-    spec = {"port": a.remote} if a.remote > 0 else ({"model": res_abs(a.model)} if a.model else None)
+    spec = {"model": res_abs(a.model)} if a.model else None
     with _pool() as p:
         results = p.map(_behaviour_match, [(i, spec, a.greedy) for i in range(8)], chunksize=1)
-    print("\n".join(behaviour_report(results)))
+    summary = {}
+    print("\n".join(behaviour_report(results, summary)))
+    print(result_line({"part": "behaviour", **summary}))
 
 
 def main(argv=None):
@@ -574,11 +615,10 @@ def main(argv=None):
     ap.add_argument("--model", default="")
     ap.add_argument("--games", type=int, default=0)
     ap.add_argument("--duration", type=float, default=0.0)
-    ap.add_argument("--remote", type=int, default=0)
     ap.add_argument("--stride", type=int, default=1)
     ap.add_argument("--greedy", action="store_true")
-    ap.add_argument("--a", type=int, default=0)
-    ap.add_argument("--b", type=int, default=0)
+    ap.add_argument("--a", default="", help="h2h: model of the net being evaluated")
+    ap.add_argument("--b", default="", help="h2h: model of the opponent net")
     ap.add_argument("--name", default="opponent")
     a = ap.parse_args(argv)
     if a.what == "league_eval":
