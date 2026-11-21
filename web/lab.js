@@ -17,7 +17,7 @@ const BEHAVIOUR = [
   ["shots_match", "Shots / match", "higher", 1], ["xa_match", "xA / match", "higher", 2],
 ];
 const DECISIONS_PER_MATCH = 2700;       // 30 decisions/s x 90 s: reward per agent-decision -> per player and match
-const state = { ov: null, detail: {}, health: null, lastOk: 0, firstFail: 0, sort: { key: "pts", dir: -1 }, filter: "", stateFilter: "all", selected: new Set(), smooth: 0.8, hidden: {}, piHours: 12, cmpCache: {}, evalPick: {} };
+const state = { ov: null, detail: {}, health: null, lastOk: 0, firstFail: 0, sort: { key: "elo", dir: -1 }, filter: "", selected: new Set(), smooth: 0.8, hidden: {}, piHours: 12, cmpCache: {}, evalPick: {} };
 
 // ---------- helpers ----------
 const $ = (s, el = document) => el.querySelector(s);
@@ -193,9 +193,18 @@ function kpi(label, value, sub = "", cls = "") { return `<div class="kpi"><div c
 const smoothControl = () => `<label class="smooth">smoothing <input type="range" min="0" max="0.97" step="0.01" value="${state.smooth}" data-smooth> <b>${f(state.smooth, 2)}</b></label>`;
 
 // ---------- NOW ----------
+// One hero that always says something (running: progress; idle: the last finished run and its verdict), the Pi, the Elo top 8,
+// the training curve of the running (or last) run and a readable event feed.
+const lastFinished = (runs) => runs.filter((r) => r.finished && !r.hidden && !["imported", "reference"].includes(r.state)).sort((a, b) => (a.finished < b.finished ? 1 : -1))[0];
+function queueLine(queued, running) {
+  const q = queued.filter((s) => s.name !== running);
+  if (!q.length) return `<div class="hero-next"><span class="muted">Queue empty</span> · add a spec with <span class="mono">python3 lab/lab.py queue add spec.json</span></div>`;
+  return `<div class="hero-next"><span class="muted">Up next</span> ${q.slice(0, 3).map((s) => `<b>${esc(s.name)}</b>`).join(", ")}${q.length > 3 ? ` <span class="muted">+${q.length - 3} more</span>` : ""} <a href="#/runs">queue →</a></div>`;
+}
+function heroStat(value, label, cls = "") { return `<div><b class="${cls}">${value}</b><span>${label}</span></div>`; }
 function viewNow() {
   const o = state.ov; if (!o) return '<div class="empty">Loading…</div>';
-  const st = o.status, run = st.runner.running, pi = st.pi;
+  const st = o.status, run = st.runner.running, pi = st.pi, last = run ? null : lastFinished(o.runs);
   let hero;
   if (run) {
     const row = o.runs.find((r) => r.name === run.run) || {};
@@ -205,51 +214,123 @@ function viewNow() {
     const lbl = run.evaluating ? badge("evaluating") : run.stalled ? `<span class="badge failed">no progress for ${dur(run.log_age_s)}</span>` : badge("running");
     const delta = run.train_pts_vs_rules != null && run.train_pts_at_start != null ? run.train_pts_vs_rules - run.train_pts_at_start : null;
     const lf = row.latest_fast;
-    hero = `<section class="hero ${mode}"><div class="hero-top"><div class="min0"><div class="eyebrow">Running experiment</div><h1>${runLink(run.run)}</h1>
-        <div class="notes">${esc(row.notes || "")}</div><div class="chips">${chips({ net: row.net, rewards_changed_vs_minimal: row.rewards_changed_vs_minimal, args: (state.detail[run.run]?.status?.spec?.args) || spec.args || {} })}</div></div><div>${lbl}</div></div>
+    hero = `<section class="hero ${mode}"><div class="hero-top"><div class="min0"><div class="eyebrow">Running experiment${run.started ? " · since " + esc(ago(run.started).replace(" ago", "")) : ""}</div><h1>${runLink(run.run)}</h1>
+        <div class="notes clamp" title="${esc(row.notes || "")}">${esc(row.notes || "")}</div><div class="chips">${chips({ net: row.net, rewards_changed_vs_minimal: row.rewards_changed_vs_minimal, args: (state.detail[run.run]?.status?.spec?.args) || spec.args || {} })}</div></div><div>${lbl}</div></div>
       <div class="progress"><i style="width:${pct}%"></i></div>
-      <div class="hero-stats"><div><b>${run.update ?? 0}<small> / ${run.target ?? "?"}</small></b><span>updates</span></div>
-        <div><b>${run.eta_hours != null ? dur(run.eta_hours * 3600) : "–"}</b><span>training left</span></div>
-        <div><b>${run.sec_per_update ? f(run.sec_per_update, 0) + " s" : "–"}</b><span>per update</span></div>
-        <div><b>${f(run.train_pts_vs_rules)} <small class="${delta > 0 ? "pos" : delta < 0 ? "neg" : ""}">${delta != null ? sgn(delta) : ""}</small></b><span>training pts vs rules</span></div>
-        <div><b>${lf ? f(lf.pts) : "–"}<small>${lf ? " u" + lf.update : ""}</small></b><span>last fast check</span></div>
-        <div><b>${run.restarts.length}</b><span>restarts</span></div></div></section>`;
+      <div class="hero-stats">${heroStat(`${run.update ?? 0}<small> / ${run.target ?? "?"}</small>`, "updates")}
+        ${heroStat(run.eta_hours != null ? dur(run.eta_hours * 3600) : "–", "training left")}
+        ${heroStat(run.sec_per_update ? f(run.sec_per_update, 0) + " s" : "–", "per update")}
+        ${heroStat(`${f(run.train_pts_vs_rules)} <small class="${delta > 0 ? "pos" : delta < 0 ? "neg" : ""}">${delta != null ? sgn(delta) : ""}</small>`, "training pts vs rules")}
+        ${heroStat(`${lf ? f(lf.pts) : "–"}<small>${lf ? " u" + lf.update : ""}</small>`, "last fast check")}
+        ${heroStat(run.restarts.length, "restarts")}</div>${queueLine(o.queue.queued, run.run)}</section>`;
+  } else if (last) {
+    const v = last.verdict || {}, a = last.latest_full, h = a?.h2h || {}, cost = last.cost_hours ? (last.cost_hours.train || 0) + (last.cost_hours.eval || 0) : null;
+    const h2h = (k) => heroStat(h[k] ? `${f(h[k].pts)}<small> GD ${sgn(h[k].gd)}</small>` : "–", "vs " + k);
+    hero = `<section class="hero idle"><div class="hero-top"><div class="min0"><div class="eyebrow">Runner idle · last experiment finished ${esc(ago(last.finished))}</div>
+        <h1>${runLink(last.name)}</h1><div class="notes clamp" title="${esc(last.notes || "")}">${esc(last.notes || "")}</div>
+        <div class="chips">${chips({ net: last.net, rewards_changed_vs_minimal: last.rewards_changed_vs_minimal, args: last.spec_args || {} })}</div></div>
+        <div class="hero-badges">${v.verdict ? badge(v.verdict) : badge(last.state)}${last.stop_reason && last.stop_reason !== "budget" ? `<span class="badge failed">${esc(last.stop_reason)}</span>` : ""}</div></div>
+      <div class="hero-stats">${heroStat(v.verdict ? `${sgn(v.pts)}<small> ± ${f(v.pts_se)}</small>` : "–", v.reference ? "pts vs " + esc(v.reference) : "verdict pending", v.verdict === "better" ? "pos" : v.verdict === "worse" ? "neg" : "")}
+        ${heroStat(a ? `${f(a.pts)}<small> ± ${f(a.se)}</small>` : "–", a ? "league pts u" + a.update : "league pts")}
+        ${heroStat(a ? sgn(a.gd) : "–", "goal difference", a && a.gd > 0 ? "pos" : a && a.gd < 0 ? "neg" : "")}
+        ${h2h("RL Team 4")}${h2h("RL Team 5")}
+        ${heroStat(cost != null ? f(cost, 1) + " h" : "–", `${last.update ?? "–"} updates`)}</div>${queueLine(o.queue.queued)}</section>`;
   } else {
-    const nxt = o.queue.queued[0];
-    hero = `<section class="hero idle"><div class="hero-top"><div><div class="eyebrow">Runner ${esc(st.runner.service || "")}</div><h1>Idle</h1><div class="notes">${nxt ? "Next: " + esc(nxt.name) : "The queue is empty."}</div></div>${badge("idle")}</div></section>`;
+    hero = `<section class="hero idle"><div class="hero-top"><div><div class="eyebrow">Runner ${esc(st.runner.service || "")}</div><h1>Idle</h1></div>${badge("idle")}</div>${queueLine(o.queue.queued)}</section>`;
   }
-  const th = throttle(pi.throttled);
+  const th = throttle(pi.throttled), hasPi = pi.last_sample != null;
   const hl = (o.health || []).filter((r) => r.t && r.t.includes("T"));
   const vit = (k, color, lo, hi) => sparkline(hl.map((r) => [parseT(r.t), r[k]]).filter((p) => p[1] != null), color, 110, 26, lo, hi);
-  const rb = st.last_reboot;
+  const rb = st.last_reboot, mem = hasPi ? pi.mem_free_mb : null;
   const vitals = `<section class="card vitals"><div class="card-h"><h2>Raspberry Pi</h2><a href="#/pi">details →</a></div>
     <div class="vrow"><span>Temperature</span><b class="${pi.temp_c > 75 ? "neg" : ""}">${f(pi.temp_c, 1)} °C</b>${vit("temp", css("--c2"), 30, 85)}</div>
     <div class="vrow"><span>CPU load</span><b>${f(pi.load_1m, 1)} <small>/ 4</small></b>${vit("load", css("--c1"), 0, 12)}</div>
-    <div class="vrow"><span>Free memory</span><b class="${pi.mem_free_mb < 500 ? "neg" : ""}">${f(pi.mem_free_mb / 1024, 1)} GB</b>${vit("mem_mb", css("--c3"), 0, 3800)}</div>
-    <div class="vrow"><span>Power</span><b class="${th.cls}">${esc(th.text)}</b><span class="muted small">up ${f(pi.uptime_hours, 1)} h</span></div>
+    <div class="vrow"><span>Free memory</span><b class="${mem != null && mem < 500 ? "neg" : ""}">${mem != null ? f(mem / 1024, 1) : "–"} GB</b>${vit("mem_mb", css("--c3"), 0, 3800)}</div>
+    <div class="vrow"><span>Power</span><b class="${th.cls}">${esc(th.text)}</b><span class="muted small">${pi.uptime_hours != null ? "up " + dur(pi.uptime_hours * 3600) : ""}</span></div>
+    ${!hasPi ? '<div class="muted small">No health samples (logs/pi_health.log): the health service is not running here.</div>' : ""}
     ${rb ? `<div class="vnote">Last reboot ${esc(ago(rb.back))} · last sample before it ${esc(rb.last_seen.replace("T", " "))}: load ${f(rb.last_sample.load, 1)}, ${f(rb.last_sample.mem_mb, 0)} MB free, ${f(rb.last_sample.temp, 0)} °C</div>` : ""}</section>`;
-  let curve = '<div class="empty">Nothing training</div>';
-  if (run) { const d = state.detail[run.run]; ensureDetail(run.run); curve = d && !d.error ? trainingChart(d, 200, "now") : '<div class="empty">Loading…</div>'; }
-  const ev = o.events.slice(0, 9).map((e) => `<li class="ev ${esc(e.kind)}"><time>${esc((e.t || "").slice(11, 16))}</time><span>${esc(e.text)}</span></li>`).join("");
-  const q = o.queue.queued.slice(0, 5).map((s, i) => `<li><span class="qn">${i + 1}</span><b>${esc(s.name)}</b><span class="chips">${chips({ rewards_changed_vs_minimal: s.rewards_changed_vs_minimal, args: s.args, net: s.net })}</span></li>`).join("");
+  const focus = run ? run.run : last?.name;
+  let curve = '<div class="empty">Nothing trained yet</div>';
+  if (focus) { const d = state.detail[focus]; ensureDetail(focus); curve = d && !d.error ? trainingChart(d, 200, "now") : '<div class="empty">Loading…</div>'; }
+  const train = `<section class="card"><div class="card-h"><h2>${run ? "Training" : "Last run"}${focus ? " · " + esc(focus) : ""}</h2>${focus ? smoothControl() : ""}</div>${curve}</section>`;
   return `<div class="grid now-top">${hero}${vitals}</div>
-    <div class="grid g2"><section class="card"><div class="card-h"><h2>League strength</h2><span class="muted small">latest full evaluation · 95% interval</span></div>${leaderboard(o.runs)}</section>
-      <section class="card"><div class="card-h"><h2>Training${run ? " · " + esc(run.run) : ""}</h2>${smoothControl()}</div>${curve}</section></div>
-    <div class="grid g2"><section class="card"><div class="card-h"><h2>Events</h2><span class="muted small">last 24 h</span></div><ul class="events">${ev || '<li class="muted">nothing yet</li>'}</ul></section>
-      <section class="card"><div class="card-h"><h2>Up next</h2><a href="#/runs">all runs →</a></div><ol class="queue">${q || '<li class="muted">queue empty</li>'}</ol></section></div>`;
+    <div class="grid g2">${rankCard(focus, o.runs)}${train}</div>
+    <section class="card"><div class="card-h"><h2>Events</h2><span class="muted small">last 24 h · newest first · fast checks grouped</span></div>${eventFeed(o.events)}</section>`;
 }
-function leaderboard(runs) {
-  const rows = runs.filter((r) => r.latest_full && r.latest_full.protocol === "full/g1/d90" && r.latest_full.pts != null).sort((a, b) => b.latest_full.pts - a.latest_full.pts);
-  if (!rows.length) return '<div class="empty">No full evaluations yet</div>';
-  const P = (v) => Math.max(0, Math.min(100, (100 * v) / 3));
-  const base = runs.find((r) => r.name.startsWith("start:") && r.latest_full)?.latest_full;
-  return `<div class="lb">${rows.map((r) => {
-    const a = r.latest_full, c = runColor(r.name);
-    return `<div class="lb-row"><div class="name">${runLink(r.name)}</div><div class="lb-track"><div class="axis"></div>${base ? `<div class="base" style="left:${P(base.pts - 1.96 * base.se)}%;width:${P(base.pts + 1.96 * base.se) - P(base.pts - 1.96 * base.se)}%"></div>` : ""}
-      <div class="err" style="left:${P(a.pts - 1.96 * a.se)}%;width:${P(a.pts + 1.96 * a.se) - P(a.pts - 1.96 * a.se)}%;background:${c}"></div><div class="pt" style="left:${P(a.pts)}%;background:${c}"></div></div>
-      <div class="val">${f(a.pts)} <span class="pm">±${f(a.se)}</span></div></div>`;
-  }).join("")}<div class="lb-row axisrow"><div></div><div class="ticks"><span>0</span><span>1</span><span>2</span><span>3 pts</span></div><div></div></div>
-  ${base ? '<div class="muted small">grey band: the start net t48_u100 (95% interval)</div>' : ""}</div>`;
+// the top 8 of the Elo ranking (lab/ladder.py); the focus run's checkpoint is marked, and added below when it is not in the top 8
+function rankCard(focus, runs) {
+  loadRanking();
+  const d = rk.data, head = (sub) => `<div class="card-h"><h2>Ranking</h2><span class="muted small">${sub} · <a href="#/ranking">full ranking →</a></span></div>`;
+  if (!d) return `<section class="card">${head("Elo")}<div class="empty">Loading…</div></section>`;
+  if (d.error || !d.matches) return `<section class="card">${head("Elo")}<div class="empty">${d.error ? "The ranking could not be computed" : "No ladder matches yet"}</div></section>`;
+  // runs whose weights are not on this machine are missing from /api/ranking; the overview rates them from their stored ladder matches
+  const have = new Set(d.rows.map((r) => r.id));
+  const stored = runs.filter((r) => r.elo?.stored && r.elo.games && !have.has(r.elo.id)).map((r) => ({ ...r.elo, name: r.name, league: "rl", kind: "net" }));
+  const played = d.rows.filter((r) => r.games).concat(stored).sort((x, y) => y.elo - x.elo).map((r, i) => ({ ...r, rank: i + 1 })), known = new Set(runs.map((r) => r.name));
+  const runOf = (r) => { const m = /^net:x_(.+?)(?:_best)?$/.exec(r.id); return m && known.has(m[1]) ? m[1] : null; };
+  const isFocus = (r) => focus && runOf(r) === focus;
+  const top = played.slice(0, 8), extra = played.slice(8).filter(isFocus), shown = top.concat(extra);
+  const lo = Math.min(...shown.map((r) => r.lo)), hi = Math.max(...shown.map((r) => r.hi)), W = 110, X = (v) => 5 + ((v - lo) / (hi - lo || 1)) * (W - 10);
+  const row = (r) => {
+    const c = css(LEAGUE_COLOR[r.league] || "--muted"), rn = runOf(r);
+    const name = rn ? `${runLink(rn)}${/_best$/.test(r.id) ? ' <span class="muted small">best</span>' : ""}${r.stored ? ' <span class="muted" title="rated from the ladder matches the Pi already played; this machine has no copy of the weights">*</span>' : ""}` : `<b>${esc(r.name)}</b>`;
+    return `<tr class="${isFocus(r) ? "focus" : ""}${r.placed ? "" : " dim"}"><td class="r muted">${r.rank}</td><td><div class="nm">${name}</div></td><td>${leagueChip(r.league)}</td>
+      <td class="r"><b>${f(r.elo, 0)}</b><span class="pm">±${f(1.96 * r.se, 0)}</span></td>
+      <td><svg width="${W}" height="14" viewBox="0 0 ${W} 14" class="rkbar"><line x1="${X(r.lo)}" x2="${X(r.hi)}" y1="7" y2="7" stroke="${c}" stroke-width="3" stroke-linecap="round" opacity=".5"/><circle cx="${X(r.elo)}" cy="7" r="4" fill="${c}"/></svg></td>
+      <td class="r muted small k-hide" title="won–drawn–lost">${r.w}–${r.d}–${r.l}</td></tr>`;
+  };
+  const gap = extra.length ? `<tr class="gap"><td></td><td colspan="5" class="muted small">…</td></tr>` : "";
+  return `<section class="card">${head(`Elo · ${d.matches.toLocaleString()} matches${d.last ? " · last " + esc(ago(d.last)) : ""}`)}
+    <div class="tbl-wrap"><table class="mini now-rank"><tbody>${top.map(row).join("")}${gap}${extra.map(row).join("")}</tbody></table></div>
+    ${focus && !shown.some(isFocus) ? `<div class="muted small">${esc(focus)} has no checkpoint in the ladder yet</div>` : ""}</section>`;
+}
+// events (lab.py cmd_events): runner log lines + recorded evaluations + reboots -> one readable line each, consecutive fast checks of a run
+// grouped, the runner's own fast / full-eval-started lines dropped (the recorded evaluations say the same), day separators
+function eventItem(e) {
+  const t = e.text || "", run = (n) => runLink(n);
+  let m;
+  if (e.kind === "eval_recorded" && (m = /^(\S+) u(\d+) (\w+) \S+ pts (\S+)/.exec(t))) {
+    const pts = parseFloat(m[4]);
+    return m[3] === "fast" ? { cls: "fast", group: "fast:" + m[1], run: m[1], u: +m[2], pts } : { cls: "full", html: `${run(m[1])} full evaluation at u${m[2]}: <b>${Number.isNaN(pts) ? "–" : f(pts)}</b> pts` };
+  }
+  if (e.kind === "fast_check" || e.kind === "full_eval") return null;
+  if (e.kind === "started" && (m = /^started (\S+)/.exec(t))) return { cls: "started", html: `${run(m[1])} started` };
+  if (e.kind === "resumed" && (m = /^resuming (\S+) from update (\d+) \((.*)\)$/.exec(t))) return { cls: "started", html: `${run(m[1])} resumed at u${m[2]} <span class="muted">${esc(m[3])}</span>` };
+  if (e.kind === "finished" && (m = /^(\S+) finished: (\S+)\s*(.*)$/.exec(t))) {
+    let v = null; try { v = m[3] ? JSON.parse(m[3]) : null; } catch (err) {}
+    const ver = v && v.verdict ? ` · ${badge(v.verdict)} <span class="muted">${sgn(v.pts)} ± ${f(v.pts_se)} vs ${esc(v.reference || "")}</span>` : "";
+    return { cls: m[2] === "done" ? "finished" : "stopped", html: `${run(m[1])} finished: ${esc(m[2])}${ver}` };
+  }
+  if (e.kind === "stopped" && (m = /^(\S+): (\S+) at update (\d+)/.exec(t))) return { cls: "stopped", html: `${run(m[1])} stopped at u${m[3]}: ${esc(m[2])}` };
+  if (e.kind === "reboot") return { cls: "reboot", html: `Pi rebooted <span class="muted">${esc(t.replace(/^Pi rebooted\s*/, ""))}</span>` };
+  if (/^ladder: /.test(t)) return { cls: "info", group: "ladder", html: "ladder round" };
+  if (/^viewer closed/.test(t)) return { cls: "info", group: "viewer", html: "Live viewer restarted" };
+  return { cls: e.kind === "error" ? "error" : "info", html: esc(t) };
+}
+function eventFeed(events) {
+  const items = [];
+  for (const e of events) {                                   // newest first
+    const it = eventItem(e); if (!it) continue;
+    const prev = items[items.length - 1];
+    if (it.group && prev && prev.group === it.group && prev.t.slice(0, 10) === (e.t || "").slice(0, 10)) { prev.n++; prev.t0 = e.t; if (it.u != null) { prev.us.push(it.u); prev.pts.push(it.pts); } continue; }
+    items.push({ ...it, t: e.t || "", t0: e.t || "", n: 1, us: it.u != null ? [it.u] : [], pts: it.pts != null ? [it.pts] : [] });
+  }
+  if (!items.length) return '<ul class="events"><li class="muted">nothing in the last 24 h</li></ul>';
+  const day = (iso) => { const d = new Date(iso.slice(0, 10) + "T12:00:00"), today = new Date(); today.setHours(12, 0, 0, 0); const k = Math.round((today - d) / 86400000); return k === 0 ? "Today" : k === 1 ? "Yesterday" : d.toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "short" }); };
+  let out = "", lastDay = "";
+  for (const it of items.slice(0, 14)) {
+    const dd = it.t.slice(0, 10);
+    if (dd && dd !== lastDay) { out += `<li class="day">${esc(day(it.t))}</li>`; lastDay = dd; }
+    let html = it.html;
+    if (it.cls === "fast") {
+      const ok = it.pts.filter((p) => !Number.isNaN(p)), us = [...it.us].sort((a, b) => a - b);
+      const rng = ok.length ? (Math.min(...ok) === Math.max(...ok) ? f(ok[0]) : `${f(Math.min(...ok))}–${f(Math.max(...ok))}`) : "–";
+      html = it.n === 1 ? `${runLink(it.run)} fast check at u${us[0]}: <b>${rng}</b> pts` : `${runLink(it.run)} ${it.n} fast checks, u${us[0]}–u${us[us.length - 1]}: <b>${rng}</b> pts`;
+    } else if (it.n > 1) html += ` <span class="muted">×${it.n}</span>`;
+    const time = it.n > 1 && it.t0 !== it.t ? `${it.t0.slice(11, 16)}–${it.t.slice(11, 16)}` : it.t.slice(11, 16);
+    out += `<li class="ev ${esc(it.cls)}"><time>${esc(time)}</time><span>${html}</span></li>`;
+  }
+  return `<ul class="events">${out}</ul>`;
 }
 function trainingChart(d, height, key, width) {
   const t = d.training || [], a = state.smooth, mk = (k) => t.map((r) => ({ x: r.upd, y: r[k] }));
@@ -262,37 +343,120 @@ function trainingChart(d, height, key, width) {
 }
 
 // ---------- RUNS ----------
+const TYPE_LABEL = { rl: ["RL", "reinforcement learning (PPO self-play on the Pi)"], imitation: ["Imitation", "behaviour cloning on the recorded play (il/train.py)"] };
+const shortVal = (v) => {
+  if (v === null || v === undefined) return "off";
+  if (typeof v === "number") return v !== 0 && Math.abs(v) < 0.001 ? v.toExponential() : String(+v.toPrecision(4));
+  return String(v).split(",").map((x) => x.split("/").pop().replace(/\.(pt|json)$/, "").replace(/^rl_5v5_arena_v/, "RL")).join(", ");
+};
+function changeChips(list) {
+  return (list || []).map((c) => {
+    const was = c.was !== undefined && c.was !== null && c.k !== "start" ? `<span class="was">${esc(shortVal(c.was))} →</span> ` : "";
+    return `<span class="chip ${c.kind === "reward" ? "rw" : ""}" title="${esc(c.k)}: ${esc(c.was ?? "default")} → ${esc(c.v ?? "default")}">${esc(c.k === "start" ? "from" : c.k)} ${was}${esc(shortVal(c.v))}</span>`;
+  }).join("");
+}
+function changesCell(r) {
+  if (r.state === "imported") return `<span class="muted small">${r.name.startsWith("start:") ? "imported checkpoint" : "older run"}</span>`;
+  if (r.state === "reference") return '<span class="muted small">shipped team</span>';
+  const ch = changeChips(r.changes);
+  const start = r.start ? shortVal(r.start) : "";
+  const sub = r.type === "imitation" ? "on the recorded play" : r.vs ? `vs ${esc(r.vs)}` : start ? `from ${esc(start)}` : "";
+  return `<div class="chips">${ch || '<span class="muted small">same as reference</span>'}</div><div class="muted small">${sub}${r.net ? ` · net ${esc(r.net)}` : ""}</div>`;
+}
+function stateCell(r, o) {
+  const run = o.status.runner.running;
+  let sub = "";
+  if (r.state === "running" && run && run.run === r.name) sub = run.evaluating ? "evaluating…" : run.eta_hours != null ? dur(run.eta_hours * 3600) + " left" : "";
+  else if (r.queued) sub = `#${r.qpos} in queue`;
+  else if (["diverged", "regressed", "failed", "cancelled"].includes(r.state)) sub = r.stop_reason && r.stop_reason !== r.state ? esc(r.stop_reason) : r.update != null ? `stopped at ${r.update}` : "";
+  if (r.restarts) sub += `${sub ? " · " : ""}${r.restarts} restart${r.restarts > 1 ? "s" : ""}`;
+  return `${badge(r.state === "evaluating" ? "evaluating" : r.state)}${sub ? `<div class="muted small">${sub}</div>` : ""}`;
+}
+function updateCell(r) {
+  if (r.update == null && !r.target) return r.queued ? "" : "–";
+  if (r.update_unit) return `${r.update}<span class="pm"> ${esc(r.update_unit)}</span>`;
+  const pct = r.target ? Math.min(100, (100 * (r.update || 0)) / r.target) : 0;
+  const cls = ["diverged", "regressed", "failed"].includes(r.state) ? "bad" : r.state === "cancelled" || r.queued ? "off" : "";
+  return `${r.update ?? 0}${r.target ? `<span class="pm">/${r.target}</span><div class="upd-bar ${cls}"><i style="width:${pct}%"></i></div>` : ""}`;
+}
+const ladderGoals = (e) => (e && e.games ? { gf: e.gf / e.games, ga: e.ga / e.games, gd: (e.gf - e.ga) / e.games } : null);
+function eloCell(e, top) {
+  if (!e) return '<span class="muted" title="not in the Elo ladder (no exported best checkpoint)">–</span>';
+  const pm = e.hi != null ? Math.round((e.hi - e.lo) / 2) : null;
+  return `<b class="${e.id === top ? "pos" : ""}">${Math.round(e.elo)}</b>${pm != null ? `<span class="pm">±${pm}</span>` : ""}<div class="muted small" title="${e.w}-${e.d}-${e.l} (won-drawn-lost) in ${e.games} ladder matches">${e.placed ? `#${e.rank}` : "placing"} · ${e.games} games${e.stored ? ' <span class="stored" title="rated from the ladder matches the Pi already played; this machine has no copy of the weights (out_5v5/ckpt/ stays on the Pi)">*</span>' : ""}</div>`;
+}
+const STOPPED = ["diverged", "regressed", "failed", "cancelled"];
+const RF0 = { state: "all", type: "all", net: "", change: "", vs: "", ranked: false, hidden: false };
+function runsFilter() {                                    // the Runs page filters, remembered in this browser
+  if (!state.rf) { let saved = {}; try { saved = JSON.parse(localStorage.getItem("runsFilter") || "{}"); } catch (e) {} state.rf = { ...RF0, ...saved }; }
+  return state.rf;
+}
+function setRunsFilter(k, v) {
+  const rf = runsFilter();
+  if (k === "reset") { state.rf = { ...RF0 }; state.filter = ""; } else rf[k] = v;
+  try { localStorage.setItem("runsFilter", JSON.stringify(state.rf)); } catch (e) {}
+  rerender();
+}
 function viewRuns() {
   const o = state.ov; if (!o) return '<div class="empty">Loading…</div>';
-  const queued = o.queue.queued.map((s) => ({ name: s.name, net: s.net, state: "queued", notes: s.notes, rewards_changed_vs_minimal: s.rewards_changed_vs_minimal, args: s.args, target: s.updates, queued: true }));
-  let rows = o.runs.concat(queued);
-  const flt = state.filter.toLowerCase();
-  if (flt) rows = rows.filter((r) => (r.name + " " + (r.notes || "") + " " + JSON.stringify(r.rewards_changed_vs_minimal || {})).toLowerCase().includes(flt));
-  if (state.stateFilter !== "all") rows = rows.filter((r) => (state.stateFilter === "finished" ? ["done", "diverged", "regressed", "cancelled", "failed"].includes(r.state) : r.state === state.stateFilter));
+  const rf = runsFilter();
+  const queued = o.queue.queued.map((s, i) => ({ name: s.name, net: s.net, state: "queued", type: "rl", notes: s.notes, changes: s.changes, vs: s.vs, start: s.start, target: s.updates, queued: true, qpos: i + 1 }));
+  const all = o.runs.concat(o.imitation || [], queued);
+  const stateOf = (r) => (STOPPED.includes(r.state) ? "stopped" : r.state);
+  const tests = {
+    search: (r) => !state.filter || (r.name + " " + (r.notes || "") + " " + (r.changes || []).map((c) => c.k + " " + shortVal(c.v)).join(" ")).toLowerCase().includes(state.filter.toLowerCase()),
+    state: (r) => rf.state === "all" || stateOf(r) === rf.state,
+    type: (r) => rf.type === "all" || r.type === rf.type,
+    net: (r) => !rf.net || r.net === rf.net,
+    change: (r) => !rf.change || (r.changes || []).some((c) => c.k === rf.change),
+    vs: (r) => !rf.vs || r.vs === rf.vs || r.name === rf.vs,
+    ranked: (r) => !rf.ranked || !!r.elo,
+    hidden: (r) => rf.hidden || !r.hidden,                // exp/hidden_runs.json: failed, empty and leftover runs
+  };
+  const pass = (r, skip) => Object.entries(tests).every(([k, t]) => k === skip || t(r));
+  let rows = all.filter((r) => pass(r));
   const k = state.sort.key, dir = state.sort.dir;
-  const val = (r) => { const a = r.latest_full || {}; return { name: r.name, state: r.state, pts: a.pts ?? -9, gd: a.gd ?? -9, ga: a.ga ?? 9, rl4: a.h2h?.["RL Team 4"]?.pts ?? -9, rl5: a.h2h?.["RL Team 5"]?.pts ?? -9, fin: r.finished || r.started || "" }[k]; };
+  const val = (r) => { const e = ladderGoals(r.elo); return { name: r.name, type: r.type, state: r.state, elo: r.elo?.elo ?? -1, gf: e ? e.gf : -99, gd: e ? e.gd : -99, ga: e ? e.ga : 99, cost: r.cost_hours ? (r.cost_hours.train || 0) + (r.cost_hours.eval || 0) : -1, fin: r.finished || r.started || "" }[k]; };
   rows.sort((x, y) => (val(x) > val(y) ? 1 : val(x) < val(y) ? -1 : 0) * dir);
-  const th = (key, l, cls = "") => `<th class="sort ${cls}" data-sort="${key}">${l}${k === key ? (dir > 0 ? " ↑" : " ↓") : ""}</th>`;
-  const states = ["all", "running", "queued", "finished", "imported"].map((s) => `<button class="pill ${state.stateFilter === s ? "on" : ""}" data-state="${s}">${s}</button>`).join("");
+  const th = (key, l, cls = "", tip = "") => `<th class="sort ${cls}" data-sort="${key}"${tip ? ` title="${esc(tip)}"` : ""}>${l}${k === key ? (dir > 0 ? " ↑" : " ↓") : ""}</th>`;
+  // each choice shows how many runs it would leave, given the other filters
+  const seg = (key, list) => `<div class="rseg">${list.map(([v, l]) => { const c = all.filter((r) => pass(r, key) && (v === "all" || (key === "state" ? stateOf(r) : r[key]) === v)).length; return `<button class="${rf[key] === v ? "on" : ""}" data-rf="${key}" data-rv="${v}" ${c || v === "all" ? "" : "disabled"}>${l}<span>${c}</span></button>`; }).join("")}</div>`;
+  const uniq = (xs) => [...new Set(xs.filter(Boolean))].sort();
+  const sel = (key, label, opts, tip = "") => `<label class="fsel ${rf[key] ? "on" : ""}" title="${esc(tip)}"><span>${label}</span><select data-rf="${key}"><option value="">any</option>${opts.map(([v, l]) => `<option value="${esc(v)}" ${rf[key] === v ? "selected" : ""}>${esc(l)}</option>`).join("")}</select></label>`;
+  const nets = uniq(all.map((r) => r.net)).map((n) => [n, n]);
+  const keys = uniq(all.flatMap((r) => (r.changes || []).map((c) => c.k))).map((x) => [x, x === "start" ? "start net" : x]);
+  const ctrls = uniq(all.map((r) => r.vs)).map((x) => [x, x]);
+  const active = rf.state !== "all" || rf.type !== "all" || rf.net || rf.change || rf.vs || rf.ranked || rf.hidden || state.filter;
+  const filters = `<div class="fbar">
+      <input class="search" placeholder="Search name, notes, settings…" value="${esc(state.filter)}" data-filter>
+      ${seg("state", [["all", "All"], ["running", "Running"], ["queued", "Queued"], ["done", "Done"], ["stopped", "Stopped"], ["imported", "Imported"], ["reference", "Reference"]])}
+    </div>
+    <div class="fbar">
+      ${seg("type", [["all", "All types"], ["rl", "RL"], ["imitation", "Imitation"]])}${sel("net", "Net", nets)}${sel("change", "Changes", keys)}${sel("vs", "Experiment", ctrls, "a control run and the runs judged against it")}
+      <label class="fchk ${rf.ranked ? "on" : ""}"><input type="checkbox" data-rf="ranked" ${rf.ranked ? "checked" : ""}> Has Elo</label>
+      <label class="fchk ${rf.hidden ? "on" : ""}" title="failed, empty and leftover runs listed in exp/hidden_runs.json"><input type="checkbox" data-rf="hidden" ${rf.hidden ? "checked" : ""}> Show hidden <span class="muted">${all.filter((r) => r.hidden).length}</span></label>
+      <span class="fcount">${rows.length} of ${all.length} runs</span>${active ? '<button class="linkbtn" data-rf="reset">Clear filters</button>' : ""}
+    </div>`;
+  const ladder = o.runs.concat(o.imitation || []).filter((r) => r.elo?.placed).sort((x, y) => y.elo.elo - x.elo.elo);
+  const top = ladder[0]?.elo.id;
   const body = rows.map((r) => {
-    const a = r.latest_full, v = r.verdict, sel = state.selected.has(r.name);
-    const args = r.queued ? r.args : (state.detail[r.name]?.status?.spec?.args) || r.spec_args || {};
-    return `<tr class="${r.queued ? "queued" : "link"}" data-run="${r.queued ? "" : esc(r.name)}"><td class="k-hide">${r.queued ? "" : `<input type="checkbox" data-pick="${esc(r.name)}" ${sel ? "checked" : ""} aria-label="select ${esc(r.name)}">`}</td>
-      <td>${r.queued ? `<span class="rl"><i class="dot" style="background:var(--line)"></i>${esc(r.name)}</span>` : runLink(r.name)}<div class="muted small clip k-hide" title="${esc(r.notes || "")}">${esc(r.notes || "")}</div></td>
-      <td>${badge(r.state)}${r.stop_reason && r.stop_reason !== "budget" ? `<div class="muted small">${esc(r.stop_reason)}</div>` : ""}</td>
-      <td class="k-hide">${r.state === "imported" ? '<span class="muted small">older run</span>' : r.state === "reference" ? '<span class="muted small">shipped team</span>' : `<div class="chips">${chips({ net: r.net, rewards_changed_vs_minimal: r.rewards_changed_vs_minimal, args })}</div>`}</td>
-      <td class="r">${r.update ?? (r.queued ? "" : "–")}${r.target ? `<span class="pm">/${r.target}</span>` : ""}</td>
-      <td class="k-hide">${r.queued ? "" : sparkline(r.spark, runColor(r.name))}</td>
-      <td class="r">${a ? `${f(a.pts)}<span class="pm">±${f(a.se)}</span>` : "–"}</td><td class="r ${a && a.gd > 0 ? "pos" : a && a.gd < 0 ? "neg" : ""}">${a ? sgn(a.gd) : "–"}</td><td class="r">${a ? f(a.ga) : "–"}</td>
-      <td class="r">${f(a?.h2h?.["RL Team 4"]?.pts)}</td><td class="r">${f(a?.h2h?.["RL Team 5"]?.pts)}</td>
-      <td>${v && v.verdict ? `${badge(v.verdict)}<div class="muted small">${sgn(v.pts)} ± ${f(v.pts_se)} vs ${esc(v.reference || "")}</div>` : ""}</td>
+    const g = ladderGoals(r.elo), sel = state.selected.has(r.name), link = !r.queued && r.type !== "imitation";
+    const [tl, tt] = TYPE_LABEL[r.type] || [r.type || "", ""];
+    return `<tr class="${link ? "link" : "queued"}" data-run="${link ? esc(r.name) : ""}"><td class="k-hide">${link ? `<input type="checkbox" data-pick="${esc(r.name)}" ${sel ? "checked" : ""} aria-label="select ${esc(r.name)}">` : ""}</td>
+      <td title="${esc(r.notes || "")}" class="${r.hidden ? "hid" : ""}">${link ? runLink(r.name) : `<span class="rl"><i class="dot" style="background:${r.queued ? "var(--line)" : runColor(r.name)}"></i>${esc(r.name)}</span>`}</td>
+      <td class="k-hide"><span class="type ${esc(r.type || "")}" title="${esc(tt)}">${esc(tl)}</span></td>
+      <td>${stateCell(r, o)}</td>
+      <td class="k-hide">${changesCell(r)}</td>
+      <td class="r">${updateCell(r)}</td>
+      <td class="r elo">${r.queued ? "" : eloCell(r.elo, top)}</td>
+      <td class="r">${g ? f(g.gf) : "–"}</td><td class="r">${g ? f(g.ga) : "–"}</td><td class="r ${g && g.gd > 0 ? "pos" : g && g.gd < 0 ? "neg" : ""}">${g ? sgn(g.gd) : "–"}</td>
       <td class="r small k-hide">${r.cost_hours ? f((r.cost_hours.train || 0) + (r.cost_hours.eval || 0), 1) + " h" : ""}</td><td class="small muted k-hide">${r.finished ? ago(r.finished) : r.started ? "since " + ago(r.started).replace(" ago", "") : ""}</td></tr>`;
   }).join("");
   const n = state.selected.size;
-  return `<div class="head"><div><h1>Runs</h1><p>Experiments, imported runs and the queue. Tick runs to compare them; click a row for details.</p></div>
-      <div class="tools"><input class="search" placeholder="Filter…" value="${esc(state.filter)}" data-filter><a class="btn ${n ? "" : "disabled"}" href="#/compare?runs=${[...state.selected].map(encodeURIComponent).join(",")}">Compare ${n ? "(" + n + ")" : ""}</a></div></div>
-    <div class="pills">${states}</div>
-    <div class="card flush"><div class="tbl-wrap"><table class="runs"><thead><tr><th class="k-hide"></th>${th("name", "Run")}${th("state", "State")}<th class="k-hide">Changes</th><th class="r">Update</th><th class="k-hide">Training 0–3</th>${th("pts", "League pts", "r")}${th("gd", "GD", "r")}${th("ga", "GA", "r")}${th("rl4", "vs RL4", "r")}${th("rl5", "vs RL5", "r")}<th>Verdict</th><th class="r k-hide">Cost</th>${th("fin", "When", "k-hide")}</tr></thead><tbody>${body || '<tr><td colspan="14" class="muted">No runs match</td></tr>'}</tbody></table></div></div>`;
+  return `<div class="head"><div><h1>Runs</h1><p>Experiments, imitation trainings, imported runs and the queue, ranked by Elo. Hover a name for its notes; tick runs to compare them; click a row for details.</p></div>
+      <div class="tools"><a class="btn ${n ? "" : "disabled"}" href="#/compare?runs=${[...state.selected].map(encodeURIComponent).join(",")}">Compare ${n ? "(" + n + ")" : ""}</a></div></div>
+    ${filters}
+    <div class="card flush"><div class="tbl-wrap"><table class="runs"><thead><tr><th class="k-hide"></th>${th("name", "Run")}${th("type", "Type", "k-hide", "how the net was trained")}${th("state", "State")}<th class="k-hide" title="what this run changes against its control (vs …), or against the default recipe (from = the net it starts from)">Changes</th><th class="r">Update</th>${th("elo", "Elo", "r", "rating of the run's best checkpoint in the Elo ladder (lab/ladder.py: every team and net against each other), ±95%; the number to pick the best model by")}${th("gf", "GF", "r", "goals scored per match in the Elo ladder's matches (the same matches the Elo comes from)")}${th("ga", "GA", "r", "goals conceded per match in the Elo ladder's matches")}${th("gd", "GD", "r", "goal difference per match in the Elo ladder's matches")}${th("cost", "Cost", "r k-hide", "Pi hours: training + evaluation")}${th("fin", "When", "k-hide")}</tr></thead><tbody>${body || '<tr><td colspan="12" class="muted">No runs match</td></tr>'}</tbody></table></div></div>`;
 }
 
 // ---------- RUN ----------
@@ -832,7 +996,7 @@ function viewPi() {
   const win = [3, 12, 48].map((h) => `<button class="pill ${state.piHours === h ? "on" : ""}" data-hours="${h}">${h} h</button>`).join("");
   const last = rows[rows.length - 1];
   return `<div class="head"><div><h1>Raspberry Pi</h1><p>One sample every 10 s (<span class="mono">logs/pi_health.log</span>). Red lines mark reboots; the last sample before one shows what the Pi was doing.</p></div><div class="pills">${win}</div></div>
-    <div class="kpis">${kpi("Temperature", `${f(pi.temp_c, 1)}<small>°C</small>`)}${kpi("CPU load", `${f(pi.load_1m, 1)}<small>/ 4</small>`)}${kpi("Free memory", `${f(pi.mem_free_mb / 1024, 2)}<small>GB</small>`)}${kpi("Power", esc(th.text), esc(th.sub || ""), th.cls)}${kpi("Uptime", dur(pi.uptime_hours * 3600), "boot " + esc(pi.boot_id || ""))}${kpi("Last sample", last ? ago(last.t) : "–", "watchdog: reboot after 15 s frozen")}</div>
+    <div class="kpis">${kpi("Temperature", `${f(pi.temp_c, 1)}<small>°C</small>`)}${kpi("CPU load", `${f(pi.load_1m, 1)}<small>/ 4</small>`)}${kpi("Free memory", `${f(pi.mem_free_mb == null ? null : pi.mem_free_mb / 1024, 2)}<small>GB</small>`)}${kpi("Power", esc(th.text), esc(th.sub || ""), th.cls)}${kpi("Uptime", dur(pi.uptime_hours * 3600), "boot " + esc(pi.boot_id || ""))}${kpi("Last sample", last ? ago(last.t) : "–", "watchdog: reboot after 15 s frozen")}</div>
     <div class="grid g2">
       <section class="card"><div class="card-h"><h3>Temperature °C</h3></div>${lineChart([{ name: "temperature", color: css("--c2"), points: mk("temp") }], { ...opt, refs: [{ y: 80, label: "throttles at 80" }], key: "pt", emptyText: "no dated samples yet" })}</section>
       <section class="card"><div class="card-h"><h3>CPU load (1 min)</h3></div>${lineChart([{ name: "load", color: css("--c1"), points: mk("load") }], { ...opt, yMin: 0, refs: [{ y: 4, label: "4 cores" }], key: "pl", emptyText: "no dated samples yet" })}</section>
@@ -1126,8 +1290,8 @@ document.addEventListener("click", (e) => {
   if (lg) { const k = lg.dataset.key, s = lg.dataset.series; state.hidden[k] = state.hidden[k] || new Set(); if (state.hidden[k].has(s)) state.hidden[k].delete(s); else state.hidden[k].add(s); rerender(); return; }
   const th = t.closest("th[data-sort]");
   if (th) { const k = th.dataset.sort; state.sort = { key: k, dir: state.sort.key === k ? -state.sort.dir : k === "name" || k === "state" ? 1 : -1 }; rerender(); return; }
-  const pill = t.closest("[data-state]");
-  if (pill) { state.stateFilter = pill.dataset.state; rerender(); return; }
+  const rfb = t.closest("button[data-rf]");
+  if (rfb) { setRunsFilter(rfb.dataset.rf, rfb.dataset.rv); return; }
   const kd = t.closest("[data-kind]");
   if (kd) { const p = route().params; p.set("kind", kd.dataset.kind); location.hash = "#/compare?" + p.toString(); return; }
   const lgp = t.closest("[data-league]");
@@ -1147,6 +1311,7 @@ document.addEventListener("click", (e) => {
 });
 document.addEventListener("change", (e) => {
   const t = e.target;
+  if (t.dataset.rf !== undefined && t.tagName !== "BUTTON") { setRunsFilter(t.dataset.rf, t.type === "checkbox" ? t.checked : t.value); return; }
   if (t.dataset.pick !== undefined) { if (t.checked) state.selected.add(t.dataset.pick); else state.selected.delete(t.dataset.pick); rerender(); }
   if (t.dataset.addrun !== undefined && t.value) { const p = route().params; const runs = (p.get("runs") || "").split(",").filter(Boolean); runs.push(t.value); p.set("runs", runs.join(",")); location.hash = "#/compare?" + p.toString(); }
   if (t.dataset.evalpick !== undefined) { state.evalPick[t.dataset.evalpick] = t.value; rerender(); }

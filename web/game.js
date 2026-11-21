@@ -6,7 +6,7 @@
 "use strict";
 
 const Game = (() => {
-  const G = { cat: null, byId: {}, keyHandler: null, match: null, pending: null, report: null, tab: 0, busy: false, pz: null };
+  const G = { cat: null, byId: {}, keyHandler: null, match: null, pending: null, report: null, tab: 0, busy: false, pz: null, showcase: null };
   const SAVE = "soccer.tournament";
   const CONTROLS = ["single", "team", "none"];
   // "Record my play": the match is saved as a dataset file for imitation learning (game/recorder.py), remembered in this browser
@@ -53,6 +53,7 @@ const Game = (() => {
   // ---------- entry (called by lab.js for every #/game/... route) ----------
   async function show(parts) {
     stopMatch();
+    if (G.showcase) G.showcase.stop();
     document.body.classList.remove("g-playing");
     for (const o of document.querySelectorAll(".g-overlay")) o.remove();
     G.keyHandler = null;
@@ -77,22 +78,134 @@ const Game = (() => {
   });
   document.addEventListener("keyup", (e) => { if (document.body.dataset.area === "game" && G.keyHandler) G.keyHandler(e, false); });
 
-  // ---------- main menu: Quick match (the team select), the tournament, the teams. Up / Down move, Enter opens.
+  // ---------- main menu: a title screen. Behind it a real match plays between the two teams of your last quick match (showcase());
+  // Quick match leads, then the other pages; every crest along the bottom opens its team.
+  // Keys: Up / Down move, Enter opens, 1-9 jump to an entry.
+  const ICON = {
+    resume: '<path d="M7 5v14l12-7z"/>',
+    puzzle: '<circle cx="12" cy="13.5" r="7.5"/><path d="M12 9.5v4l2.6 2M9.5 2.5h5M12 2.5V6"/>',
+    trophy: '<path d="M8 21h8M12 16.5V21M7 3.5h10V9a5 5 0 0 1-10 0zM7 5.5H4V7a3 3 0 0 0 3 3M17 5.5h3V7a3 3 0 0 1-3 3"/>',
+    shield: '<path d="M12 3l8 3v6c0 4.8-3.4 8-8 9-4.6-1-8-4.2-8-9V6z"/><path d="M9 12l2 2 4-4"/>',
+    arrow: '<path d="M5 12h14M13 6l6 6-6 6"/>',
+  };
+  const icon = (k, px = 22) => `<svg width="${px}" height="${px}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICON[k]}</svg>`;
   function menu() {
-    const save = loadT();
-    const items = [["Quick match", "#/game/quick", "Pick two teams and play"]]
-      .concat(save ? [["Continue tournament", "#/game/tournament", save.title || ""]] : [])
-      .concat([["Puzzle", "#/game/puzzle", "One-minute rounds from random positions (data collection)"], ["New tournament", "#/game/tournament/new", "One league or all of them"], ["Teams and squads", "#/game/teams", `${G.cat.teams.length} teams in ${G.cat.leagues.length} leagues`]]);
-    const v = mount(`<div class="gm"><div class="gm-in"><div class="gm-title">Simple Soccer</div><div class="gm-sub">Football against handmade and trained AI teams</div>
-      <nav class="gm-list">${items.map(([label, href, sub], k) => `<a class="gm-item${k ? "" : " primary"}" href="${href}"><b>${esc(label)}</b><span>${esc(sub)}</span></a>`).join("")}</nav></div></div>`);
-    const links = [...v.querySelectorAll(".gm-item")];
+    const C = G.cat, save = loadT();
+    const last = (prefs.sides || []).map((id) => G.byId[id]).filter(Boolean);
+    const pair = last.length === 2 && last[0].id !== last[1].id ? last : (() => {
+      const a = C.teams[Math.floor(Math.random() * C.teams.length)];
+      const rest = C.teams.filter((t) => t.id !== a.id && Draw.dist(Draw.rgb(t.colors[0]), Draw.rgb(a.colors[0])) > 0.45);
+      return [a, rest[Math.floor(Math.random() * rest.length)] || C.teams.find((t) => t.id !== a.id)];
+    })();
+    const vs = `<span class="gm-vs">${Draw.logoTag(pair[0].id, 18)}<span>${esc(pair[0].name)}</span><i>vs</i><span>${esc(pair[1].name)}</span>${Draw.logoTag(pair[1].id, 18)}</span>`;
+    const items = (save ? [["resume", "Continue tournament", "#/game/tournament", save.title || "Your saved tournament"]] : [])
+      .concat([["puzzle", "Puzzle", "#/game/puzzle", "One-minute rounds from random positions"],
+        ["trophy", "New tournament", "#/game/tournament/new", "One league or all of them"],
+        ["shield", "Teams and squads", "#/game/teams", `${C.teams.length} teams in ${C.leagues.length} leagues`]]);
+    const ranked = C.teams.slice().sort((a, b) => (b.elo || 0) - (a.elo || 0));
+    const crests = ranked.map((t) => `<a href="#/game/teams/${encodeURIComponent(t.id)}" title="${esc(t.name)}${t.elo ? " · Elo " + t.elo : ""}" tabindex="-1">${Draw.logoTag(t.id, 34)}</a>`).join("");
+    const bug = (t) => `${Draw.logoTag(t.id, 20)}<b>${esc(t.short || t.name.slice(0, 3).toUpperCase())}</b>`;
+    const v = mount(`<div class="gm">
+      <div class="gm-stage" aria-hidden="true"><canvas class="gm-pitch"></canvas></div><div class="gm-shade" aria-hidden="true"></div>
+      <div class="gm-bug" aria-hidden="true" hidden><span class="gm-bug-l">Live</span>${bug(pair[0])}<span class="gm-score" id="gm-score">0 – 0</span>${bug(pair[1])}<span class="gm-clock" id="gm-clock"></span></div>
+      <div class="gm-in">
+        <div class="gm-kicker">5-a-side football</div>
+        <h1 class="gm-title"><span>Simple</span><span>Soccer</span></h1>
+        <p class="gm-sub">Play against ${C.teams.length} teams: handmade rule bots and nets trained by self-play.</p>
+        <nav class="gm-list" aria-label="Main menu">
+          <a class="gm-play gm-link" href="#/game/quick"><span class="gm-play-t"><b>Quick match</b>${last.length === 2 ? vs : "<span>Pick two teams and play</span>"}</span>${icon("arrow", 26)}</a>
+          ${items.map(([ic, label, href, sub], k) => `<a class="gm-item gm-link" href="${href}"><span class="gm-ic">${icon(ic)}</span><span class="gm-t"><b>${esc(label)}</b><small>${esc(sub)}</small></span><kbd>${k + 2}</kbd></a>`).join("")}
+        </nav>
+      </div>
+      <div class="gm-reel" aria-label="Teams by Elo"><div class="gm-reel-track">${crests}${crests.replace(/<a /g, '<a aria-hidden="true" ')}</div></div>
+    </div>`);
+    const links = [...v.querySelectorAll(".gm-link")];
     links[0].focus({ preventScroll: true });
+    const scoreEl = $("#gm-score", v), clockEl = $("#gm-clock", v), bugEl = $(".gm-bug", v);
+    let shown = "";
+    showcase($(".gm-pitch", v), pair, (f) => {
+      if (!f) { bugEl.hidden = true; return; }
+      const s = `${f.sc[0]} – ${f.sc[1]}|${f.st === 2 ? "FT" : f.ot ? "OT " + clockText(f.otl) : clockText(f.tl)}`;
+      if (s === shown) return;
+      shown = s; bugEl.hidden = false; [scoreEl.textContent, clockEl.textContent] = s.split("|");
+    }, () => { bugEl.classList.remove("goal"); void bugEl.offsetWidth; bugEl.classList.add("goal"); });
     G.keyHandler = (e, down) => {
-      if (!down || (e.key !== "ArrowDown" && e.key !== "ArrowUp")) return;
+      if (!down || e.metaKey || e.ctrlKey || e.altKey) return;
+      const n = Number(e.key);
+      if (n >= 1 && n <= links.length) { e.preventDefault(); location.hash = links[n - 1].getAttribute("href"); return; }
+      if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
       e.preventDefault();
       const k = Math.max(0, links.indexOf(document.activeElement));
       links[(k + (e.key === "ArrowDown" ? 1 : -1) + links.length) % links.length].focus();
     };
+  }
+
+  // the menu's background: a real match between the two teams, played by the match core on the server exactly like Watch in
+  // Quick match, drawn with the match's own pitch, players and nets and a still camera on the whole pitch (the CSS tilts it).
+  // A new match starts after each final whistle; it is paused while the tab is hidden and closed when the menu goes.
+  // With reduced motion: the kickoff line-up only.
+  function showcase(cv, teams, onFrame, onGoalEv) {
+    const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const S = { ws: null, meta: null, frames: [], timer: 0, done: false };
+    const send = (o) => { try { if (S.ws && S.ws.readyState === 1) S.ws.send(JSON.stringify(o)); } catch (e) {} };
+    const vis = () => send({ pause: document.hidden });
+    S.stop = () => {
+      if (S.done) return;
+      S.done = true; clearTimeout(S.timer); document.removeEventListener("visibilitychange", vis);
+      send({ quit: 1 }); try { S.ws.close(); } catch (e) {}
+      if (G.showcase === S) G.showcase = null;
+    };
+    if (G.showcase) G.showcase.stop();
+    G.showcase = S;
+    document.addEventListener("visibilitychange", vis);
+    function start() {
+      if (S.done) return;
+      const ws = S.ws = new WebSocket((location.protocol === "https:" ? "wss://" : "ws://") + location.host + "/ws/match");
+      let ended = false;
+      ws.onopen = () => {
+        ws.send(JSON.stringify({ setup: { home: teams[0].id, away: teams[1].id, pitch: "big", size: 5, duration: 300, control: "none", allow_draw: true, record: false } }));
+        if (document.hidden) send({ pause: true });
+      };
+      ws.onmessage = (e) => {
+        if (S.ws !== ws) return;
+        const d = JSON.parse(e.data);
+        if (d.k === "m") { prepareMeta(S, d); S.frames = []; }
+        else if (d.k === "f") {
+          d.at = performance.now();
+          S.frames.push(d); if (S.frames.length > 8) S.frames.shift();
+          for (const ev of d.ev || []) onGoalEv(ev);
+          onFrame(d);
+          if (still) { draw(); S.stop(); }
+        } else if (d.k === "r" && !ended) {
+          ended = true;
+          S.timer = setTimeout(() => { send({ quit: 1 }); try { ws.close(); } catch (er) {} start(); }, 6000);
+        } else if (d.k === "e") { onFrame(null); S.stop(); }
+      };
+      ws.onclose = () => { if (S.ws === ws && !ended && !S.done) S.timer = setTimeout(start, 5000); };   // the server went away: try again later
+    }
+    function draw() {
+      const m = S.meta, fr = S.frames;
+      const dpr = Math.min(2, window.devicePixelRatio || 1), cw = cv.clientWidth, ch = cv.clientHeight;
+      if (!m || !fr.length || !cw || !ch) return;
+      if (cv.width !== Math.round(cw * dpr) || cv.height !== Math.round(ch * dpr)) { cv.width = Math.round(cw * dpr); cv.height = Math.round(ch * dpr); }
+      const ctx = cv.getContext("2d"), P = m.pitch, bx = P.out_x + 6, by = P.out_y + 6, u = Math.min(cw / (2 * bx), ch / (2 * by));
+      ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, cv.width, cv.height);
+      ctx.setTransform(dpr * u, 0, 0, dpr * u, (dpr * cw) / 2, (dpr * ch) / 2);
+      // as drawMatch: positions interpolated between the two frames around (now - one tick)
+      const rt = performance.now() - 20;
+      let a = fr[fr.length - 1], b = a, k = 0;
+      for (let i = fr.length - 1; i > 0; i--) if (fr[i - 1].at <= rt) { a = fr[i - 1]; b = fr[i]; k = Math.min(1, Math.max(0, (rt - a.at) / Math.max(b.at - a.at, 1))); break; }
+      if (b.t < a.t || a.p.length !== b.p.length) { a = b; k = 0; }
+      const L = (x, y) => x + (y - x) * k;
+      ctx.save();
+      ctx.beginPath(); ctx.roundRect(-bx, -by, 2 * bx, 2 * by, 16); ctx.clip();
+      drawPitch(ctx, m); drawPlayers(ctx, S, m, a, b, L, b); drawNets(ctx, m);
+      ctx.restore();
+    }
+    start();
+    if (still) return;
+    const loop = () => { if (S.done) return; if (!cv.isConnected) { S.stop(); return; } draw(); requestAnimationFrame(loop); };
+    requestAnimationFrame(loop);
   }
 
   // ---------- team select: the quick match screen (kit split). Each half is one side: its league, its team (crest, Elo, how it plays);
@@ -709,9 +822,8 @@ const Game = (() => {
     G.keyHandler = (e, down) => { if (!down || e.repeat) return; if (e.key === "Enter") { e.preventDefault(); again(); } else if (e.key === "Escape") { G.pz = null; go("#/game"); } };
   }
   function drawPuzzleHud(ctx, M, f, W, H, intro) {
-    const pz = M.p.session, R = pz.rounds, n = R.length + 1, pts = R.reduce((s, r) => s + r.pts, 0);
-    const left = Math.max(0, pz.total - pzPlayed(pz) - (60 - f.tl));
-    text(ctx, `PUZZLE  ·  ROUND ${n}  ·  ${pts} PTS  ·  ${clockText(left)} LEFT`, 18, TOP + 40, "l", 600, 16, Draw.css(ACC), 4, "rgba(0,0,0,0.9)", 700);
+    const n = M.p.session.rounds.length + 1;
+    drawPuzzleCard(ctx, M, f, W);
     if (intro > 0) {
       const a = Math.min(1, intro / 20);
       ctx.fillStyle = `rgba(0,0,0,${0.45 * a})`; ctx.fillRect(0, H / 2 - 190, W, 96);
@@ -726,11 +838,51 @@ const Game = (() => {
     }
   }
 
+  // the puzzle card, top right, one row as tall as the scorebug: ROUND n | one dot per round played | points | session time left
+  // (a thin bar along its bottom edge fills as the session goes)
+  function drawPuzzleCard(ctx, M, f, W) {
+    const pz = M.p.session, R = pz.rounds, n = R.length + 1, pts = R.reduce((s, r) => s + r.pts, 0);
+    const left = Math.max(0, pz.total - pzPlayed(pz) - (60 - f.tl)), used = Math.min(1, 1 - left / pz.total), low = left < 30;
+    const h = 38, pad = 12, y0 = 14, MUTED = "#8d98ab", step = 12, r = 4, MAXD = 8;
+    const round = `ROUND ${n}`, clock = clockText(left), shown = R.slice(-MAXD);
+    ctx.font = FONT(15, 700); const rw = ctx.measureText(round).width;
+    ctx.font = FONT(20, 800); const pw = ctx.measureText(String(pts)).width;
+    ctx.font = FONT(11, 700); const uw = ctx.measureText("PTS").width;
+    ctx.font = FONT(15, 700); const kw = ctx.measureText(clock).width;
+    const segR = rw + 2 * pad, segD = (shown.length + 1) * step - (step - 2 * r) + 2 * pad - 2, segP = pw + 5 + uw + 2 * pad, segK = kw + 2 * pad;
+    const w = segR + segD + segP + segK, x0 = W - 16 - w;
+    ctx.save();
+    ctx.shadowColor = "rgba(0,0,0,0.35)"; ctx.shadowBlur = 14; ctx.shadowOffsetY = 4;
+    roundRect(ctx, x0, y0, w, h, 9, "#12161d");
+    ctx.restore();
+    ctx.save(); ctx.beginPath(); ctx.roundRect(x0, y0, w, h, 9); ctx.clip();
+    let x = x0;
+    text(ctx, round, x, y0 + 25, "c", segR, 15, "#fff", 0, "", 700); x += segR;
+    // dots: green = you scored, grey = no goal, red = they scored; the current round hollow (the newest MAXD rounds)
+    const col = { W: "#46c98d", D: "#5b6577", L: "#ef6a5b" }, cy = y0 + h / 2 - 1;
+    let dx = x + pad - 1 + r;
+    for (const rd of shown) { ctx.beginPath(); ctx.arc(dx, cy, r, 0, 2 * Math.PI); ctx.fillStyle = col[rd.outcome]; ctx.fill(); dx += step; }
+    const pulse = 0.55 + 0.45 * Math.abs(Math.sin(performance.now() / 400));
+    ctx.beginPath(); ctx.arc(dx, cy, r - 0.75, 0, 2 * Math.PI); ctx.lineWidth = 1.5; ctx.strokeStyle = Draw.css(ACC, pulse); ctx.stroke();
+    x += segD;
+    ctx.fillStyle = "#0b0e13"; ctx.fillRect(x, y0, segP, h);
+    text(ctx, String(pts), x + pad, y0 + 27, "l", 0, 20, "#ffd54a", 0, "", 800);
+    text(ctx, "PTS", x + pad + pw + 5, y0 + 26, "l", 0, 11, MUTED, 0, "", 700); x += segP;
+    ctx.fillStyle = low ? "#ef6a5b" : "#ffd54a"; ctx.fillRect(x, y0, segK, h);
+    text(ctx, clock, x, y0 + 25, "c", segK, 15, "#12161d", 0, "", 700);
+    // session progress along the bottom edge
+    ctx.fillStyle = "rgba(255,255,255,0.08)"; ctx.fillRect(x0, y0 + h - 3, w, 3);
+    ctx.fillStyle = low ? "#ef6a5b" : "#ffd54a"; ctx.fillRect(x0, y0 + h - 3, w * used, 3);
+    ctx.restore();
+    M.pzCard = { x: x0, y: y0, w, h };
+  }
+
   // ---------- the live match ----------
   function play(p) { G.pending = p; go("#/game/match"); }
   function stopMatch() {
     const M = G.match; if (!M) return;
     M.stopped = true; cancelAnimationFrame(M.raf);
+    Sound.crowdOff(); if (M.paused) Sound.pause(false);
     window.removeEventListener("blur", M.onBlur);
     try { M.ws.send(JSON.stringify({ quit: 1 })); } catch (e) {}
     try { M.ws.close(); } catch (e) {}
@@ -739,6 +891,7 @@ const Game = (() => {
   const KEYS = { ArrowLeft: [-1, 0], KeyA: [-1, 0], ArrowRight: [1, 0], KeyD: [1, 0], ArrowUp: [0, -1], KeyW: [0, -1], ArrowDown: [0, 1], KeyS: [0, 1] };
   function match(p) {
     document.body.classList.add("g-playing");
+    Sound.unlock();
     const v = mount('<div class="g-match"><canvas></canvas></div>');
     const cv = $("canvas", v);
     const M = G.match = { p, cv, ws: null, meta: null, frames: [], held: new Set(), sentIn: "", paused: false, speed: 1, result: null, error: "", stopped: false,
@@ -750,6 +903,7 @@ const Game = (() => {
       if (d.k === "m") prepareMeta(M, d);
       else if (d.k === "f") {
         d.at = performance.now();
+        sfx(M, d);
         M.frames.push(d); if (M.frames.length > 8) M.frames.shift();
         for (const ev of d.ev || []) onGoal(M, ev);
       } else if (d.k === "r") {
@@ -789,10 +943,11 @@ const Game = (() => {
     else if (M.paused && c === "KeyR" && !M.p.session) act(M, "restart");
     else if (c === "KeyT") { M.speed = M.speed === 1 ? 2 : M.speed === 2 ? 4 : M.speed === 4 ? 8 : 1; wsSend(M, { speed: M.speed }); }
     else if (c === "KeyQ") wsSend(M, { switch: 1 });
+    else if (c === "KeyN") { Sound.unlock(); M.toast = { text: Sound.toggle() ? "Sound on" : "Sound off", at: performance.now() }; }
   }
   // what a key or a card button does: pause / resume, restart (same teams, new seed), quit, the report after the final whistle
   function act(M, a) {
-    if (a === "pause") { M.paused = !M.paused; wsSend(M, { pause: M.paused }); }
+    if (a === "pause") { M.paused = !M.paused; wsSend(M, { pause: M.paused }); Sound.pause(M.paused); }
     else if (a === "restart") { const p = { ...M.p, setup: { ...M.p.setup, seed: Math.floor(Math.random() * 2147483647) } }; G.pending = null; stopMatch(); G.pending = p; match(p); }
     else if (a === "quit") { const q = M.p.quit; G.pending = null; stopMatch(); q(); }
     else if (a === "report" && M.result) { const res = M.result, done = M.p.done; G.pending = null; stopMatch(); done(res); }
@@ -818,7 +973,7 @@ const Game = (() => {
       <div class="mo-sc small">${esc(m.teams[0].name)} <b>${f.sc[0]} – ${f.sc[1]}</b> ${esc(m.teams[1].name)}</div>
       <div class="mo-btns col"><button type="button" class="ks-go" data-act="pause">Resume ${k("Esc")}</button>
         ${M.p.session ? "" : `<button type="button" class="ks-btn2" data-act="restart">Restart ${k("R")}</button>`}<button type="button" class="ks-btn2" data-act="quit">Quit the match ${k("M")}</button></div>
-      <div class="mo-keys"><span>${k("WASD")} ${k("↑↓←→")} move</span><span>${k("Space")} ${k("X")} kick</span>${m.control === 2 ? `<span>${k("Q")} switch player</span>` : ""}<span>${k("T")} speed</span></div></div>`;
+      <div class="mo-keys"><span>${k("WASD")} ${k("↑↓←→")} move</span><span>${k("Space")} ${k("X")} kick</span>${m.control === 2 ? `<span>${k("Q")} switch player</span>` : ""}<span>${k("T")} speed</span><span>${k("N")} sound ${Sound.on ? "on" : "off"}</span></div></div>`;
     else {
       const res = M.result, w = f.w, ev = res ? res.events : [];
       const verdict = w === -1 ? "Draw" : `${esc(m.teams[w].name)} win${f.so ? ` on penalties ${f.so[0]}–${f.so[1]}` : res?.overtime ? " with a golden goal" : ""}`;
@@ -839,9 +994,10 @@ const Game = (() => {
     P.cPitch = Draw.rgb(P.pitch); P.cOuter = Draw.rgb(P.outer); P.cLine = Draw.rgb(P.line);
     m.goalCols = m.kits.map((k) => Draw.goalColour(k, P.cPitch));
     m.byUid = {}; m.players.forEach((pl, i) => { pl.i = i; pl.last = pl.name.split(" ")[1] || ""; m.byUid[pl.uid] = pl; });
+    Sound.crowdOn();
   }
 
-  // the camera uses the whole window (no HUD strip); TOP = below the scorebug, where the small chips and the puzzle line go
+  // the camera uses the whole window (no HUD strip); TOP = just below the scorebug (the off-screen marker stays under it)
   const BASE_W = 1280, BASE_H = 720, TOP = 64, CAM_ZOOM = 1.15, CAM_SMOOTH = 0.08, INTRO = 130, INTRO_FROM = 0.86;
   let FAMILY = "";
   const FONT = (px, wt = 400) => { if (!FAMILY) FAMILY = getComputedStyle(document.documentElement).getPropertyValue("--g-font").trim() || "sans-serif"; return `${wt} ${px}px ${FAMILY}`; };
@@ -870,6 +1026,31 @@ const Game = (() => {
     }
     for (let i = 0; i < 70; i++)
       M.parts.push({ x: R(0, W), y: -R(10, 400), vx: R(-1, 1), vy: R(2, 4.5), life: Math.floor(R(120, 191)), age: 0, col: pal[i % 4], sz: R(4, 8), rot: Math.random() * 6.283, spin: R(-0.2, 0.2), grav: 0, kind: 0 });
+  }
+  // the sounds of a new frame d, from what changed since the frames before it (web/sound.js makes them)
+  function sfx(M, d) {
+    const m = M.meta, fr = M.frames, a = fr[fr.length - 1], z = fr[fr.length - 2];
+    if (!m || !a || d.t < a.t) return;                                                  // (the tick stands still during the kickoff intro)
+    const P = m.pitch, pan = d.b[0] / (P.out_x || P.half_w) * 0.7;
+    if (a.in > 0 && !d.in && d.st === 0) Sound.whistle(Sound.WHISTLE.kickoff);          // the kickoff intro is over: play
+    if (!a.ot && d.ot) Sound.whistle(Sound.WHISTLE.overtime);
+    if (a.st !== 1 && d.st === 1) Sound.roar(d.gt === m.human_team ? 1 : 0.6);
+    if (a.st !== 2 && d.st === 2) { Sound.whistle(Sound.WHISTLE.fulltime); setTimeout(() => G.match === M && Sound.roar(0.4), 1300); }
+    // a kick: a player's "kick used" flag (it is set only when the kick reached the ball) goes on
+    let kicked = false;
+    for (let i = 0; i < d.h.length && !kicked; i++) if ((d.h[i] & 4) && !(a.h[i] & 4)) {
+      const v = Math.hypot(d.b[0] - a.b[0], d.b[1] - a.b[1]) / (M.speed || 1);
+      Sound.kick(Math.min(1, Math.max(0.45, v / 7)) * (d.h[i] & 1 ? 1 : 0.75), pan); kicked = true;
+    }
+    // the ball changed direction without a kick: off a post, the boards / net, or a player
+    if (kicked || !z || M.speed !== 1 || d.st === 2 || performance.now() - (M.bounceAt || 0) < 90) return;
+    const v1 = [a.b[0] - z.b[0], a.b[1] - z.b[1]], v2 = [d.b[0] - a.b[0], d.b[1] - a.b[1]], s1 = Math.hypot(...v1);
+    if (s1 < 1.2 || Math.hypot(...v2) > 40 || !((v1[0] * v2[0] < 0 && Math.abs(v1[0]) > 0.8) || (v1[1] * v2[1] < 0 && Math.abs(v1[1]) > 0.8))) return;
+    const br = m.ball_r, [bx, by] = a.b;
+    const post = P.statics.some(([sx, sy, sr]) => Math.hypot(bx - sx, by - sy) < sr + br + 6);
+    const wall = Math.abs(by) > P.half_h - br - 6 || Math.abs(bx) > P.half_w - br - 6;
+    M.bounceAt = performance.now();
+    Sound.bounce(post ? "post" : wall ? "wall" : "body", Math.min(1, s1 / 6), pan);
   }
   function stepParticles(M, f) {
     const P = M.parts;
@@ -977,19 +1158,13 @@ const Game = (() => {
     m.players.forEach((pl, i) => {
       if (2 * i + 1 >= b.p.length) return;
       const x = L(a.p[2 * i], b.p[2 * i]), y = L(a.p[2 * i + 1], b.p[2 * i + 1]), r = pl.r, fl = b.h[i] || 0, kit = m.teams[pl.team];
-      if (fl & 1) {                                             // you: a yellow ring under the player
+      if (fl & 1) {                                             // you: a translucent yellow ring around the player (off screen: drawOffscreen)
         M.me = { x, y, pl };
-        ctx.beginPath(); ctx.arc(x, y, r + 6, 0, 2 * Math.PI); ctx.lineWidth = 4; ctx.strokeStyle = "rgba(0,0,0,0.55)"; ctx.stroke();
-        ctx.lineWidth = 2.5; ctx.strokeStyle = "#ffd54a"; ctx.stroke();
+        ctx.beginPath(); ctx.arc(x, y, r + 6, 0, 2 * Math.PI); ctx.lineWidth = 3; ctx.strokeStyle = "rgba(255,213,74,0.5)"; ctx.stroke();
       }
       Draw.kit(ctx, x, y, r, "#" + kit.kit[0], "#" + kit.kit[1], kit.pattern);
       ctx.beginPath(); ctx.arc(x, y, r - 1, 0, 2 * Math.PI); ctx.lineWidth = 2.5; ctx.strokeStyle = fl & 2 && !(fl & 4) ? "#fff" : "#000"; ctx.stroke();
       text(ctx, String(pl.number), x - r, y + 5.5, "c", 2 * r, 14, "#fff", 5);
-      if (fl & 1) {                                             // ... and a small arrow above it
-        const ty = y - r - 9;
-        ctx.beginPath(); ctx.moveTo(x, ty); ctx.lineTo(x - 7, ty - 10); ctx.lineTo(x + 7, ty - 10); ctx.closePath();
-        ctx.lineWidth = 3; ctx.strokeStyle = "rgba(0,0,0,0.6)"; ctx.stroke(); ctx.fillStyle = "#ffd54a"; ctx.fill();
-      }
     });
     if (f.st === 1 && f.gs >= 0 && m.byUid[f.gs]) {             // celebration: pulsing rings and confetti around the scorer
       const sc = m.byUid[f.gs], i = sc.i, x = L(a.p[2 * i], b.p[2 * i]), y = L(a.p[2 * i + 1], b.p[2 * i + 1]);
@@ -1011,12 +1186,12 @@ const Game = (() => {
   }
   // you cannot be seen (off screen, on its very edge, or under the scorebug): an arrow on the window edge pointing at you, with your number
   function drawOffscreen(ctx, M, m, sp, W, H) {
-    const pad = 30, top = TOP + 10, e = 12, b = M.bug;
-    const underBug = b && sp[0] < b.x + b.w + 14 && sp[1] < b.y + b.h + 14;
-    if (sp[0] >= e && sp[0] <= W - e && sp[1] >= e && sp[1] <= H - e && !underBug) return;
+    const pad = 30, top = TOP + 10, e = 12, b = M.bug, c = M.pzCard;
+    const under = (q) => q && sp[0] > q.x - 14 && sp[0] < q.x + q.w + 14 && sp[1] < q.y + q.h + 14;
+    if (sp[0] >= e && sp[0] <= W - e && sp[1] >= e && sp[1] <= H - e && !under(b) && !under(c)) return;
     const cx = W / 2, cy = H / 2, dx = sp[0] - cx, dy = sp[1] - cy;
     const k = Math.min(Math.abs((W / 2 - pad) / (dx || 1e-6)), Math.abs((H / 2 - pad) / (dy || 1e-6)));
-    const x = cx + dx * k, y = Math.max(top, cy + dy * k), ang = Math.atan2(dy, dx);
+    const x = cx + dx * k, y = Math.max(c && x > c.x - 30 ? c.y + c.h + 27 : top, cy + dy * k), ang = Math.atan2(dy, dx);
     ctx.save(); ctx.translate(x, y);
     ctx.beginPath(); ctx.arc(0, 0, 17, 0, 2 * Math.PI); ctx.fillStyle = "rgba(11,14,19,0.85)"; ctx.fill(); ctx.lineWidth = 2.5; ctx.strokeStyle = "#ffd54a"; ctx.stroke();
     ctx.rotate(ang);
@@ -1059,13 +1234,14 @@ const Game = (() => {
     text(ctx, clock, x, y0 + 25, "c", kw + 2 * pad, 15, "#12161d", 0, "", 700);
     ctx.restore();
     M.bug = { x: x0, y: y0, w: total, h };
-    // chips under the bug: recording, speed
-    let cxp = x0;
+    // chips to the right of the bug: recording, speed
+    let cxp = x0 + total + 8;
+    const cyc = y0 + h / 2;
     const chip = (label, col, dot) => {
       ctx.font = FONT(12, 700); const w = ctx.measureText(label).width + (dot ? 30 : 20);
-      roundRect(ctx, cxp, y0 + h + 8, w, 22, 11, "rgba(11,14,19,0.75)");
-      if (dot) { ctx.beginPath(); ctx.arc(cxp + 12, y0 + h + 19, 4, 0, 2 * Math.PI); ctx.fillStyle = dot; ctx.fill(); }
-      text(ctx, label, cxp + (dot ? 21 : 10), y0 + h + 23, "l", 0, 12, col, 0, "", 700);
+      roundRect(ctx, cxp, cyc - 11, w, 22, 11, "rgba(11,14,19,0.75)");
+      if (dot) { ctx.beginPath(); ctx.arc(cxp + 12, cyc, 4, 0, 2 * Math.PI); ctx.fillStyle = dot; ctx.fill(); }
+      text(ctx, label, cxp + (dot ? 21 : 10), cyc + 4, "l", 0, 12, col, 0, "", 700);
       cxp += w + 6;
     };
     if (m.rec && f.cu >= 0 && f.st !== 2) chip("REC", "#ef6a5b", Math.floor(performance.now() / 700) % 2 ? "#ef6a5b" : "#b8463b");
@@ -1077,6 +1253,13 @@ const Game = (() => {
     drawParticles(ctx, M);
     drawScorebug(ctx, M, m, f);
     if (M.p.session && !M.error) drawPuzzleHud(ctx, M, f, W, H, intro);
+    const ta = M.toast ? 1 - (performance.now() - M.toast.at) / 1400 : 0;                  // "Sound on / off" after N
+    if (ta > 0) {
+      ctx.save(); ctx.globalAlpha = Math.min(1, ta * 4);
+      roundRect(ctx, W / 2 - 80, H - 64, 160, 36, 18, "rgba(11,14,19,0.85)");
+      text(ctx, M.toast.text, W / 2 - 80, H - 40, "c", 160, 16, "#fff", 0, "", 700);
+      ctx.restore();
+    }
   }
   function drawKickoff(ctx, m, f, W, H, intro) {
     const k = 1 - intro / INTRO, a = Math.max(0, Math.min(1, k / 0.15)) * Math.max(0, Math.min(1, (1 - k) / 0.2));

@@ -181,7 +181,7 @@ def cmd_status(_a):
     queue = sorted(os.path.basename(p) for p in glob.glob(os.path.join(EXP, "queue", "*.json")))
     rb = reboots(hl)
     return {"pi": {"uptime_hours": round(up / 3600, 2) if up else None, "boot_id": tracker.boot_id(), "last_sample": last.get("t"),
-                   "temp_c": last.get("temp"), "load_1m": last.get("load"), "mem_free_mb": int(mem.get("MemAvailable", 0)) // 1024,
+                   "temp_c": last.get("temp"), "load_1m": last.get("load"), "mem_free_mb": int(mem["MemAvailable"]) // 1024 if "MemAvailable" in mem else None,
                    "throttled": last.get("throttled"), "throttled_meaning": throttle_text(last.get("throttled"))},
             "runner": {"service": active, "running": running, "queue": queue},
             "last_reboot": rb[-1] if rb else None}
