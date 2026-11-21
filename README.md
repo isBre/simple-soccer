@@ -11,7 +11,8 @@ python3 web/app.py
 ```
 
 Then open <http://localhost:8080/#/game> (from another computer: `http://<this machine>:8080`). It needs Python 3 with numpy; the
-same page has the **Lab** (the experiment dashboard) next to the **Game**. On the Raspberry Pi the service `soccer-dashboard` runs it.
+same page has the **Lab** (the experiment dashboard) next to the **Game**. Dependencies are listed in `pyproject.toml` (numpy;
+torch for training); nothing needs installing, every script runs from the checkout as `python3 <dir>/<script>.py`. On the Raspberry Pi the service `soccer-dashboard` runs it.
 
 ## Screenshots
 
@@ -76,7 +77,7 @@ data/     pitches, styles, teams, formations, shipped nets (JSON)
   `lab/dashboard.py`), `ws.py` (a minimal WebSocket), `index.html` (the shell with the Game / Lab switch), `game.js` +
   `game.css` + `draw.js` (the game: menus, match renderer, logos and kits), `lab.js` + `style.css` (the Lab).
 - `rl/` ([rl/README.md](rl/README.md)): `env.py`, `client.py`, `selfplay.py`, `ppo.py`, `distill.py`, `evaluate.py`,
-  `eval_checkpoint.py`, `export_team.py`, `net_server.py`.
+  `eval_checkpoint.py`, `export_team.py`, `selfplay_args.py` (the training options, without torch).
 - `lab/` ([lab/README.md](lab/README.md)): `exp_runner.py`, `tracker.py`, `lab.py`, `dashboard.py` (Lab API), `live.py`,
   `systemd/`. Results and specs live in `exp/`, checkpoints in `out_5v5/`, logs in `logs/`.
 - `tests/` regression tests of the core, training environment, evaluations, tournaments and the web app (see "Tests"); `tools/`
@@ -144,8 +145,8 @@ result, which the report shows. Tournament rounds are simulated in one request (
   `data/human/` (versioned in git with Git LFS, about 1 MB per 90 s), written at the final whistle, or when you quit after at least 10 s.
   `python3 il/human_data.py [--check]` lists the files (and rebuilds every observation from the raw state). Plan:
   [docs/imitation_plan.md](docs/imitation_plan.md).
-- A net plays a team through `MatchConfig.nets[team]` (`{"model": path}`, `{"dict": model}` or `{"port": n}` for a running
-  `rl/net_server.py`); a team with `ml_model` in its JSON gets its net automatically.
+- A net plays a team through `MatchConfig.nets[team]` (`{"model": path}` or `{"dict": model}`, loaded in the match's own
+  process); a team with `ml_model` in its JSON gets its net automatically.
 - Speed (`python3 tools/bench.py`, on a Mac): rule-vs-rule 5v5 about 10,600 ticks/s (177x real time), the training
   environment about 5,700 steps/s per process. The Godot implementation did about 7,200 and 3,400.
 

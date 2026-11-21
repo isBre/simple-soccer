@@ -13,11 +13,10 @@ import sys
 import time
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-for p in (ROOT, os.path.join(ROOT, "lab")):
-    if p not in sys.path:
-        sys.path.insert(0, p)
+if ROOT not in sys.path:
+    sys.path.insert(0, ROOT)
 
-import ladder                                    # noqa: E402
+from lab import ladder                           # noqa: E402
 
 OPPONENTS = ["rules:cobalt", "rules:owls", "rules:tide", "net:t46_best", "team:rl_team", "net:t48_u100", "team:rl_team_2",
              "net:team46_start", "net:x_anchor_wall_best", "team:rl_team_5"]

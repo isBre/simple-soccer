@@ -10,7 +10,6 @@ Extra reward terms (per player) push towards human-like play: completed progress
 
   /root/rl-venv/bin/python rl/selfplay.py --updates 1500
 """
-import argparse
 import copy
 import json
 import os
@@ -25,11 +24,15 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.distributions import Bernoulli, Categorical
 
-from client import ROOT, VecEnv
-from ppo import Agent, OUT, OUT_DRAW, OUT_LOSS, OUT_WIN, load_padded, save_model, team_pools
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if ROOT not in sys.path:                     # run as a script: the project root, for the package imports
+    sys.path.insert(0, ROOT)
+
+from rl.client import VecEnv                                                                   # noqa: E402
+from rl.ppo import Agent, OUT, OUT_DRAW, OUT_LOSS, OUT_WIN, load_padded, save_model, team_pools   # noqa: E402
+from rl.selfplay_args import OBS_DIMS, parser                                                  # noqa: E402
 
 CKPT = os.path.join(OUT, "ckpt")
-OBS_DIMS = {"legacy": 54, "team": 46}            # observation layouts (see soccer/ai/nets.py features_team): ego with player slot / role-free team observation
 
 
 N_TEAM, N_LEGACY = 46, 54                       # env obs "both" = the team observation followed by the legacy one
@@ -91,76 +94,7 @@ def eval_blocking(model_path, tag, args, log, mode="full"):
 
 
 def main():
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--updates", type=int, default=1500, help="final update number (absolute: with --start_update 200 and --updates 3000 it trains updates 201..3000)")
-    ap.add_argument("--obs", choices=list(OBS_DIMS), default="team", help="observation layout: team = 46 numbers, no player ID (default); legacy = 54 numbers with the slot (the first RL teams)")
-    ap.add_argument("--start_update", type=int, default=0, help="continue numbering from a restart: the checkpoint --start was saved at this update")
-    ap.add_argument("--workers_rule", type=int, default=8)
-    ap.add_argument("--workers_self", type=int, default=8)
-    ap.add_argument("--envs_per_worker", type=int, default=10)
-    ap.add_argument("--rollout", type=int, default=128)
-    ap.add_argument("--epochs", type=int, default=4)
-    ap.add_argument("--minibatch", type=int, default=8192)
-    ap.add_argument("--lr", type=float, default=1e-4)
-    ap.add_argument("--gamma", type=float, default=0.997)
-    ap.add_argument("--lam", type=float, default=0.95)
-    ap.add_argument("--ent", type=float, default=0.003)
-    ap.add_argument("--seed", type=int, default=7)
-    ap.add_argument("--start", default=os.path.join(OUT, "rl_agent_after_s9_all.pt"))
-    ap.add_argument("--baseline", default="", help="frozen benchmark opponent (.pt); default = --start")
-    ap.add_argument("--w_pass_prog", type=float, default=0.3)
-    ap.add_argument("--w_pass_ok", type=float, default=0.05)
-    ap.add_argument("--w_pass_fail", type=float, default=0.08)
-    ap.add_argument("--pass_individual", type=int, default=0, help="1: pass rewards go to the passer / receiver, not the whole team")
-    ap.add_argument("--w_recv", type=float, default=0.0)
-    ap.add_argument("--w_open", type=float, default=0.0)
-    ap.add_argument("--w_key_pass", type=float, default=0.0)
-    ap.add_argument("--w_xa", type=float, default=0.0)
-    ap.add_argument("--w_space", type=float, default=0.006)
-    ap.add_argument("--space_radius", type=float, default=140.0)
-    ap.add_argument("--w_kick", type=float, default=0.01)
-    ap.add_argument("--random_start", type=float, default=0.0, help="fraction of episodes that start from a fully random layout instead of a kickoff")
-    ap.add_argument("--coop_cap", type=float, default=0.0, help="max cooperation reward per episode (anti reward-farming)")
-    ap.add_argument("--w_jitter", type=float, default=0.0)
-    ap.add_argument("--w_keeper", type=float, default=0.0)
-    ap.add_argument("--shaping", type=float, default=1.0, help="weight of the ball shaping (ball towards the goal, teammate towards the ball); 0 = off")
-    ap.add_argument("--w_corner", type=float, default=0.0, help="penalty per decision while our team put the ball in a corner (last touch ours)")
-    ap.add_argument("--w_wall", type=float, default=0.0, help="penalty per decision for a player pressed against the outer wall for 2+ decisions in a row")
-    ap.add_argument("--w_far", type=float, default=0.0, help="penalty for an outfield player further than --far_radius px from the ball (the arena is 1280 x 600; full penalty at twice the radius)")
-    ap.add_argument("--far_radius", type=float, default=600.0)
-    ap.add_argument("--w_xg", type=float, default=0.0, help="reward per expected goal (xG) of the player's own shots (shot quality), at most --xg_cap per match")
-    ap.add_argument("--xg_cap", type=float, default=6.0)
-    ap.add_argument("--w_xga", type=float, default=0.0, help="team penalty per xG of the opponent's shots")
-    ap.add_argument("--w_win", type=float, default=0.0, help="team bonus at the end of a won match")
-    ap.add_argument("--w_draw", type=float, default=0.0, help="team bonus at the end of a drawn match")
-    ap.add_argument("--w_tackle", type=float, default=0.0, help="reward per tackle or interception, at most --def_cap per match")
-    ap.add_argument("--def_cap", type=float, default=2.0)
-    ap.add_argument("--w_goalside", type=float, default=0.0, help="per decision: outfield player between the ball and its own goal while the opponent has the ball")
-    ap.add_argument("--goalside_lane", type=float, default=120.0)
-    ap.add_argument("--w_opp_half", type=float, default=0.0, help="team penalty per decision while the opponent has the ball in our half")
-    ap.add_argument("--w_compact", type=float, default=0.0, help="team penalty per decision when the outfield players are stretched beyond --compact_len / --compact_wid px")
-    ap.add_argument("--compact_len", type=float, default=700.0)
-    ap.add_argument("--compact_wid", type=float, default=450.0)
-    ap.add_argument("--keeper_free", type=float, default=350.0)
-    ap.add_argument("--snapshot_every", type=int, default=40)
-    ap.add_argument("--resample_every", type=int, default=20)
-    ap.add_argument("--ckpt_every", type=int, default=100)
-    ap.add_argument("--eval_every", type=int, default=100, help="complete evaluation of the checkpoint every N updates (multiple of --ckpt_every; 0 = never); training is paused meanwhile")
-    ap.add_argument("--fast_every", type=int, default=0, help="FAST check (16 short matches + head to head vs --fast_ref) every N updates, training paused; 0 = never")
-    ap.add_argument("--fast_ref", default="", help="game-model JSON of the net the run started from (the fast check plays it head to head)")
-    ap.add_argument("--learn_threads", type=int, default=2, help="torch threads of the learning step (all 4 would fight the env workers for the CPU: the Pi froze)")
-    ap.add_argument("--base_port", type=int, default=7100, help="first port of the rule-group workers (self-play group: +100)")
-    ap.add_argument("--hidden", type=int, default=128, help="width of the two hidden layers (must match --start)")
-    ap.add_argument("--teacher", default="", help="kickstarting: a checkpoint (.pt/.json, e.g. the 54-input jit8) whose moves the learner is pulled towards")
-    ap.add_argument("--kl_coef", type=float, default=0.0, help="weight of KL(teacher || learner) in the loss at update 0, decaying linearly")
-    ap.add_argument("--kl_decay", type=int, default=300, help="update at which the teacher term reaches 0")
-    ap.add_argument("--opp_models", default="", help="comma-separated strong opponents for the self-play group (.pt or game-model .json, 46 or 54 inputs)")
-    ap.add_argument("--pfsp", type=float, default=0.5, help="share of the self-play slots 1-3 given to --opp_models, each picked more often the more it wins (PFSP)")
-    ap.add_argument("--eval_games", type=int, default=1, help="league games per team and side (1 = 32 matches)")
-    ap.add_argument("--eval_duration", type=float, default=90.0, help="seconds per evaluation match")
-    ap.add_argument("--eval_h2h_games", type=int, default=8, help="head-to-head games per side against each reference net")
-    ap.add_argument("--log_every", type=int, default=5)
-    ap.add_argument("--tag", default="sp")
+    ap = parser()
     args = ap.parse_args()
     os.makedirs(os.path.join(ROOT, "logs"), exist_ok=True)
     obs_dim = OBS_DIMS[args.obs]
@@ -380,10 +314,17 @@ def main():
 
             if upd % args.log_every == 0 or upd == args.start_update + 1:
                 f = lambda d: ("%.2f(%d)" % (np.mean(d), len(d))) if d else "-"
+                m2 = lambda d: float("%.2f" % np.mean(d)) if d else None
+                dps, elapsed = 2 * T * Er / t_sim, time.time() - t_start
                 log("sp upd %d | pts/m vs rules %s | vs frozen benchmark %s | vs league %s | rew/step %.4f | ent %.2f | pool %d | "
                     "%.0f dec/s sim %.1fs learn %.1fs | %.0fs" % (upd, f(stats["rule"]), f(stats["bench"]), f(stats["league"]),
-                                                              b_rew.mean().item(), ent.item(), len(pool), 2 * T * Er / t_sim,
-                                                              t_sim, t_learn, time.time() - t_start))
+                                                              b_rew.mean().item(), ent.item(), len(pool), dps,
+                                                              t_sim, t_learn, elapsed))
+                with open(os.path.join(ROOT, "logs", args.tag + "_train.jsonl"), "a") as tf:     # the same numbers for lab/tracker.py train_rows
+                    tf.write(json.dumps({"clock": time.strftime("%H:%M:%S"), "upd": upd, "rules": m2(stats["rule"]), "n_rules": len(stats["rule"]),
+                                         "bench": m2(stats["bench"]), "league": m2(stats["league"]), "rew": float("%.4f" % b_rew.mean().item()),
+                                         "ent": float("%.2f" % ent.item()), "dps": int("%.0f" % dps), "sim": float("%.1f" % t_sim),
+                                         "learn": float("%.1f" % t_learn), "elapsed": int("%.0f" % elapsed)}) + "\n")
             if strong and upd % (args.log_every * 5) == 0:
                 log("strong opponents (pts/match, last 60): " + ", ".join("%s %s" % (n, ("%.2f(%d)" % (np.mean(r), len(r))) if r else "-") for n, r in strong_res.items()))
             if upd % args.ckpt_every == 0:

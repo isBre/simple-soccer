@@ -90,10 +90,7 @@ def teams():
     if _teams is None:
         out = dict(database().teams)
         try:
-            lab = os.path.join(ROOT, "lab")
-            if lab not in sys.path:
-                sys.path.insert(0, lab)
-            import ladder
+            from lab import ladder
             squad = out.get(ladder.NET_SQUAD)
             if squad is not None:
                 for e in ladder.roster():

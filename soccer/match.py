@@ -114,7 +114,7 @@ class MatchConfig:
         self.auto_switch = False
         self.human_role = ""                # SINGLE control: GK / DEF / MID / FWD = control that role's first player ("" = auto)
         self.formations = ["", ""]
-        self.nets = [None, None]            # {"model": path} | {"port": n} | None (the team's ml_model, else rules)
+        self.nets = [None, None]            # {"model": path} | {"dict": model} | None (the team's ml_model, else rules)
         self.net_temperature = 1.0
 
     def get_style(self, t):

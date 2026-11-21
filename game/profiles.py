@@ -16,9 +16,8 @@ import sys
 import time
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-for _p in (ROOT, os.path.join(ROOT, "rl")):
-    if _p not in sys.path:
-        sys.path.insert(0, _p)
+if ROOT not in sys.path:
+    sys.path.insert(0, ROOT)
 
 PATH = os.path.join(ROOT, "data", "team_profiles.json")
 PROFILE_MATCHES = 16
@@ -31,7 +30,7 @@ SCALARS = ("possession_pct", "ball_own_half_pct", "field_tilt_pct", "goal_guarde
 def _play(job):
     """Worker: one profiling match of team `tid` (side 0) -> the Behaviour record."""
     from game import api
-    from evaluate import Behaviour
+    from rl.evaluate import Behaviour
     from soccer.match import ENDED, Match
     tid, opp, seed = job
     m = Match(api.config({"home": tid, "away": opp, "pitch": "arena", "size": 5, "duration": 60.0, "seed": seed, "control": "none"}))
@@ -49,7 +48,7 @@ def jobs_for(tid, n):
 
 
 def summarise(records):
-    from evaluate import scout_summary
+    from rl.evaluate import scout_summary
     s = scout_summary(records)
     n = max(len(records), 1)
     out = {k: s[k] for k in SCALARS}

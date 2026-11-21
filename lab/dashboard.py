@@ -37,9 +37,10 @@ from urllib.parse import unquote
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 import sys  # noqa: E402
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import lab  # noqa: E402  (lab/lab.py: the agent CLI; /api/v1 serves the same functions)
-import tracker  # noqa: E402
+if ROOT not in sys.path:
+    sys.path.insert(0, ROOT)
+from lab import lab  # noqa: E402  (lab/lab.py: the agent CLI; /api/v1 serves the same functions)
+from lab import tracker  # noqa: E402
 EXP = os.path.join(ROOT, "exp")
 LOGS = os.path.join(ROOT, "logs")
 STATIC = os.path.join(ROOT, "web")                 # the page shell, styles and scripts (Lab and Game)
@@ -75,7 +76,7 @@ def elo_table(ttl=60):
     still rated from its stored ladder matches, with the file version of its newest match ("stored": True)."""
     if time.time() - _elo_cache["t"] > ttl:
         try:
-            import ladder
+            from lab import ladder
             ros, res = ladder.roster(), ladder.results()
             have = {e["id"] for e in ros}
             newest = {}
@@ -398,7 +399,7 @@ class Handler(BaseHTTPRequestHandler):
                 v = max(os.path.getmtime(f) for f in glob.glob(os.path.join(STATIC, "*")))
                 return self.send(json.dumps({"v": v}).encode(), "application/json")
             if path == "/api/ranking":
-                import ladder
+                from lab import ladder
                 return self.send(json.dumps(ladder.ranking(), default=float).encode(), "application/json")
             if path == "/api/dataset":
                 return self.send(json.dumps(dataset_view(), default=float).encode(), "application/json")

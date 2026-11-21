@@ -6,8 +6,6 @@ output 9 is the kick logit."""
 import json
 import math
 import os
-import socket
-import struct
 import threading
 
 import numpy as np
@@ -98,43 +96,13 @@ class Net:
         return h
 
 
-class RemoteNet:
-    """A net served by rl/net_server.py (the experiment pipeline: newest / best checkpoint, the dashboard's live opponent).
-    The server sends the input size on connect, then answers n_in float32 with 10 float32."""
-
-    def __init__(self, port):
-        self.sock = socket.create_connection(("127.0.0.1", int(port)))
-        self.sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
-        self.n_in = struct.unpack("<I", _recv(self.sock, 4))[0]
-        self.kick_bias = 0.0
-
-    def forward(self, x):
-        out = []
-        for row in np.asarray(x, np.float32):
-            self.sock.sendall(row.tobytes())
-            out.append(np.frombuffer(_recv(self.sock, 40), np.float32))
-        return np.stack(out)
-
-
-def _recv(sock, n):
-    buf = b""
-    while len(buf) < n:
-        c = sock.recv(n - len(buf))
-        if not c:
-            raise ConnectionError("net server closed the connection")
-        buf += c
-    return buf
-
-
 _cache = {}
 _cache_lock = threading.Lock()
 
 
 def load(spec):
-    """spec: {"model": path} (a game-model JSON), {"dict": game model} (in memory, e.g. a self-play snapshot) or
-    {"port": n} (a running rl/net_server.py). Model files are cached."""
-    if "port" in spec:
-        return RemoteNet(spec["port"])
+    """spec: {"model": path} (a game-model JSON) or {"dict": game model} (in memory, e.g. a self-play snapshot).
+    Model files are cached."""
     if "dict" in spec:
         return Net(spec["dict"])
     path = os.path.abspath(spec["model"])

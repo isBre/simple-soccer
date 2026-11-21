@@ -26,14 +26,11 @@ import subprocess
 import sys
 import time
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import tracker  # noqa: E402
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))   # the project root BEFORE lab/ (lab/lab.py would hide the lab package)
+from lab import tracker  # noqa: E402
 
 ROOT, EXP = tracker.ROOT, tracker.EXP
 LOGS = os.path.join(ROOT, "logs")
-TRAIN_RE = re.compile(r"^\[(\d+:\d+:\d+)\] sp upd (\d+) \| pts/m vs rules (\S+?)(?:\((\d+)\))? \| vs frozen benchmark (\S+?)(?:\(\d+\))? \| "
-                      r"vs league (\S+?)(?:\(\d+\))? \| rew/step (\S+) \| ent (\S+) \| pool \d+ \| (\d+) dec/s sim (\S+)s learn (\S+)s \| (\d+)s")
-
 
 class LabError(Exception):
     def __init__(self, error, hint=""):
@@ -100,17 +97,8 @@ def tag_of(run, st=None):
 
 def training(tag):
     """Per logged update: training points vs rule bots / frozen start net / own snapshots, reward per step, entropy, speed, seconds
-    since the trainer's (re)start."""
-    rows = []
-    path = os.path.join(LOGS, tag + ".out")
-    if os.path.exists(path):
-        for line in open(path, errors="replace"):
-            m = TRAIN_RE.match(line)
-            if m:
-                rows.append({"upd": int(m.group(2)), "rules": num(m.group(3)), "n_rules": int(m.group(4) or 0), "bench": num(m.group(5)),
-                             "league": num(m.group(6)), "rew": num(m.group(7)), "ent": num(m.group(8)), "dps": int(m.group(9)),
-                             "sim": num(m.group(10)), "learn": num(m.group(11)), "elapsed": int(m.group(12)), "clock": m.group(1)})
-    return latest_segment(rows)
+    since the trainer's (re)start (tracker.train_rows)."""
+    return latest_segment(tracker.train_rows(tag))
 
 
 def speed(tr):
@@ -404,7 +392,7 @@ def cmd_queue(a):
 
 def cmd_ranking(a):
     """The Elo ranking of every team of every league (lab/ladder.py): rating with 95% interval, games, record."""
-    import ladder
+    from lab import ladder
     r = ladder.ranking()
     rows = r["rows"] if not a.league else [x for x in r["rows"] if x["league"] == a.league]
     keep = ("rank", "id", "name", "league", "kind", "elo", "lo", "hi", "games", "w", "d", "l", "gf", "ga", "pts", "placed")
