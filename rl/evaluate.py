@@ -43,7 +43,8 @@ def gd_round(x):
 
 
 def _pool():
-    return mp.get_context("fork" if hasattr(os, "fork") else "spawn").Pool(os.cpu_count() or 2)
+    n = int(os.environ.get("SOCCER_PROCS", "0")) or os.cpu_count() or 2      # SOCCER_PROCS caps it (e.g. on a fanless laptop)
+    return mp.get_context("fork" if hasattr(os, "fork") else "spawn").Pool(n)
 
 
 def _play(cfg):

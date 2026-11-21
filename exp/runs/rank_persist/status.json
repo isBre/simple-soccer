@@ -1,0 +1,97 @@
+{
+ "state": "running",
+ "spec": {
+  "name": "rank_persist",
+  "obs": "rank",
+  "start": "out_5v5/ckpt/x_rank_start.pt",
+  "updates": 600,
+  "lr": 5e-05,
+  "rewards": {
+   "w_wall": 0.0
+  },
+  "args": {
+   "teacher": "out_5v5/ckpt/jit8_best.pt",
+   "kl_coef": 0.12,
+   "kl_decay": 1000,
+   "opp_models": "out_5v5/ckpt/jit8_best.pt,data/models/rl_5v5_arena_v4.json,data/models/rl_5v5_arena_v5.json",
+   "pfsp": 0.75
+  },
+  "notes": "First run with role-free derived observation features (user OK 2026-11-21): obs 'rank' = the 46-number team observation + 10 ranks (me and my 4 teammates nearest first: rank in our team by distance to the ball and by depth). Start = kickstart_persist u400 with zero weights on the 10 new inputs (rl/pad_inputs.py: plays identically at u0). Everything else is persist_long2 (same recipe, seed, 600 updates), so the only difference vs the control is the observation. Trained on the MacBook Air (M4, fanless), background QoS. Expectation: if sorting players is what the 128-wide net cannot do, h2h vs RL4/RL5 should rise above the 0.76-1.09 band.",
+  "control": "persist_long2"
+ },
+ "baseline_run": "start:x_rank_start",
+ "started": 1795252807,
+ "tag": "x_rank_persist",
+ "target_updates": 600,
+ "effective_rewards": {
+  "pass_individual": 1,
+  "w_recv": 0.1,
+  "w_open": 0.003,
+  "w_key_pass": 0.25,
+  "w_xa": 2.5,
+  "coop_cap": 8,
+  "random_start": 0.6,
+  "shaping": 0,
+  "w_keeper": 0,
+  "w_jitter": 0,
+  "w_far": 0,
+  "w_xg": 0,
+  "w_xga": 0,
+  "w_win": 0,
+  "w_draw": 0,
+  "w_tackle": 0,
+  "w_goalside": 0,
+  "w_opp_half": 0,
+  "w_compact": 0,
+  "w_wall": 0.0,
+  "w_corner": 0
+ },
+ "effective_args": {
+  "lr": 5e-05,
+  "updates": 600,
+  "workers_rule": 2,
+  "workers_self": 1,
+  "envs_per_worker": 16,
+  "rollout": 128,
+  "minibatch": 4096,
+  "ckpt_every": 25,
+  "fast_every": 50,
+  "learn_threads": 2,
+  "seed": 7,
+  "teacher": "out_5v5/ckpt/jit8_best.pt",
+  "kl_coef": 0.12,
+  "kl_decay": 1000,
+  "opp_models": "out_5v5/ckpt/jit8_best.pt,data/models/rl_5v5_arena_v4.json,data/models/rl_5v5_arena_v5.json",
+  "pfsp": 0.75
+ },
+ "seed": 7,
+ "git_commit": "969b3cc",
+ "git_dirty": true,
+ "boot_id": null,
+ "restarts": [],
+ "control": "persist_long2",
+ "net": {
+  "sizes": [
+   56,
+   128,
+   128,
+   10
+  ],
+  "label": "56-128-128-10",
+  "params": 25098
+ },
+ "name": "rank_persist",
+ "updated": 1795254076,
+ "update": 266,
+ "train_pts": 2.89,
+ "base_train": 2.92,
+ "bad_checks": 0,
+ "recorded": [
+  50,
+  100,
+  150,
+  200,
+  250
+ ],
+ "train_s": 1118
+}

@@ -13,6 +13,7 @@ import threading
 import numpy as np
 
 TEAM_OBS = 46                     # role-free team observation (features_team)
+RANK_OBS = 56                     # features_team + 10 rank numbers (features_rank)
 DIRS = [0j, -1j, 1 - 1j, 1 + 0j, 1 + 1j, 1j, -1 + 1j, -1 + 0j, -1 - 1j]
 
 
@@ -42,6 +43,29 @@ def features_team(m, p):
     return out
 
 
+def ranks(m, p):
+    """10 role-free derived numbers (user OK, 2026-11-21): for me and my 4 teammates in the order of features_team (nearest
+    first), the player's rank in our team by distance to the ball (0 = nearest) and by depth (0 = deepest, nearest our own
+    goal), each divided by (team size - 1). They fix no role: a rank changes with the situation, and two players swap ranks as
+    they move. The same information is in the 46 positions, but a small net cannot sort 5 points easily."""
+    s = m.attack_dir(p.team)
+    team = m.team_lists[p.team]
+    n = max(len(team) - 1, 1)
+    key = lambda o: (abs(o.pos - p.pos) ** 2, o.uid)
+    order = [p] + sorted([o for o in team if o is not p], key=key)
+    by_ball = {o.uid: i for i, o in enumerate(sorted(team, key=lambda o: (abs(o.pos - m.ball_pos) ** 2, o.uid)))}
+    by_depth = {o.uid: i for i, o in enumerate(sorted(team, key=lambda o: (o.pos.real * s, o.uid)))}
+    out = []
+    for o in order:
+        out += (by_ball[o.uid] / n, by_depth[o.uid] / n)
+    return out
+
+
+def features_rank(m, p):
+    """features_team followed by ranks (56 numbers for 5 players)."""
+    return features_team(m, p) + ranks(m, p)
+
+
 def features(m, p, with_slot=False):
     """Older ego observation (49 numbers, 54 with the slot one-hot): me, ball, teammates and opponents in slot order, then the
     ball relative to me (fine scale, so the kick range is learnable) and the opponent goal relative to me."""
@@ -67,12 +91,16 @@ def features(m, p, with_slot=False):
 
 
 def features_for(m, p, n_in):
-    """The observation a net of this input size expects (46 = team observation; 49 / 54 = the older ego layouts)."""
-    return features_team(m, p) if n_in == TEAM_OBS else features(m, p, n_in > 49)
+    """The observation a net of this input size expects (46 = team observation, 56 = team + ranks; 49 / 54 = the older ego layouts)."""
+    if n_in == TEAM_OBS:
+        return features_team(m, p)
+    if n_in == RANK_OBS:
+        return features_rank(m, p)
+    return features(m, p, n_in > 49)
 
 
 def fits(n_in, team_size):
-    return n_in in (8 * team_size + 9, 8 * team_size + 14, 8 * team_size + 6)
+    return n_in in (8 * team_size + 9, 8 * team_size + 14, 8 * team_size + 6, 10 * team_size + 6)
 
 
 # ---------------------------------------------------------------- nets
