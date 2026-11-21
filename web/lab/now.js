@@ -20,7 +20,7 @@ function viewNow() {
     const spec = (o.queue.queued.find((q) => q.name === run.run) || {});
     const pct = run.target ? Math.min(100, (100 * (run.update || 0)) / run.target) : 0;
     const mode = run.evaluating ? "eval" : run.stalled ? "stale" : "";
-    const lbl = run.evaluating ? badge("evaluating") : run.stalled ? `<span class="badge failed">no progress for ${dur(run.log_age_s)}</span>` : badge("running");
+    const lbl = run.thermal_pause ? `<span class="badge evaluating" title="lab/thermal_guard.py: resumes at ${f(run.thermal_pause.resume, 1)} °C">paused to cool · ${f(run.thermal_pause.temp, 1)} °C</span>` : run.evaluating ? badge("evaluating") : run.stalled ? `<span class="badge failed">no progress for ${dur(run.log_age_s)}</span>` : badge("running");
     const delta = run.train_pts_vs_rules != null && run.train_pts_at_start != null ? run.train_pts_vs_rules - run.train_pts_at_start : null;
     const lf = row.latest_fast;
     hero = `<section class="hero ${mode}"><div class="hero-top"><div class="min0"><div class="eyebrow">Running experiment${run.started ? " · since " + esc(ago(run.started).replace(" ago", "")) : ""}</div><h1>${runLink(run.run)}</h1>
@@ -47,16 +47,16 @@ function viewNow() {
   } else {
     hero = `<section class="hero idle"><div class="hero-top"><div><div class="eyebrow">Runner ${esc(st.runner.service || "")}</div><h1>Idle</h1></div>${badge("idle")}</div>${queueLine(o.queue.queued)}</section>`;
   }
-  const th = throttle(pi.throttled), hasPi = pi.last_sample != null;
+  const th = powerState(pi), hasPi = pi.last_sample != null, cores = pi.cores || 4, mac = pi.kind === "mac";
   const hl = (o.health || []).filter((r) => r.t && r.t.includes("T"));
   const vit = (k, color, lo, hi) => sparkline(hl.map((r) => [parseT(r.t), r[k]]).filter((p) => p[1] != null), color, 110, 26, lo, hi);
   const rb = st.last_reboot, mem = hasPi ? pi.mem_free_mb : null;
-  const vitals = `<section class="card vitals"><div class="card-h"><h2>Raspberry Pi</h2><a href="#/pi">details →</a></div>
-    <div class="vrow"><span>Temperature</span><b class="${pi.temp_c > 75 ? "neg" : ""}">${f(pi.temp_c, 1)} °C</b>${vit("temp", css("--c2"), 30, 85)}</div>
-    <div class="vrow"><span>CPU load</span><b>${f(pi.load_1m, 1)} <small>/ 4</small></b>${vit("load", css("--c1"), 0, 12)}</div>
-    <div class="vrow"><span>Free memory</span><b class="${mem != null && mem < 500 ? "neg" : ""}">${mem != null ? f(mem / 1024, 1) : "–"} GB</b>${vit("mem_mb", css("--c3"), 0, 3800)}</div>
-    <div class="vrow"><span>Power</span><b class="${th.cls}">${esc(th.text)}</b><span class="muted small">${pi.uptime_hours != null ? "up " + dur(pi.uptime_hours * 3600) : ""}</span></div>
-    ${!hasPi ? '<div class="muted small">No health samples (logs/pi_health.log): the health service is not running here.</div>' : ""}
+  const vitals = `<section class="card vitals"><div class="card-h"><h2 title="${esc(pi.chip || "")}">${esc(machineName(pi))}${pi.chip ? ` <span class="muted small">${esc(pi.chip)}</span>` : ""}</h2><a href="#/pi">details →</a></div>
+    <div class="vrow"><span>${esc(pi.temp_label || "Temperature")}</span><b class="${pi.temp_c > tempWarn(pi) ? "neg" : ""}">${f(pi.temp_c, 1)} °C</b>${vit("temp", css("--c2"), mac ? 20 : 30, mac ? 50 : 85)}</div>
+    <div class="vrow"><span>CPU load</span><b>${f(pi.load_1m, 1)} <small>/ ${cores}</small></b>${vit("load", css("--c1"), 0, cores * 3)}</div>
+    <div class="vrow"><span>Free memory</span><b class="${mem != null && mem < 500 ? "neg" : ""}">${mem != null ? f(mem / 1024, 1) : "–"} <small>/ ${f((pi.mem_total_mb || 3800) / 1024, 0)}</small> GB</b>${vit("mem_mb", css("--c3"), 0, pi.mem_total_mb || 3800)}</div>
+    <div class="vrow"><span>${mac ? "Thermal" : "Power"}</span><b class="${th.cls}">${esc(th.text)}</b><span class="muted small">${[th.sub && mac ? th.sub : "", pi.uptime_hours != null ? "up " + dur(pi.uptime_hours * 3600) : ""].filter(Boolean).map(esc).join(" · ")}</span></div>
+    ${!hasPi ? '<div class="muted small">No health samples (logs/pi_health.log): start <span class="mono">python3 lab/health_log.py</span> (the Pi: service soccer-health).</div>' : ""}
     ${rb ? `<div class="vnote">Last reboot ${esc(ago(rb.back))} · last sample before it ${esc(rb.last_seen.replace("T", " "))}: load ${f(rb.last_sample.load, 1)}, ${f(rb.last_sample.mem_mb, 0)} MB free, ${f(rb.last_sample.temp, 0)} °C</div>` : ""}</section>`;
   const focus = run ? run.run : last?.name;
   let curve = '<div class="empty">Nothing trained yet</div>';
@@ -111,7 +111,7 @@ function eventItem(e) {
     return { cls: m[2] === "done" ? "finished" : "stopped", html: `${run(m[1])} finished: ${esc(m[2])}${ver}` };
   }
   if (e.kind === "stopped" && (m = /^(\S+): (\S+) at update (\d+)/.exec(t))) return { cls: "stopped", html: `${run(m[1])} stopped at u${m[3]}: ${esc(m[2])}` };
-  if (e.kind === "reboot") return { cls: "reboot", html: `Pi rebooted <span class="muted">${esc(t.replace(/^Pi rebooted\s*/, ""))}</span>` };
+  if (e.kind === "reboot") return { cls: "reboot", html: `${esc((/^(.*?) rebooted/.exec(t) || [, "Pi"])[1])} rebooted <span class="muted">${esc(t.replace(/^.*? rebooted\s*/, ""))}</span>` };
   if (/^ladder: /.test(t)) return { cls: "info", group: "ladder", html: "ladder round" };
   if (/^viewer closed/.test(t)) return { cls: "info", group: "viewer", html: "Live viewer restarted" };
   return { cls: e.kind === "error" ? "error" : "info", html: esc(t) };

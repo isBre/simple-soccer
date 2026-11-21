@@ -441,13 +441,28 @@ class Match:
 
         movers = self.movers
         n = len(movers)
+        statics = self.statics
+        collide = self._collide_discs
+        walls = self._collide_walls
+        bseg, pseg = self._walls(self.bseg), self._walls(self.pseg)
         for i in range(n):
             a = movers[i]
+            ar = a.radius
+            # the overlap test of _collide_discs inline: most pairs are far apart and the call would return at once
             for j in range(i + 1, n):
-                self._collide_discs(a, movers[j])
-            for s in self.statics:
-                self._collide_discs(a, s)
-            self._collide_walls(a, self.bseg if a.kind == KIND_BALL else self.pseg)
+                b = movers[j]
+                diff = a.pos - b.pos
+                rsum = ar + b.radius
+                d2 = diff.real * diff.real + diff.imag * diff.imag
+                if not (d2 >= rsum * rsum or d2 < 0.00000001):
+                    collide(a, b)
+            for b in statics:
+                diff = a.pos - b.pos
+                rsum = ar + b.radius
+                d2 = diff.real * diff.real + diff.imag * diff.imag
+                if not (d2 >= rsum * rsum or d2 < 0.00000001):
+                    collide(a, b)
+            walls(a, bseg if a.kind == KIND_BALL else pseg)
 
         self._apply_kickoff_limits()
 
@@ -537,15 +552,32 @@ class Match:
             a.vel -= nrm * j * a.inv_mass
             b.vel += nrm * j * b.inv_mass
 
+    def _walls(self, segs):
+        """segs prepared for _collide_walls: (a, b, bc, b - a, |b - a|^2, bounding box widened by 1 px), rebuilt if the list grew."""
+        cache = self.__dict__.setdefault("_wall_cache", {})
+        got = cache.get(id(segs))
+        if got is None or got[0] is not segs or len(got[1]) != len(segs):
+            prep = []
+            for a, b, c in segs:
+                ab = b - a
+                prep.append((a, b, c, ab, ab.real * ab.real + ab.imag * ab.imag, min(a.real, b.real) - 1.0, max(a.real, b.real) + 1.0,
+                             min(a.imag, b.imag) - 1.0, max(a.imag, b.imag) + 1.0))
+            got = cache[id(segs)] = (segs, prep)
+        return got[1]
+
     @staticmethod
     def _collide_walls(d, segs):
+        """segs from _walls. A disc outside a segment's box widened by its radius (+1 px) cannot touch it: skipped."""
         r = d.radius
-        for a, b, c in segs:
-            ab = b - a
-            pa = d.pos - a
-            t = (pa.real * ab.real + pa.imag * ab.imag) / (ab.real * ab.real + ab.imag * ab.imag)
+        for a, b, c, ab, l2, x0, x1, y0, y1 in segs:
+            pos = d.pos
+            px, py = pos.real, pos.imag
+            if px < x0 - r or px > x1 + r or py < y0 - r or py > y1 + r:
+                continue
+            pa = pos - a
+            t = (pa.real * ab.real + pa.imag * ab.imag) / l2
             t = 0.0 if t < 0.0 else (1.0 if t > 1.0 else t)
-            diff = d.pos - (a + ab * t)
+            diff = pos - (a + ab * t)
             d2 = diff.real * diff.real + diff.imag * diff.imag
             if d2 >= r * r or d2 < 0.00000001:
                 continue

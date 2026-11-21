@@ -128,8 +128,30 @@ def health(hours=12.0):
         d = dict(re.findall(r"(\w+)=([^\s]*)", parts[1]))
         rows.append({"t": parts[0], "boot": d.get("boot"), "throttled": d.get("throttled"), "temp": num(d.get("temp", "").rstrip("'C")),
                      "load": num(d.get("load")), "mem_mb": num(d.get("memfree", "").rstrip("MB")), "clock_mhz": num(d.get("clock", "").rstrip("MHz")),
-                     "swap_mb": num(d.get("swapused", "").rstrip("MB"))})
+                     "swap_mb": num(d.get("swapused", "").rstrip("MB")), "thermal": num(d.get("thermal")), "battery": num(d.get("battery")),
+                     "power": d.get("power"), "kind": d.get("kind"), "machine": (d.get("machine") or "").replace("_", " ") or None,
+                     "chip": (d.get("chip") or "").replace("_", " ") or None, "cores": num(d.get("cores")),
+                     "mem_total_mb": num(d.get("memtotal", "").rstrip("MB")), "temp_src": d.get("temp_src")})
     return rows
+
+
+THERMAL = ["nominal", "moderate", "heavy", "trapping", "sleeping"]       # macOS thermal pressure levels (CPU slowed from "moderate" up)
+
+
+def machine(last):
+    """What the health box describes: the machine of the last health sample (the Pi when the sample has no machine keys)."""
+    kind = last.get("kind") or ("mac" if sys.platform == "darwin" else "pi")
+    mac = kind == "mac"
+    boot = None
+    if mac:
+        m = re.search(r"sec = (\d+)", subprocess.run(["sysctl", "-n", "kern.boottime"], capture_output=True, text=True).stdout)
+        boot = int(m.group(1)) if m else None
+    th = last.get("thermal")
+    return {"kind": kind, "name": last.get("machine") or ("Mac" if mac else "Raspberry Pi"), "chip": last.get("chip"),
+            "cores": int(last.get("cores") or os.cpu_count() or 4), "mem_total_mb": last.get("mem_total_mb") or (None if mac else 3800),
+            "temp_label": "Battery temp" if last.get("temp_src") == "battery" else "Temperature", "temp_warn": 40 if last.get("temp_src") == "battery" else 75,
+            "thermal": int(th) if th is not None else None, "thermal_text": THERMAL[int(th)] if th is not None and 0 <= th < len(THERMAL) else None,
+            "power": last.get("power"), "battery_pct": last.get("battery"), "boot_time": boot, "watchdog": kind == "pi"}
 
 
 def reboots(rows=None):
@@ -147,6 +169,15 @@ def cmd_status(_a):
     mem = dict(re.findall(r"(\w+):\s+(\d+)", open("/proc/meminfo").read())) if os.path.exists("/proc/meminfo") else {}
     hl = health(48)
     last = hl[-1] if hl else {}
+    mc = machine(last)
+    guard = {}
+    try:                                                # lab/thermal_guard.py (fanless laptop): the run is paused to cool down
+        guard = json.load(open(os.path.join(LOGS, "thermal_guard.json")))
+        guard = guard if time.time() - guard.get("updated", 0) < 120 else {}
+    except (OSError, ValueError):
+        pass
+    if up is None and mc["boot_time"]:
+        up = time.time() - mc["boot_time"]
     try:
         active = subprocess.run(["systemctl", "is-active", "soccer-exp"], capture_output=True, text=True).stdout.strip() or None
     except OSError:                                    # no systemd (not the Pi): the runner service is not installed here
@@ -164,12 +195,14 @@ def cmd_status(_a):
             running = {"run": st["name"], "update": st.get("update"), "target": st.get("target_updates"), "sec_per_update": round(spu, 1) if spu else None,
                        "eta_hours": round(spu * max(st.get("target_updates", 0) - (st.get("update") or 0), 0) / 3600, 2) if spu else None,
                        "train_pts_vs_rules": st.get("train_pts"), "train_pts_at_start": st.get("base_train"), "evaluating": ev,
-                       "log_age_s": round(age) if age is not None else None, "stalled": bool(age is not None and age > 900 and not ev),
+                       "log_age_s": round(age) if age is not None else None, "stalled": bool(age is not None and age > 900 and not ev and not guard.get("paused")),
+                       "thermal_pause": guard if guard.get("paused") else None,
                        "bad_checks": st.get("bad_checks", 0), "restarts": st.get("restarts", []), "started": iso(st.get("started"))}
     queue = sorted(os.path.basename(p) for p in glob.glob(os.path.join(EXP, "queue", "*.json")))
     rb = reboots(hl)
-    return {"pi": {"uptime_hours": round(up / 3600, 2) if up else None, "boot_id": tracker.boot_id(), "last_sample": last.get("t"),
-                   "temp_c": last.get("temp"), "load_1m": last.get("load"), "mem_free_mb": int(mem["MemAvailable"]) // 1024 if "MemAvailable" in mem else None,
+    return {"pi": {"uptime_hours": round(up / 3600, 2) if up else None, "boot_id": tracker.boot_id() or last.get("boot"), "last_sample": last.get("t"),
+                   "temp_c": last.get("temp"), "load_1m": last.get("load"),
+                   "mem_free_mb": int(mem["MemAvailable"]) // 1024 if "MemAvailable" in mem else last.get("mem_mb"), **mc,
                    "throttled": last.get("throttled"), "throttled_meaning": throttle_text(last.get("throttled"))},
             "runner": {"service": active, "running": running, "queue": queue},
             "last_reboot": rb[-1] if rb else None}
@@ -309,8 +342,8 @@ def cmd_events(a):
         ev.append({"t": iso(r.get("time")), "kind": "eval_recorded", "text": "%s u%d %s %s pts %s" % (r["run"], r["update"], r["kind"], r.get("protocol"),
                                                                                                     r["league"].get("all", {}).get("pts"))})
     for rb in reboots():
-        ev.append({"t": rb["back"], "kind": "reboot", "text": "Pi rebooted (last sample %s, load %s, free %s MB, temp %s)" % (
-            rb["last_seen"], rb["last_sample"]["load"], rb["last_sample"]["mem_mb"], rb["last_sample"]["temp"])})
+        ev.append({"t": rb["back"], "kind": "reboot", "text": "%s rebooted (last sample %s, load %s, free %s MB, temp %s)" % (
+            machine(rb["last_sample"])["name"], rb["last_seen"], rb["last_sample"]["load"], rb["last_sample"]["mem_mb"], rb["last_sample"]["temp"])})
     return sorted((e for e in ev if e["t"] and e["t"] >= since), key=lambda e: e["t"])
 
 

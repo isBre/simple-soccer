@@ -43,10 +43,10 @@ async function poll() {
 function setPulse(ok) {
   const p = $("#pulse"), off = $("#offline"), pi = $("#pichip"), s = state.ov?.status?.pi;
   p.className = "pulse " + (ok ? "ok" : "err");
-  if (pi && s) pi.innerHTML = `<i class="${s.temp_c > 75 || (s.throttled && s.throttled !== "0x0") ? "warn" : "ok"}"></i>${f(s.temp_c, 0)}°C · load ${f(s.load_1m, 1)}`;
+  if (pi && s) { pi.innerHTML = `<i class="${s.temp_c > tempWarn(s) || (s.throttled && s.throttled !== "0x0") || s.thermal > 0 ? "warn" : "ok"}"></i>${f(s.temp_c, 0)}°C · load ${f(s.load_1m, 1)}`; pi.title = machineName(s); }
   const down = !ok && state.firstFail && Date.now() - state.firstFail > 25000;
   off.hidden = !down;
-  if (down) off.innerHTML = `<b>The Pi stopped answering</b>${state.lastOk ? " · last data " + new Date(state.lastOk).toLocaleTimeString() + " (" + dur((Date.now() - state.lastOk) / 1000) + " ago)" : ""} · if it froze, the watchdog reboots it and the runner resumes`;
+  if (down) off.innerHTML = `<b>The ${esc(machineName(s))} stopped answering</b>${state.lastOk ? " · last data " + new Date(state.lastOk).toLocaleTimeString() + " (" + dur((Date.now() - state.lastOk) / 1000) + " ago)" : ""}${s?.watchdog !== false ? " · if it froze, the watchdog reboots it and the runner resumes" : " · if it slept or rebooted, start the runner again"}`;
 }
 
 // ---------- routing and events ----------

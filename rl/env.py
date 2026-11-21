@@ -31,6 +31,7 @@ REPEAT = 2                 # sim ticks per decision (same as the match's AI_PERI
 OUT_NONE, OUT_GOAL, OUT_OWN, OUT_TIMEOUT, OUT_CONCEDED, OUT_WIN, OUT_DRAW, OUT_LOSS = range(8)
 OBS_LEGACY = 54            # ego observation with the slot one-hot (the first RL teams)
 OBS_TEAM = 46              # role-free team observation (features_team)
+OBS_RANK = 56              # team observation + 10 role-free ranks (features_rank)
 
 DEFAULTS = dict(pitch="arena", size=5, n_active=5, with_keeper=True, opp="none", own_team="owls", max_steps=750, spread=1.0,
                 ball_speed=0.0, match_mode=False, duration=90.0, selfplay=0.0, shaping=1.0, opp_external=False,
@@ -93,8 +94,10 @@ class RLEnv:
 
     def obs_dim(self):
         """Observation layout (config "obs"): "legacy" = 54 numbers with slot, "team" = the 46-number role-free one,
-        "both" = team then legacy (100 numbers; only for distilling an old net into a new one, rl/distill.py)."""
-        return {"legacy": OBS_LEGACY, "team": OBS_TEAM, "both": OBS_TEAM + OBS_LEGACY}[self.obs]
+        "rank" = team + 10 ranks (56), "both" = team then legacy (100 numbers; distillation, a 54-input teacher / opponent),
+        "both_rank" = rank then legacy (110)."""
+        return {"legacy": OBS_LEGACY, "team": OBS_TEAM, "rank": OBS_RANK, "both": OBS_TEAM + OBS_LEGACY,
+                "both_rank": OBS_RANK + OBS_LEGACY}[self.obs]
 
     def n_agents(self):
         """Learner agents first, then (self-play) the opponent team's players."""
@@ -406,13 +409,9 @@ class RLEnv:
 
     def observe(self):
         """The observations of all agents (learners, then the self-play opponents), concatenated."""
-        out = []
-        for a in self.agents + self.opp_agents:
-            if self.obs != "legacy":
-                out += nets.features_team(self.sim, a)
-            if self.obs != "team":
-                out += nets.features(self.sim, a, True)
-        return out
+        o = self.obs
+        return nets.features_many(self.sim, self.agents + self.opp_agents, team=o != "legacy", rank=o in ("rank", "both_rank"),
+                                  legacy=o not in ("team", "rank"))
 
     def step(self, actions):
         """actions: move idx (0..8) and kick (0/1) per agent, flat [m0, k0, m1, k1, ...].

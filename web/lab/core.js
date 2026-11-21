@@ -59,6 +59,16 @@ function throttle(hex) {
   const list = (bits) => names.filter((_, i) => bits & (1 << i)).join(", ");
   return { text: now ? list(now) : "OK now", cls: now ? "neg" : "warn", sub: past ? "since boot: " + list(past) : "" };
 }
+// The health box describes whatever machine the pipeline runs on (lab/lab.py machine): the Pi reports throttle flags,
+// a Mac its thermal pressure (macOS slows the CPU from "moderate" up), power source and battery charge.
+function powerState(pi) {
+  if (pi.kind !== "mac") return throttle(pi.throttled);
+  const lv = pi.thermal, src = pi.power ? (pi.power === "AC" ? "on AC" : "on battery") + (pi.battery_pct != null ? " · " + f(pi.battery_pct, 0) + "%" : "") : "";
+  if (lv == null) return { text: "–", cls: "", sub: src };
+  return { text: lv === 0 ? "OK" : "thermal " + pi.thermal_text, cls: lv === 0 ? "pos" : lv === 1 ? "warn" : "neg", sub: src };
+}
+function machineName(pi) { return pi?.name || "Raspberry Pi"; }
+function tempWarn(pi) { return pi?.temp_warn ?? 75; }
 function ema(points, a) {
   if (!a) return points;
   let m = null;

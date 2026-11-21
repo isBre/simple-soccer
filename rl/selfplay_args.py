@@ -5,7 +5,7 @@ import os
 
 OUT = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "out_5v5")   # = rl/agent.py OUT
 
-OBS_DIMS = {"legacy": 54, "team": 46}            # observation layouts (see soccer/ai/nets.py features_team): ego with player slot / role-free team observation
+OBS_DIMS = {"legacy": 54, "team": 46, "rank": 56}            # observation layouts (see soccer/ai/nets.py features_team): ego with player slot / role-free team observation
 
 
 def parser():
@@ -67,6 +67,7 @@ def parser():
     ap.add_argument("--fast_every", type=int, default=0, help="FAST check (16 short matches + head to head vs --fast_ref) every N updates, training paused; 0 = never")
     ap.add_argument("--fast_ref", default="", help="game-model JSON of the net the run started from (the fast check plays it head to head)")
     ap.add_argument("--learn_threads", type=int, default=2, help="torch threads of the learning step (all 4 would fight the env workers for the CPU: the Pi froze)")
+    ap.add_argument("--trainer_fg", type=int, default=1, help="macOS, runner in background mode (TrainerQos): 1 = the trainer process leaves it (about 1.5x faster, about 0.7 W more), 0 = it stays (coolest). Env workers and evaluations always keep it. Speed only")
     ap.add_argument("--base_port", type=int, default=7100, help="first port of the rule-group workers (self-play group: +100)")
     ap.add_argument("--hidden", type=int, default=128, help="width of the two hidden layers (must match --start)")
     ap.add_argument("--teacher", default="", help="kickstarting: a checkpoint (.pt/.json, e.g. the 54-input jit8) whose moves the learner is pulled towards")

@@ -32,6 +32,35 @@ from rl.client import VecEnv                                                    
 from rl.agent import Agent, OUT, OUT_DRAW, OUT_WIN, load_padded, team_pools                     # noqa: E402
 from rl.selfplay_args import OBS_DIMS, parser                                                  # noqa: E402
 
+torch.distributions.Distribution.set_default_validate_args(False)    # argument checks only (no effect on any value): ~20% of the rollout inference
+
+
+class TrainerQos:
+    """macOS: lab/mac_run.sh starts the runner with `taskpolicy -b` (background mode: efficiency cores only, low clock), the
+    coolest way to run the long simulation. The trainer process itself only works in short bursts (the nets between two env
+    steps, the learning step) and otherwise waits for the env workers, so with --trainer_fg 1 it leaves background mode once its
+    workers are started (they inherit background mode and keep it): the bursts run about 4.5 times faster on the performance cores
+    and the workers stop waiting for them. Evaluations go back to background mode (child processes inherit it). No-op elsewhere
+    (Linux, or a trainer not started in background mode). Changes speed only, nothing that is computed."""
+    PRIO_DARWIN_PROCESS, PRIO_DARWIN_BG = 4, 0x1000
+
+    def __init__(self, enabled):
+        self.libc = None
+        if enabled and sys.platform == "darwin":
+            import ctypes
+            libc = ctypes.CDLL(None)
+            if libc.getpriority(self.PRIO_DARWIN_PROCESS, 0) == 1:     # started in background mode
+                self.libc = libc
+
+    def fg(self):
+        if self.libc is not None:
+            self.libc.setpriority(self.PRIO_DARWIN_PROCESS, 0, 0)
+
+    def bg(self):
+        if self.libc is not None:
+            self.libc.setpriority(self.PRIO_DARWIN_PROCESS, 0, self.PRIO_DARWIN_BG)
+
+
 CKPT = os.path.join(OUT, "ckpt")
 
 
@@ -54,9 +83,10 @@ def load_net(path):
     return a
 
 
-def obs_cols(in_dim):
-    """Columns of the 'both' observation a net with this input size reads."""
-    return slice(0, N_TEAM) if in_dim == N_TEAM else slice(N_TEAM, N_TEAM + N_LEGACY)
+def obs_cols(in_dim, first=N_TEAM):
+    """Columns of the 'both' / 'both_rank' observation (first = 46 or 56 numbers, then the 54 legacy ones) a net with this
+    input size reads: the team observation is the first 46 of the rank one."""
+    return slice(first, first + N_LEGACY) if in_dim == N_LEGACY else slice(0, in_dim)
 
 
 def pts(o):
@@ -77,7 +107,7 @@ def make_cfgs(args):
     return {**base, "opp": pool}, {**base, "opp": "owls", "opp_external": True}
 
 
-def eval_blocking(model_path, tag, args, log, mode="full"):
+def eval_blocking(model_path, tag, args, log, mode="full", qos=None):
     """Complete evaluation of a snapshot (rl/eval_checkpoint.py: league, behaviour, head to head, ...) while training is PAUSED:
     this call returns when it is done, the env workers just wait, so the evaluation gets the whole CPU (the viewer shows an
     "evaluation running" banner meanwhile). Result: logs/sp_eval/<tag>.txt"""
@@ -89,7 +119,13 @@ def eval_blocking(model_path, tag, args, log, mode="full"):
         cmd += ["--ref", "start=" + args.fast_ref]                  # head to head against the net this run started from
     log("training paused: %s evaluation of %s (logs/sp_eval/%s%s.txt)" % (mode, tag, tag, suffix))
     t0 = time.time()
-    subprocess.run(cmd, cwd=os.path.join(ROOT, "rl"), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    if qos is not None:
+        qos.bg()                                                    # the evaluation processes inherit background mode
+    try:
+        subprocess.run(cmd, cwd=os.path.join(ROOT, "rl"), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    finally:
+        if qos is not None:
+            qos.fg()
     log("evaluation of %s finished in %.0f min, training continues" % (tag, (time.time() - t0) / 60.0))
 
 
@@ -102,13 +138,14 @@ def main():
               for p in args.opp_models.split(",") if p]
     teacher = load_net(args.teacher if os.path.isabs(args.teacher) else os.path.join(ROOT, args.teacher)) if args.teacher else None
     both = teacher is not None or any(n[0].in_features == N_LEGACY for _, n in strong)
-    assert not both or args.obs == "team", "a teacher / 54-input opponents need --obs team"
-    env_obs = "both" if both else args.obs
-    D_env = N_TEAM + N_LEGACY if both else obs_dim
+    assert not both or args.obs in ("team", "rank"), "a teacher / 54-input opponents need --obs team or rank"
+    env_obs = ("both" if args.obs == "team" else "both_rank") if both else args.obs
+    D_env = obs_dim + N_LEGACY if both else obs_dim
     L = slice(0, obs_dim)                                           # the learner's columns of the environment observation
     for _, n in strong:
         for p in n.parameters():
             p.requires_grad_(False)
+    T_cols = obs_cols(teacher.sizes[0], obs_dim) if teacher is not None else None    # the teacher's columns of the environment observation
     if teacher is not None:
         for p in teacher.parameters():
             p.requires_grad_(False)
@@ -129,6 +166,7 @@ def main():
         logf.write(line + "\n")
         logf.flush()
 
+    qos = TrainerQos(args.trainer_fg)
     agent = Agent(obs_dim, args.hidden)
     load_padded(agent, args.start)
     opt = torch.optim.Adam(agent.parameters(), lr=args.lr)
@@ -161,7 +199,7 @@ def main():
         for k in range(1, NSLOT):
             if strong and np.random.rand() < args.pfsp:
                 name, net = pfsp_pick()
-                slot_net[k], slot_cols[k], slot_name[k] = net, obs_cols(net[0].in_features), "strong:" + name
+                slot_net[k], slot_cols[k], slot_name[k] = net, obs_cols(net[0].in_features, obs_dim), "strong:" + name
             else:
                 snap_nets[k].load_state_dict(pool[np.random.randint(len(pool))])
                 slot_net[k], slot_cols[k], slot_name[k] = snap_nets[k], L, "league"
@@ -175,6 +213,7 @@ def main():
     try:
         er.configure(cfg_rule, seed=args.seed)
         es.configure(cfg_self, seed=args.seed + 1)
+        qos.fg()                                                    # the workers are started (in background mode): see TrainerQos
         Er, Es = er.E, es.E
         E, A, D, T = Er + Es, 5, D_env, args.rollout
         slot_of = np.arange(Es) * NSLOT // Es                      # envs of the self group -> opponent slot
@@ -290,7 +329,7 @@ def main():
                     loss = pg + 0.5 * vl - args.ent * ent
                     if teacher is not None:                         # kickstarting: stay close to the teacher's moves (weight decays to 0)
                         with torch.no_grad():
-                            zt = teacher.actor(x[:, N_TEAM:N_TEAM + N_LEGACY])
+                            zt = teacher.actor(x[:, T_cols])
                         klt = (F.softmax(zt[:, :9], -1) * (F.log_softmax(zt[:, :9], -1) - F.log_softmax(z[:, :9], -1))).sum(-1).mean()
                         pt, ps = torch.sigmoid(zt[:, 9]), torch.sigmoid(z[:, 9]).clamp(1e-6, 1 - 1e-6)
                         klt = klt + (pt * (torch.log(pt.clamp(1e-6)) - torch.log(ps)) + (1 - pt) * (torch.log((1 - pt).clamp(1e-6)) - torch.log(1 - ps))).mean()
@@ -334,9 +373,9 @@ def main():
                 torch.save(agent.state_dict(), os.path.join(CKPT, "%s_u%d.pt" % (args.tag, upd)))
                 torch.save({"opt": opt.state_dict(), "pool": pool}, os.path.join(CKPT, "%s_u%d.train_state" % (args.tag, upd)))  # for a faithful resume
                 if args.eval_every > 0 and upd % args.eval_every == 0:
-                    eval_blocking(path, "%s_u%d" % (args.tag, upd), args, log)
+                    eval_blocking(path, "%s_u%d" % (args.tag, upd), args, log, qos=qos)
                 elif args.fast_every > 0 and upd % args.fast_every == 0:
-                    eval_blocking(path, "%s_u%d" % (args.tag, upd), args, log, "fast")
+                    eval_blocking(path, "%s_u%d" % (args.tag, upd), args, log, "fast", qos=qos)
         log("selfplay finished")
     finally:
         er.close()
