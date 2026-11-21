@@ -56,6 +56,8 @@ POKE_RADIUS = 500.0     # px from our goal within which the presser pokes the ba
 OUTLET_FROM = -0.639    # ball below this share of the half (negative = our half): the most advanced free player stays up as an outlet (-1 = off)
 OUTLET_X = -0.142       # where the outlet waits (share of the half, 0 = halfway line)
 TERR = 0.135            # territory: a kick deep in our half that we may lose is worth this x depth x the ground it gains
+FIRST_FWD = 0.2         # first time: a ball at an outfield player's feet is hit at once if it would go at least this forward (cos)
+FIRST_UPTO = 1.0        # ... up to this share of the half beyond halfway (1 = the whole pitch; -1 = never)
 SUPPORT_EVERY = 6                                  # ticks between two support-spot searches
 
 
@@ -463,7 +465,42 @@ class OpusBot(StyleBot):
             self._keeper(m, p, bpos, bvel)
         else:
             self._move_off_ball(m, p, brain)
+        if not p.input_kick and p is not brain.keeper:
+            self._first_time(m, p)
         self._avoid_human(m, p)
+
+    def _first_time(self, m, p):
+        """A ball at an outfield player's feet is hit first time whenever the kick it gives right now goes forwards, instead
+        of being bumped on with the body or circled for a better angle. Against a press a body touch almost always hands
+        the ball straight back (measured: of ~55 balls won in our own third per match, ~43 were lost again within half a
+        second, mostly without a kick). Applies to every outfield player, not only the ball player: the ball often lands
+        on a marker or the cover in a scramble."""
+        ax = m.attack_dir(p.team)
+        if m.ball_pos.real * ax > m.pitch.half_w * FIRST_UPTO:
+            return
+        to = m.ball_pos - p.pos
+        d = abs(to)
+        if d - p.radius - m.ball_r >= KICK_RANGE:
+            return
+        n = to / max(d, 1e-6)
+        u = normalized(m.ball_vel + n * KICK_STRENGTH)
+        if u.real * ax < FIRST_FWD:
+            return
+        # what the hit is (pass / shot / clearance) comes from the same simulation as every other kick; a pass tells the
+        # receiver to meet the ball
+        pd = m.pitch
+        shot = 0
+        if u.real * ax > 0.05:
+            ty = m.ball_pos.imag + u.imag * (ax * pd.half_w - m.ball_pos.real) / u.real
+            shot = 1 if abs(ty) < pd.goal_half - m.ball_r else 0
+        _, kind_of, recv_of, _ = self._evaluate(m, p, m.ball_pos, m.ball_vel, 0.0, n, [u], [shot])
+        p.input_kick = True
+        p.kick_intent = kind_of[0]
+        if kind_of[0] == "pass" and recv_of[0] is not None:
+            brain = m.brains[p.team]
+            brain.pass_target = recv_of[0]
+            brain.pass_kicker = p
+            brain.pass_tick = m.tick
 
     # ------------------------------------------------------------ off the ball
 

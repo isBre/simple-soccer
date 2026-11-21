@@ -43,6 +43,8 @@ PARAMS = [
     ("style.keeper_sweep", 0.3, 0.0, 1.0),
     # second run (2026-11-20): getting out of our own third against a high press
     ("TERR", 0.0, 0.0, 0.4), ("COVER_OWN", 140.0, 40.0, 220.0), ("OUTLET_FROM", -1.0, -1.0, 0.0), ("OUTLET_X", 0.0, -0.5, 0.4),
+    # third run (2026-11-21): hitting the ball first time
+    ("FIRST_FWD", 0.2, -0.3, 0.8), ("FIRST_UPTO", -1.0, -1.0, 1.0),
 ]
 N = len(PARAMS)
 LO = np.array([p[2] for p in PARAMS])
