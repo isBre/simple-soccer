@@ -10,7 +10,7 @@ const live = { mode: "match", es: null, meta: null, frames: [], trail: [], raf: 
 function viewLive() {
   return `<div class="live-wrap">
       <div class="live-main"><div class="scorebar" id="lv-sb"><div class="tm"><i class="kit"></i><span>–</span></div><div class="mid"><div class="score">– : –</div><div class="clock">–</div></div><div class="tm r"><span>–</span><i class="kit"></i></div></div>
-        <canvas id="lv-c" width="1400" height="710"></canvas><div class="lv-over" id="lv-over">Waiting for the Pi's match…</div>
+        <canvas id="lv-c" width="1400" height="710"></canvas><div class="lv-over" id="lv-over">Waiting for the live match…</div>
         <button class="ctl-btn" data-ctl title="Controls" aria-label="Controls">⚙</button>
         <button class="fs-btn" data-fs title="Full screen" aria-label="Full screen">${FS_ICON[document.body.classList.contains("live-fs") ? 1 : 0]}</button></div>
       <div class="card live-side"><button class="ctl-close" data-ctl aria-label="Close controls">✕ Close</button><div id="lv-prog"></div><div class="seg" id="lv-mode" title="Puzzle: random layout of every player and the ball, 60 s, over at the first goal"><button data-mode="match">Match</button><button data-mode="puzzle">Puzzle</button></div><div class="seg" id="lv-cam"><button data-cam="1">Follow ball</button><button data-cam="0">Whole pitch</button></div>
@@ -81,7 +81,7 @@ function liveDraw(ts) {
   if (!cv) return;
   const over = $("#lv-over");
   if (performance.now() - live.sideAt > 1000) { live.sideAt = performance.now(); liveSide(); }
-  if (!m || !live.frames.length) { over.hidden = false; over.innerHTML = "Waiting for the Pi's match…<small>it plays while an experiment trains</small>"; return; }
+  if (!m || !live.frames.length) { over.hidden = false; over.innerHTML = "Waiting for the live match…<small>the newest checkpoint of this machine's current run plays here (none yet)</small>"; return; }
   const P = m.pitch, dpr = window.devicePixelRatio || 1, aspect = P.out_x / P.out_y;
   const box = cv.parentElement.getBoundingClientRect(), sbH = $("#lv-sb")?.offsetHeight || 0;
   const kiosk = document.body.classList.contains("kiosk"), fs = document.body.classList.contains("live-fs");
@@ -170,7 +170,7 @@ function liveDraw(ts) {
   const stale = performance.now() - live.lastFrameAt > 3000;
   if (b.st === 1) { over.hidden = false; over.innerHTML = `GOAL<small>${esc(m.teams[b.gt]?.name || "")}</small>`; }
   else if (b.st === 2) { over.hidden = false; over.innerHTML = `FULL TIME<small>${b.sc[0]} : ${b.sc[1]}</small>`; }
-  else if (stale) { over.hidden = false; over.innerHTML = "NO SIGNAL<small>waiting for the Pi's match</small>"; }
+  else if (stale) { over.hidden = false; over.innerHTML = "NO SIGNAL<small>waiting for the live match</small>"; }
   else over.hidden = true;
 }
 function disc(ctx, x, y, r, fill, stroke, lw) { ctx.beginPath(); ctx.arc(x, y, r, 0, 2 * Math.PI); ctx.fillStyle = fill; ctx.fill(); if (stroke) { ctx.lineWidth = lw || 2; ctx.strokeStyle = stroke; ctx.stroke(); } }

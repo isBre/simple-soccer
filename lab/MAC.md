@@ -52,5 +52,5 @@ sudo cp lab/systemd/soccer-exp-viewer.service /etc/systemd/system/ && sudo syste
 sudo systemctl disable --now soccer-exp && sudo systemctl enable --now soccer-exp-viewer
 ```
 `soccer-exp-viewer` runs `exp_runner.py --viewer-only`: only the live demo (the screen shows it through `soccer-kiosk`), following the experiment that is current in the
-synced `exp/runs/*/status.json`. The Lab pages show the Mac's results; the "Pi" page and the vitals still show the Pi itself.
+synced `exp/runs/*/status.json`. The Lab pages show the Mac's results; the Machine page and the vitals show the computer that serves the dashboard (here the Pi).
 Back to training on the Pi: `sudo systemctl disable --now soccer-exp-viewer && sudo systemctl enable --now soccer-exp`.

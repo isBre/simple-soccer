@@ -1,11 +1,11 @@
 """The Lab part of the web app (web/app.py serves it): the experiment pipeline's JSON API. The pages are web/lab/*.js.
-Open http://<pi-address>:8080/#/ from another computer; the Lab pages poll the API below every 10 s.
-  /api/overview       Pi state, the running experiment (progress, ETA), queue, every run with its latest evaluation, its Elo (lab/ladder.py)
-                      and what it changes against its control; the imitation trainings (out_il/); Pi health. Runs listed in
+Open http://<this machine>:8080/#/ from another computer; the Lab pages poll the API below every 10 s.
+  /api/overview       this machine's state, the running experiment (progress, ETA), queue, every run with its latest evaluation, its Elo (lab/ladder.py)
+                      and what it changes against its control; the imitation trainings (out_il/); machine health. Runs listed in
                       exp/hidden_runs.json carry "hidden" (the reason): the Runs table leaves them out unless "Show hidden" is ticked
   /api/run/<name>     one run: spec and settings, training curve, PPO health, reward terms, every evaluation, heatmaps
-  /api/health         Pi health log (throttling, temperature, load, memory) of the last hours
-  /api/live           server-sent events: the match the Pi's viewer is showing (relayed from UDP 127.0.0.1:7310, sent by lab/live.py)
+  /api/health         this machine's health log (throttling, temperature, load, memory) of the last hours
+  /api/live           server-sent events: the live demo match of this machine's current run (relayed from UDP 127.0.0.1:7310, sent by lab/live.py)
   /results.md         the tracker's table as text
   /api/v1/<command>   the agent interface (lab/lab.py, read-only): status, runs, run/<name>, evals, best, compare?a=&b=, ablation, events?since=,
                       queue, schema; query parameters = the CLI options (e.g. /api/v1/evals?run=minimal&kind=full). See AGENTS.md.
@@ -16,9 +16,12 @@ Open http://<pi-address>:8080/#/ from another computer; the Lab pages poll the A
   /api/ranking        the Elo ranking (lab/ladder.py ranking(): every team of every league, rating history, recent matches)
   /api/live/opponents GET the opponents the Live page can play (rule teams, RL Team 4/5, older checkpoints) and the chosen one
   /api/live/mode      POST {"mode": "match"|"puzzle"}: puzzle = random layout of all players and the ball, 60 s, over at the first goal
-  /api/live/opponent  POST {"id": ...}: with the mode, the ONLY writes of this server: which opponent the Pi's demo match plays next
+  /api/live/opponent  POST {"id": ...}: with the mode, the ONLY writes of this server: which opponent the live demo match plays next
                       (logs/live_opponent.json, read by lab/live.py); ids come from the list above, requests from another web site are refused
 Standard library only and no internet needed (the charts are drawn in the browser as SVG). It reads exp/ and logs/; the one write is the opponent choice.
+Two helpers run beside the server (web/app.py starts them), so the Lab works on whatever machine serves it, Pi or Mac:
+  health_sampler()    a health line every 10 s (lab/health_log.py) while no other sampler writes logs/health.log
+  follow_live()       the live demo match (lab/live.py) of this machine's current run while no one else (the runner's --viewer) plays it
 There is NO login: use it on a trusted network only.
 
   python3 web/app.py [--port 8080]                       (service soccer-dashboard, lab/systemd/)
@@ -335,11 +338,17 @@ class Live:
     seq = 0
     meta_seq = 0
     received = 0.0
+    bound = False                 # this server receives the stream (another one on this machine may hold the port)
 
     @classmethod
     def listen(cls, port=7310):
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        sock.bind(("127.0.0.1", port))
+        try:
+            sock.bind(("127.0.0.1", port))
+        except OSError:
+            print("live demo: port %d is taken (another web app on this machine shows it)" % port, flush=True)
+            return
+        cls.bound = True
         while True:
             data = sock.recv(65535)
             try:
@@ -355,6 +364,49 @@ class Live:
                     cls.seq += 1
                 cls.received = time.time()
                 cls.cond.notify_all()
+
+
+def health_sampler():
+    """Health line every 10 s while no other sampler (lab/health_log.py, the Pi's soccer-health) keeps logs/health.log fresh."""
+    from lab import health_log
+    try:
+        health_log.sample(only_if_quiet=True)
+    except Exception as e:                                       # never takes the server down
+        print("health sampler stopped: %r" % e, flush=True)
+
+
+def follow_live(every=10):
+    """The live demo match (lab/live.py) of this machine's current run: the running experiment, else the most recently updated one
+    (lab/exp_runner.py viewer_target). Only while no other lab/live.py runs (the runner's --viewer owns it while it trains: started
+    and paused by it and by lab/thermal_guard.py); this one steps back as soon as another appears. Only the server that receives the
+    stream (Live.bound) plays it."""
+    import subprocess
+    from lab import exp_runner
+    own, cur = None, None
+    while True:
+        time.sleep(every)
+        if not Live.bound:
+            continue
+        if own is not None and own.poll() is not None:          # ours ended (crashed or was stopped): start it again below
+            own = cur = None
+        try:
+            pids = subprocess.run(["pgrep", "-f", "lab/live.py"], capture_output=True, text=True).stdout.split()
+        except OSError:
+            continue
+        others = [p for p in pids if own is None or int(p) != own.pid]
+        tag, model = exp_runner.viewer_target()
+        if tag and not (os.path.exists(os.path.join(ROOT, model)) or glob.glob(os.path.join(ROOT, "out_5v5", "ckpt", tag + "_u*.json"))):
+            tag = None                                           # its nets are not on this machine (results synced from elsewhere)
+        if own is not None and (others or tag != cur):
+            own.terminate()
+            try:
+                own.wait(10)
+            except subprocess.TimeoutExpired:
+                own.kill()
+            own = cur = None
+        if own is None and not others and tag:
+            own, cur = exp_runner.viewer_window(tag, model), tag
+            print("live demo: follows %s (pid %d)" % (tag, own.pid), flush=True)
 
 
 class Handler(BaseHTTPRequestHandler):

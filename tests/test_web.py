@@ -86,7 +86,7 @@ def main():
         s.bind(("127.0.0.1", 0))
         port = s.getsockname()[1]
     rec_dir = tempfile.mkdtemp(prefix="soccer_human_")
-    srv = subprocess.Popen([sys.executable, os.path.join(ROOT, "web", "app.py"), "--port", str(port), "--host", "127.0.0.1"],
+    srv = subprocess.Popen([sys.executable, os.path.join(ROOT, "web", "app.py"), "--port", str(port), "--host", "127.0.0.1", "--no-helpers"],
                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env={**os.environ, "SOCCER_HUMAN_DIR": rec_dir})
     results = []
     try:

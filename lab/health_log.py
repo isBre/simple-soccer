@@ -1,7 +1,8 @@
-"""Health sampler for any machine the pipeline runs on (the Pi keeps lab/pi_health_log.sh, service soccer-health).
+"""Health sampler for any machine the pipeline runs on (on the Pi lab/pi_health_log.sh, service soccer-health, adds throttle flags).
 
-Appends one line every 10 s to logs/pi_health.log, in the same key=value format as the Pi's script, so lab/lab.py health() and the
-dashboard read both. Extra keys describe the machine (name, chip, cores, total memory) and, on macOS, the readings it gives without
+Appends one line every 10 s to logs/health.log, in the same key=value format as the Pi's script, so lab/lab.py health() and the
+dashboard read both. The web app (web/app.py) runs sample(only_if_quiet=True): it writes only while no other sampler does, so the
+health page works on whatever machine serves it. Extra keys describe the machine (name, chip, cores, total memory) and, on macOS, the readings it gives without
 admin rights: battery temperature (the only temperature sensor readable without sudo; on a fanless MacBook it follows the chassis),
 thermal pressure (0 nominal, 1 moderate, 2 heavy, 3 trapping, 4 sleeping: macOS slows the CPU from 1 up), power source and charge.
 
@@ -74,18 +75,35 @@ def sample_linux():
     return d
 
 
-def main():
-    out = sys.argv[1] if len(sys.argv) > 1 else os.path.join(ROOT, "logs", "pi_health.log")
+HEALTH_LOG = os.path.join(ROOT, "logs", "health.log")
+EVERY = 10                     # seconds between samples
+QUIET = 25                     # only_if_quiet: write when the log has not changed for this long (no other sampler is running)
+
+
+def sample(out=HEALTH_LOG, only_if_quiet=False):
+    """Appends one line every EVERY s, forever. only_if_quiet: skips while another sampler keeps the log fresh."""
     os.makedirs(os.path.dirname(out), exist_ok=True)
     mac = sys.platform == "darwin"
     info = machine_mac() if mac else machine_linux()
     fixed = " ".join("%s=%s" % (k, str(v).replace(" ", "_")) for k, v in info.items() if v not in (None, ""))
+    mine = None                                                     # mtime of the log after our own last line
     while True:
-        d = sample_mac() if mac else sample_linux()
-        line = "%s %s %s" % (time.strftime("%Y-%m-%dT%H:%M:%S"), fixed, " ".join("%s=%s" % kv for kv in d.items()))
-        with open(out, "a") as f:
-            f.write(line + "\n")
-        time.sleep(10)
+        try:
+            mt = os.path.getmtime(out)
+            quiet = mt == mine or time.time() - mt > QUIET              # unchanged since our line, or nobody wrote for a while
+        except OSError:
+            quiet = True
+        if quiet or not only_if_quiet:
+            d = sample_mac() if mac else sample_linux()
+            line = "%s %s %s" % (time.strftime("%Y-%m-%dT%H:%M:%S"), fixed, " ".join("%s=%s" % kv for kv in d.items()))
+            with open(out, "a") as f:
+                f.write(line + "\n")
+            mine = os.path.getmtime(out)
+        time.sleep(EVERY)
+
+
+def main():
+    sample(sys.argv[1] if len(sys.argv) > 1 else HEALTH_LOG)
 
 
 if __name__ == "__main__":

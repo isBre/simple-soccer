@@ -1,6 +1,6 @@
 // The Lab area of the web app (web/app.py): dashboard of the experiment pipeline (API: lab/dashboard.py). Polls the JSON API every 10 s.
 // It also owns the router (web/lab/app.js): #/game/... routes go to the Game area (web/game.js).
-// Routes: #/ now · #/live · #/runs · #/run/<name>[/<tab>] · #/compare?runs=a,b&kind=full · #/ranking · #/dataset[/<match>] · #/pi
+// Routes: #/ now · #/live · #/runs · #/run/<name>[/<tab>] · #/compare?runs=a,b&kind=full · #/ranking · #/dataset[/<match>] · #/machine
 // Charts are plain SVG (no libraries, no internet). Run colours are hashed from the run name, so they never change.
 // This file: helpers and the SVG charts used by every page. The Lab is split into web/lab/*.js, plain scripts loaded in order by index.html
 // (they share one global scope).
@@ -19,7 +19,7 @@ const BEHAVIOUR = [
   ["shots_match", "Shots / match", "higher", 1], ["xa_match", "xA / match", "higher", 2],
 ];
 const DECISIONS_PER_MATCH = 2700;       // 30 decisions/s x 90 s: reward per agent-decision -> per player and match
-const state = { ov: null, detail: {}, health: null, lastOk: 0, firstFail: 0, sort: { key: "elo", dir: -1 }, filter: "", selected: new Set(), smooth: 0.8, hidden: {}, piHours: 12, cmpCache: {}, evalPick: {} };
+const state = { ov: null, detail: {}, health: null, lastOk: 0, firstFail: 0, sort: { key: "elo", dir: -1 }, filter: "", selected: new Set(), smooth: 0.8, hidden: {}, healthHours: 12, cmpCache: {}, evalPick: {} };
 
 // ---------- helpers ----------
 const $ = (s, el = document) => el.querySelector(s);
@@ -61,14 +61,14 @@ function throttle(hex) {
 }
 // The health box describes whatever machine the pipeline runs on (lab/lab.py machine): the Pi reports throttle flags,
 // a Mac its thermal pressure (macOS slows the CPU from "moderate" up), power source and battery charge.
-function powerState(pi) {
-  if (pi.kind !== "mac") return throttle(pi.throttled);
-  const lv = pi.thermal, src = pi.power ? (pi.power === "AC" ? "on AC" : "on battery") + (pi.battery_pct != null ? " · " + f(pi.battery_pct, 0) + "%" : "") : "";
+function powerState(m) {
+  if (m.kind !== "mac") return throttle(m.throttled);
+  const lv = m.thermal, src = m.power ? (m.power === "AC" ? "on AC" : "on battery") + (m.battery_pct != null ? " · " + f(m.battery_pct, 0) + "%" : "") : "";
   if (lv == null) return { text: "–", cls: "", sub: src };
-  return { text: lv === 0 ? "OK" : "thermal " + pi.thermal_text, cls: lv === 0 ? "pos" : lv === 1 ? "warn" : "neg", sub: src };
+  return { text: lv === 0 ? "OK" : "thermal " + m.thermal_text, cls: lv === 0 ? "pos" : lv === 1 ? "warn" : "neg", sub: src };
 }
-function machineName(pi) { return pi?.name || "Raspberry Pi"; }
-function tempWarn(pi) { return pi?.temp_warn ?? 75; }
+function machineName(m) { return m?.name || "This machine"; }
+function tempWarn(m) { return m?.temp_warn ?? 75; }
 function ema(points, a) {
   if (!a) return points;
   let m = null;

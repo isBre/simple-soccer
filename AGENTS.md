@@ -14,7 +14,7 @@ on the experiments, start here. People: the same applies; the dashboard (the Lab
 
 ## Look (read-only, compact JSON)
 ```
-python3 lab/lab.py status                  # Pi + runner + running experiment (progress, ETA, stalled?) + last reboot
+python3 lab/lab.py status                  # machine (Pi or Mac) + runner + running experiment (progress, ETA, stalled?) + last reboot
 python3 lab/lab.py runs                    # every run: what it changed, state, stop reason, verdict, cost
 python3 lab/lab.py run NAME --tail 20      # one run in detail (evaluations, training / PPO / reward-term tail, config)
 python3 lab/lab.py evals --kind full       # evaluation records (filters: --run, --kind, --protocol)
@@ -56,7 +56,7 @@ divergence / regression / cancel, then runs full evaluations (last checkpoint an
 
 ## Health
 - `lab.py status` shows `stalled` (no training output for 15 min outside an evaluation) and `last_reboot` (last health sample before it).
-- `logs/pi_health.log`: one line every 10 s (ISO time, boot id, throttling, temperature, load, memory). `journalctl -b -1` for the kernel side.
+- `logs/health.log`: one line every 10 s (ISO time, boot id, throttling, temperature, load, memory). `journalctl -b -1` for the kernel side.
 - Services: `soccer-exp` (runner), `soccer-dashboard` (port 8080), `soccer-health` (units in `lab/systemd/`; deploy steps in `lab/README.md`). The hardware watchdog reboots a frozen Pi.
 
 ## Commit
@@ -65,6 +65,6 @@ Results, specs and the notebook are versioned: `git -c user.name=<owner> -c user
 git identity; use the identity of the existing commits), with a `Co-Authored-By` line, then `git push`.
 
 ## Live demo match
-The Live page plays the newest checkpoint against a **random opponent per match** (all handmade rule teams, RL Team 4/5, t48_u100, jit8 and the
+The Live page plays the newest checkpoint of this machine's current run (started by the web app when the runner does not) against a **random opponent per match** (all handmade rule teams, RL Team 4/5, t48_u100, jit8 and the
 best checkpoint of every `x_*` run). The Live page also has a **puzzle mode** (random layout of all players and the ball, 60 s, over at the first goal; `POST /api/live/mode`). The dropdown on the page pins one opponent (`POST /api/live/opponent`, same-origin only, the dashboard's only
 write; state in `logs/live_opponent.json`). Agents do not need it.

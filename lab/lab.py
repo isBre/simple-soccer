@@ -2,7 +2,7 @@
 so it works even when the dashboard is down. Every command prints one JSON object ({"schema_version", "generated_at", "data"}),
 --pretty indents it. Exit code 1 on errors ({"error", "hint"}). The dashboard serves the same data under /api/v1/ (read-only).
 
-  python3 lab/lab.py status                          Pi, runner, running experiment (progress, ETA, stalled?), last reboot
+  python3 lab/lab.py status                          machine (Pi or Mac), runner, running experiment (progress, ETA, stalled?), last reboot
   python3 lab/lab.py runs [--state done]             one row per run: settings changed, progress, verdict, cost
   python3 lab/lab.py run NAME [--tail 20]            one run: status, evaluations (summaries), training / PPO tail
   python3 lab/lab.py evals [--run R] [--kind full] [--protocol full/g1/d90]
@@ -114,10 +114,10 @@ def speed(tr):
     return (b["elapsed"] - a["elapsed"]) / max(b["upd"] - a["upd"], 1)
 
 
-# ---------------------------------------------------------------- Pi health
+# ---------------------------------------------------------------- machine health
 def health(hours=12.0):
     """Health samples (every 10 s) of the last hours: time (ISO), boot id, throttle flags, temperature, load, free memory, clock."""
-    path = os.path.join(LOGS, "pi_health.log")
+    path = os.path.join(LOGS, "health.log")
     if not os.path.exists(path):
         return []
     rows = []
@@ -200,7 +200,7 @@ def cmd_status(_a):
                        "bad_checks": st.get("bad_checks", 0), "restarts": st.get("restarts", []), "started": iso(st.get("started"))}
     queue = sorted(os.path.basename(p) for p in glob.glob(os.path.join(EXP, "queue", "*.json")))
     rb = reboots(hl)
-    return {"pi": {"uptime_hours": round(up / 3600, 2) if up else None, "boot_id": tracker.boot_id() or last.get("boot"), "last_sample": last.get("t"),
+    return {"machine": {"uptime_hours": round(up / 3600, 2) if up else None, "boot_id": tracker.boot_id() or last.get("boot"), "last_sample": last.get("t"),
                    "temp_c": last.get("temp"), "load_1m": last.get("load"),
                    "mem_free_mb": int(mem["MemAvailable"]) // 1024 if "MemAvailable" in mem else last.get("mem_mb"), **mc,
                    "throttled": last.get("throttled"), "throttled_meaning": throttle_text(last.get("throttled"))},

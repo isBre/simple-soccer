@@ -44,11 +44,11 @@ p { margin: 4px 0 0; }
 .nav a:hover { color: var(--ink); background: var(--panel-2); text-decoration: none; }
 .nav a.on { color: var(--accent); }
 .picker { width: 190px; font: inherit; font-size: 13px; padding: 6px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--panel-2); color: var(--ink); }
-.pichip { display: inline-flex; align-items: center; gap: 7px; font-size: 12.5px; color: var(--ink-2); padding: 5px 10px; border-radius: 8px; border: 1px solid var(--line); white-space: nowrap; }
-.pichip:hover { text-decoration: none; background: var(--panel-2); color: var(--ink); }
-.pichip.on { color: var(--accent); border-color: var(--accent); }
-.pichip i { width: 8px; height: 8px; border-radius: 50%; background: var(--good); }
-.pichip i.warn { background: var(--warn); }
+.machinechip { display: inline-flex; align-items: center; gap: 7px; font-size: 12.5px; color: var(--ink-2); padding: 5px 10px; border-radius: 8px; border: 1px solid var(--line); white-space: nowrap; }
+.machinechip:hover { text-decoration: none; background: var(--panel-2); color: var(--ink); }
+.machinechip.on { color: var(--accent); border-color: var(--accent); }
+.machinechip i { width: 8px; height: 8px; border-radius: 50%; background: var(--good); }
+.machinechip i.warn { background: var(--warn); }
 .theme-btn { border: 1px solid var(--line); background: var(--panel-2); color: var(--muted); border-radius: 8px; width: 34px; height: 32px; cursor: pointer; font-size: 15px; flex: none; }
 .theme-btn:hover { color: var(--ink); }
 .pulse i { display: block; width: 9px; height: 9px; border-radius: 50%; background: var(--slate); }

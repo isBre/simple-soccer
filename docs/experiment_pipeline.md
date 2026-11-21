@@ -53,7 +53,7 @@ to another machine and run `mlflow ui` there to browse it. The full MLflow serve
 
 ## Dashboard
 `python3 web/app.py` serves a self-refreshing page on `0.0.0.0:8080`: current run and queue, a table of finished runs
-with verdicts, charts of strength over updates (inline SVG, no internet needed), the Pi health log. It is read-only and has no
+with verdicts, charts of strength over updates (inline SVG, no internet needed), the machine's health log (Machine page). It is read-only and has no
 login: use it on a trusted network only.
 
 ## Agent loop

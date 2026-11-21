@@ -18,7 +18,7 @@ function fetchCompare(run, e, ref, refUpdate, key) {
 function loadHealth() {
   if (pending._h) return;
   pending._h = true;
-  getJSON("/api/health?hours=" + state.piHours).then((d) => { state.health = d; render(); }).catch(() => {}).finally(() => { delete pending._h; });
+  getJSON("/api/health?hours=" + state.healthHours).then((d) => { state.health = d; render(); }).catch(() => {}).finally(() => { delete pending._h; });
 }
 async function poll() {
   if (route().view === "game") return;                       // the Game area needs none of this
@@ -27,7 +27,7 @@ async function poll() {
     state.lastOk = Date.now(); state.firstFail = 0;
     const r = route();
     if (r.view === "run" && state.detail[r.arg]) state.detail[r.arg]._t = 0;
-    if (r.view === "pi") state.health = null;
+    if (r.view === "machine") state.health = null;
     if (r.view === "dataset" && !r.arg) loadDataset(true);
     if (r.view === "ranking") loadRanking(true);
     if (r.view === "compare") for (const n of (r.params.get("runs") || "").split(",")) if (state.detail[n]) state.detail[n]._t = 0;
@@ -41,9 +41,9 @@ async function poll() {
   }
 }
 function setPulse(ok) {
-  const p = $("#pulse"), off = $("#offline"), pi = $("#pichip"), s = state.ov?.status?.pi;
+  const p = $("#pulse"), off = $("#offline"), chip = $("#machinechip"), s = state.ov?.status?.machine;
   p.className = "pulse " + (ok ? "ok" : "err");
-  if (pi && s) { pi.innerHTML = `<i class="${s.temp_c > tempWarn(s) || (s.throttled && s.throttled !== "0x0") || s.thermal > 0 ? "warn" : "ok"}"></i>${f(s.temp_c, 0)}°C · load ${f(s.load_1m, 1)}`; pi.title = machineName(s); }
+  if (chip && s) { chip.innerHTML = `<i class="${s.temp_c > tempWarn(s) || (s.throttled && s.throttled !== "0x0") || s.thermal > 0 ? "warn" : "ok"}"></i>${f(s.temp_c, 0)}°C · load ${f(s.load_1m, 1)}`; chip.title = machineName(s); }
   const down = !ok && state.firstFail && Date.now() - state.firstFail > 25000;
   off.hidden = !down;
   if (down) off.innerHTML = `<b>The ${esc(machineName(s))} stopped answering</b>${state.lastOk ? " · last data " + new Date(state.lastOk).toLocaleTimeString() + " (" + dur((Date.now() - state.lastOk) / 1000) + " ago)" : ""}${s?.watchdog !== false ? " · if it froze, the watchdog reboots it and the runner resumes" : " · if it slept or rebooted, start the runner again"}`;
@@ -56,7 +56,7 @@ function route() {
   if (parts[0] === "dataset") return { view: "dataset", arg: parts[1] ? decodeURIComponent(parts[1]) : "", params };
   if (parts[0] === "docs") return { view: "docs", arg: parts[1] ? decodeURIComponent(parts[1]) : "", params };
   if (parts[0] === "game") return { view: "game", parts: parts.slice(1), params };
-  return { view: ["runs", "compare", "pi", "live", "ranking"].includes(parts[0]) ? parts[0] : "now", params };
+  return { view: ["runs", "compare", "machine", "live", "ranking"].includes(parts[0]) ? parts[0] : "now", params };
 }
 let lastHTML = "";
 function render() {
@@ -79,7 +79,7 @@ function render() {
   if (r.view !== "live") { stopLive(); document.body.classList.remove("live-ctl"); }
   if (!(r.view === "dataset" && r.arg)) stopReplay();
   const before = new Set(Object.keys(chartData));
-  const html = r.view === "live" ? viewLive() : r.view === "runs" ? viewRuns() : r.view === "run" ? viewRun(r.arg, r.tab) : r.view === "compare" ? viewCompare(r.params) : r.view === "pi" ? viewPi() : r.view === "docs" ? viewDocs(r.arg) : r.view === "dataset" ? viewDataset(r.arg) : r.view === "ranking" ? viewRanking() : viewNow();
+  const html = r.view === "live" ? viewLive() : r.view === "runs" ? viewRuns() : r.view === "run" ? viewRun(r.arg, r.tab) : r.view === "compare" ? viewCompare(r.params) : r.view === "machine" ? viewMachine() : r.view === "docs" ? viewDocs(r.arg) : r.view === "dataset" ? viewDataset(r.arg) : r.view === "ranking" ? viewRanking() : viewNow();
   const cleaned = html.replace(/data-chart="c[a-z0-9]+"/g, "");
   const drop = (keep) => { for (const k of Object.keys(chartData)) if (before.has(k) !== keep) delete chartData[k]; };
   if (cleaned === lastHTML) { drop(true); return; }
@@ -119,7 +119,7 @@ document.addEventListener("click", (e) => {
   const lgp = t.closest("[data-league]");
   if (lgp) { rk.league = lgp.dataset.league; rerender(); return; }
   const hrs = t.closest("[data-hours]");
-  if (hrs) { state.piHours = +hrs.dataset.hours; state.health = null; rerender(); return; }
+  if (hrs) { state.healthHours = +hrs.dataset.hours; state.health = null; rerender(); return; }
   const rm = t.closest("[data-rmrun]");
   if (rm) { const p = route().params; p.set("runs", (p.get("runs") || "").split(",").filter((n) => n && n !== rm.dataset.rmrun).join(",")); location.hash = "#/compare?" + p.toString(); return; }
   const cp = t.closest("[data-copy]");

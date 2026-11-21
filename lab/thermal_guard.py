@@ -2,7 +2,7 @@
 live match) with SIGSTOP when the temperature passes --max, and resumes them with SIGCONT once it is back under --resume.
 
 The recipe does not change (same workers, same batches): a hot room only makes the run slower. Reads the newest line of
-logs/pi_health.log (lab/health_log.py: on macOS the battery temperature, the only sensor readable without admin rights).
+logs/health.log (lab/health_log.py: on macOS the battery temperature, the only sensor readable without admin rights).
 Writes logs/thermal_guard.json ({"paused", "since", "temp", "max", "resume", "paused_s"}) for lab.py status / the dashboard,
 and appends every pause / resume to exp/runner.log. Without a fresh health sample (older than 60 s) it pauses too: no reading, no heat.
 Stops on its own when the runner is gone (and always leaves the processes running).
@@ -18,7 +18,7 @@ import subprocess
 import time
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-HEALTH = os.path.join(ROOT, "logs", "pi_health.log")
+HEALTH = os.path.join(ROOT, "logs", "health.log")
 STATE = os.path.join(ROOT, "logs", "thermal_guard.json")
 RUNNER_LOG = os.path.join(ROOT, "exp", "runner.log")
 

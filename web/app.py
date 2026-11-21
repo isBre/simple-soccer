@@ -1,7 +1,7 @@
 """The web app: one server for both areas of the page.
 
   Game   play Simple Soccer in the browser: quick match, teams, tournaments, match report (game/: the back end)
-  Lab    the experiment pipeline on the Pi: runs, live demo match, comparisons, docs (lab/dashboard.py: the back end)
+  Lab    the experiment pipeline of this machine (Pi or Mac): runs, live demo match, comparisons, docs (lab/dashboard.py: the back end)
 
   python3 web/app.py [--port 8080]       then open http://<this machine>:8080  (#/game = Game, #/ = Lab)
 
@@ -101,8 +101,12 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--port", type=int, default=8080)
     ap.add_argument("--host", default="0.0.0.0", help="0.0.0.0 = the local network can open it; 127.0.0.1 = this machine only")
+    ap.add_argument("--no-helpers", action="store_true", help="no health sampler and no live demo match from this server (tests)")
     a = ap.parse_args()
     threading.Thread(target=lab_api.Live.listen, daemon=True).start()
+    if not a.no_helpers:
+        threading.Thread(target=lab_api.health_sampler, daemon=True).start()
+        threading.Thread(target=lab_api.follow_live, daemon=True).start()
     server = ThreadingHTTPServer((a.host, a.port), Handler)
     server.daemon_threads = True
     print("Simple Soccer web app on http://%s:%d  (Game: #/game, Lab: #/)" % ("localhost" if a.host == "0.0.0.0" else a.host, a.port), flush=True)

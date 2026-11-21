@@ -13,7 +13,7 @@ function queueLine(queued, running) {
 function heroStat(value, label, cls = "") { return `<div><b class="${cls}">${value}</b><span>${label}</span></div>`; }
 function viewNow() {
   const o = state.ov; if (!o) return '<div class="empty">Loading…</div>';
-  const st = o.status, run = st.runner.running, pi = st.pi, last = run ? null : lastFinished(o.runs);
+  const st = o.status, run = st.runner.running, mc = st.machine, last = run ? null : lastFinished(o.runs);
   let hero;
   if (run) {
     const row = o.runs.find((r) => r.name === run.run) || {};
@@ -47,16 +47,16 @@ function viewNow() {
   } else {
     hero = `<section class="hero idle"><div class="hero-top"><div><div class="eyebrow">Runner ${esc(st.runner.service || "")}</div><h1>Idle</h1></div>${badge("idle")}</div>${queueLine(o.queue.queued)}</section>`;
   }
-  const th = powerState(pi), hasPi = pi.last_sample != null, cores = pi.cores || 4, mac = pi.kind === "mac";
+  const th = powerState(mc), hasSample = mc.last_sample != null, cores = mc.cores || 4, mac = mc.kind === "mac";
   const hl = (o.health || []).filter((r) => r.t && r.t.includes("T"));
   const vit = (k, color, lo, hi) => sparkline(hl.map((r) => [parseT(r.t), r[k]]).filter((p) => p[1] != null), color, 110, 26, lo, hi);
-  const rb = st.last_reboot, mem = hasPi ? pi.mem_free_mb : null;
-  const vitals = `<section class="card vitals"><div class="card-h"><h2 title="${esc(pi.chip || "")}">${esc(machineName(pi))}${pi.chip ? ` <span class="muted small">${esc(pi.chip)}</span>` : ""}</h2><a href="#/pi">details →</a></div>
-    <div class="vrow"><span>${esc(pi.temp_label || "Temperature")}</span><b class="${pi.temp_c > tempWarn(pi) ? "neg" : ""}">${f(pi.temp_c, 1)} °C</b>${vit("temp", css("--c2"), mac ? 20 : 30, mac ? 50 : 85)}</div>
-    <div class="vrow"><span>CPU load</span><b>${f(pi.load_1m, 1)} <small>/ ${cores}</small></b>${vit("load", css("--c1"), 0, cores * 3)}</div>
-    <div class="vrow"><span>Free memory</span><b class="${mem != null && mem < 500 ? "neg" : ""}">${mem != null ? f(mem / 1024, 1) : "–"} <small>/ ${f((pi.mem_total_mb || 3800) / 1024, 0)}</small> GB</b>${vit("mem_mb", css("--c3"), 0, pi.mem_total_mb || 3800)}</div>
-    <div class="vrow"><span>${mac ? "Thermal" : "Power"}</span><b class="${th.cls}">${esc(th.text)}</b><span class="muted small">${[th.sub && mac ? th.sub : "", pi.uptime_hours != null ? "up " + dur(pi.uptime_hours * 3600) : ""].filter(Boolean).map(esc).join(" · ")}</span></div>
-    ${!hasPi ? '<div class="muted small">No health samples (logs/pi_health.log): start <span class="mono">python3 lab/health_log.py</span> (the Pi: service soccer-health).</div>' : ""}
+  const rb = st.last_reboot, mem = hasSample ? mc.mem_free_mb : null;
+  const vitals = `<section class="card vitals"><div class="card-h"><h2 title="${esc(mc.chip || "")}">${esc(machineName(mc))}${mc.chip ? ` <span class="muted small">${esc(mc.chip)}</span>` : ""}</h2><a href="#/machine">details →</a></div>
+    <div class="vrow"><span>${esc(mc.temp_label || "Temperature")}</span><b class="${mc.temp_c > tempWarn(mc) ? "neg" : ""}">${f(mc.temp_c, 1)} °C</b>${vit("temp", css("--c2"), mac ? 20 : 30, mac ? 50 : 85)}</div>
+    <div class="vrow"><span>CPU load</span><b>${f(mc.load_1m, 1)} <small>/ ${cores}</small></b>${vit("load", css("--c1"), 0, cores * 3)}</div>
+    <div class="vrow"><span>Free memory</span><b class="${mem != null && mem < 500 ? "neg" : ""}">${mem != null ? f(mem / 1024, 1) : "–"} <small>/ ${f((mc.mem_total_mb || 3800) / 1024, 0)}</small> GB</b>${vit("mem_mb", css("--c3"), 0, mc.mem_total_mb || 3800)}</div>
+    <div class="vrow"><span>${mac ? "Thermal" : "Power"}</span><b class="${th.cls}">${esc(th.text)}</b><span class="muted small">${[th.sub && mac ? th.sub : "", mc.uptime_hours != null ? "up " + dur(mc.uptime_hours * 3600) : ""].filter(Boolean).map(esc).join(" · ")}</span></div>
+    ${!hasSample ? '<div class="muted small">No health samples yet (logs/health.log): the web app takes one every 10 s.</div>' : ""}
     ${rb ? `<div class="vnote">Last reboot ${esc(ago(rb.back))} · last sample before it ${esc(rb.last_seen.replace("T", " "))}: load ${f(rb.last_sample.load, 1)}, ${f(rb.last_sample.mem_mb, 0)} MB free, ${f(rb.last_sample.temp, 0)} °C</div>` : ""}</section>`;
   const focus = run ? run.run : last?.name;
   let curve = '<div class="empty">Nothing trained yet</div>';

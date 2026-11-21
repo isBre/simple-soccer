@@ -31,7 +31,7 @@ Everything is plain files: `exp/results.jsonl` (one record per evaluation, kind 
 copy `exp/mlruns/` to another computer and run `mlflow ui` there).
 The web app (`web/app.py`, service `soccer-dashboard`, port 8080, **no login: local network only**) shows the Lab next to the Game (switch in the bar); the Lab (`web/lab/*.js` on the API of `lab/dashboard.py`, read-only, dark by default) polls every 10 s:
 **Now** (the running experiment with progress / ETA / last fast check, or when idle the last finished run with its verdict, head to head and cost; the next specs in the queue; Pi vitals and the last reboot; the top 8 of the Elo ranking with the current run's checkpoint marked; the smoothed training curve of the running or last run; the events of the last 24 h as readable lines with fast checks grouped),
-**Live** (the match the Pi plays, drawn in the browser from a stream of positions: `lab/live.py` sends JSON over local UDP 7310, the dashboard relays it as server-sent events), **Runs** (experiments, imitation trainings, imported runs and the
+**Live** (the match this machine plays, drawn in the browser from a stream of positions: `lab/live.py` sends JSON over local UDP 7310, the dashboard relays it as server-sent events), **Runs** (experiments, imitation trainings, imported runs and the
 queue in one table ranked by Elo, with goals for / against from the ladder matches, what each run changes against its control, cost; filters by state,
 type, net, changed setting and experiment; runs listed in `exp/hidden_runs.json` (failed, empty, leftover) are hidden unless "Show hidden" is ticked; tick runs to compare), **Run** pages with tabs (Summary: evaluations with intervals and the
 reference band; Training: PPO health small multiples, reward composition; Evaluation: tiers, head to head, forest plot vs the reference, paired; Behaviour: vs the rule bots, heatmaps; Config: what differs from the defaults),
@@ -42,7 +42,8 @@ Safety against the freezes seen on the Pi: the learning step uses 2 torch thread
 
 ## Live demo match (`lab/live.py`)
 
-While an experiment runs, the runner keeps `lab/live.py --tag <run tag> --start <start net>` running: the newest checkpoint of the run
+The web app keeps `lab/live.py --tag <run tag> --start <start net>` running for this machine's current run (the running experiment, else the most
+recently updated one), on the Pi or the Mac alike; while the runner plays it itself (`--viewer`) the web app steps back: the newest checkpoint of the run
 (RL Team 5's squad) plays one 90 s match after another in real time on the match core and streams every frame (30/s, JSON over UDP
 127.0.0.1:7310) to the dashboard, which relays it to the browser. The opponent is drawn for every match from all handmade teams,
 RL Team 4/5, t48_u100, jit8 and the best checkpoint of every `x_*` run, unless the Live page pins one (`logs/live_opponent.json`).

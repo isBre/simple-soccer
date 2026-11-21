@@ -47,7 +47,7 @@ dashboard: `http://<pi-address>:8080`. Newest entries at the bottom; the agent a
 The Pi became unreachable with the fan still running (frozen, not a power cut), no kernel message. Before both freezes training slowed
 25-60x (a learning step took 622 s instead of 11). Found and fixed: the venv's numpy (OpenBLAS) started 28 busy threads per net server and
 starved the simulation; the learning step used 4 torch threads next to the Godot workers. Now: BLAS 1 thread, learn 2 threads, hardware
-watchdog (reboot after 15 s frozen), the runner resumes after a reboot, `logs/pi_health.log` records the state every 10 s.
+watchdog (reboot after 15 s frozen), the runner resumes after a reboot, `logs/health.log` records the state every 10 s.
 Not proven that this was the cause: if it freezes again, read the last lines of the health log first.
 
 ## Experiment queue (2026-11-16)
