@@ -234,9 +234,25 @@ def run_detail(run):
             "terms": lab.thin(lab.latest_segment([{"upd": t["upd"], **t["terms"]} for t in lab.jl(os.path.join(LOGS, tag + "_terms.jsonl"))]), 300),
             "evals": evals, "reference": {"name": ref_name, "evals": ref}, "estimates": ladder.estimates(run=run),
             "start_elo": start_elo(st, run),
-            "behaviour_refs": behaviour_refs(run, rows, names),
+            "behaviour_refs": behaviour_refs(run, rows, names, k=10),
+            "style_me": style_scalars(sc["scout"]) if sc else {},
             "heat": heatmaps(os.path.join(ROOT, last_full["file"])) if last_full and last_full.get("file") else [],
             "minimal": tracker.MINIMAL, "defaults": tracker.DEFAULTS}
+
+
+def style_scalars(sc):
+    """The numbers of a scouting summary the Behaviour tab compares: its scalar fields, plus per match xG for / against, xG per shot
+    and ball recoveries (from the stored shot and recovery lists)."""
+    if not sc:
+        return {}
+    out = {k: v for k, v in sc.items() if isinstance(v, (int, float)) and not isinstance(v, bool)}
+    m = max(sc.get("matches") or 0, 1)
+    shots, against = sc.get("shots") or [], sc.get("shots_against") or []
+    out["xg_match"] = round(sum(x[2] for x in shots) / m, 3)
+    out["xga_match"] = round(sum(x[2] for x in against) / m, 3)
+    out["xg_per_shot"] = round(sum(x[2] for x in shots) / len(shots), 3) if shots else None
+    out["recoveries_match"] = round(len(sc.get("recoveries") or []) / m, 2)
+    return out
 
 
 def behaviour_refs(run, rows, names, k=6):
@@ -251,7 +267,9 @@ def behaviour_refs(run, rows, names, k=6):
             next((r for r in reversed(rows) if r["run"] == n and r.get("behaviour")), None)
         e = elo_of(n, table, tracker.run_status(n)) if rec else None
         if e and e.get("placed"):
-            out.append({"name": n, "elo": e["elo"], "update": rec["update"], "kind": rec["kind"], "protocol": rec.get("protocol"), "behaviour": rec["behaviour"]})
+            sc = next((r for r in reversed(rows) if r["run"] == n and r.get("scout")), None)
+            out.append({"name": n, "elo": e["elo"], "update": rec["update"], "kind": rec["kind"], "protocol": rec.get("protocol"), "behaviour": rec["behaviour"],
+                        "style": style_scalars(sc["scout"]) if sc else {}})
     out.sort(key=lambda r: -r["elo"])
     return out[:k]
 

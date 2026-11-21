@@ -436,3 +436,17 @@ tr.dim td { opacity: .6; }
 .st.evaluating { color: var(--warn); } .st.evaluating::before { background: var(--warn); opacity: 1; }
 .st.diverged, .st.regressed, .st.failed { color: var(--bad); } .st.diverged::before, .st.regressed::before, .st.failed::before { background: var(--bad); opacity: 1; }
 .st.queued, .st.cancelled, .st.imported, .st.reference { color: var(--muted); }
+/* Behaviour against the strongest teams (web/lab/run.js runBehaviour): one Gaussian per metric */
+.bh-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 18px 28px; margin-top: 12px; }
+.bh-cell { min-width: 0; }
+.bh-group { margin: 18px 0 0; font-size: 13px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+.bh-h { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; font-size: 13px; color: var(--ink-2); }
+.bh-h b { font-size: 16px; color: var(--ink); font-variant-numeric: tabular-nums; }
+.bh-gauss { display: block; width: 100%; height: auto; margin: 4px 0 2px; }
+.bh-f { display: flex; justify-content: space-between; gap: 10px; font-size: 12px; }
+.bh-f .muted { white-space: nowrap; }
+.bh-legend { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 12.5px; margin-bottom: 4px; }
+.bh-k { display: inline-flex; align-items: center; gap: 5px; }
+.bh-k i { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
+.bh-k i.area { width: 14px; height: 8px; border-radius: 3px; background: var(--muted); opacity: .35; }
+.bh-k i.me { width: 2px; height: 12px; border-radius: 0; }

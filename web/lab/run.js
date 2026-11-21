@@ -76,26 +76,75 @@ function runEvaluation(d) {
     <section class="card"><div class="card-h"><h2>Goals per match</h2><span class="muted small">estimates · vs the average ladder team</span></div>${estGoalsChart(d, 220, "ev")}</section></div>
     ${table}${matches}`;
 }
-// behaviour of the run's newest full evaluation next to the strongest rated teams (dashboard.behaviour_refs: RL Team 4 / 5, jit8,
-// the best checkpoint of the top runs); the bar = the range of those teams, the dot = this run
+// behaviour of the run's newest full evaluation against the strongest rated teams (dashboard.behaviour_refs: the 10 highest in the
+// Elo ladder with measured behaviour). Per metric a curve of where those teams are (kernel density: it follows the data, no fitted
+// bell), the top 5 as coloured marks on it, this run as a vertical line, and one phrase. Metrics: BEHAVIOUR_GROUPS.
 const refName = (n) => n.replace(/^team:/, "").replace(/^old_/, "");
+const TOP_COLORS = ["--c5", "--c1", "--c3", "--c4", "--c2"];
+const TOP_N = TOP_COLORS.length;
+// what the Behaviour tab compares: [source, key, label, better, decimals]; b = behaviour of the full evaluation, s = its scouting summary
+const BEHAVIOUR_GROUPS = [
+  ["Movement", [["b", "dir_changes_s", "Direction changes / s", "lower", 1], ["b", "idle_pct", "Idle %", "lower", 0], ["b", "spacing_px", "Teammate spacing px", "", 0],
+    ["b", "keeper_dist_px", "Slot-0 distance from goal px", "", 0], ["s", "at_wall_pct", "Time against the wall %", "lower", 1]]],
+  ["Ball and territory", [["s", "possession_pct", "Possession %", "higher", 0], ["s", "field_tilt_pct", "Field tilt % (final-third possession)", "higher", 0],
+    ["s", "ball_own_half_pct", "Ball in our half %", "lower", 0], ["s", "ball_corner_pct", "Ball in a corner %", "", 1]]],
+  ["Pressing and defence", [["s", "ppda", "PPDA (lower = harder pressing)", "lower", 2], ["s", "press_d1_px", "Nearest presser to the ball px", "lower", 0],
+    ["s", "press_d2_px", "2nd presser px", "lower", 0], ["s", "recoveries_match", "Ball recoveries / match", "higher", 1], ["s", "goal_guarded_pct", "Goal guarded %", "", 0],
+    ["s", "goal_empty_pct", "Goal empty %", "lower", 1], ["s", "xga_match", "xG against / match", "lower", 2]]],
+  ["Attack", [["b", "passes_match", "Passes / match", "higher", 1], ["s", "pass_ok_pct", "Pass completion %", "higher", 0], ["s", "progressive_match", "Progressive passes / match", "higher", 1],
+    ["b", "key_passes_match", "Key passes / match", "higher", 2], ["b", "shots_match", "Shots / match", "higher", 1], ["s", "xg_match", "xG / match", "higher", 2],
+    ["s", "xg_per_shot", "xG per shot", "higher", 3], ["b", "xa_match", "xA / match", "higher", 2]]],
+];
+const quantile = (xs, q) => { const a = [...xs].sort((x, y) => x - y), p = (a.length - 1) * q, i = Math.floor(p); return a[i] + (a[Math.min(i + 1, a.length - 1)] - a[i]) * (p - i); };
+function behaviourStrip(v, refs, src, k, dec, better, color) {
+  const pts = refs.map((r, i) => ({ x: (src === "s" ? r.style : r.behaviour)?.[k], i, name: refName(r.name) })).filter((p) => p.x != null);
+  if (pts.length < 2 || v == null) return null;
+  const vals = pts.map((p) => p.x), n = vals.length, q1 = quantile(vals, 0.25), q3 = quantile(vals, 0.75);
+  // kernel density of the teams' values (Silverman's bandwidth): a curve that follows the data, two humps where there are two
+  // groups, a one-sided pile where many teams share a value (no fitted bell)
+  const mean = vals.reduce((a, b) => a + b, 0) / n, sd = Math.sqrt(vals.reduce((a, b) => a + (b - mean) ** 2, 0) / (n - 1));
+  const spread = Math.max(...vals) - Math.min(...vals) || Math.abs(mean) || 1;
+  const h = Math.max(0.9 * Math.min(sd, (q3 - q1) / 1.34 || sd) * n ** -0.2, spread / 25);
+  const dens = (x) => vals.reduce((a, xi) => a + Math.exp(-0.5 * ((x - xi) / h) ** 2), 0);
+  const floor = Math.min(v, ...vals) >= 0 ? 0 : -Infinity;      // counts, distances, shares: never below zero
+  const lo = Math.max(floor, Math.min(v, ...vals) - 2 * h), hi = Math.max(v, ...vals) + 2 * h;
+  const W = 300, H = 56, base = H - 8, X = (x) => 8 + ((x - lo) / (hi - lo)) * (W - 16);
+  const xs = Array.from({ length: 81 }, (_, i) => lo + ((hi - lo) * i) / 80), top = Math.max(...xs.map(dens)) || 1;
+  const Y = (x) => base - (dens(x) / top) * (base - 6);
+  const line = xs.map((x, i) => (i ? "L" : "M") + X(x).toFixed(1) + "," + Y(x).toFixed(1)).join("");
+  let g = `<path d="${line}L${X(hi).toFixed(1)},${base}L${X(lo).toFixed(1)},${base}Z" fill="var(--muted)" opacity=".14"/>`;
+  g += `<path d="${line}" fill="none" stroke="var(--muted)" stroke-width="1.6" stroke-linejoin="round"/>`;
+  g += `<line x1="8" x2="${W - 8}" y1="${base}" y2="${base}" stroke="var(--line)"/>`;
+  pts.filter((p) => p.i < TOP_N).forEach((p) => {                 // the top teams: a coloured mark on the curve
+    g += `<circle cx="${X(p.x)}" cy="${Y(p.x)}" r="4" fill="${css(TOP_COLORS[p.i])}" stroke="var(--panel)" stroke-width="1.5"><title>#${p.i + 1} ${esc(p.name)}: ${f(p.x, dec)}</title></circle>`;
+  });
+  const vx = X(v);
+  g += `<line x1="${vx}" x2="${vx}" y1="4" y2="${base}" stroke="${color}" stroke-width="2"><title>this run: ${f(v, dec)}</title></line>`;
+  const below = vals.filter((x) => x < v).length, above = vals.filter((x) => x > v).length, tie = n - below - above;
+  const say = (better === "lower" ? `lower than ${above} of ${n} top teams` : `higher than ${below} of ${n} top teams`) + (tie ? `, level with ${tie}` : "");
+  const out = v < q1 ? "low" : v > q3 ? "high" : "";
+  const cls = !out || !better ? "" : (out === "high") === (better === "higher") ? "pos" : "neg";
+  return { svg: `<svg viewBox="0 0 ${W} ${H}" class="bh-gauss">${g}</svg>`, say, cls, q1, q3 };
+}
 function runBehaviour(d) {
   const e = d.evals.filter((x) => x.kind === "full").pop();
   if (!e) return '<div class="empty">Behaviour is measured in full evaluations: none yet</div>';
-  const b = e.behaviour || {}, refs = d.behaviour_refs || [];
-  const rows = BEHAVIOUR.filter(([k]) => b[k] != null).map(([k, label, , dec]) => {
-    const vals = refs.map((r) => r.behaviour?.[k]).filter((v) => v != null), v = b[k];
-    let bar = "";
-    if (vals.length) {
-      const lo = Math.min(...vals), hi = Math.max(...vals), a = Math.min(lo, v), z = Math.max(hi, v), X = (x) => 4 + ((x - a) / (z - a || 1)) * 112;
-      bar = `<svg width="120" height="14" viewBox="0 0 120 14" class="rkbar"><line x1="${X(lo)}" x2="${X(hi)}" y1="7" y2="7" stroke="var(--muted)" stroke-width="5" stroke-linecap="round" opacity=".35"/><circle cx="${X(v)}" cy="7" r="4.5" fill="${runColor(d.run)}"/></svg>`;
-    }
-    return `<tr><td>${label}</td><td class="r"><b>${f(v, dec)}</b></td><td>${bar}</td>${refs.map((r) => `<td class="r muted">${f(r.behaviour?.[k], dec)}</td>`).join("")}</tr>`;
-  }).join("");
-  const head = `<tr><th>Behaviour</th><th class="r">${esc(d.run)} <span class="muted small">u${e.update}</span></th><th><span class="muted small">range of the teams on the right</span></th>${refs.map((r) => `<th class="r" title="${esc(r.kind)} evaluation u${r.update} (${esc(r.protocol || "")})">${runLink(r.name).replace(esc(r.name) + "</a>", esc(refName(r.name)) + "</a>")}<div class="muted small">Elo ${f(r.elo, 0)}</div></th>`).join("")}</tr>`;
+  const b = e.behaviour || {}, st = d.style_me || {}, refs = d.behaviour_refs || [], me = css("--ink");   // never one of the top teams' colours
+  const card = ([src, k, label, better, dec]) => {
+    const v = (src === "s" ? st : b)[k];
+    if (v == null) return "";
+    const gz = behaviourStrip(v, refs, src, k, dec, better, me);
+    return `<div class="bh-cell"><div class="bh-h"><span>${label}</span><b>${f(v, dec)}</b></div>
+      ${gz ? gz.svg : ""}
+      <div class="bh-f"><span class="${gz?.cls || ""}">${gz ? gz.say : "no reference data"}</span><span class="muted" title="the middle half of the ${refs.length} top teams">${gz ? `typical ${f(gz.q1, dec)}–${f(gz.q3, dec)}` : ""}</span></div></div>`;
+  };
+  const groups = BEHAVIOUR_GROUPS.map(([title, list]) => { const c = list.map(card).join(""); return c ? `<h3 class="bh-group">${title}</h3><div class="bh-grid">${c}</div>` : ""; }).join("");
+  const legend = `<span class="bh-k"><i class="me" style="background:${me}"></i>${esc(d.run)}</span>` + refs.slice(0, TOP_N).map((r, i) => `<span class="bh-k"><i style="background:${css(TOP_COLORS[i])}"></i><a href="#/run/${encodeURIComponent(r.name)}">${esc(refName(r.name))}</a></span>`).join("")
+    + `<span class="bh-k"><i class="area"></i>curve: where the ${refs.length} top teams are</span>`;
   const heats = (d.heat || []).map((hm) => heatmap(hm, hm.slot === "ball" ? "Ball" : "Player slot " + (Number(hm.slot) + 1))).join("");
-  return `<section class="card flush"><div class="card-h pad"><h2>Behaviour next to the strongest teams</h2><span class="muted small">the ${refs.length} highest rated teams in the Elo ladder with measured behaviour · all measured in matches against the same rule teams, sampled moves</span></div>
-    <div class="tbl-wrap"><table><thead>${head}</thead><tbody>${rows || `<tr><td colspan="${3 + refs.length}" class="muted">no behaviour data</td></tr>`}</tbody></table></div></section>
+  return `<section class="card"><div class="card-h"><h2>Behaviour against the strongest teams</h2><span class="muted small">u${e.update} · green / red: outside the typical range of the top teams, on the better / worse side</span></div>
+    <div class="bh-legend">${legend}</div>${groups || '<div class="empty">no behaviour data</div>'}
+    <p class="muted small">Scouting numbers (possession, pressing, xG, …) exist for the teams with a scouting summary; a card counts only those.</p></section>
     <section class="card"><div class="card-h"><h2>Where the players are</h2><span class="muted small">share of time · attacking right</span></div><div class="heats">${heats || '<div class="empty">no heatmaps</div>'}</div>
     <div class="hlegend"><span>rare</span><i></i><span>often</span></div><p class="muted small">Per player slot: with no fixed roles a slot is not a position. Role-based views come with the scouting page.</p></section>`;
 }
