@@ -60,6 +60,7 @@ divergence / regression / cancel, then runs full evaluations (last checkpoint an
 - Services: `soccer-exp` (runner), `soccer-dashboard` (port 8080), `soccer-health` (units in `lab/systemd/`; deploy steps in `lab/README.md`). The hardware watchdog reboots a frozen Pi.
 
 ## Commit
+The test hook (`.githooks/`, README "Tests") is not installed on the Pi: pushes of results and notes from there are never held up.
 Results, specs and the notebook are versioned: `git -c user.name=<owner> -c user.email=<owner email> commit` (the Pi has no global
 git identity; use the identity of the existing commits), with a `Co-Authored-By` line, then `git push`.
 

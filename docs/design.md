@@ -1,7 +1,7 @@
 # Simple Soccer – Design Guide
 
 Single source of truth for the look of every menu, table and report screen of the game (the Game area of the web app).
-**If a screen needs something that is not described here, add it here first, then build it in `web/game.css` / `web/game.js`.**
+**If a screen needs something that is not described here, add it here first, then build it in `web/game.css` / `web/game/`.**
 No screen should hard-code a colour, font size or spacing: use the tokens below (CSS variables `--g-bg`, `--g-panel`, `--g-accent`, ...
 in `web/game.css`). The guide was written for the Godot version (its `UIKit`); the browser game implements the same tokens and
 components: `UIKit.card` = `.g-card`, buttons = `.g-btn` (`primary`, `ghost`), the arrow picker = `.g-pick`, `DataTable` = `.g-table`.
@@ -53,7 +53,7 @@ Corner radius: **8** for buttons/rows, **12** for cards. No borders; use surface
 
 ---
 
-## 2. Components (`web/game.css`, built by `web/game.js`)
+## 2. Components (`web/game.css`, built by `web/game/core.js`)
 
 ### Buttons – three levels, max one primary per screen
 - **Primary**: `ACCENT` fill, dark text (`BG`), height 52. The thing you want the player to do next ("Play my match", "Start Tournament", "Continue").
@@ -113,7 +113,7 @@ In-match HUD: translucent top bar only (score, clock, team names). No on-screen 
 ---
 
 ## 4. Implementation rules
-- All styling goes through `web/game.css` (classes `.g-card`, `.g-btn`, `.g-pick`, `.g-table`, `.g-tabs`, …) and the helpers in `web/game.js` (`card`, `btn`, `picker`, `table`, `select`, `field`).
+- All styling goes through `web/game.css` (classes `.g-card`, `.g-btn`, `.g-pick`, `.g-table`, `.g-tabs`, …) and the helpers in `web/game/core.js` (`card`, `btn`, `table`, …; each screen's own pickers live in its module).
 - Colours come from the `--g-*` tokens; sizes follow the type scale below.
 - A screen is allowed one Primary button.
 - Screens must work at 1280×720 up to a fullscreen MacBook (16:10); use containers and expand flags, no absolute positions.

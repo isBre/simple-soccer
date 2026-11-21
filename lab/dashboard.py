@@ -1,4 +1,4 @@
-"""The Lab part of the web app (web/app.py serves it): the experiment pipeline's JSON API. The pages are web/lab.js.
+"""The Lab part of the web app (web/app.py serves it): the experiment pipeline's JSON API. The pages are web/lab/*.js.
 Open http://<pi-address>:8080/#/ from another computer; the Lab pages poll the API below every 10 s.
   /api/overview       Pi state, the running experiment (progress, ETA), queue, every run with its latest evaluation, its Elo (lab/ladder.py)
                       and what it changes against its control; the imitation trainings (out_il/); Pi health. Runs listed in
@@ -32,7 +32,7 @@ import re
 import socket
 import threading
 import time
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from http.server import BaseHTTPRequestHandler
 from urllib.parse import unquote
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -396,7 +396,7 @@ class Handler(BaseHTTPRequestHandler):
                     return self.send(b"not found", "text/plain", 404)
                 return self.send(open(full, "rb").read(), ctype)
             if path == "/api/version":                              # the page reloads itself when the dashboard's files changed (the kiosk has no keyboard)
-                v = max(os.path.getmtime(f) for f in glob.glob(os.path.join(STATIC, "*")))
+                v = max(os.path.getmtime(f) for f in glob.glob(os.path.join(STATIC, "**", "*"), recursive=True))
                 return self.send(json.dumps({"v": v}).encode(), "application/json")
             if path == "/api/ranking":
                 from lab import ladder

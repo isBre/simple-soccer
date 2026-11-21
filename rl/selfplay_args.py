@@ -3,7 +3,7 @@ be one of these)."""
 import argparse
 import os
 
-OUT = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "out_5v5")   # = rl/ppo.py OUT
+OUT = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "out_5v5")   # = rl/agent.py OUT
 
 OBS_DIMS = {"legacy": 54, "team": 46}            # observation layouts (see soccer/ai/nets.py features_team): ego with player slot / role-free team observation
 

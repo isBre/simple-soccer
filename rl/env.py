@@ -24,7 +24,7 @@ if ROOT not in sys.path:
 
 from soccer.ai import nets                                           # noqa: E402
 from soccer.data import database                                     # noqa: E402
-from soccer.match import ENDED, GOAL, HIST, PLAYING, Match, MatchConfig   # noqa: E402
+from soccer.match import ENDED, HIST, PLAYING, Match, MatchConfig   # noqa: E402
 from soccer.rng import RandomNumberGenerator                         # noqa: E402
 
 REPEAT = 2                 # sim ticks per decision (same as the match's AI_PERIOD)

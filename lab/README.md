@@ -8,7 +8,7 @@ Runs the training experiments unattended on the Raspberry Pi and shows them on a
 | `exp_runner.py` | the runner (service `soccer-exp`): queue -> train -> fast checks -> full evaluation -> verdict |
 | `tracker.py` | the shared file formats in `exp/` (results, statuses, specs, defaults `MINIMAL` / `DEFAULTS`) |
 | `lab.py` | the agent CLI (read-only views, queue edits); `/api/v1` of the dashboard serves the same |
-| `dashboard.py` | the Lab's JSON API; the web app (`web/app.py`, service `soccer-dashboard`, port 8080) serves it, the pages are `web/lab.js` |
+| `dashboard.py` | the Lab's JSON API; the web app (`web/app.py`, service `soccer-dashboard`, port 8080) serves it, the pages are `web/lab/*.js` |
 | `live.py` | the dashboard's live demo match (newest checkpoint vs a random or picked opponent, real time) |
 | `mac_sync.py`, [`MAC.md`](MAC.md) | training on a Mac while the Pi only shows it: the sync script (Mac -> Pi results and checkpoints, Pi -> Mac queue and cancels) and `exp_runner.py --viewer-only` (service `soccer-exp-viewer`) |
 | `pi_health_log.sh` | one health line every 10 s (service `soccer-health`) |
@@ -29,7 +29,7 @@ Every evaluation writes `logs/sp_eval/<name>.txt` (readable text) and `<name>.js
 Everything is plain files: `exp/results.jsonl` (one record per evaluation, kind fast|full, league points / goal difference / head to head / behaviour, each with standard errors), `exp/results.md` (table, rewritten after every evaluation),
 `exp/runs/<name>/status.json`, `exp/runner.log`; finished specs move to `exp/done/`, broken ones to `exp/failed/`. `EXP_MLFLOW=1` also mirrors every evaluation to MLflow (`pip install mlflow-skinny`, no server;
 copy `exp/mlruns/` to another computer and run `mlflow ui` there).
-The web app (`web/app.py`, service `soccer-dashboard`, port 8080, **no login: local network only**) shows the Lab next to the Game (switch in the bar); the Lab (`web/lab.js` on the API of `lab/dashboard.py`, read-only, dark by default) polls every 10 s:
+The web app (`web/app.py`, service `soccer-dashboard`, port 8080, **no login: local network only**) shows the Lab next to the Game (switch in the bar); the Lab (`web/lab/*.js` on the API of `lab/dashboard.py`, read-only, dark by default) polls every 10 s:
 **Now** (the running experiment with progress / ETA / last fast check, or when idle the last finished run with its verdict, head to head and cost; the next specs in the queue; Pi vitals and the last reboot; the top 8 of the Elo ranking with the current run's checkpoint marked; the smoothed training curve of the running or last run; the events of the last 24 h as readable lines with fast checks grouped),
 **Live** (the match the Pi plays, drawn in the browser from a stream of positions: `lab/live.py` sends JSON over local UDP 7310, the dashboard relays it as server-sent events), **Runs** (experiments, imitation trainings, imported runs and the
 queue in one table ranked by Elo, with goals for / against from the ladder matches, what each run changes against its control, cost; filters by state,

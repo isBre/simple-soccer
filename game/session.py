@@ -18,7 +18,6 @@ Server -> page:
   {"k": "e", "error": "..."}    the match could not start
 
 Kickoff intro (as the Godot game): at every kickoff the match is held for INTRO_TICKS while the page zooms in."""
-import math
 import random
 import time
 

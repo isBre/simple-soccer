@@ -96,7 +96,7 @@ def main():
                 break
             except OSError:
                 time.sleep(0.1)
-        pages = [get(port, p) for p in ("/", "/style.css", "/game.css", "/draw.js", "/game.js", "/lab.js", "/api/docs")]
+        pages = [get(port, p) for p in ("/", "/style.css", "/game.css", "/draw.js", "/game.js", "/game/core.js", "/game/render.js", "/lab/core.js", "/lab/app.js", "/api/docs")]
         runs = json.loads(get(port, "/api/v1/runs")[1])
         results.append(check("pages", all(c == 200 and len(b) > 100 for c, b in pages) and "data" in runs, "%d files, %d runs" % (len(pages), len(runs["data"]))))
 

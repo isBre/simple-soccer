@@ -25,7 +25,7 @@ if ROOT not in sys.path:                     # run as a script: the project root
     sys.path.insert(0, ROOT)
 
 from rl.client import VecEnv                                         # noqa: E402
-from rl.ppo import Agent, load_padded, save_model, team_pools, OUT   # noqa: E402
+from rl.agent import Agent, load_padded, save_model, team_pools, OUT   # noqa: E402
 
 N_TEAM, N_LEGACY = 46, 54
 

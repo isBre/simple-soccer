@@ -13,16 +13,18 @@ Two observation layouts exist (`selfplay.py --obs`, `env.py` config `obs`, chose
 
 - `env.py`: the environment (episodes, random starts, every reward term) on the match core (`soccer/`); no Godot.
   Started as an exact copy of the earlier Godot environment; `tests/test_env.py` guards it.
-- `client.py`: vector env over N worker processes (several envs each). `ppo.py`: PPO + curriculum + model export.
+- `client.py`: vector env over N worker processes (several envs each). `agent.py`: the net (actor + critic) and its export
+  to game JSON. Training is `selfplay.py` (below); its options are in `selfplay_args.py`.
 - `evaluate.py league_eval`: plays a model against all 16 teams on both sides (full matches, all cores) and
   writes `teams_info.json` (strengths, tiers, 4 held-out teams that are never trained against).
 
-Curriculum: empty goal -> rule-based keeper -> full 90 s matches vs weak / average / strong training teams.
+The first RL teams were trained from scratch with a curriculum (empty goal -> rule-based keeper -> full matches against weak /
+average / strong teams, `rl/ppo.py`); every run since continues from a trained net, so that trainer was removed (2026-11-21,
+it is in the git history).
 
 ```bash
 python3 -m venv ~/rl-venv && ~/rl-venv/bin/pip install torch numpy --index-url https://download.pytorch.org/whl/cpu
-~/rl-venv/bin/python rl/ppo.py --stages s4_five_empty s5_vs_keeper s6_weak s7_average s8_strong
-~/rl-venv/bin/python rl/evaluate.py league_eval --model res://out_5v5/rl_s8_strong_last.json --games 2
+~/rl-venv/bin/python rl/evaluate.py league_eval --model res://data/models/rl_5v5_arena_v5.json --games 2
 ```
 
 ## New observation, warm start by imitation (`rl/distill.py`)
@@ -61,7 +63,7 @@ Results of the first teams: `docs/history/results_league_final.txt`, `docs/histo
 
 Tested setup, `jit` runs of Nov 2026:
 - Python venv with **torch 2.5.1** (`pip install torch==2.5.1 "numpy<2"`). The newest torch wheel (2.15) crashed with "illegal instruction" in the multi-threaded backward pass on this CPU.
-- The `.pt` checkpoints are not in git (`*.pt` is ignored). To start from a shipped model, convert its JSON (`data/models/*.json`: actor weights only, so the critic starts fresh and the first updates are noisy) into a `.pt` through `ppo.Agent` and `load_state_dict`.
+- The `.pt` checkpoints are not in git (`*.pt` is ignored). To start from a shipped model, convert its JSON (`data/models/*.json`: actor weights only, so the critic starts fresh and the first updates are noisy) into a `.pt` through `rl.agent.Agent` and `load_state_dict`.
 - Used for the `jit*` runs: `--workers_rule 3 --workers_self 1 --envs_per_worker 16 --minibatch 4096`. The limit is CPU, not memory (about 1.5 GB used): the Python loop steps all envs in turn and the PPO step uses all cores. Rollouts use one torch thread (tiny batches; more threads only steal CPU from the env workers), the learning step uses all of them.
 - Run training at low priority (`nice -n 15`) next to the live demo match (`lab/live.py`), so the demo keeps real time.
 

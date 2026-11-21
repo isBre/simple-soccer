@@ -61,8 +61,8 @@ Four parts, each using the one below it:
 
 ```
 web/      the web app: one server (app.py) and the page, with two areas: Game and Lab
-game/     the game's back end: catalog, match setup, tournaments, live matches (the pages are web/game.js)
-lab/      experiments on the Pi: queue, runner, Lab API, live demo match, agent CLI (the pages are web/lab.js)
+game/     the game's back end: catalog, match setup, tournaments, live matches (the pages are web/game/)
+lab/      experiments on the Pi: queue, runner, Lab API, live demo match, agent CLI (the pages are web/lab/)
 rl/       training and evaluation of the net teams (PPO, environment, league / head-to-head / scouting)
 soccer/   the match core (Python): physics, rules, stats, grades, rule-based and net AI
 data/     pitches, styles, teams, formations, shipped nets (JSON)
@@ -75,8 +75,10 @@ data/     pitches, styles, teams, formations, shipped nets (JSON)
   (fixtures, standings, statistics), `session.py` (a live match over a WebSocket), `routes.py` (the HTTP API).
 - `web/`: `app.py` (the server, standard library only: static files, `/api/game/...`, `/ws/match`, and the Lab's API from
   `lab/dashboard.py`), `ws.py` (a minimal WebSocket), `index.html` (the shell with the Game / Lab switch), `game.js` +
-  `game.css` + `draw.js` (the game: menus, match renderer, logos and kits), `lab.js` + `style.css` (the Lab).
-- `rl/` ([rl/README.md](rl/README.md)): `env.py`, `client.py`, `selfplay.py`, `ppo.py`, `distill.py`, `evaluate.py`,
+  `game/*.js` + `game.css` + `draw.js` (the game, ES modules: `game/core.js` state and helpers, one module per screen,
+  `game/render.js` the match on the canvas; logos and kits in `draw.js`), `lab/*.js` + `style.css` (the Lab: plain scripts
+  loaded in order, one per page, `lab/core.js` helpers and charts, `lab/app.js` routing and start-up).
+- `rl/` ([rl/README.md](rl/README.md)): `env.py`, `client.py`, `agent.py`, `selfplay.py`, `distill.py`, `evaluate.py`,
   `eval_checkpoint.py`, `export_team.py`, `selfplay_args.py` (the training options, without torch).
 - `lab/` ([lab/README.md](lab/README.md)): `exp_runner.py`, `tracker.py`, `lab.py`, `dashboard.py` (Lab API), `live.py`,
   `systemd/`. Results and specs live in `exp/`, checkpoints in `out_5v5/`, logs in `logs/`.
@@ -153,7 +155,11 @@ result, which the report shows. Tournament rounds are simulated in one request (
 ## Tests
 ```bash
 python3 tests/run_all.py            # everything, about 40 s; no Godot or other setup needed
+sh .githooks/install.sh             # once per computer you write code on: runs the tests before every push that changes code
 ```
+With the hook installed, a push whose commits change code runs the tests first and is stopped if one fails (`git push
+--no-verify` skips it once); pushes of results, notes or docs only (`exp/`, `docs/`, `*.md`) are not held up. Not on the Pi:
+its pushes are results, and another CPU / maths library may not reproduce the stored match results bit for bit.
 Regression tests: each one plays fixed, seeded cases with the current code and compares them with the reference results in
 `tests/golden/`. A FAIL means the code now behaves differently. If that is intended (a physics, AI, reward or report change),
 re-record with `--update` (one test or `run_all.py --update`) and commit the new files together with the change. Matches are

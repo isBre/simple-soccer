@@ -29,7 +29,7 @@ if ROOT not in sys.path:                     # run as a script: the project root
     sys.path.insert(0, ROOT)
 
 from rl.client import VecEnv                                                                   # noqa: E402
-from rl.ppo import Agent, OUT, OUT_DRAW, OUT_LOSS, OUT_WIN, load_padded, save_model, team_pools   # noqa: E402
+from rl.agent import Agent, OUT, OUT_DRAW, OUT_WIN, load_padded, team_pools                     # noqa: E402
 from rl.selfplay_args import OBS_DIMS, parser                                                  # noqa: E402
 
 CKPT = os.path.join(OUT, "ckpt")
