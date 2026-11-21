@@ -16,12 +16,19 @@ allowed. Results: exp/ladder.jsonl, one line per match (append only).
 
 How ratings are computed (fit()): Bradley-Terry on all stored results at once (win 1, draw 0.5, loss 0), on the Elo scale
 (400 points = 10:1 odds), with a weak prior (each rating ~ N(1500, 400)) so a team that never lost stays finite. The order of the
-matches does not matter, and every rating gets a 95% interval from the curvature of the likelihood. A snapshot of the ratings after
+matches does not matter, and every rating gets a 95% interval from the curvature of the likelihood, relative to the average
+rating (only differences are measured; the level of the whole scale is not).
+Goals (goal_model(), goal_table()): a Poisson model of the same matches, goals of i against j ~ Poisson(exp(mu + att_i - def_j)),
+gives every entry an attack and a defence strength; agf / aga = goals scored / conceded per 90 s match against the average entry
+of the ladder. Raw goals per match would depend on who an entry happened to play (strong entries meet strong opponents).
+Estimated Elo (estimate()): a checkpoint during training plays mixed placed entries (half spread over the ranking, half near its
+level) and only its own rating and goal strengths are fitted, the ladder's held fixed; exp/elo_estimates.jsonl, not part of the ladder. A snapshot of the ratings after
 each round goes to exp/ladder_ratings.jsonl (the history chart; older snapshots are thinned to one per hour).
 
   python3 lab/ladder.py roster                         the entries and their files
   python3 lab/ladder.py round [--pairs 8] [--workers 3] one round (2 matches per pair), then the new ratings
   python3 lab/ladder.py ratings                        the ranking (JSON)
+  python3 lab/ladder.py estimate --model M --tag T --update U [--pairs 12]   estimated Elo of a checkpoint (exp/elo_estimates.jsonl)
 The runner (lab/exp_runner.py --loop) plays a round whenever the queue is empty (exp/ladder_off disables it)."""
 import argparse
 import glob
@@ -156,7 +163,11 @@ def fit(ros=None, res=None):
         th -= step
         if np.max(np.abs(step)) < 1e-9:
             break
-    se = np.sqrt(np.maximum(np.diag(np.linalg.inv(-H)), 0.0))
+    # se relative to the average rating: only differences between ratings are measured, the level of the whole scale is set by the
+    # prior alone (its uncertainty, ~±125 at 95%, is the same for everyone and says nothing about who is better)
+    C = np.linalg.inv(-H)
+    rel = np.diag(C) - 2 * C.mean(axis=1) + C.mean()
+    se = np.sqrt(np.maximum(rel, 0.0))
     out = {}
     for k, i in ix.items():
         out[k] = {"elo": BASE + K * th[i], "se": K * se[i], "games": 0, "w": 0, "d": 0, "l": 0, "gf": 0, "ga": 0}
@@ -170,6 +181,100 @@ def fit(ros=None, res=None):
             o["w" if gf > ga else ("d" if gf == ga else "l")] += 1
     for o in out.values():
         o["pts"] = (3 * o["w"] + o["d"]) / o["games"] if o["games"] else None
+    return out
+
+
+GOAL_PRIOR_SD = 1.0              # attack / defence strengths ~ N(0, 1) on the log scale (a factor e), so a team that never conceded stays finite
+
+
+def _goal_obs(res, ix):
+    """Each match = two Poisson observations: (scorer, conceder, goals)."""
+    import numpy as np
+    sc = [ix[r["a"]] for r in res] + [ix[r["b"]] for r in res]
+    co = [ix[r["b"]] for r in res] + [ix[r["a"]] for r in res]
+    y = [r["ga"] for r in res] + [r["gb"] for r in res]
+    return np.array(sc, dtype=int), np.array(co, dtype=int), np.array(y, dtype=float)
+
+
+def goal_model(ros=None, res=None):
+    """Attack and defence strength of every entry from the goals of all stored matches (a Poisson model, as in football statistics):
+    goals of i against j ~ Poisson(exp(mu + att_i - def_j)). MAP with a N(0, GOAL_PRIOR_SD) prior, Newton's method.
+    Returns {"mu", "att": {id: (value, se)}, "def": {id: (value, se)}, "ref": [ids the 'average opponent' is taken over]}."""
+    import numpy as np
+    ros = roster() if ros is None else ros
+    res = valid(results() if res is None else res, ros)
+    ids = [e["id"] for e in ros]
+    ix = {k: i for i, k in enumerate(ids)}
+    n = len(ids)
+    sc, co, y = _goal_obs(res, ix)
+    # parameters: [mu, att_0..att_n-1, def_0..def_n-1]
+    th = np.zeros(2 * n + 1)
+    th[0] = math.log(max(y.mean(), 1e-3)) if len(y) else 0.0
+    prec = np.r_[0.0, np.full(2 * n, 1.0 / GOAL_PRIOR_SD ** 2)]
+    for _ in range(50):
+        lam = np.exp(th[0] + th[1 + sc] - th[1 + n + co])
+        r = y - lam
+        g = -prec * th
+        g[0] += r.sum()
+        np.add.at(g, 1 + sc, r)
+        np.add.at(g, 1 + n + co, -r)
+        H = -np.diag(prec)
+        H[0, 0] -= lam.sum()
+        np.add.at(H[0], 1 + sc, -lam)
+        np.add.at(H[0], 1 + n + co, lam)
+        H[1:, 0] = H[0, 1:]
+        np.add.at(H, (1 + sc, 1 + sc), -lam)
+        np.add.at(H, (1 + n + co, 1 + n + co), -lam)
+        np.add.at(H, (1 + sc, 1 + n + co), lam)
+        np.add.at(H, (1 + n + co, 1 + sc), lam)
+        step = np.linalg.solve(H - 1e-9 * np.eye(2 * n + 1), g)
+        th -= step
+        if np.max(np.abs(step)) < 1e-9:
+            break
+    cov = np.linalg.inv(-H + 1e-9 * np.eye(2 * n + 1))
+    se = np.sqrt(np.maximum(np.diag(cov), 0.0))
+    played = {i for i in ids if (sc == ix[i]).any()}
+    return {"mu": float(th[0]), "att": {k: (float(th[1 + i]), float(se[1 + i])) for k, i in ix.items()},
+            "def": {k: (float(th[1 + n + i]), float(se[1 + n + i])) for k, i in ix.items()}, "ref": sorted(played),
+            "cov": cov, "ix": ix, "n": n}
+
+
+def adjusted_goals(gm, att, deff, skip=None):
+    """Goals scored and conceded per 90 s match against the average opponent of the ladder (the mean over the entries that have
+    played): {gf, ga, gf_se, ga_se}. att / deff = (value, se) of the team in question."""
+    opp = [k for k in gm["ref"] if k != skip] or gm["ref"]
+    if not opp:
+        return {"gf": None, "ga": None, "gf_se": None, "ga_se": None}
+    gf = sum(math.exp(gm["mu"] + att[0] - gm["def"][j][0]) for j in opp) / len(opp)
+    ga = sum(math.exp(gm["mu"] + gm["att"][j][0] - deff[0]) for j in opp) / len(opp)
+    return {"gf": gf, "ga": ga, "gf_se": gf * att[1], "ga_se": ga * deff[1]}      # delta method, the team's own uncertainty only
+
+
+def _ladder_se(gm, k, opp):
+    """se of an entry's adjusted goals from the full covariance of the fit (mu, attacks and defences are estimated together:
+    only their combination is well determined)."""
+    import numpy as np
+    n, ix, cov = gm["n"], gm["ix"], gm["cov"]
+    i = ix[k]
+    gf_g, ga_g = np.zeros(2 * n + 1), np.zeros(2 * n + 1)
+    for j in opp:
+        e = math.exp(gm["mu"] + gm["att"][k][0] - gm["def"][j][0]) / len(opp)
+        gf_g[0] += e; gf_g[1 + i] += e; gf_g[1 + n + ix[j]] -= e
+        e = math.exp(gm["mu"] + gm["att"][j][0] - gm["def"][k][0]) / len(opp)
+        ga_g[0] += e; ga_g[1 + ix[j]] += e; ga_g[1 + n + i] -= e
+    return float(np.sqrt(max(gf_g @ cov @ gf_g, 0.0))), float(np.sqrt(max(ga_g @ cov @ ga_g, 0.0)))
+
+
+def goal_table(ros=None, res=None):
+    """{id: {gf, ga, gf_se, ga_se, att, def}}: every entry's opponent-adjusted goals (adjusted_goals), se from the fit's covariance."""
+    gm = goal_model(ros, res)
+    out = {}
+    for k in gm["att"]:
+        opp = [j for j in gm["ref"] if j != k] or gm["ref"]
+        g = adjusted_goals(gm, gm["att"][k], gm["def"][k], skip=k)
+        if g["gf"] is not None:
+            g["gf_se"], g["ga_se"] = _ladder_se(gm, k, opp)
+        out[k] = {**g, "att": gm["att"][k][0], "def": gm["def"][k][0]}
     return out
 
 
@@ -252,12 +357,7 @@ def play_round(pairs_n=8, workers=3, path=RESULTS, seed=None):
     by = {e["id"]: e for e in ros}
     jobs = [(by[i], by[j], rng.randrange(1, 1 << 31)) for i, j in pairs]
     t0 = time.time()
-    if workers > 1 and len(jobs) > 1:
-        with mp.get_context("spawn").Pool(min(workers, len(jobs)), initializer=_nice) as pool:
-            recs = [r for pair in pool.map(play_pair, jobs) for r in pair]
-    else:
-        _nice()
-        recs = [r for j in jobs for r in play_pair(j)]
+    recs = _play(jobs, workers)
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, "a") as f:
         for r in recs:
@@ -267,6 +367,123 @@ def play_round(pairs_n=8, workers=3, path=RESULTS, seed=None):
         append_history({"t": time.strftime("%Y-%m-%dT%H:%M:%S"), "matches": len(valid(results(path), ros)),
                         "elo": {k: round(v["elo"], 1) for k, v in rat.items() if v["games"]}})
     return {"matches": len(recs), "seconds": round(time.time() - t0, 1), "pairs": pairs, "ratings": rat}
+
+
+ESTIMATES = os.path.join(EXP, "elo_estimates.jsonl")
+EST_PAIRS = 12                   # pairs per estimate (2 matches each): about ±140 Elo at 95%
+
+
+def _rating_vs_fixed(opp_elo, scores):
+    """MAP rating (Elo scale) of one team against opponents whose ratings are held fixed, with the ladder's prior. (elo, se)."""
+    tau = PRIOR_SD / K
+    th = 0.0
+    for _ in range(60):
+        g, h = -th / tau ** 2, -1.0 / tau ** 2
+        for oe, s in zip(opp_elo, scores):
+            p = 1.0 / (1.0 + math.exp(-(th - (oe - BASE) / K)))
+            g += s - p
+            h -= p * (1 - p)
+        step = g / h
+        th -= step
+        if abs(step) < 1e-10:
+            break
+    return BASE + K * th, K / math.sqrt(-h)
+
+
+def _strength_vs_fixed(base, y, sign):
+    """MAP attack (sign +1: goals scored, base_k = mu - def_opp) or defence (sign -1: goals conceded, base_k = mu + att_opp) of one
+    team against opponents held fixed: y_k ~ Poisson(exp(base_k + sign * x)), prior N(0, GOAL_PRIOR_SD). (x, se)."""
+    x = 0.0
+    for _ in range(60):
+        lam = [math.exp(b + sign * x) for b in base]
+        g = sign * sum(yy - l for yy, l in zip(y, lam)) - x / GOAL_PRIOR_SD ** 2
+        h = -sum(lam) - 1.0 / GOAL_PRIOR_SD ** 2
+        step = g / h
+        x -= step
+        if abs(step) < 1e-10:
+            break
+    return x, 1.0 / math.sqrt(-h)
+
+
+def _summarise(me, recs, rat, gm):
+    opp = [(r["b"], r["ga"], r["gb"]) for r in recs]
+    elo, se = _rating_vs_fixed([rat[o]["elo"] for o, _, _ in opp], [1.0 if gf > ga else 0.5 if gf == ga else 0.0 for _, gf, ga in opp])
+    att = _strength_vs_fixed([gm["mu"] - gm["def"][o][0] for o, _, _ in opp], [gf for _, gf, _ in opp], +1)
+    dfn = _strength_vs_fixed([gm["mu"] + gm["att"][o][0] for o, _, _ in opp], [ga for _, _, ga in opp], -1)
+    w = sum(1 for _, gf, ga in opp if gf > ga)
+    d = sum(1 for _, gf, ga in opp if gf == ga)
+    return {"elo": round(elo, 1), "se": round(se, 1), "lo": round(elo - 1.96 * se, 1), "hi": round(elo + 1.96 * se, 1),
+            **{k: (round(v, 3) if v is not None else None) for k, v in adjusted_goals(gm, att, dfn).items()},
+            "games": len(opp), "w": w, "d": d, "l": len(opp) - w - d,
+            "raw_gf": round(sum(gf for _, gf, _ in opp) / len(opp), 3), "raw_ga": round(sum(ga for _, _, ga in opp) / len(opp), 3)}
+
+
+def _play(jobs, workers):
+    if workers > 1 and len(jobs) > 1:
+        with mp.get_context("spawn").Pool(min(workers, len(jobs)), initializer=_nice) as pool:
+            return [r for pair in pool.map(play_pair, jobs) for r in pair]
+    _nice()
+    return [r for j in jobs for r in play_pair(j)]
+
+
+def estimate(model, tag, update, pairs=EST_PAIRS, workers=3, seed=None, path=ESTIMATES):
+    """Estimated Elo of a checkpoint during training: it plays `pairs` placed ladder entries (2 matches each, sides swapped) and
+    only its own rating is fitted, everyone else's held at their ladder values (the ladder itself is not changed). Opponents are
+    mixed: the first half spread over the whole ranking (one random entry from each slice), the second half near the rating
+    that first half gave (drawn with weight p(1-p): close games tell the most). Goals scored / conceded are adjusted for the
+    opponents with the ladder's goal model (adjusted_goals). One line per estimate in exp/elo_estimates.jsonl."""
+    t0 = time.time()
+    ros, res = roster(), results()
+    rat, gm = fit(ros, res), goal_model(ros, res)
+    by = {e["id"]: e for e in ros}
+    placed = sorted([e["id"] for e in ros if rat[e["id"]]["games"] >= PLACEMENT], key=lambda i: rat[i]["elo"])
+    if not placed:
+        raise SystemExit("the ladder has no placed entries yet")
+    full = model if os.path.isabs(model) else os.path.join(ROOT, model)
+    me = {"id": "est:%s_u%d" % (tag, update), "name": "%s u%d" % (tag, update), "team": NET_SQUAD, "model": os.path.relpath(full, ROOT), "sha": _sha(full)}
+    rng = random.Random(seed if seed is not None else hash((tag, update)) & 0xFFFFFFFF)
+    pairs = min(pairs, len(placed))
+    n1 = max(1, pairs // 2)
+    first = [placed[min(len(placed) - 1, int((k + rng.random()) * len(placed) / n1))] for k in range(n1)]
+    first = list(dict.fromkeys(first))
+    recs = _play([(me, by[o], rng.randrange(1, 1 << 31)) for o in first], workers)
+    if pairs > len(first):
+        mid = _summarise(me, _as_mine(me, recs), rat, gm)["elo"]
+        left = [o for o in placed if o not in first]
+        chosen = []
+        while left and len(first) + len(chosen) < pairs:
+            wts = [max(1e-6, (lambda p: p * (1 - p))(1.0 / (1.0 + 10 ** ((rat[o]["elo"] - mid) / 400.0)))) for o in left]
+            x, acc = rng.random() * sum(wts), 0.0
+            for o, wgt in zip(left, wts):
+                acc += wgt
+                if acc >= x:
+                    break
+            chosen.append(o)
+            left.remove(o)
+        recs += _play([(me, by[o], rng.randrange(1, 1 << 31)) for o in chosen], workers)
+    mine = _as_mine(me, recs)
+    out = {"t": time.strftime("%Y-%m-%dT%H:%M:%S"), "protocol": "estimate/" + PROTOCOL, "tag": tag, "run": tag[2:] if tag.startswith("x_") else tag,
+           "update": update, "model": me["model"], "sha": me["sha"], **_summarise(me, mine, rat, gm),
+           "seconds": round(time.time() - t0, 1), "ladder_matches": len(valid(res, ros)),
+           "matches": [{"opp": r["b"], "opp_elo": round(rat[r["b"]]["elo"]), "gf": r["ga"], "ga": r["gb"], "side": r["a_side"], "seed": r["seed"]} for r in mine]}
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "a") as f:
+        f.write(json.dumps(out) + "\n")
+    return out
+
+
+def _as_mine(me, recs):
+    """The match records seen from the estimated checkpoint (it is always `a` in play_pair's jobs)."""
+    return [r for r in recs if r["a"] == me["id"]]
+
+
+def estimates(path=ESTIMATES, run=None):
+    """The stored estimates (one per checkpoint; a repeated one replaces the older line), optionally of one run, in update order."""
+    by = {}
+    for r in results(path):
+        if run is None or r.get("run") == run:
+            by[(r.get("run"), r.get("update"))] = r
+    return sorted(by.values(), key=lambda r: (r.get("run") or "", r.get("update") or 0))
 
 
 def thin_history(lines, now=None):
@@ -305,11 +522,14 @@ def ranking(path=RESULTS):
     ros = roster()
     res = results(path)
     rat = fit(ros, res)
+    goals = goal_table(ros, res)
     rows = []
     for e in ros:
         r = rat[e["id"]]
+        g = goals.get(e["id"], {})
         rows.append({**{k: e[k] for k in ("id", "name", "league", "kind", "model") if k in e},
-                     **{k: (round(v, 1) if isinstance(v, float) else v) for k, v in r.items()}, "placed": r["games"] >= PLACEMENT})
+                     **{k: (round(v, 1) if isinstance(v, float) else v) for k, v in r.items()}, "placed": r["games"] >= PLACEMENT,
+                     **{"a" + k: (round(g[k], 3) if g.get(k) is not None else None) for k in ("gf", "ga", "gf_se", "ga_se")}})
     rows.sort(key=lambda x: -x["elo"])
     for i, r in enumerate(rows):
         r["rank"] = i + 1
@@ -325,6 +545,36 @@ def ranking(path=RESULTS):
             "recent": v[-30:]}
 
 
+ARCHIVE = os.path.join(EXP, "ladder_archive")
+
+
+def archive(label="", dry_run=False, results_path=RESULTS, history_path=HISTORY, archive_dir=ARCHIVE):
+    """Starts the ranking over, only when the user decides (never automatically): moves every stored match (ladder.jsonl) and the
+    rating history (ladder_ratings.jsonl) to exp/ladder_archive/<date>[_<label>]/, with info.json (when, how many matches, the
+    ranking at that moment). Nothing is deleted; archived matches simply no longer count. Run it on the machine that plays the
+    ladder (with lab/MAC.md's setup: the Mac, whose exp/ is copied to the Pi). Returns what moved (or would move)."""
+    res = results(results_path)
+    name = time.strftime("%Y-%m-%d") + ("_" + "".join(c if c.isalnum() or c in "-_" else "_" for c in label) if label else "")
+    dest, k = os.path.join(archive_dir, name), 2
+    while os.path.exists(dest):
+        dest, k = os.path.join(archive_dir, "%s_%d" % (name, k)), k + 1
+    info = {"archived": time.strftime("%Y-%m-%dT%H:%M:%S"), "label": label, "matches": len(res),
+            "first": res[0]["t"] if res else None, "last": res[-1]["t"] if res else None,
+            "files": [os.path.basename(p) for p in (results_path, history_path) if os.path.exists(p)],
+            "folder": os.path.relpath(dest, ROOT)}
+    if res and results_path == RESULTS:
+        info["top"] = [{"id": r["id"], "elo": r["elo"], "games": r["games"]} for r in ranking(results_path)["rows"][:20]]
+    if dry_run or not info["files"]:
+        return info
+    os.makedirs(dest)
+    for p in (results_path, history_path):
+        if os.path.exists(p):
+            os.replace(p, os.path.join(dest, os.path.basename(p)))
+    with open(os.path.join(dest, "info.json"), "w") as f:
+        json.dump(info, f, indent=1)
+    return info
+
+
 def main():
     ap = argparse.ArgumentParser()
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -336,6 +586,14 @@ def main():
     p.add_argument("--rounds", type=int, default=1)
     p.add_argument("--out", default=RESULTS, help="results file (default exp/ladder.jsonl; another file = a test, no history)")
     sub.add_parser("ratings")
+    p = sub.add_parser("estimate", help="estimated Elo of one checkpoint (not added to the ladder)")
+    p.add_argument("--model", required=True)
+    p.add_argument("--tag", required=True)
+    p.add_argument("--update", type=int, required=True)
+    p.add_argument("--pairs", type=int, default=EST_PAIRS)
+    p.add_argument("--workers", type=int, default=3)
+    p.add_argument("--seed", type=int, default=None)
+    p.add_argument("--out", default=ESTIMATES)
     a = ap.parse_args()
     if a.cmd == "roster":
         for e in roster():
@@ -347,6 +605,9 @@ def main():
         rk = ranking(os.path.abspath(a.out))
         for row in rk["rows"]:
             print("%3d %-34s %6.0f ± %3.0f  %3d games" % (row["rank"], row["id"], row["elo"], 1.96 * row["se"], row["games"]))
+    elif a.cmd == "estimate":
+        r = estimate(a.model, a.tag, a.update, a.pairs, a.workers, a.seed, os.path.abspath(a.out))
+        print(json.dumps({k: v for k, v in r.items() if k != "matches"}))
     else:
         print(json.dumps(ranking(), indent=1))
 

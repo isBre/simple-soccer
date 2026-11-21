@@ -1,11 +1,15 @@
 # Experiment log (lab notebook)
 
-What was tried, what came out, and what we concluded. Numbers are league points per match against the 16 rule-based teams
-(3 = always win), mean ± standard error, unless stated. Full evaluations use 90 s matches (32 matches); fast checks use 60 s matches
+What was tried, what came out, and what we concluded. Up to 2026-11-21 numbers are league points per match against the 16 rule-based teams
+(3 = always win), mean ± standard error, unless stated; from then on runs are judged by Elo and goals scored / conceded (standing decision below). Full evaluations use 90 s matches (32 matches); fast checks use 60 s matches
 against every 3rd team (24 matches) and are only comparable with other fast checks. Raw results: `exp/results.jsonl`, table: `exp/results.md`,
 dashboard: `http://<pi-address>:8080`. Newest entries at the bottom; the agent appends a review after every finished experiment.
 
 ## Standing decisions (read first)
+- **Runs are judged by Elo, goals scored and goals conceded** (user, 2026-11-21): the Elo ladder rating of the run's best checkpoint and
+  its opponent-adjusted goals per match against the average ladder team (`lab/ladder.py`). No better / worse verdict: a finished run is
+  placed in the ladder and its rating settles as the ladder plays. During training every check also gives an estimated Elo (24 matches
+  against mixed ladder entries, about ±140). Points against the rule bots saturate near 3 and are kept only as a health check.
 - **No fixed roles.** One net drives all 5 players; the observation has no player slot or ID, so roles must come from the situation (decided 2026-11-14).
 - **Observation `team` (46 numbers):** me, my 4 teammates nearest first, the 5 opponents nearest first, the ball (positions and velocities,
   normalised), a kickoff flag and a goal-celebration flag. No goal positions, no "ball relative to me", no score, no time.
@@ -220,3 +224,12 @@ New scouting numbers `ball_corner_pct` / `ball_corner_ours_pct` (ball within 150
 - Runs on the user's MacBook Air (M4, fanless) instead of the Pi: same batch and worker settings as the Pi runs (so it stays comparable), started with background QoS (efficiency cores), nice 10, evaluations capped at 3 processes (`SOCCER_PROCS=3`, new in `rl/evaluate.py`), no ladder loop afterwards. The runner skips the Pi's kiosk browser off Linux.
 - Read-out: h2h vs RL Team 4 / 5 against the 80-game band of 46-number nets (0.76-1.09 / 0.85-1.00); if the 16-game h2h looks better, confirm with an 80-game run before believing it.
 
+### Note 2026-11-21: evaluation switched to Elo and goals
+- The user's call: comparing points against the rule bots no longer tells runs apart (every recent run 2.81-2.94 of 3). From now on a run
+  is judged by its Elo in the ladder and its goals scored / conceded; the runner writes no verdict.
+- Goals are opponent-adjusted (a Poisson attack / defence model of all ladder matches): raw goals per match depended on who an entry
+  played, and the ladder pairs close ratings, so strong nets met strong opponents. Example: RL Team 5 scores 1.43 raw but 2.34 adjusted.
+- The ladder's 95% intervals were about ±125 for everyone: that was the uncertainty of the level of the whole scale (the prior), not of
+  who is better. They are now relative to the average rating: about ±25-30 after 700-900 games.
+- During training every fast check adds an estimated Elo: 24 matches, half spread over the ranking, half near the checkpoint's level,
+  only its own rating fitted. Checked on three nets with known ladder ratings (4 estimates each): mean within 40 Elo of the ladder value.

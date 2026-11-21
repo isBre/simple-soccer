@@ -65,6 +65,8 @@ def parser():
     ap.add_argument("--ckpt_every", type=int, default=100)
     ap.add_argument("--eval_every", type=int, default=100, help="complete evaluation of the checkpoint every N updates (multiple of --ckpt_every; 0 = never); training is paused meanwhile")
     ap.add_argument("--fast_every", type=int, default=0, help="FAST check (16 short matches + head to head vs --fast_ref) every N updates, training paused; 0 = never")
+    ap.add_argument("--fast_rules", type=int, default=1, help="1: the FAST check also plays the fixed matches against the rule bots (logs/sp_eval/<tag>_fast.txt); 0: only the estimated Elo")
+    ap.add_argument("--elo_pairs", type=int, default=0, help="with each FAST check: estimated Elo from this many pairs of ladder matches (lab/ladder.py estimate, 2 matches per pair, training paused); 0 = none")
     ap.add_argument("--fast_ref", default="", help="game-model JSON of the net the run started from (the fast check plays it head to head)")
     ap.add_argument("--learn_threads", type=int, default=2, help="torch threads of the learning step (all 4 would fight the env workers for the CPU: the Pi froze)")
     ap.add_argument("--trainer_fg", type=int, default=1, help="macOS, runner in background mode (TrainerQos): 1 = the trainer process leaves it (about 1.5x faster, about 0.7 W more), 0 = it stays (coolest). Env workers and evaluations always keep it. Speed only")

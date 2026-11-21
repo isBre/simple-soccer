@@ -17,24 +17,24 @@ function viewRun(name, tab) {
   return head + ({ summary: runSummary, training: runTraining, evaluation: runEvaluation, behaviour: runBehaviour, scouting: runScouting, config: runConfig }[tab])(d);
 }
 const refEval = (d, protocol) => (d.reference?.evals || []).filter((e) => e.protocol === protocol).pop();
+// the run's Elo: the ladder rating of its best checkpoint once placed, the estimates of its checkpoints during training, the start net
+function runElo(d) {
+  const row = (state.ov?.runs || []).find((r) => r.name === d.run) || {}, e = row.elo, es = d.estimates || [], est = es[es.length - 1];
+  return { e: e && e.games ? e : null, est, se: d.start_elo, g: ladderGoals(e && e.games ? e : null, est) };
+}
 function runSummary(d) {
-  const fulls = d.evals.filter((e) => e.kind === "full"), fasts = d.evals.filter((e) => e.kind === "fast");
-  const last = fulls[fulls.length - 1], v = d.status.verdict, h = last?.h2h || {};
+  const { e, est, se, g } = runElo(d);
+  const cur = e ? e.elo : est ? est.elo : null, dStart = cur != null && se ? cur - se.elo : null;
   const kp = `<div class="kpis">
-    ${kpi(`League pts <span class="muted">${last ? "u" + last.update : ""}</span>`, last ? `${f(last.pts)}<small>± ${f(last.se)}</small>` : "–", last ? esc(last.protocol) : "no full evaluation yet")}
-    ${kpi("Goal difference", last ? sgn(last.gd) : "–", last ? `GF ${f(last.gf)} · GA ${f(last.ga)}` : "", last && last.gd > 0 ? "pos" : last && last.gd < 0 ? "neg" : "")}
-    ${kpi("Best move", last && last.greedy_pts != null ? f(last.greedy_pts) : "–", last && last.greedy_ga != null ? `GA ${f(last.greedy_ga)}` : "")}
-    ${kpi("vs RL Team 4", f(h["RL Team 4"]?.pts), h["RL Team 4"] ? `n ${h["RL Team 4"].n} · GD ${sgn(h["RL Team 4"].gd)}` : "")}
-    ${kpi("vs RL Team 5", f(h["RL Team 5"]?.pts), h["RL Team 5"] ? `n ${h["RL Team 5"].n} · GD ${sgn(h["RL Team 5"].gd)}` : "")}
-    ${kpi("Verdict", v && v.verdict ? esc(v.verdict) : "–", v && v.verdict ? `${sgn(v.pts)} ± ${f(v.pts_se)} vs ${esc(v.reference)}${v.paired ? " · paired" : ""}` : "after the full evaluation", v?.verdict === "better" ? "pos" : v?.verdict === "worse" ? "neg" : "")}</div>`;
-  const xMax = Math.max(100, d.row?.target || 0, ...d.evals.map((e) => e.update));
-  const evChart = (list, protocol, title) => {
-    const ref = refEval(d, protocol);
-    return `<section class="card"><div class="card-h"><h2>${title}</h2><span class="muted small">${esc(protocol)} · 95% interval</span></div>${lineChart([{ name: d.run, color: runColor(d.run), points: list.map((e) => ({ x: e.update, y: e.pts, err: 1.96 * e.se, hollow: e.kind === "fast" })), dots: true, noLine: true }],
-      { yMin: 0, yMax: 3, height: 200, xMin: 0, xMax, bands: ref ? [{ y0: ref.pts - 1.96 * ref.se, y1: ref.pts + 1.96 * ref.se, label: "reference " + (d.reference.name || "") }] : [], emptyText: "none yet", key: "ev" + protocol })}</section>`;
-  };
-  return `${kp}<div class="grid g2">${evChart(fulls, "full/g1/d90", "Full evaluations")}${evChart(fasts, "fast/g2/d60", "Fast checks")}</div>
-    <section class="card"><div class="card-h"><h2>Training points</h2>${smoothControl()}</div>${trainingChart(d, 250, "run", 1240)}</section>`;
+    ${kpi("Elo", e ? `${f(e.elo, 0)}<small>± ${f((e.hi - e.lo) / 2, 0)}</small>` : "–", e ? (e.placed ? `#${e.rank} · ${e.games} ladder games · ${e.w}–${e.d}–${e.l}` : `placing: ${e.games}/6 games`) : "best checkpoint not in the ladder yet")}
+    ${kpi(`Estimated Elo <span class="muted">${est ? "u" + est.update : ""}</span>`, est ? `~${f(est.elo, 0)}<small>± ${f(1.96 * est.se, 0)}</small>` : "–", est ? `${est.games} games · ${est.w}–${est.d}–${est.l}` : "comes with every check")}
+    ${kpi("vs start net", dStart != null ? sgn(dStart, 0) : "–", se ? `${esc(se.name)} ${se.estimate ? "~" : ""}${f(se.elo, 0)}${se.estimate ? " (estimate u0)" : ""}` : "start net not rated", dStart > 0 ? "pos" : dStart < 0 ? "neg" : "")}
+    ${kpi("Goals scored", g ? f(g.gf) : "–", g ? `per match vs the average ladder team${g.gf_se != null ? " · ±" + f(1.96 * g.gf_se) : ""}${g.est ? " · estimate" : ""}` : "")}
+    ${kpi("Goals conceded", g ? f(g.ga) : "–", g ? `per match vs the average ladder team${g.ga_se != null ? " · ±" + f(1.96 * g.ga_se) : ""}${g.est ? " · estimate" : ""}` : "")}
+    ${kpi("Goal difference", g ? sgn(g.gd) : "–", g ? "scored − conceded" : "", g && g.gd > 0 ? "pos" : g && g.gd < 0 ? "neg" : "")}</div>`;
+  return `${kp}<div class="grid g2"><section class="card"><div class="card-h"><h2>Estimated Elo</h2><span class="muted small">each check · 95% interval</span></div>${estChart(d, 220, "sum")}</section>
+    <section class="card"><div class="card-h"><h2>Goals per match</h2><span class="muted small">estimates · vs the average ladder team</span></div>${estGoalsChart(d, 220, "sum")}</section></div>
+    <section class="card"><div class="card-h"><h2>Training points</h2><span class="muted small">sampled play during training, a trend signal</span>${smoothControl()}</div>${trainingChart(d, 250, "run", 1240)}</section>`;
 }
 function runTraining(d) {
   const p = d.ppo || [], t = d.training || [], a = state.smooth;
@@ -60,40 +60,44 @@ function runTraining(d) {
   <section class="card flush"><div class="card-h pad"><h2>Reward per player and match</h2><span class="muted small">mean of the last 20 updates</span></div><div class="tbl-wrap"><table><thead><tr><th>Term</th><th class="r">per match</th><th class="r">share</th></tr></thead><tbody>${table || '<tr><td colspan="3" class="muted">no data</td></tr>'}</tbody></table></div></section></div>`;
 }
 function runEvaluation(d) {
-  const evs = d.evals;
-  if (!evs.length) return '<div class="empty">No evaluation yet</div>';
-  const e = evs.find((x) => x.id && x.id === state.evalPick[d.run]) || evs.filter((x) => x.kind === "full").pop() || evs[evs.length - 1];
-  const sel = `<select data-evalpick="${esc(d.run)}">${evs.map((x) => `<option value="${esc(x.id || "")}" ${x === e ? "selected" : ""}>${x.kind} · u${x.update} · ${esc(x.protocol)}</option>`).join("")}</select>`;
-  const ref = refEval(d, e.protocol);
-  const L = e.league_all || {}, G = e.greedy_all || {}, R = ref || null;
-  const tiers = ["weak", "average", "strong", "elite", "held", "train", "all"].filter((t) => L[t]);
-  const tierRows = tiers.map((t) => `<tr><td>${t === "held" ? "held-out teams" : t === "train" ? "trained-against" : t === "all" ? "<b>all 16</b>" : t}</td><td class="r">${f(L[t].pts)}<span class="pm">±${f(L[t].se)}</span></td><td class="r ${L[t].gd > 0 ? "pos" : L[t].gd < 0 ? "neg" : ""}">${sgn(L[t].gd)}</td><td class="r">${f(L[t].ga)}</td><td class="r">${L[t].n}</td><td class="r">${G[t] ? f(G[t].pts) : "–"}</td><td class="r">${G[t] ? f(G[t].ga) : "–"}</td></tr>`).join("");
-  const h2h = Object.entries(e.h2h_full || {}).map(([k, v]) => `<tr><td>${esc(k)}</td><td class="r">${f(v.pts)}<span class="pm">±${f(v.se)}</span></td><td class="r">${v.w}/${v.d}/${v.l}</td><td class="r ${v.gd > 0 ? "pos" : v.gd < 0 ? "neg" : ""}">${sgn(v.gd)}</td><td class="r">${v.n}</td></tr>`).join("");
-  let fr;
-  if (R && R.league_all && d.reference.name !== d.run) {
-    const floor = (x) => Math.max(x.se, 0.5 / Math.sqrt(Math.max(x.n, 1)));
-    const rowsF = tiers.filter((t) => R.league_all[t] && t !== "all").map((t) => { const dd = L[t].pts - R.league_all[t].pts, se = Math.hypot(floor(L[t]), floor(R.league_all[t])); return { label: t, d: dd, se, sig: Math.abs(dd / se) > 1.96 }; });
-    const key = `${d.run}|${e.update}|${e.kind}`, c = state.cmpCache[key];
-    if (c && c.pts != null) rowsF.unshift({ label: "all 16" + (c.paired ? " · paired" : ""), d: c.pts, se: c.pts_se, sig: Math.abs(c.z) > 1.96, sub: `z ${f(c.z, 1)}` });
-    else fetchCompare(d.run, e, d.reference.name, R.update, key);
-    fr = `<section class="card"><div class="card-h"><h2>Difference vs ${esc(d.reference.name)}</h2><span class="muted small">${esc(e.protocol)}</span></div>${forest(rowsF)}</section>`;
-  } else fr = `<section class="card"><div class="card-h"><h2>Difference vs reference</h2></div><div class="empty">No reference evaluation with protocol ${esc(e.protocol)}</div></section>`;
-  return `<div class="toolbar">Evaluation ${sel} <span class="muted small">${e.eval_seconds ? "took " + dur(e.eval_seconds) : ""}${e.paired_matches ? " · " + e.paired_matches + " matches stored" : ""}</span></div>
-    <div class="grid g2"><section class="card flush"><div class="card-h pad"><h2>League by opponent tier</h2></div><div class="tbl-wrap"><table><thead><tr><th>Opponents</th><th class="r">Pts</th><th class="r">GD</th><th class="r">GA</th><th class="r">N</th><th class="r">Best move</th><th class="r">GA</th></tr></thead><tbody>${tierRows}</tbody></table></div></section>
-    ${fr}</div><section class="card flush"><div class="card-h pad"><h2>Head to head</h2></div><div class="tbl-wrap"><table><thead><tr><th>Opponent</th><th class="r">Pts</th><th class="r">W/D/L</th><th class="r">GD</th><th class="r">N</th></tr></thead><tbody>${h2h || '<tr><td colspan="5" class="muted">none</td></tr>'}</tbody></table></div></section>`;
+  loadRanking();
+  const { e, se } = runElo(d), es = d.estimates || [];
+  const name = Object.fromEntries((rk.data?.rows || []).map((r) => [r.id, r.name]));
+  const pick = es.find((x) => x.update === state.estPick[d.run]) || es[es.length - 1];
+  const rowsE = es.slice().reverse().map((x) => `<tr class="${x === pick ? "focus" : ""}"><td>u${x.update}${x.update === 0 ? ' <span class="muted small">start net</span>' : ""}</td><td class="r"><b>${f(x.elo, 0)}</b><span class="pm">±${f(1.96 * x.se, 0)}</span></td>
+    <td class="r">${f(x.gf)}</td><td class="r">${f(x.ga)}</td><td class="r ${x.gf - x.ga > 0 ? "pos" : x.gf - x.ga < 0 ? "neg" : ""}">${sgn(x.gf - x.ga)}</td><td class="r nowrap">${x.w}–${x.d}–${x.l}</td><td class="r muted small">${f(x.raw_gf)} – ${f(x.raw_ga)}</td><td class="r">${x.games}</td></tr>`).join("");
+  const ladderRow = e ? `<tr class="lad"><td><b>ladder</b> <span class="muted small">best checkpoint</span></td><td class="r"><b>${f(e.elo, 0)}</b><span class="pm">±${f((e.hi - e.lo) / 2, 0)}</span></td><td class="r">${f(e.agf)}</td><td class="r">${f(e.aga)}</td><td class="r ${e.agf - e.aga > 0 ? "pos" : "neg"}">${sgn(e.agf - e.aga)}</td><td class="r nowrap">${e.w}–${e.d}–${e.l}</td><td class="r muted small">${f(e.gf / e.games)} – ${f(e.ga / e.games)}</td><td class="r">${e.games}${e.placed ? "" : ' <span class="muted small">placing</span>'}</td></tr>` : "";
+  const startRow = se && se.games && !se.estimate ? `<tr class="dim"><td>start net <span class="muted small">${esc(se.name)}</span></td><td class="r">${f(se.elo, 0)}<span class="pm">±${f((se.hi - se.lo) / 2, 0)}</span></td><td class="r">${f(se.agf)}</td><td class="r">${f(se.aga)}</td><td class="r">${se.agf != null ? sgn(se.agf - se.aga) : "–"}</td><td></td><td></td><td class="r">${se.games}</td></tr>` : "";
+  const table = `<section class="card flush"><div class="card-h pad"><h2>Elo and goals</h2><span class="muted small">goals per 90 s match vs the average ladder team (opponent-adjusted) · raw = as played</span></div><div class="tbl-wrap"><table><thead><tr><th>Checkpoint</th><th class="r">Elo</th><th class="r">GF</th><th class="r">GA</th><th class="r">GD</th><th class="r">W–D–L</th><th class="r">raw GF – GA</th><th class="r">Games</th></tr></thead>
+    <tbody>${ladderRow}${rowsE || (ladderRow ? "" : '<tr><td colspan="8" class="muted">No estimate yet: one comes with every check (every 50 updates).</td></tr>')}${startRow}</tbody></table></div></section>`;
+  const sel = es.length ? `<select data-estpick="${esc(d.run)}">${es.map((x) => `<option value="${x.update}" ${x === pick ? "selected" : ""}>u${x.update}</option>`).join("")}</select>` : "";
+  const matches = pick ? `<section class="card flush"><div class="card-h pad"><h2>Matches of the estimate ${sel}</h2><span class="muted small">${pick.games} games · ${pick.seconds ? "took " + dur(pick.seconds) : ""} · opponents mixed: half spread over the ranking, half near its level</span></div><div class="tbl-wrap"><table class="mini"><thead><tr><th>Opponent</th><th class="r">Their Elo</th><th class="r">Score</th><th class="r">Side</th></tr></thead><tbody>${(pick.matches || []).slice().sort((a, b) => b.opp_elo - a.opp_elo || a.side - b.side).map((m) => `<tr><td>${esc(name[m.opp] || m.opp)}</td><td class="r">${m.opp_elo}</td><td class="r ${m.gf > m.ga ? "pos" : m.gf < m.ga ? "neg" : ""}"><b>${m.gf}–${m.ga}</b></td><td class="r muted small">${m.side ? "away" : "home"}</td></tr>`).join("")}</tbody></table></div></section>` : "";
+  return `<div class="grid g2"><section class="card"><div class="card-h"><h2>Estimated Elo</h2><span class="muted small">each check · 95% interval</span></div>${estChart(d, 220, "ev")}</section>
+    <section class="card"><div class="card-h"><h2>Goals per match</h2><span class="muted small">estimates · vs the average ladder team</span></div>${estGoalsChart(d, 220, "ev")}</section></div>
+    ${table}${matches}`;
 }
+// behaviour of the run's newest full evaluation next to the strongest rated teams (dashboard.behaviour_refs: RL Team 4 / 5, jit8,
+// the best checkpoint of the top runs); the bar = the range of those teams, the dot = this run
+const refName = (n) => n.replace(/^team:/, "").replace(/^old_/, "");
 function runBehaviour(d) {
   const e = d.evals.filter((x) => x.kind === "full").pop();
   if (!e) return '<div class="empty">Behaviour is measured in full evaluations: none yet</div>';
-  const b = e.behaviour || {}, rb = e.behaviour_rule_bots || {};
-  const bars = BEHAVIOUR.filter(([k]) => b[k] != null).map(([k, label, , dec]) => {
-    const v = b[k], r = rb[k], mx = Math.max(v, r || 0) * 1.15 || 1;
-    return `<div class="bh"><div class="bl">${label}</div><div class="bt"><i style="width:${(100 * v) / mx}%;background:${runColor(d.run)}"></i>${r != null ? `<span class="rf" style="left:${(100 * r) / mx}%" title="rule bots ${f(r, dec)}"></span>` : ""}</div><div class="bv">${f(v, dec)}${r != null ? `<span class="pm"> rules ${f(r, dec)}</span>` : ""}</div></div>`;
+  const b = e.behaviour || {}, refs = d.behaviour_refs || [];
+  const rows = BEHAVIOUR.filter(([k]) => b[k] != null).map(([k, label, , dec]) => {
+    const vals = refs.map((r) => r.behaviour?.[k]).filter((v) => v != null), v = b[k];
+    let bar = "";
+    if (vals.length) {
+      const lo = Math.min(...vals), hi = Math.max(...vals), a = Math.min(lo, v), z = Math.max(hi, v), X = (x) => 4 + ((x - a) / (z - a || 1)) * 112;
+      bar = `<svg width="120" height="14" viewBox="0 0 120 14" class="rkbar"><line x1="${X(lo)}" x2="${X(hi)}" y1="7" y2="7" stroke="var(--muted)" stroke-width="5" stroke-linecap="round" opacity=".35"/><circle cx="${X(v)}" cy="7" r="4.5" fill="${runColor(d.run)}"/></svg>`;
+    }
+    return `<tr><td>${label}</td><td class="r"><b>${f(v, dec)}</b></td><td>${bar}</td>${refs.map((r) => `<td class="r muted">${f(r.behaviour?.[k], dec)}</td>`).join("")}</tr>`;
   }).join("");
+  const head = `<tr><th>Behaviour</th><th class="r">${esc(d.run)} <span class="muted small">u${e.update}</span></th><th><span class="muted small">range of the teams on the right</span></th>${refs.map((r) => `<th class="r" title="${esc(r.kind)} evaluation u${r.update} (${esc(r.protocol || "")})">${runLink(r.name).replace(esc(r.name) + "</a>", esc(refName(r.name)) + "</a>")}<div class="muted small">Elo ${f(r.elo, 0)}</div></th>`).join("")}</tr>`;
   const heats = (d.heat || []).map((hm) => heatmap(hm, hm.slot === "ball" ? "Ball" : "Player slot " + (Number(hm.slot) + 1))).join("");
-  return `<div class="grid g2"><section class="card"><div class="card-h"><h2>Behaviour vs the rule bots</h2><span class="muted small">u${e.update} · tick = rule bots</span></div>${bars}</section>
+  return `<section class="card flush"><div class="card-h pad"><h2>Behaviour next to the strongest teams</h2><span class="muted small">the ${refs.length} highest rated teams in the Elo ladder with measured behaviour · all measured in matches against the same rule teams, sampled moves</span></div>
+    <div class="tbl-wrap"><table><thead>${head}</thead><tbody>${rows || `<tr><td colspan="${3 + refs.length}" class="muted">no behaviour data</td></tr>`}</tbody></table></div></section>
     <section class="card"><div class="card-h"><h2>Where the players are</h2><span class="muted small">share of time · attacking right</span></div><div class="heats">${heats || '<div class="empty">no heatmaps</div>'}</div>
-    <div class="hlegend"><span>rare</span><i></i><span>often</span></div><p class="muted small">Per player slot: with no fixed roles a slot is not a position. Role-based views come with the scouting page.</p></section></div>`;
+    <div class="hlegend"><span>rare</span><i></i><span>often</span></div><p class="muted small">Per player slot: with no fixed roles a slot is not a position. Role-based views come with the scouting page.</p></section>`;
 }
 function runConfig(d) {
   const c = d.config || {}, m = d.minimal || {}, df = d.defaults || {};

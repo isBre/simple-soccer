@@ -5,12 +5,14 @@ An experiment is one small JSON file (exp/queue/<NN>_<name>.json), run in file-n
    "rewards": {"w_win": 3.0, "w_draw": 1.0}, "notes": "does the win/draw bonus help on top of the minimal set?"}
 `rewards` overrides MINIMAL below (goals, passing, cooperation, spacing while attacking, kick discipline); any selfplay option can be given
 in "args" (e.g. {"workers_rule": 2}). Per experiment the runner:
-  1. evaluates the start net once (fast + full, cached per start file) = the baseline,
-  2. trains; every `fast_every` updates selfplay pauses for a FAST check (16 short matches, same seeds, vs the start net),
+  1. estimates the start net's Elo (update 0 of the run); with `fast_rules` 1 also its fixed rule-bot checks (fast + full, cached),
+  2. trains; every `fast_every` updates selfplay pauses for a check: an estimated Elo (lab/ladder.py estimate: `elo_pairs` pairs
+     of matches against mixed ladder entries, exp/elo_estimates.jsonl), plus the fixed rule-bot matches when `fast_rules` is 1,
   3. stops early: `diverged` (training points vs the rule bots fall under 70% of their start value) or `regressed`
-     (two fast checks in a row worse than the baseline by more than 2 standard errors),
-  4. otherwise runs a FULL evaluation of the last checkpoint and compares it with the baseline (tracker.compare: verdict
-     better / worse / no difference, using the standard errors).
+     (two estimated Elos in a row below the start net's by more than 2 standard errors of the difference),
+  4. otherwise runs a FULL evaluation (behaviour, scouting) of the last checkpoint and of the one with the highest estimated Elo,
+     keeps the better of the two by estimated Elo as the run's best checkpoint (x_<run>_best) and places it in the Elo ladder.
+     There is no better / worse verdict: a run is judged by its Elo in the ladder, which keeps updating as more matches are played.
 Everything is written to exp/ (see lab/tracker.py). After a reboot the runner resumes the running experiment from its last checkpoint.
 
   ~/rl-venv/bin/python lab/exp_runner.py --loop [--viewer]        (installed as the systemd service soccer-exp.service)
@@ -36,7 +38,7 @@ ROOT, EXP = tracker.ROOT, tracker.EXP
 CKPT = os.path.join(ROOT, "out_5v5", "ckpt")
 MINIMAL, DEFAULTS = tracker.MINIMAL, tracker.DEFAULTS
 DIVERGE_FRACTION = 0.7          # training points vs the rule bots below this share of their starting value: stop
-REGRESS_SE = 2.0                # fast check worse than the baseline by more than this many standard errors, twice in a row: stop
+REGRESS_SE = 2.0                # estimated Elo below the start net's by more than this many standard errors, twice in a row: stop
 
 
 def log(msg):
@@ -155,16 +157,40 @@ def view_only():
         time.sleep(30)
 
 
-def reference_for(spec, base_name, rows):
-    """(name, record) a finished run is judged against: the control run's full evaluation at the closest update (same protocol)
-    when the spec names a "control", otherwise the start net's full evaluation."""
-    ctrl = spec.get("control")
-    if ctrl:
-        cands = [r for r in rows if r["run"] == ctrl and r["kind"] == "full"]
-        if cands:
-            target = int(spec.get("updates", DEFAULTS["updates"]))
-            return ctrl, min(cands, key=lambda r: abs(r["update"] - target))
-    return base_name, tracker.latest(base_name, "full", rows=rows)
+def elo_estimate(model, tag, update, pairs):
+    """lab/ladder.py estimate of one checkpoint (blocking). The record, or None."""
+    if pairs <= 0:
+        return None
+    p = subprocess.run([sys.executable, os.path.join(ROOT, "lab", "ladder.py"), "estimate", "--model", os.path.join(ROOT, model), "--tag", tag,
+                        "--update", str(update), "--pairs", str(pairs), "--workers", "3"], cwd=ROOT, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+    try:
+        return json.loads(p.stdout.strip().splitlines()[-1])
+    except (ValueError, IndexError):
+        log("estimated Elo of %s u%d failed: %s" % (tag, update, p.stdout.strip()[-300:]))
+        return None
+
+
+def keep_best(tag, update):
+    """Makes checkpoint `update` the run's best (out_5v5/ckpt/<tag>_best.json/.pt, logs/<tag>_best.json): the ladder entry of the run."""
+    src = os.path.join(CKPT, "%s_u%d" % (tag, update))
+    if not os.path.exists(src + ".json"):
+        return
+    shutil.copy(src + ".json", os.path.join(CKPT, tag + "_best.json"))
+    if os.path.exists(src + ".pt"):
+        shutil.copy(src + ".pt", os.path.join(CKPT, tag + "_best.pt"))
+    with open(os.path.join(ROOT, "logs", tag + "_best.json"), "w") as f:
+        json.dump({"checkpoint": "%s_u%d" % (tag, update), "update": update, "by": "estimated Elo", "model": os.path.relpath(src + ".json", ROOT)}, f)
+
+
+def place_in_ladder(tag, rounds=3):
+    """Plays ladder rounds right after a run until its best checkpoint is placed (PLACEMENT games): otherwise a busy queue would
+    leave it unrated. New entries are paired first (ladder.choose_pairs)."""
+    from lab import ladder
+    for _ in range(rounds):
+        rat = ladder.fit()
+        r = rat.get("net:%s_best" % tag)
+        if r is None or r["games"] >= ladder.PLACEMENT or not ladder_round():
+            return
 
 
 def run_experiment(spec_path, viewer=False):
@@ -185,7 +211,8 @@ def run_experiment(spec_path, viewer=False):
         spec_path = dest
     rewards, args = tracker.effective(spec)
     start_json = json_of(spec["start"])
-    base_name = baseline(start_json)
+    fast_rules = int(args.get("fast_rules", 1) or 0)
+    base_name = baseline(start_json) if fast_rules else "start:" + os.path.basename(start_json)[:-5]
     base_fast = tracker.latest(base_name, "fast")
     upd_end = int(spec.get("updates", DEFAULTS["updates"]))
     start_update, ckpt = last_checkpoint(tag)
@@ -198,11 +225,17 @@ def run_experiment(spec_path, viewer=False):
         start = os.path.relpath(ckpt, ROOT)
     else:
         start, start_update = spec["start"], 0
+    elo_pairs = int(args.get("elo_pairs", 0) or 0)
+    from lab import ladder
+    if elo_pairs and not any(e.get("update") == 0 for e in ladder.estimates(run=name)):
+        log("%s: estimated Elo of the start net" % name)
+        elo_estimate(start_json, tag, 0, elo_pairs)
     commit, dirty = tracker.git_commit()
     tracker.set_status(name, state="running", spec=spec, baseline_run=base_name, started=st.get("started", int(time.time())), tag=tag,
                        target_updates=upd_end, effective_rewards=rewards, effective_args=args, seed=args.get("seed"), git_commit=commit,
                        git_dirty=dirty, boot_id=boot, restarts=restarts, control=spec.get("control"), net=tracker.net_info(spec["start"]))
     done = set(st.get("recorded", []))
+    done_est = set(st.get("recorded_est", []))
     base_train = st.get("base_train")
     bad_checks = st.get("bad_checks", 0)
     train_s = st.get("train_s", 0.0)
@@ -236,10 +269,21 @@ def run_experiment(spec_path, viewer=False):
                 rec = tracker.add_result(name, u, "fast", path)
                 c = tracker.compare(rec, base_fast)
                 if c.get("z") is not None:
-                    bad_checks = bad_checks + 1 if c["z"] < -REGRESS_SE else 0
                     log("%s u%d fast: pts %.2f, vs start %+.2f ± %.2f (%s, z %.1f)" % (name, u, rec["league"]["all"]["pts"], c["pts"], c["pts_se"],
                                                                                      "paired" if c["paired"] else "unpaired", c["z"]))
-            tracker.set_status(name, update=upd, train_pts=pts, base_train=base_train, bad_checks=bad_checks, recorded=sorted(done), train_s=round(train_s))
+            ests = ladder.estimates(run=name)
+            e0 = next((e for e in ests if e.get("update") == 0), None)
+            for e in ests:                                             # the regression check: estimated Elo against the start net's
+                if not e.get("update") or e["update"] in done_est:
+                    continue
+                done_est.add(e["update"])
+                if e0:
+                    z = (e["elo"] - e0["elo"]) / max(1e-9, (e["se"] ** 2 + e0["se"] ** 2) ** 0.5)
+                    bad_checks = bad_checks + 1 if z < -REGRESS_SE else 0
+                    log("%s u%d estimated Elo %.0f ± %.0f, vs start %+.0f (z %.1f), GF %.2f GA %.2f" % (name, e["update"], e["elo"], 1.96 * e["se"],
+                                                                                                    e["elo"] - e0["elo"], z, e["gf"], e["ga"]))
+            tracker.set_status(name, update=upd, train_pts=pts, base_train=base_train, bad_checks=bad_checks, recorded=sorted(done),
+                               recorded_est=sorted(done_est), train_s=round(train_s))
             if os.path.exists(cancel_flag):
                 stop_reason = "cancelled"
             elif bad_checks >= 2:
@@ -266,30 +310,42 @@ def run_experiment(spec_path, viewer=False):
     if stop_reason == "budget" and final_ckpt:
         cands = {final_update}
         rows = tracker.load_results()
-        fasts = [r for r in rows if r["run"] == name and r["kind"] == "fast" and r["league"].get("all")]
-        if fasts:                                                      # also the best fast check, if it is another checkpoint
-            best = max(fasts, key=lambda r: r["league"]["all"]["pts"])
+        ests = {e["update"]: e for e in ladder.estimates(run=name) if e.get("update")}
+        if ests:                                                       # also the checkpoint with the highest estimated Elo
+            best = max(ests.values(), key=lambda e: e["elo"])
             if os.path.exists(os.path.join(CKPT, "%s_u%d.json" % (tag, best["update"]))):
                 cands.add(best["update"])
+        else:                                                          # older runs without estimates: the best fast check
+            fasts = [r for r in rows if r["run"] == name and r["kind"] == "fast" and r["league"].get("all")]
+            if fasts:
+                best = max(fasts, key=lambda r: r["league"]["all"]["pts"])
+                if os.path.exists(os.path.join(CKPT, "%s_u%d.json" % (tag, best["update"]))):
+                    cands.add(best["update"])
         for u in sorted(cands):
             model = "out_5v5/ckpt/%s_u%d.json" % (tag, u)
             out = "logs/sp_eval/%s_u%d.txt" % (tag, u)
             log("%s: full evaluation of update %d" % (name, u))
             if evaluate(model, out, "full", refs=[("start", start_json)]):
                 full_evals.append(tracker.add_result(name, u, "full", os.path.join(ROOT, out)))
-    verdict = None
-    final = next((r for r in full_evals if r["update"] == final_update), None)
-    if final:
-        ref_name, ref = reference_for(spec, base_name, tracker.load_results())
-        verdict = {**tracker.compare(final, ref), "reference": ref_name, "update": final_update}
+    if full_evals and elo_pairs:
+        ests = {e["update"]: e for e in ladder.estimates(run=name)}
+        if final_update not in ests:
+            ests[final_update] = elo_estimate("out_5v5/ckpt/%s_u%d.json" % (tag, final_update), tag, final_update, elo_pairs)
+        ok = [u for u in {r["update"] for r in full_evals} if ests.get(u)]
+        if ok:
+            best_u = max(ok, key=lambda u: ests[u]["elo"])
+            keep_best(tag, best_u)
+            log("%s: best checkpoint u%d (estimated Elo %.0f)" % (name, best_u, ests[best_u]["elo"]))
     eval_s = sum(r.get("seconds") or 0 for r in tracker.load_results() if r["run"] == name)
     state = {"budget": "done", "error": "failed"}.get(stop_reason, stop_reason)
-    tracker.set_status(name, state=state, stop_reason=stop_reason, finished=int(time.time()), final_update=final_update, verdict=verdict,
+    tracker.set_status(name, state=state, stop_reason=stop_reason, finished=int(time.time()), final_update=final_update, verdict=None,
                        cost_hours={"train": round(train_s / 3600, 2), "eval": round(eval_s / 3600, 2)})
     shutil.move(spec_path, os.path.join(EXP, "failed" if state == "failed" else "done", os.path.basename(spec_path)))
     if os.path.exists(cancel_flag):
         os.remove(cancel_flag)
-    log("%s finished: %s %s" % (name, state, json.dumps(verdict) if verdict else ""))
+    log("%s finished: %s" % (name, state))
+    if state == "done" and not os.path.exists(os.path.join(EXP, "ladder_off")):
+        place_in_ladder(tag)
 
 
 def next_spec():

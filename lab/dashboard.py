@@ -44,6 +44,7 @@ if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 from lab import lab  # noqa: E402  (lab/lab.py: the agent CLI; /api/v1 serves the same functions)
 from lab import tracker  # noqa: E402
+from lab import ladder  # noqa: E402
 EXP = os.path.join(ROOT, "exp")
 LOGS = os.path.join(ROOT, "logs")
 STATIC = os.path.join(ROOT, "web")                 # the page shell, styles and scripts (Lab and Game)
@@ -90,8 +91,9 @@ def elo_table(ttl=60):
             extra = [{"id": k, "name": k[4:], "league": "rl", "kind": "net", "sha": sha, "stored": True} for k, sha in newest.items()
                      if k not in have and k.startswith("net:x_") and k.endswith("_best") and os.path.isdir(os.path.join(EXP, "runs", k[6:-5]))]
             ros = ros + extra
-            rat = ladder.fit(ros, res)
-            rows = sorted(({**e, **rat[e["id"]], "placed": rat[e["id"]]["games"] >= ladder.PLACEMENT} for e in ros), key=lambda r: -r["elo"])
+            rat, goals = ladder.fit(ros, res), ladder.goal_table(ros, res)
+            rows = sorted(({**e, **rat[e["id"]], "placed": rat[e["id"]]["games"] >= ladder.PLACEMENT,
+                            **{"a" + k: goals.get(e["id"], {}).get(k) for k in ("gf", "ga", "gf_se", "ga_se")}} for e in ros), key=lambda r: -r["elo"])
             for i, r in enumerate(rows):
                 r["rank"] = i + 1
             _elo_cache["rows"] = {r["id"]: r for r in rows}
@@ -110,10 +112,10 @@ def elo_of(name, rows, st=None):
     else:
         ids = ["net:" + lab.tag_of(name, st) + "_best", "net:" + name]
     r = next((rows[i] for i in ids if i in rows), None)
-    return {k: r.get(k) for k in ("id", "elo", "se", "lo", "hi", "rank", "games", "placed", "w", "d", "l", "gf", "ga", "stored")} if r else None
+    return {k: r.get(k) for k in ("id", "elo", "se", "lo", "hi", "rank", "games", "placed", "w", "d", "l", "gf", "ga", "agf", "aga", "agf_se", "aga_se", "stored")} if r else None
 
 
-OPERATIONAL = ("ckpt_every", "fast_every", "learn_threads", "envs_per_worker", "trainer_fg")   # how fast it trains, not what it learns
+OPERATIONAL = ("ckpt_every", "fast_every", "elo_pairs", "fast_rules", "learn_threads", "envs_per_worker", "trainer_fg")   # how fast it trains, not what it learns
 
 
 def settings(st, spec):
@@ -195,6 +197,7 @@ def overview():
             r["hidden"] = hidden[r["name"]]
         r["type"] = "rl"                               # RL Team 4 / 5 (the reference teams) were trained with RL too
         r["elo"] = elo_of(r["name"], elo, st)
+        r["start_elo"] = start_elo(st, r["name"])
         if st.get("spec"):
             r["changes"], r["vs"] = changes(st, st["spec"])
     queue = lab.cmd_queue(ns(action="list"))
@@ -229,9 +232,45 @@ def run_detail(run):
             "scout_ref": {"name": "RL Team 4", **ref_sc["scout"]} if ref_sc and run != "team:RL Team 4" else None, "config": rj(os.path.join(LOGS, tag + "_config.json"), {}),
             "training": lab.thin(lab.training(tag), 500), "ppo": lab.thin(lab.latest_segment(lab.jl(os.path.join(LOGS, tag + "_ppo.jsonl"))), 400),
             "terms": lab.thin(lab.latest_segment([{"upd": t["upd"], **t["terms"]} for t in lab.jl(os.path.join(LOGS, tag + "_terms.jsonl"))]), 300),
-            "evals": evals, "reference": {"name": ref_name, "evals": ref},
+            "evals": evals, "reference": {"name": ref_name, "evals": ref}, "estimates": ladder.estimates(run=run),
+            "start_elo": start_elo(st, run),
+            "behaviour_refs": behaviour_refs(run, rows, names),
             "heat": heatmaps(os.path.join(ROOT, last_full["file"])) if last_full and last_full.get("file") else [],
             "minimal": tracker.MINIMAL, "defaults": tracker.DEFAULTS}
+
+
+def behaviour_refs(run, rows, names, k=6):
+    """The strongest teams with measured behaviour, to compare a run's behaviour with: every run / reference team / imported net
+    whose ladder entry is placed (RL Team 4 and 5, jit8, the best checkpoint of each run), its newest record with behaviour (a full
+    evaluation, else a scouting one), the k highest rated. [{name, elo, update, kind, protocol, behaviour}]"""
+    table, out = elo_table(), []
+    for n in names:
+        if n == run:
+            continue
+        rec = next((r for r in reversed(rows) if r["run"] == n and r.get("behaviour") and r["kind"] == "full"), None) or \
+            next((r for r in reversed(rows) if r["run"] == n and r.get("behaviour")), None)
+        e = elo_of(n, table, tracker.run_status(n)) if rec else None
+        if e and e.get("placed"):
+            out.append({"name": n, "elo": e["elo"], "update": rec["update"], "kind": rec["kind"], "protocol": rec.get("protocol"), "behaviour": rec["behaviour"]})
+    out.sort(key=lambda r: -r["elo"])
+    return out[:k]
+
+
+def start_elo(st, run=None):
+    """The Elo of the net a run started from: its ladder entry (models/<stem>.json, a run's best checkpoint), else the run's
+    estimate at update 0 (the runner estimates the start net before training; "estimate": True). None if neither exists."""
+    start = ((st.get("spec") or {}).get("start") or "")
+    if not start:
+        return None
+    stem = os.path.basename(start).rsplit(".", 1)[0]
+    r = elo_table().get("net:" + stem)
+    if r and r.get("games"):
+        return {"name": stem, **{k: r.get(k) for k in ("elo", "se", "lo", "hi", "agf", "aga", "games", "placed")}}
+    e0 = next((e for e in ladder.estimates(run=run) if e.get("update") == 0), None) if run else None
+    if e0:
+        return {"name": stem, "elo": e0["elo"], "se": e0["se"], "lo": e0["lo"], "hi": e0["hi"], "agf": e0.get("gf"), "aga": e0.get("ga"),
+                "games": e0["games"], "placed": False, "estimate": True}
+    return None
 
 
 def health_view(hours=12.0):

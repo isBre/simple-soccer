@@ -29,7 +29,8 @@ function stateCell(r, o) {
   else if (r.queued) sub = `#${r.qpos} in queue`;
   else if (["diverged", "regressed", "failed", "cancelled"].includes(r.state)) sub = r.stop_reason && r.stop_reason !== r.state ? esc(r.stop_reason) : r.update != null ? `stopped at ${r.update}` : "";
   if (r.restarts) sub += `${sub ? " · " : ""}${r.restarts} restart${r.restarts > 1 ? "s" : ""}`;
-  return `${badge(r.state === "evaluating" ? "evaluating" : r.state)}${sub ? `<div class="muted small">${sub}</div>` : ""}`;
+  const st = r.state === "evaluating" ? "evaluating" : r.state || "unknown";
+  return `<span class="st ${esc(st)}">${esc(st)}</span>${sub ? `<div class="muted small">${sub}</div>` : ""}`;
 }
 function updateCell(r) {
   if (r.update == null && !r.target) return r.queued ? "" : "–";
@@ -38,8 +39,13 @@ function updateCell(r) {
   const cls = ["diverged", "regressed", "failed"].includes(r.state) ? "bad" : r.state === "cancelled" || r.queued ? "off" : "";
   return `${r.update ?? 0}${r.target ? `<span class="pm">/${r.target}</span><div class="upd-bar ${cls}"><i style="width:${pct}%"></i></div>` : ""}`;
 }
-const ladderGoals = (e) => (e && e.games ? { gf: e.gf / e.games, ga: e.ga / e.games, gd: (e.gf - e.ga) / e.games } : null);
-function eloCell(e, top) {
+// goals scored / conceded per 90 s match against the average ladder entry (lab/ladder.py goal model: adjusted for who was played);
+// from the ladder when the run's best checkpoint is in it, else from the run's latest estimated Elo
+const ladderGoals = (e, est) => (e && e.games && e.agf != null ? { gf: e.agf, ga: e.aga, gd: e.agf - e.aga, gf_se: e.agf_se, ga_se: e.aga_se, est: false }
+  : est && est.gf != null ? { gf: est.gf, ga: est.ga, gd: est.gf - est.ga, gf_se: est.gf_se, ga_se: est.ga_se, est: true } : null);
+const estTip = "estimated Elo: the checkpoint played mixed ladder entries during training and only its own rating was fitted (lab/ladder.py estimate); the ladder rating replaces it once the run's best checkpoint is placed";
+function eloCell(e, top, est) {
+  if (!e && est) return `<b class="est" title="${esc(estTip)}">~${Math.round(est.elo)}</b><span class="pm">±${Math.round(1.96 * est.se)}</span><div class="muted small">estimate · u${est.update} · ${est.games} games</div>`;
   if (!e) return '<span class="muted" title="not in the Elo ladder (no exported best checkpoint)">–</span>';
   const pm = e.hi != null ? Math.round((e.hi - e.lo) / 2) : null;
   return `<b class="${e.id === top ? "pos" : ""}">${Math.round(e.elo)}</b>${pm != null ? `<span class="pm">±${pm}</span>` : ""}<div class="muted small" title="${e.w}-${e.d}-${e.l} (won-drawn-lost) in ${e.games} ladder matches">${e.placed ? `#${e.rank}` : "placing"} · ${e.games} games${e.stored ? ' <span class="stored" title="rated from the ladder matches the Pi already played; this machine has no copy of the weights (out_5v5/ckpt/ stays on the Pi)">*</span>' : ""}</div>`;
@@ -75,7 +81,7 @@ function viewRuns() {
   const pass = (r, skip) => Object.entries(tests).every(([k, t]) => k === skip || t(r));
   let rows = all.filter((r) => pass(r));
   const k = state.sort.key, dir = state.sort.dir;
-  const val = (r) => { const e = ladderGoals(r.elo); return { name: r.name, type: r.type, state: r.state, elo: r.elo?.elo ?? -1, gf: e ? e.gf : -99, gd: e ? e.gd : -99, ga: e ? e.ga : 99, cost: r.cost_hours ? (r.cost_hours.train || 0) + (r.cost_hours.eval || 0) : -1, fin: r.finished || r.started || "" }[k]; };
+  const val = (r) => { const e = ladderGoals(r.elo, r.elo_estimate); return { name: r.name, type: r.type, state: r.state, elo: r.elo?.elo ?? r.elo_estimate?.elo ?? -1, gf: e ? e.gf : -99, gd: e ? e.gd : -99, ga: e ? e.ga : 99, cost: r.cost_hours ? (r.cost_hours.train || 0) + (r.cost_hours.eval || 0) : -1, fin: r.finished || r.started || "" }[k]; };
   rows.sort((x, y) => (val(x) > val(y) ? 1 : val(x) < val(y) ? -1 : 0) * dir);
   const th = (key, l, cls = "", tip = "") => `<th class="sort ${cls}" data-sort="${key}"${tip ? ` title="${esc(tip)}"` : ""}>${l}${k === key ? (dir > 0 ? " ↑" : " ↓") : ""}</th>`;
   // each choice shows how many runs it would leave, given the other filters
@@ -99,21 +105,21 @@ function viewRuns() {
   const ladder = o.runs.concat(o.imitation || []).filter((r) => r.elo?.placed).sort((x, y) => y.elo.elo - x.elo.elo);
   const top = ladder[0]?.elo.id;
   const body = rows.map((r) => {
-    const g = ladderGoals(r.elo), sel = state.selected.has(r.name), link = !r.queued && r.type !== "imitation";
+    const g = ladderGoals(r.elo, r.elo_estimate), sel = state.selected.has(r.name), link = !r.queued && r.type !== "imitation";
     const [tl, tt] = TYPE_LABEL[r.type] || [r.type || "", ""];
     return `<tr class="${link ? "link" : "queued"}" data-run="${link ? esc(r.name) : ""}"><td class="k-hide">${link ? `<input type="checkbox" data-pick="${esc(r.name)}" ${sel ? "checked" : ""} aria-label="select ${esc(r.name)}">` : ""}</td>
       <td title="${esc(r.notes || "")}" class="${r.hidden ? "hid" : ""}">${link ? runLink(r.name) : `<span class="rl"><i class="dot" style="background:${r.queued ? "var(--line)" : runColor(r.name)}"></i>${esc(r.name)}</span>`}</td>
+      <td class="r small k-hide">${r.cost_hours ? f((r.cost_hours.train || 0) + (r.cost_hours.eval || 0), 1) + " h" : ""}</td><td class="small muted k-hide nowrap">${r.finished ? ago(r.finished) : r.started ? "since " + ago(r.started).replace(" ago", "") : ""}</td>
       <td class="k-hide"><span class="type ${esc(r.type || "")}" title="${esc(tt)}">${esc(tl)}</span></td>
       <td>${stateCell(r, o)}</td>
       <td class="k-hide">${changesCell(r)}</td>
       <td class="r">${updateCell(r)}</td>
-      <td class="r elo">${r.queued ? "" : eloCell(r.elo, top)}</td>
-      <td class="r">${g ? f(g.gf) : "–"}</td><td class="r">${g ? f(g.ga) : "–"}</td><td class="r ${g && g.gd > 0 ? "pos" : g && g.gd < 0 ? "neg" : ""}">${g ? sgn(g.gd) : "–"}</td>
-      <td class="r small k-hide">${r.cost_hours ? f((r.cost_hours.train || 0) + (r.cost_hours.eval || 0), 1) + " h" : ""}</td><td class="small muted k-hide">${r.finished ? ago(r.finished) : r.started ? "since " + ago(r.started).replace(" ago", "") : ""}</td></tr>`;
+      <td class="r elo">${r.queued ? "" : eloCell(r.elo, top, r.elo_estimate)}</td>
+      <td class="r ${g?.est ? "est" : ""}">${g ? f(g.gf) : "–"}</td><td class="r ${g?.est ? "est" : ""}">${g ? f(g.ga) : "–"}</td><td class="r ${g && g.gd > 0 ? "pos" : g && g.gd < 0 ? "neg" : ""}">${g ? sgn(g.gd) : "–"}</td></tr>`;
   }).join("");
   const n = state.selected.size;
-  return `<div class="head"><div><h1>Runs</h1><p>Experiments, imitation trainings, imported runs and the queue, ranked by Elo. Hover a name for its notes; tick runs to compare them; click a row for details.</p></div>
+  return `<div class="head"><div><h1>Runs</h1><p>Experiments, imitation trainings, imported runs and the queue, ranked by Elo, with goals scored and conceded against the average ladder team (grey ~ = estimated during training). Hover a name for its notes; tick runs to compare them; click a row for details.</p></div>
       <div class="tools"><a class="btn ${n ? "" : "disabled"}" href="#/compare?runs=${[...state.selected].map(encodeURIComponent).join(",")}">Compare ${n ? "(" + n + ")" : ""}</a></div></div>
     ${filters}
-    <div class="card flush"><div class="tbl-wrap"><table class="runs"><thead><tr><th class="k-hide"></th>${th("name", "Run")}${th("type", "Type", "k-hide", "how the net was trained")}${th("state", "State")}<th class="k-hide" title="what this run changes against its control (vs …), or against the default recipe (from = the net it starts from)">Changes</th><th class="r">Update</th>${th("elo", "Elo", "r", "rating of the run's best checkpoint in the Elo ladder (lab/ladder.py: every team and net against each other), ±95%; the number to pick the best model by")}${th("gf", "GF", "r", "goals scored per match in the Elo ladder's matches (the same matches the Elo comes from)")}${th("ga", "GA", "r", "goals conceded per match in the Elo ladder's matches")}${th("gd", "GD", "r", "goal difference per match in the Elo ladder's matches")}${th("cost", "Cost", "r k-hide", "Pi hours: training + evaluation")}${th("fin", "When", "k-hide")}</tr></thead><tbody>${body || '<tr><td colspan="12" class="muted">No runs match</td></tr>'}</tbody></table></div></div>`;
+    <div class="card flush"><div class="tbl-wrap"><table class="runs"><thead><tr><th class="k-hide"></th>${th("name", "Run")}${th("cost", "Cost", "r k-hide", "Pi hours: training + evaluation")}${th("fin", "When", "k-hide")}${th("type", "Type", "k-hide", "how the net was trained")}${th("state", "State")}<th class="k-hide" title="what this run changes against its control (vs …), or against the default recipe (from = the net it starts from)">Changes</th><th class="r">Update</th>${th("elo", "Elo", "r", "rating of the run's best checkpoint in the Elo ladder (lab/ladder.py: every team and net against each other), ±95%; the number to pick the best model by. ~ = estimated during training, until the ladder has placed it")}${th("gf", "GF", "r", "goals scored per 90 s match against the average ladder team (opponent-adjusted, from the same matches as the Elo)")}${th("ga", "GA", "r", "goals conceded per 90 s match against the average ladder team (opponent-adjusted)")}${th("gd", "GD", "r", "GF - GA")}</tr></thead><tbody>${body || '<tr><td colspan="12" class="muted">No runs match</td></tr>'}</tbody></table></div></div>`;
 }

@@ -199,8 +199,8 @@ tbody tr.queued td { opacity: .6; }
 td.r, th.r { text-align: right; }
 .pm { color: var(--muted); font-size: 11.5px; margin-left: 2px; }
 table.runs td:nth-child(2) { white-space: normal; min-width: 170px; }
-table.runs td:nth-child(4) { white-space: normal; min-width: 110px; }
-table.runs td:nth-child(5) { white-space: normal; min-width: 270px; }
+table.runs td:nth-child(6) { white-space: normal; min-width: 90px; }
+table.runs td:nth-child(7) { white-space: normal; min-width: 270px; }
 
 /* charts */
 .chart { position: relative; }
@@ -421,3 +421,18 @@ tr.thin td:first-child::after { content: " · thin"; color: var(--warn, var(--ba
 table.rank td { vertical-align: middle; }
 table.rank tr.dim td { opacity: .6; }
 .rkbar { display: block; }
+/* Elo estimates (web/lab.js runEvaluation, eloCell): estimated values are greyed, the selected estimate and the ladder row highlighted */
+.est { color: var(--muted); }
+b.est { color: var(--ink); opacity: .7; }
+tr.focus td { background: var(--accent-soft); }
+tr.lad td { background: var(--panel-2); }
+tr.dim td { opacity: .6; }
+.hero-stats span b.inl { display: inline; font-size: inherit; }
+/* Runs table state (web/lab.js stateCell): plain text with a small dot; colour only where it matters (running, evaluating, stopped) */
+.st { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; color: var(--ink-2); white-space: nowrap; }
+.st::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--muted); opacity: .6; }
+.st.done::before { background: var(--good); opacity: .8; }
+.st.running { color: var(--good); } .st.running::before { background: var(--good); opacity: 1; animation: blink 1.6s ease-in-out infinite; }
+.st.evaluating { color: var(--warn); } .st.evaluating::before { background: var(--warn); opacity: 1; }
+.st.diverged, .st.regressed, .st.failed { color: var(--bad); } .st.diverged::before, .st.regressed::before, .st.failed::before { background: var(--bad); opacity: 1; }
+.st.queued, .st.cancelled, .st.imported, .st.reference { color: var(--muted); }
