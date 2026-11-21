@@ -25,6 +25,27 @@ The Pi's Elo ladder rounds then run on the Mac too (`touch exp/ladder_off` there
 `envs_per_worker 16`, `learn_threads 2`) were chosen for the Pi's 4 cores; on a Mac with more cores a spec may set larger values in `args`
 (they change speed, not what is learned).
 
+## Speed and heat (fanless MacBook Air M4, measured 2026-11-21)
+`lab/mac_run.sh` runs everything in macOS background mode (`taskpolicy -b`): efficiency cores only. The same Python work costs about
+3.6 times less energy there than on a performance core (1.0 J vs 3.6 J for one test loop), so the long simulation stays there.
+- The match core, the rule AI and the observations do less work per step (same numbers bit for bit: a fingerprint of every
+  observation, reward and position over 28,000 env steps and 24 full matches is unchanged): env workers about 25% faster, evaluations
+  and ladder matches about 15%.
+- `selfplay.py --trainer_fg 1` (default): the trainer process leaves background mode once its env workers are started. It only works
+  in short bursts (the nets between two env steps, the learning step: 0.1 s instead of 0.6-1.0 s) and the workers no longer wait for
+  it. Env workers and evaluations stay in background mode. `--trainer_fg 0` keeps the trainer there too (the coolest setting).
+
+16 updates of the rank_persist recipe, energy of the trainer and its workers (`proc_pid_rusage`; the whole Mac draws about 15 W):
+
+| | time | energy | power |
+|---|---|---|---|
+| before | 78 s | 44 J | 0.6 W |
+| now, `--trainer_fg 0` | 51-60 s | 35-38 J | 0.6-0.7 W |
+| now, `--trainer_fg 1` | 34-41 s | 47-50 J | 1.2-1.4 W |
+
+The training is the same (same rewards and entropy at every update; the options change speed, not what is learned). Other jobs on the
+efficiency cores (6 of them) slow the run down the most: check `ps -Ao pcpu,nice,command -r | head` before a long run.
+
 ## Pi, once (then the Pi no longer trains)
 ```
 sudo cp lab/systemd/soccer-exp-viewer.service /etc/systemd/system/ && sudo systemctl daemon-reload

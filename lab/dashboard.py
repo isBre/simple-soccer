@@ -109,7 +109,7 @@ def elo_of(name, rows, st=None):
     return {k: r.get(k) for k in ("id", "elo", "se", "lo", "hi", "rank", "games", "placed", "w", "d", "l", "gf", "ga", "stored")} if r else None
 
 
-OPERATIONAL = ("ckpt_every", "fast_every", "learn_threads", "envs_per_worker")   # how fast it trains, not what it learns
+OPERATIONAL = ("ckpt_every", "fast_every", "learn_threads", "envs_per_worker", "trainer_fg")   # how fast it trains, not what it learns
 
 
 def settings(st, spec):

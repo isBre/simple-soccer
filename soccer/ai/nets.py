@@ -99,6 +99,98 @@ def features_for(m, p, n_in):
     return features(m, p, n_in > 49)
 
 
+class _Frame:
+    """What every observation of one tick shares, computed once: each player's 4 scaled numbers from both teams' points of
+    view, the squared distance of every pair, and each team's ranks by distance to the ball and by depth. features_many builds
+    from it exactly the lists features_team / features_rank / features return (same values, same order)."""
+
+    def __init__(self, m):
+        pd = m.pitch
+        ox, oy = pd.out_x, pd.out_y
+        self.m = m
+        self.teams = m.team_lists
+        players = [o for t in self.teams for o in t]
+        self.push = {}                                 # (uid, s) -> 4 numbers
+        for o in players + [m.ball]:
+            pos, vel = o.pos, o.vel
+            y, vy = pos.imag / oy, vel.imag / 5.0
+            key = id(o) if o is m.ball else o.uid
+            self.push[key, 1.0] = (pos.real * 1.0 / ox, y, vel.real * 1.0 / 5.0, vy)
+            self.push[key, -1.0] = (pos.real * -1.0 / ox, y, vel.real * -1.0 / 5.0, vy)
+        self.ball_key = id(m.ball)
+        self.d2 = {}                                   # (uid_a, uid_b) -> abs(a.pos - b.pos) ** 2 (symmetric)
+        for i, a in enumerate(players):
+            for b in players[i + 1:]:
+                d = abs(a.pos - b.pos) ** 2
+                self.d2[a.uid, b.uid] = self.d2[b.uid, a.uid] = d
+        self.flags = (1.0 if m.kickoff_active else 0.0, 1.0 if m.state == 1 else 0.0)
+        self._ranks = {}
+
+    def team_ranks(self, team):
+        r = self._ranks.get(team)
+        if r is None:
+            m, lst = self.m, self.teams[team]
+            s = m.attack_dir(team)
+            bp = m.ball_pos
+            by_ball = {o.uid: i for i, o in enumerate(sorted(lst, key=lambda o: (abs(o.pos - bp) ** 2, o.uid)))}
+            by_depth = {o.uid: i for i, o in enumerate(sorted(lst, key=lambda o: (o.pos.real * s, o.uid)))}
+            r = self._ranks[team] = (by_ball, by_depth, max(len(lst) - 1, 1))
+        return r
+
+
+def features_many(m, players, team=True, rank=False, legacy=False, frame=None):
+    """The observations of several players of the same tick, concatenated: per player features_team (team), then ranks (rank,
+    after the team observation), then the legacy ego features with the slot one-hot (legacy). Identical to calling those."""
+    f = frame or _Frame(m)
+    push, d2 = f.push, f.d2
+    out = []
+    for p in players:
+        s = m.attack_dir(p.team)
+        if team:
+            uid = p.uid
+            out += push[uid, s]
+            mates = [o for o in f.teams[p.team] if o is not p]
+            mates.sort(key=lambda o: (d2[uid, o.uid], o.uid))
+            for o in mates:
+                out += push[o.uid, s]
+            opps = list(f.teams[1 - p.team])
+            opps.sort(key=lambda o: (d2[uid, o.uid], o.uid))
+            for o in opps:
+                out += push[o.uid, s]
+            out += push[f.ball_key, s]
+            out += f.flags
+            if rank:
+                by_ball, by_depth, n = f.team_ranks(p.team)
+                out += (by_ball[uid] / n, by_depth[uid] / n)
+                for o in mates:
+                    out += (by_ball[o.uid] / n, by_depth[o.uid] / n)
+        if legacy:
+            out += push[p.uid, s]
+            out += push[f.ball_key, s]
+            for o in f.teams[p.team]:
+                if o is not p:
+                    out += push[o.uid, s]
+            for o in f.teams[1 - p.team]:
+                out += push[o.uid, s]
+            pd = m.pitch
+            rel = m.ball_pos - p.pos
+            out.append(min(max(rel.real * s / 40.0, -6.0), 6.0))
+            out.append(min(max(rel.imag / 40.0, -6.0), 6.0))
+            out.append(min(abs(rel) / 40.0, 6.0))
+            out.append((s * pd.half_w - p.pos.real) * s / 400.0)
+            out.append((0.0 - p.pos.imag) / 400.0)
+            out += [1.0 if p.slot == k else 0.0 for k in range(5)]
+    return out
+
+
+def features_group(m, players, n_in):
+    """features_for for several players of the same tick: one list per player."""
+    if n_in in (TEAM_OBS, RANK_OBS):
+        f = _Frame(m)
+        return [features_many(m, [p], True, n_in == RANK_OBS, False, f) for p in players]
+    return [features(m, p, n_in > 49) for p in players]
+
+
 def fits(n_in, team_size):
     return n_in in (8 * team_size + 9, 8 * team_size + 14, 8 * team_size + 6, 10 * team_size + 6)
 

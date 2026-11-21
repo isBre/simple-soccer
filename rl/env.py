@@ -409,15 +409,9 @@ class RLEnv:
 
     def observe(self):
         """The observations of all agents (learners, then the self-play opponents), concatenated."""
-        out = []
-        for a in self.agents + self.opp_agents:
-            if self.obs in ("rank", "both_rank"):
-                out += nets.features_rank(self.sim, a)
-            elif self.obs != "legacy":
-                out += nets.features_team(self.sim, a)
-            if self.obs not in ("team", "rank"):
-                out += nets.features(self.sim, a, True)
-        return out
+        o = self.obs
+        return nets.features_many(self.sim, self.agents + self.opp_agents, team=o != "legacy", rank=o in ("rank", "both_rank"),
+                                  legacy=o not in ("team", "rank"))
 
     def step(self, actions):
         """actions: move idx (0..8) and kick (0/1) per agent, flat [m0, k0, m1, k1, ...].

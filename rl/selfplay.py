@@ -28,6 +28,35 @@ from torch.distributions import Bernoulli, Categorical
 from client import ROOT, VecEnv
 from ppo import Agent, OUT, OUT_DRAW, OUT_LOSS, OUT_WIN, load_padded, save_model, team_pools
 
+torch.distributions.Distribution.set_default_validate_args(False)    # argument checks only (no effect on any value): ~20% of the rollout inference
+
+
+class TrainerQos:
+    """macOS: lab/mac_run.sh starts the runner with `taskpolicy -b` (background mode: efficiency cores only, low clock), the
+    coolest way to run the long simulation. The trainer process itself only works in short bursts (the nets between two env
+    steps, the learning step) and otherwise waits for the env workers, so with --trainer_fg 1 it leaves background mode once its
+    workers are started (they inherit background mode and keep it): the bursts run about 4.5 times faster on the performance cores
+    and the workers stop waiting for them. Evaluations go back to background mode (child processes inherit it). No-op elsewhere
+    (Linux, or a trainer not started in background mode). Changes speed only, nothing that is computed."""
+    PRIO_DARWIN_PROCESS, PRIO_DARWIN_BG = 4, 0x1000
+
+    def __init__(self, enabled):
+        self.libc = None
+        if enabled and sys.platform == "darwin":
+            import ctypes
+            libc = ctypes.CDLL(None)
+            if libc.getpriority(self.PRIO_DARWIN_PROCESS, 0) == 1:     # started in background mode
+                self.libc = libc
+
+    def fg(self):
+        if self.libc is not None:
+            self.libc.setpriority(self.PRIO_DARWIN_PROCESS, 0, 0)
+
+    def bg(self):
+        if self.libc is not None:
+            self.libc.setpriority(self.PRIO_DARWIN_PROCESS, 0, self.PRIO_DARWIN_BG)
+
+
 CKPT = os.path.join(OUT, "ckpt")
 OBS_DIMS = {"legacy": 54, "team": 46, "rank": 56}            # observation layouts (see soccer/ai/nets.py features_team): ego with player slot / role-free team observation
 
@@ -75,7 +104,7 @@ def make_cfgs(args):
     return {**base, "opp": pool}, {**base, "opp": "owls", "opp_external": True}
 
 
-def eval_blocking(model_path, tag, args, log, mode="full"):
+def eval_blocking(model_path, tag, args, log, mode="full", qos=None):
     """Complete evaluation of a snapshot (rl/eval_checkpoint.py: league, behaviour, head to head, ...) while training is PAUSED:
     this call returns when it is done, the env workers just wait, so the evaluation gets the whole CPU (the viewer shows an
     "evaluation running" banner meanwhile). Result: logs/sp_eval/<tag>.txt"""
@@ -87,7 +116,13 @@ def eval_blocking(model_path, tag, args, log, mode="full"):
         cmd += ["--ref", "start=" + args.fast_ref]                  # head to head against the net this run started from
     log("training paused: %s evaluation of %s (logs/sp_eval/%s%s.txt)" % (mode, tag, tag, suffix))
     t0 = time.time()
-    subprocess.run(cmd, cwd=os.path.join(ROOT, "rl"), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    if qos is not None:
+        qos.bg()                                                    # the evaluation processes inherit background mode
+    try:
+        subprocess.run(cmd, cwd=os.path.join(ROOT, "rl"), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    finally:
+        if qos is not None:
+            qos.fg()
     log("evaluation of %s finished in %.0f min, training continues" % (tag, (time.time() - t0) / 60.0))
 
 
@@ -150,6 +185,7 @@ def main():
     ap.add_argument("--fast_every", type=int, default=0, help="FAST check (16 short matches + head to head vs --fast_ref) every N updates, training paused; 0 = never")
     ap.add_argument("--fast_ref", default="", help="game-model JSON of the net the run started from (the fast check plays it head to head)")
     ap.add_argument("--learn_threads", type=int, default=2, help="torch threads of the learning step (all 4 would fight the env workers for the CPU: the Pi froze)")
+    ap.add_argument("--trainer_fg", type=int, default=1, help="macOS, runner in background mode (TrainerQos): 1 = the trainer process leaves it (about 1.5x faster, about 0.7 W more), 0 = it stays (coolest). Env workers and evaluations always keep it. Speed only")
     ap.add_argument("--base_port", type=int, default=7100, help="first port of the rule-group workers (self-play group: +100)")
     ap.add_argument("--hidden", type=int, default=128, help="width of the two hidden layers (must match --start)")
     ap.add_argument("--teacher", default="", help="kickstarting: a checkpoint (.pt/.json, e.g. the 54-input jit8) whose moves the learner is pulled towards")
@@ -197,6 +233,7 @@ def main():
         logf.write(line + "\n")
         logf.flush()
 
+    qos = TrainerQos(args.trainer_fg)
     agent = Agent(obs_dim, args.hidden)
     load_padded(agent, args.start)
     opt = torch.optim.Adam(agent.parameters(), lr=args.lr)
@@ -243,6 +280,7 @@ def main():
     try:
         er.configure(cfg_rule, seed=args.seed)
         es.configure(cfg_self, seed=args.seed + 1)
+        qos.fg()                                                    # the workers are started (in background mode): see TrainerQos
         Er, Es = er.E, es.E
         E, A, D, T = Er + Es, 5, D_env, args.rollout
         slot_of = np.arange(Es) * NSLOT // Es                      # envs of the self group -> opponent slot
@@ -395,9 +433,9 @@ def main():
                 torch.save(agent.state_dict(), os.path.join(CKPT, "%s_u%d.pt" % (args.tag, upd)))
                 torch.save({"opt": opt.state_dict(), "pool": pool}, os.path.join(CKPT, "%s_u%d.train_state" % (args.tag, upd)))  # for a faithful resume
                 if args.eval_every > 0 and upd % args.eval_every == 0:
-                    eval_blocking(path, "%s_u%d" % (args.tag, upd), args, log)
+                    eval_blocking(path, "%s_u%d" % (args.tag, upd), args, log, qos=qos)
                 elif args.fast_every > 0 and upd % args.fast_every == 0:
-                    eval_blocking(path, "%s_u%d" % (args.tag, upd), args, log, "fast")
+                    eval_blocking(path, "%s_u%d" % (args.tag, upd), args, log, "fast", qos=qos)
         log("selfplay finished")
     finally:
         er.close()

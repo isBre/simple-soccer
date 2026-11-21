@@ -77,7 +77,7 @@ class MatchAI:
                     p.bot_ai.decide(m, p)
         for group in by_net.values():              # one forward pass per net for all its players of this tick
             net = group[0].bot_ai.net
-            out = net.forward([nets.features_for(m, p, net.n_in) for p in group])
+            out = net.forward(nets.features_group(m, group, net.n_in))
             for p, o in zip(group, out):
                 p.bot_ai.act(m, p, o)
         m.keeper_uid = [b.keeper.uid if b.keeper is not None else -1 for b in m.brains]
