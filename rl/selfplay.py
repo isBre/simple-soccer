@@ -13,6 +13,7 @@ Extra reward terms (per player) push towards human-like play: completed progress
 import copy
 import json
 import os
+import re
 import subprocess
 import sys
 import time
@@ -108,25 +109,57 @@ def make_cfgs(args):
 
 
 def eval_blocking(model_path, tag, args, log, mode="full", qos=None):
-    """Complete evaluation of a snapshot (rl/eval_checkpoint.py: league, behaviour, head to head, ...) while training is PAUSED:
-    this call returns when it is done, the env workers just wait, so the evaluation gets the whole CPU (the viewer shows an
-    "evaluation running" banner meanwhile). Result: logs/sp_eval/<tag>.txt"""
+    """Evaluation of a snapshot while training is PAUSED: this call returns when it is done, the env workers just wait, so the
+    evaluation gets the whole CPU (the viewer shows an "evaluation running" banner meanwhile).
+      full: rl/eval_checkpoint.py (league, behaviour, scouting, head to head): logs/sp_eval/<tag>.txt
+      fast: the check every --fast_every updates: the estimated Elo (--elo_pairs, lab/ladder.py estimate) and, with --fast_rules 1,
+            the older fixed check against the rule bots (logs/sp_eval/<tag>_fast.txt)"""
+    rules = mode == "full" or args.fast_rules
+    elo = mode == "fast" and args.elo_pairs > 0
+    if not rules and not elo:
+        return
     suffix = "_fast" if mode == "fast" else ""
     out = os.path.join(ROOT, "logs", "sp_eval", tag + suffix + ".txt")
     cmd = [sys.executable, os.path.join(ROOT, "rl", "eval_checkpoint.py"), "--model", model_path, "--out", out, "--paused", "--mode", mode,
            "--games", str(args.eval_games), "--duration", str(args.eval_duration), "--h2h_games", str(args.eval_h2h_games)]
     if args.fast_ref:
         cmd += ["--ref", "start=" + args.fast_ref]                  # head to head against the net this run started from
-    log("training paused: %s evaluation of %s (logs/sp_eval/%s%s.txt)" % (mode, tag, tag, suffix))
+    log("training paused: %s check of %s" % (mode, tag))
     t0 = time.time()
     if qos is not None:
         qos.bg()                                                    # the evaluation processes inherit background mode
     try:
-        subprocess.run(cmd, cwd=os.path.join(ROOT, "rl"), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        if rules:
+            subprocess.run(cmd, cwd=os.path.join(ROOT, "rl"), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        if elo:
+            elo_estimate(model_path, args, log)
     finally:
         if qos is not None:
             qos.fg()
-    log("evaluation of %s finished in %.0f min, training continues" % (tag, (time.time() - t0) / 60.0))
+    log("%s check of %s finished in %.1f min, training continues" % (mode, tag, (time.time() - t0) / 60.0))
+
+
+def elo_estimate(model_path, args, log):
+    """Estimated Elo of the snapshot (lab/ladder.py estimate: it plays placed ladder entries, its rating is fitted with theirs held
+    fixed; exp/elo_estimates.jsonl). The "evaluation running" flag is set meanwhile (the runner does not count it as training time,
+    the Lab shows "evaluating"). A failure only costs the estimate."""
+    upd = int(re.search(r"_u(\d+)\.json$", model_path).group(1))
+    flag = os.path.join(ROOT, "logs", "%s_eval_running.json" % args.tag)
+    t0 = time.time()
+    with open(flag, "w") as fh:
+        json.dump({"pid": os.getpid(), "checkpoint": os.path.basename(model_path)[:-5], "started": int(t0), "paused": True, "what": "elo estimate"}, fh)
+    try:
+        p = subprocess.run([sys.executable, os.path.join(ROOT, "lab", "ladder.py"), "estimate", "--model", model_path, "--tag", args.tag,
+                            "--update", str(upd), "--pairs", str(args.elo_pairs), "--workers", "3"], cwd=ROOT, stdout=subprocess.PIPE,
+                           stderr=subprocess.STDOUT, text=True)
+    finally:
+        if os.path.exists(flag):
+            os.remove(flag)
+    try:
+        r = json.loads(p.stdout.strip().splitlines()[-1])
+        log("estimated Elo of %s u%d: %.0f ± %.0f (GF %.2f, GA %.2f, %d games, %.0f s)" % (args.tag, upd, r["elo"], 1.96 * r["se"], r["gf"], r["ga"], r["games"], time.time() - t0))
+    except (ValueError, IndexError, KeyError, TypeError):
+        log("estimated Elo of %s u%d failed: %s" % (args.tag, upd, p.stdout.strip()[-300:]))
 
 
 def main():

@@ -137,6 +137,7 @@ document.addEventListener("change", (e) => {
   if (t.dataset.pick !== undefined) { if (t.checked) state.selected.add(t.dataset.pick); else state.selected.delete(t.dataset.pick); rerender(); }
   if (t.dataset.addrun !== undefined && t.value) { const p = route().params; const runs = (p.get("runs") || "").split(",").filter(Boolean); runs.push(t.value); p.set("runs", runs.join(",")); location.hash = "#/compare?" + p.toString(); }
   if (t.dataset.evalpick !== undefined) { state.evalPick[t.dataset.evalpick] = t.value; rerender(); }
+  if (t.dataset.estpick !== undefined) { state.estPick[t.dataset.estpick] = +t.value; rerender(); }
   if (t.id === "picker" && t.value) { location.hash = "#/run/" + encodeURIComponent(t.value); t.value = ""; t.blur(); }
 });
 document.addEventListener("input", (e) => {

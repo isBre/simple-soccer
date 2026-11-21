@@ -21,28 +21,31 @@ function viewNow() {
     const pct = run.target ? Math.min(100, (100 * (run.update || 0)) / run.target) : 0;
     const mode = run.evaluating ? "eval" : run.stalled ? "stale" : "";
     const lbl = run.thermal_pause ? `<span class="badge evaluating" title="lab/thermal_guard.py: resumes at ${f(run.thermal_pause.resume, 1)} °C">paused to cool · ${f(run.thermal_pause.temp, 1)} °C</span>` : run.evaluating ? badge("evaluating") : run.stalled ? `<span class="badge failed">no progress for ${dur(run.log_age_s)}</span>` : badge("running");
-    const delta = run.train_pts_vs_rules != null && run.train_pts_at_start != null ? run.train_pts_vs_rules - run.train_pts_at_start : null;
-    const lf = row.latest_fast;
+    const est = row.elo_estimate, est0 = state.detail[run.run]?.estimates?.[0];
+    const dEst = est && est0 && est0 !== est && est0.update === 0 ? est.elo - est0.elo : null;
     hero = `<section class="hero ${mode}"><div class="hero-top"><div class="min0"><div class="eyebrow">Running experiment${run.started ? " · since " + esc(ago(run.started).replace(" ago", "")) : ""}</div><h1>${runLink(run.run)}</h1>
         <div class="notes clamp" title="${esc(row.notes || "")}">${esc(row.notes || "")}</div><div class="chips">${chips({ net: row.net, rewards_changed_vs_minimal: row.rewards_changed_vs_minimal, args: (state.detail[run.run]?.status?.spec?.args) || spec.args || {} })}</div></div><div>${lbl}</div></div>
       <div class="progress"><i style="width:${pct}%"></i></div>
       <div class="hero-stats">${heroStat(`${run.update ?? 0}<small> / ${run.target ?? "?"}</small>`, "updates")}
         ${heroStat(run.eta_hours != null ? dur(run.eta_hours * 3600) : "–", "training left")}
         ${heroStat(run.sec_per_update ? f(run.sec_per_update, 0) + " s" : "–", "per update")}
-        ${heroStat(`${f(run.train_pts_vs_rules)} <small class="${delta > 0 ? "pos" : delta < 0 ? "neg" : ""}">${delta != null ? sgn(delta) : ""}</small>`, "training pts vs rules")}
-        ${heroStat(`${lf ? f(lf.pts) : "–"}<small>${lf ? " u" + lf.update : ""}</small>`, "last fast check")}
-        ${heroStat(run.restarts.length, "restarts")}</div>${queueLine(o.queue.queued, run.run)}</section>`;
+        ${heroStat(est ? `~${f(est.elo, 0)}<small> ±${f(1.96 * est.se, 0)}</small>` : "–", est ? `estimated Elo u${est.update}${dEst != null ? ` · <b class="inl ${dEst > 0 ? "pos" : dEst < 0 ? "neg" : ""}">${sgn(dEst, 0)}</b> vs start` : ""}` : "estimated Elo", "")}
+        ${heroStat(est ? f(est.gf) : "–", "goals scored / match")}
+        ${heroStat(est ? f(est.ga) : "–", "goals conceded / match")}</div>${queueLine(o.queue.queued, run.run)}</section>`;
   } else if (last) {
-    const v = last.verdict || {}, a = last.latest_full, h = a?.h2h || {}, cost = last.cost_hours ? (last.cost_hours.train || 0) + (last.cost_hours.eval || 0) : null;
-    const h2h = (k) => heroStat(h[k] ? `${f(h[k].pts)}<small> GD ${sgn(h[k].gd)}</small>` : "–", "vs " + k);
+    const e = last.elo, est = last.elo_estimate, g = ladderGoals(e, est), se = last.start_elo, cost = last.cost_hours ? (last.cost_hours.train || 0) + (last.cost_hours.eval || 0) : null;
+    const eloTxt = e && e.games ? `${f(e.elo, 0)}<small> ±${f((e.hi - e.lo) / 2, 0)}</small>` : est ? `~${f(est.elo, 0)}<small> ±${f(1.96 * est.se, 0)}</small>` : "–";
+    const eloLbl = e && e.games ? (e.placed ? `Elo · #${e.rank} · ${e.games} games` : `Elo · placing (${e.games}/6 games)`) : est ? `estimated Elo u${est.update}` : "Elo";
+    const dStart = se && (e?.games || est) ? (e?.games ? e.elo : est.elo) - se.elo : null;
     hero = `<section class="hero idle"><div class="hero-top"><div class="min0"><div class="eyebrow">Runner idle · last experiment finished ${esc(ago(last.finished))}</div>
         <h1>${runLink(last.name)}</h1><div class="notes clamp" title="${esc(last.notes || "")}">${esc(last.notes || "")}</div>
         <div class="chips">${chips({ net: last.net, rewards_changed_vs_minimal: last.rewards_changed_vs_minimal, args: last.spec_args || {} })}</div></div>
-        <div class="hero-badges">${v.verdict ? badge(v.verdict) : badge(last.state)}${last.stop_reason && last.stop_reason !== "budget" ? `<span class="badge failed">${esc(last.stop_reason)}</span>` : ""}</div></div>
-      <div class="hero-stats">${heroStat(v.verdict ? `${sgn(v.pts)}<small> ± ${f(v.pts_se)}</small>` : "–", v.reference ? "pts vs " + esc(v.reference) : "verdict pending", v.verdict === "better" ? "pos" : v.verdict === "worse" ? "neg" : "")}
-        ${heroStat(a ? `${f(a.pts)}<small> ± ${f(a.se)}</small>` : "–", a ? "league pts u" + a.update : "league pts")}
-        ${heroStat(a ? sgn(a.gd) : "–", "goal difference", a && a.gd > 0 ? "pos" : a && a.gd < 0 ? "neg" : "")}
-        ${h2h("RL Team 4")}${h2h("RL Team 5")}
+        <div class="hero-badges">${badge(last.state)}${last.stop_reason && last.stop_reason !== "budget" ? `<span class="badge failed">${esc(last.stop_reason)}</span>` : ""}</div></div>
+      <div class="hero-stats">${heroStat(eloTxt, eloLbl)}
+        ${heroStat(dStart != null ? sgn(dStart, 0) : "–", se ? "vs start net " + esc(se.name) + " " + f(se.elo, 0) : "vs start net", dStart > 0 ? "pos" : dStart < 0 ? "neg" : "")}
+        ${heroStat(g ? f(g.gf) : "–", "goals scored / match")}
+        ${heroStat(g ? f(g.ga) : "–", "goals conceded / match")}
+        ${heroStat(g ? sgn(g.gd) : "–", "goal difference", g && g.gd > 0 ? "pos" : g && g.gd < 0 ? "neg" : "")}
         ${heroStat(cost != null ? f(cost, 1) + " h" : "–", `${last.update ?? "–"} updates`)}</div>${queueLine(o.queue.queued)}</section>`;
   } else {
     hero = `<section class="hero idle"><div class="hero-top"><div><div class="eyebrow">Runner ${esc(st.runner.service || "")}</div><h1>Idle</h1></div>${badge("idle")}</div>${queueLine(o.queue.queued)}</section>`;
@@ -60,8 +63,9 @@ function viewNow() {
     ${rb ? `<div class="vnote">Last reboot ${esc(ago(rb.back))} · last sample before it ${esc(rb.last_seen.replace("T", " "))}: load ${f(rb.last_sample.load, 1)}, ${f(rb.last_sample.mem_mb, 0)} MB free, ${f(rb.last_sample.temp, 0)} °C</div>` : ""}</section>`;
   const focus = run ? run.run : last?.name;
   let curve = '<div class="empty">Nothing trained yet</div>';
-  if (focus) { const d = state.detail[focus]; ensureDetail(focus); curve = d && !d.error ? trainingChart(d, 200, "now") : '<div class="empty">Loading…</div>'; }
-  const train = `<section class="card"><div class="card-h"><h2>${run ? "Training" : "Last run"}${focus ? " · " + esc(focus) : ""}</h2>${focus ? smoothControl() : ""}</div>${curve}</section>`;
+  let hasEst = false;
+  if (focus) { const d = state.detail[focus]; ensureDetail(focus); hasEst = !!(d && d.estimates && d.estimates.length); curve = d && !d.error ? (hasEst ? estChart(d, 200, "now") : trainingChart(d, 200, "now")) : '<div class="empty">Loading…</div>'; }
+  const train = `<section class="card"><div class="card-h"><h2>${hasEst ? "Estimated Elo" : run ? "Training" : "Last run"}${focus ? " · " + esc(focus) : ""}</h2>${focus && !hasEst ? smoothControl() : focus ? `<span class="muted small">every check · 95% interval · <a href="#/run/${encodeURIComponent(focus)}/training">training curve →</a></span>` : ""}</div>${curve}</section>`;
   return `<div class="grid now-top">${hero}${vitals}</div>
     <div class="grid g2">${rankCard(focus, o.runs)}${train}</div>
     <section class="card"><div class="card-h"><h2>Events</h2><span class="muted small">last 24 h · newest first · fast checks grouped</span></div>${eventFeed(o.events)}</section>`;
@@ -100,8 +104,10 @@ function eventItem(e) {
   let m;
   if (e.kind === "eval_recorded" && (m = /^(\S+) u(\d+) (\w+) \S+ pts (\S+)/.exec(t))) {
     const pts = parseFloat(m[4]);
-    return m[3] === "fast" ? { cls: "fast", group: "fast:" + m[1], run: m[1], u: +m[2], pts } : { cls: "full", html: `${run(m[1])} full evaluation at u${m[2]}: <b>${Number.isNaN(pts) ? "–" : f(pts)}</b> pts` };
+    return m[3] === "fast" ? { cls: "fast", group: "fast:" + m[1], run: m[1], u: +m[2], pts } : m[3] === "full" ? { cls: "full", html: `${run(m[1])} full evaluation at u${m[2]} <span class="muted">behaviour, scouting</span>` } : null;
   }
+  if (e.kind === "estimate" && (m = /^(\S+) u(\d+) estimated Elo (\d+) ± (\d+), vs start ([+-]\d+) \(z (\S+)\), GF (\S+) GA (\S+)/.exec(t)))
+    return { cls: "full", html: `${run(m[1])} u${m[2]} estimated Elo <b>~${m[3]}</b><span class="muted"> ±${m[4]}</span> · <span class="${+m[5] > 0 ? "pos" : +m[5] < 0 ? "neg" : ""}">${m[5]}</span> vs start · GF ${m[7]} · GA ${m[8]}` };
   if (e.kind === "fast_check" || e.kind === "full_eval") return null;
   if (e.kind === "started" && (m = /^started (\S+)/.exec(t))) return { cls: "started", html: `${run(m[1])} started` };
   if (e.kind === "resumed" && (m = /^resuming (\S+) from update (\d+) \((.*)\)$/.exec(t))) return { cls: "started", html: `${run(m[1])} resumed at u${m[2]} <span class="muted">${esc(m[3])}</span>` };

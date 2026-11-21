@@ -6,7 +6,7 @@ import sys
 import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-TESTS = ["test_rng.py", "test_match.py", "test_env.py", "test_evaluate.py", "test_tournament.py", "test_web.py"]
+TESTS = ["test_rng.py", "test_match.py", "test_env.py", "test_evaluate.py", "test_ladder.py", "test_tournament.py", "test_web.py"]
 
 
 def main():

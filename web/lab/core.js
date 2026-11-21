@@ -19,7 +19,7 @@ const BEHAVIOUR = [
   ["shots_match", "Shots / match", "higher", 1], ["xa_match", "xA / match", "higher", 2],
 ];
 const DECISIONS_PER_MATCH = 2700;       // 30 decisions/s x 90 s: reward per agent-decision -> per player and match
-const state = { ov: null, detail: {}, health: null, lastOk: 0, firstFail: 0, sort: { key: "elo", dir: -1 }, filter: "", selected: new Set(), smooth: 0.8, hidden: {}, piHours: 12, cmpCache: {}, evalPick: {} };
+const state = { ov: null, detail: {}, health: null, lastOk: 0, firstFail: 0, sort: { key: "elo", dir: -1 }, filter: "", selected: new Set(), smooth: 0.8, hidden: {}, piHours: 12, cmpCache: {}, evalPick: {}, estPick: {} };
 
 // ---------- helpers ----------
 const $ = (s, el = document) => el.querySelector(s);
@@ -99,7 +99,7 @@ function lineChart(series, opt = {}) {
   const cy = (y) => Math.max(T, Math.min(H - B, Y(y)));
   let g = "";
   for (const b of opt.bands || []) g += `<rect x="${L}" width="${W - L - R}" y="${cy(Math.max(b.y0, b.y1))}" height="${Math.abs(cy(b.y0) - cy(b.y1))}" fill="${b.color || "var(--muted)"}" opacity=".14"/>${b.label ? `<text class="reft" x="${L + 4}" y="${cy(Math.max(b.y0, b.y1)) + 11}">${esc(b.label)}</text>` : ""}`;
-  for (const t of niceTicks(y0, y1, 4)) g += `<line class="gl" x1="${L}" x2="${W - R}" y1="${Y(t)}" y2="${Y(t)}"/><text class="ax" x="${L - 6}" y="${Y(t) + 4}" text-anchor="end">${fmtTick(t)}</text>`;
+  for (const t of niceTicks(y0, y1, 4)) g += `<line class="gl" x1="${L}" x2="${W - R}" y1="${Y(t)}" y2="${Y(t)}"/><text class="ax" x="${L - 6}" y="${Y(t) + 4}" text-anchor="end">${(opt.yTick || fmtTick)(t)}</text>`;
   const xt = opt.time ? timeTicks(x0, x1) : niceTicks(x0, x1, 6);
   for (const t of xt) if (t >= x0 && t <= x1) g += `<text class="ax" x="${X(t)}" y="${H - 6}" text-anchor="middle">${opt.time ? hhmm(t) : fmtTick(t)}</text>`;
   for (const r of opt.refs || []) g += `<line class="ref" x1="${L}" x2="${W - R}" y1="${Y(r.y)}" y2="${Y(r.y)}"/><text class="reft" x="${W - R}" y="${Y(r.y) - 4}" text-anchor="end">${esc(r.label)}</text>`;
@@ -203,3 +203,22 @@ function heatmap(hm, title) {
 }
 function kpi(label, value, sub = "", cls = "") { return `<div class="kpi"><div class="l">${label}</div><div class="v ${cls}">${value}</div>${sub ? `<div class="s">${sub}</div>` : ""}</div>`; }
 const smoothControl = () => `<label class="smooth">smoothing <input type="range" min="0" max="0.97" step="0.01" value="${state.smooth}" data-smooth> <b>${f(state.smooth, 2)}</b></label>`;
+
+// the estimated Elo of the run's checkpoints (lab/ladder.py estimate) with 95% intervals; dashed reference lines: the start net's
+// ladder rating and, once placed, the run's best checkpoint in the ladder
+function estChart(d, height, key, width) {
+  const es = d.estimates || [], se = d.start_elo, me = (state.ov?.runs || []).find((r) => r.name === d.run)?.elo;
+  const refs = [];
+  if (se && se.games && !se.estimate) refs.push({ y: se.elo, label: `start net ${se.name} ${f(se.elo, 0)}` });
+  if (me && me.placed) refs.push({ y: me.elo, label: `ladder, best checkpoint ${f(me.elo, 0)}` });
+  return lineChart([{ name: "estimated Elo", color: runColor(d.run), points: es.map((e) => ({ x: e.update, y: e.elo, err: 1.96 * e.se })), dots: true }],
+    { height, width, refs, xMin: 0, key: "est-" + key, title: "estimated Elo", fmt: (v) => f(v, 0), yTick: (v) => String(Math.round(v)),
+      emptyText: "no estimate yet: one comes with every check (every 50 updates)" });
+}
+function estGoalsChart(d, height, key, width) {
+  const es = d.estimates || [];
+  return lineChart([
+    { name: "scored", color: css("--good"), points: es.map((e) => ({ x: e.update, y: e.gf, err: e.gf_se != null ? 1.96 * e.gf_se : 0 })), dots: true },
+    { name: "conceded", color: css("--bad"), points: es.map((e) => ({ x: e.update, y: e.ga, err: e.ga_se != null ? 1.96 * e.ga_se : 0 })), dots: true },
+  ], { height, width, yMin: 0, xMin: 0, key: "estg-" + key, title: "goals per match", legend: true, emptyText: "no estimate yet" });
+}

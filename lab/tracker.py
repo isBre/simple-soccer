@@ -41,7 +41,7 @@ def minimal_for(started):
     return m
 
 DEFAULTS = {"lr": 5e-5, "updates": 300, "workers_rule": 2, "workers_self": 1, "envs_per_worker": 16, "rollout": 128, "minibatch": 4096,
-            "ckpt_every": 25, "fast_every": 50, "learn_threads": 2, "seed": 7}
+            "ckpt_every": 25, "fast_every": 50, "elo_pairs": 12, "fast_rules": 0, "learn_threads": 2, "seed": 7}
 FINISHED = ("done", "diverged", "regressed", "cancelled", "failed")
 
 

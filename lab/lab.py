@@ -11,6 +11,7 @@ so it works even when the dashboard is down. Every command prints one JSON objec
   python3 lab/lab.py ablation [--kind full]          every run vs its reference, Holm-corrected over the batch
   python3 lab/lab.py events [--since 2026-11-16T20:00]   runs started/resumed/finished, evaluations, reboots
   python3 lab/lab.py ranking [--league rl]           Elo ranking of every team of every league (lab/ladder.py), 95% intervals
+  python3 lab/lab.py estimates [--run NAME]          estimated Elo of the checkpoints during training (lab/ladder.py estimate)
   python3 lab/lab.py queue list | validate F | add F [--position N] | cancel NAME | move NAME N
   python3 lab/lab.py schema                          what every metric means (unit, direction, protocol)
   python3 lab/lab.py ladder archive [--label L] [--yes]   start the Elo ranking over (only when the user asks; matches kept)
@@ -183,14 +184,18 @@ def cmd_status(_a):
         active = subprocess.run(["systemctl", "is-active", "soccer-exp"], capture_output=True, text=True).stdout.strip() or None
     except OSError:                                    # no systemd (not the Pi): the runner service is not installed here
         active = None
-    running = None
+    running, fresh = None, None
     for p in glob.glob(os.path.join(EXP, "runs", "*", "status.json")):
         st = tracker.run_status(os.path.basename(os.path.dirname(p)))
         if st.get("state") == "running":
             tag = st.get("tag", "x_" + st["name"])
+            log_path = os.path.join(LOGS, tag + ".out")
+            seen = max(os.path.getmtime(log_path) if os.path.exists(log_path) else 0, os.path.getmtime(p))
+            if fresh is not None and seen <= fresh:     # two "running" states (one copied from another computer): the newest output wins
+                continue
+            fresh = seen
             tr = training(tag)
             spu = speed(tr) if tr else None
-            log_path = os.path.join(LOGS, tag + ".out")
             age = time.time() - os.path.getmtime(log_path) if os.path.exists(log_path) else None
             ev = os.path.exists(os.path.join(LOGS, tag + "_eval_running.json"))
             running = {"run": st["name"], "update": st.get("update"), "target": st.get("target_updates"), "sec_per_update": round(spu, 1) if spu else None,
@@ -244,6 +249,8 @@ def run_row(name, rows):
     ev = [r for r in rows if r["run"] == name]
     full = next((r for r in reversed(ev) if r["kind"] == "full"), None)
     fast = next((r for r in reversed(ev) if r["kind"] == "fast"), None)
+    from lab import ladder
+    est = ladder.estimates(run=name)
     rewards = st.get("effective_rewards") or {}
     mn = tracker.minimal_for(st.get("started"))
     changed = {k: v for k, v in rewards.items() if mn.get(k) != v}
@@ -254,7 +261,18 @@ def run_row(name, rows):
             "update": st.get("update"), "target": st.get("target_updates"), "stop_reason": st.get("stop_reason"),
             "restarts": len(st.get("restarts", [])), "verdict": st.get("verdict"), "cost_hours": st.get("cost_hours"),
             "started": iso(st.get("started")), "finished": iso(st.get("finished")),
-            "latest_full": eval_row(full) if full else None, "latest_fast": eval_row(fast) if fast else None}
+            "latest_full": eval_row(full) if full else None, "latest_fast": eval_row(fast) if fast else None,
+            "elo_estimate": est_row(est[-1]) if est else None, "elo_estimates": len(est)}
+
+
+def est_row(e, matches=False):
+    """An estimated-Elo record without its match list (unless matches)."""
+    return {k: v for k, v in e.items() if matches or k != "matches"}
+
+
+def cmd_estimates(a):
+    from lab import ladder
+    return [est_row(e, a.matches) for e in ladder.estimates(run=a.run)]
 
 
 def cmd_runs(a):
@@ -335,7 +353,7 @@ def cmd_events(a):
             m = re.match(r"^\[(\d{4}-\d\d-\d\d) (\d\d:\d\d:\d\d)\] (.*)", l.rstrip())
             if m:
                 t = m.group(1) + "T" + m.group(2)
-                kind = next((k for k, pat in (("started", r"^started "), ("resumed", r"^resuming "), ("finished", r" finished: "), ("fast_check", r" fast: "),
+                kind = next((k for k, pat in (("started", r"^started "), ("resumed", r"^resuming "), ("finished", r" finished: "), ("fast_check", r" fast: "), ("estimate", r" estimated Elo \d"),
                                               ("stopped", r" - stopping"), ("error", r"^ERROR|exited with code"), ("baseline", r"^baseline "),
                                               ("full_eval", r"full evaluation")) if re.search(pat, m.group(3))), "info")
                 ev.append({"t": t, "kind": kind, "text": m.group(3)})
@@ -429,7 +447,7 @@ def cmd_ranking(a):
     from lab import ladder
     r = ladder.ranking()
     rows = r["rows"] if not a.league else [x for x in r["rows"] if x["league"] == a.league]
-    keep = ("rank", "id", "name", "league", "kind", "elo", "lo", "hi", "games", "w", "d", "l", "gf", "ga", "pts", "placed")
+    keep = ("rank", "id", "name", "league", "kind", "elo", "lo", "hi", "games", "w", "d", "l", "agf", "aga", "agf_se", "aga_se", "gf", "ga", "placed")
     return {"protocol": r["protocol"], "matches": r["matches"], "stale": r["stale"], "last": r["last"], "ladder_off": r["off"],
             "rows": [{k: x.get(k) for k in keep} for x in rows]}
 
@@ -456,7 +474,7 @@ def cmd_schema(_a):
 
 COMMANDS = {"status": cmd_status, "runs": cmd_runs, "run": cmd_run, "evals": cmd_evals, "best": cmd_best, "compare": cmd_compare,
             "ablation": cmd_ablation, "events": cmd_events, "queue": cmd_queue, "schema": cmd_schema, "ranking": cmd_ranking,
-            "ladder": cmd_ladder}
+            "estimates": cmd_estimates, "ladder": cmd_ladder}
 
 
 def envelope(data):
@@ -495,6 +513,9 @@ def parser():
     p.add_argument("arg", nargs="?")
     p.add_argument("--position", type=int)
     sub.add_parser("schema")
+    p = sub.add_parser("estimates")
+    p.add_argument("--run")
+    p.add_argument("--matches", action="store_true", help="with the match list of each estimate")
     p = sub.add_parser("ranking")
     p.add_argument("--league", help="rules | rl | ml | dl")
     p = sub.add_parser("ladder", help="ladder archive [--label NAME] [--yes]: start the Elo ranking over (only when the user asks)")
