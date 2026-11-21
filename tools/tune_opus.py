@@ -41,6 +41,8 @@ PARAMS = [
     ("GUARD_TRIGGER", 85.0, 30.0, 170.0), ("POKE_RADIUS", 260.0, 0.0, 500.0),
     ("style.long_shot", 0.5, 0.0, 1.0), ("style.pass_bias", 0.7, 0.2, 1.0), ("style.risk", 0.5, 0.0, 1.0),
     ("style.keeper_sweep", 0.3, 0.0, 1.0),
+    # second run (2026-11-20): getting out of our own third against a high press
+    ("TERR", 0.0, 0.0, 0.4), ("COVER_OWN", 140.0, 40.0, 220.0), ("OUTLET_FROM", -1.0, -1.0, 0.0), ("OUTLET_X", 0.0, -0.5, 0.4),
 ]
 N = len(PARAMS)
 LO = np.array([p[2] for p in PARAMS])

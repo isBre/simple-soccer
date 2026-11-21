@@ -15,18 +15,23 @@ short.
 ## In one minute
 
 - **Plays as a team.** At any moment exactly one outfield player plays the ball; the other three have jobs (rest defence,
-  striker, support / cover, marking). It has 3+ outfield players around the ball **4 % of the time** (Silver Arrows 5 %, RL Team 5
-  28 %) and plays **~23 passes a match at 79 %** (Silver Arrows ~10 at 59 %).
+  striker, support / cover, marking). It has 3+ outfield players around the ball **~6 % of the time** (Silver Arrows 5 %, RL Team 5
+  28 %) and plays **~19 passes a match at 80 %** (Silver Arrows ~10 at 59 %).
 - **Thinks with physics.** In build-up it simulates ~50 kicks per decision (three aim samples each) and every player's exact
   reach, and picks the kick by who gets to the ball first and what that is worth.
-- **Tuned against the nets.** 27 of its numbers were tuned overnight with CMA-ES against 10 trained nets; on fresh seeds that
-  added +0.33 points and +0.55 goal difference per match against the nets (z = 3.2 and 4.9).
+- **Tuned against the nets, twice.** Its numbers were tuned with CMA-ES against 10 trained nets. The second run (section 9)
+  added a territory term and an outlet player after measuring that the nets pinned it in its own third; on fresh seeds it added
+  **+0.44 points and +0.47 goal difference per match against the nets** (z = 4.5 and 4.9) over the first tuned version.
 - **Strength:**
-  - **Lab ranking:** **1664 ± 154 Elo, 17th of 42**: the top rule team by ~380 points (Silver Arrows 1284), above RL Team 2 and
-    RL Team 3, level with the team46 nets.
-  - **Trained nets:** still behind the best ones (RL Team 5 ~1897, jit8 ~1879), but it now takes points off them: in its 60
-    ladder games it is 21-19-20, including a win and a draw against RL Team 5.
-  - **Against the 16 rule teams:** ~1.9 points per match, positive record against every one of them.
+  - **Against the whole field** (every other ladder entry, both sides, same seeds): **1.53 points per match, +0.34 goal
+    difference** (first tuned version 1.18 and −0.12; z = 2.8 and 3.6). Against the 25 trained nets and RL teams alone:
+    1.33 points, +0.19 goal difference.
+  - **Lab ranking:** **1613 ± 134 Elo after 180 games**, 20th of 42, the top rule team by ~300 points (Silver Arrows 1313), in
+    the middle of the trained nets. The ladder rates the current file only, so the version bump started it from zero; the
+    interval still overlaps the first tuned version's 1664 ± 154 (60 games), and the paired match-up above is the sharper test.
+  - **Trained nets:** still behind the best ones (jit8 ~1860, RL Team 5 ~1870), but it now beats most of the `x_*` runs and the
+    team46 / t48 nets on the same seeds.
+  - **Against the rule teams:** ~1.8–2.1 points per match, positive goal difference against every one of them.
 
 ![Live match: defending](opus/screen_defending.jpg)
 *A live match in the browser, before tuning (Opus in orange defends the left goal). One player (#5) engages the man on the ball; the others hold
@@ -250,7 +255,7 @@ intervals):
 
 ![Ladder](opus/ladder.png)
 
-After tuning, Opus is **17th of 42 at 1664 ± 154** after 60 games (the team file got a new version, so the ranking re-rated it
+After the first tuning, Opus (v2) was **17th of 42 at 1664 ± 154** after 60 games (the team file got a new version, so the ranking re-rated it
 from scratch; before tuning it was 22nd at 1471 ± 171). That is ~380 points above every handmade team, above RL Team 2 and RL Team 3
 and six of the trained nets, level with the team46 nets, and still ~230 below the top (RL Team 5 1897, jit8 1879). Its record:
 21 wins, 19 draws, 20 defeats, 35–34 in goals; 1-1-0 against RL Team 5, 0-1-1 against jit8, 2-0-0 against x_anchor_ctrl and
@@ -325,12 +330,108 @@ The direction is consistent: **more direct and more willing to shoot in attack, 
 play is intact: 3+ players around the ball 4.1 % of the time (3.2 % before, Silver Arrows 5.4 %), the same spacing, fewer passes
 (23 instead of 33 a match) because the finishing now starts at halfway.
 
-## 9. Limits and next steps
+## 9. Second round: getting out of our own third
+
+After the first tuning the nets still won most games, so before changing anything the losses were measured: 40 matches (90 s)
+against the five strongest nets (jit8, x_anchor_wall_strong, RL Team 4, RL Team 5, x_persist_lr), with the ball's position
+sampled every 10 ticks and every change of possession logged.
+
+**Diagnosis.** The nets pinned Opus back. The ball was in Opus's own third **63 %** of the time and possession changed hands
+**~57 times a match inside our own third**, each way: Opus won the ball and lost it straight back (53 % of those losses came
+within 10 ticks of winning it, 86 % by the ball player). The goals against came out of these scrambles, from 80–200 px in front of
+goal with 3–4 net players around the ball. The cause sat in the kick evaluation: a kick that the opponent wins was valued by what
+the opponent can do *from the point where he gets it*, and losing it 400 px upfield scored almost the same as losing it at the
+edge of our own box.
+
+**Two additions** (both in [`soccer/ai/opus.py`](../soccer/ai/opus.py)):
+
+- **Territory.** Every kick except shots gets a bonus for the ground it gains before anyone reaches it, weighted by how deep in our
+  half the ball is. With the ball at $x_b$ (along our attacking direction), the first touch by anyone at $x_e$, and $h$ the half
+  length:
+
+  $$\text{depth} = \mathrm{clamp}\!\left(\tfrac12 - \tfrac{x_b}{h},\,0,\,1\right),\qquad
+  \text{gain} = \mathrm{clamp}\!\left(\tfrac{x_e - x_b}{h},\,-1,\,1\right),\qquad
+  V \leftarrow V + w_{\text{terr}}\cdot \text{depth}\cdot\text{gain}$$
+
+  The term is zero from a quarter of the way into their half, and largest at our own goal line, where a clearance that loses the
+  ball 300 px upfield is now clearly better than a short pass into a crowd.
+- **Outlet.** When the ball is deep in our half and at least three outfield players are free of other jobs, the most advanced one
+  stays up near halfway on the far side, so a clearance finds a team-mate and the next attack doesn't start from zero. The cover
+  player also gets its own distance for balls in our own third.
+
+A hand test showed the territory term cut goals against from 1.10 to 0.85 and own-third time from 63 % to 54 %, while the cover
+and outlet variants were inside the noise. So rather than choose by hand, the four new numbers (territory weight, cover distance in
+our own third, where the outlet starts and where it waits) joined the other 27 in a **second CMA-ES run**: 31 parameters,
+$\lambda = 4 + \lfloor 3\ln 31\rfloor = 14$, 30 generations, started from the first run's result, $\sigma_0 = 0.12$, about 4.5 hours on
+3 low-priority cores.
+
+![Second tuning run](opus/tuning2.png)
+
+**Checked on fresh seeds** against the version that was on `main` (paired: same opponent, side and seed; seeds no search ever
+played):
+
+| Fresh seeds | Matches | Points per match (v2 → v3) | Goal difference per match | z (points / goal difference) |
+|---|---|---|---|---|
+| 10 nets | 240 | 0.71 → **1.15** | −0.63 → **−0.16** | **4.5 / 4.9** |
+| 6 rule teams | 48 | 1.71 → **2.15** | +0.48 → +0.73 | 2.0 / 1.5 |
+
+**Against the five strongest nets** (the diagnosis matches, same seeds as before):
+
+| | v2 | v3 |
+|---|---|---|
+| ball in our own third | 63 % | 58 % |
+| possession lost in our own third (per match) | 57 | 47 |
+| goals against per match | 1.10 | 0.90 |
+
+**Still a team.** `team_bench --rl` (every rule team and RL Team 4/5, both sides, 3-minute matches), same seeds:
+
+| | v2 | v3 |
+|---|---|---|
+| points per match | 1.78 | **2.10** |
+| goals for / against | 1.06 / 0.69 | 1.36 / 0.47 |
+| outfield players within 120 px of the ball | 1.20 | 1.21 (opponents 1.51) |
+| 3+ outfield players around the ball | 4.1 % | 5.6 % (Silver Arrows 5.4 %) |
+| mean spacing between outfield players | 282 px | 278 px |
+| passes per match (completed) | 22.4 (80 %) | 18.5 (80 %) |
+| goals with an assist | 17 % | 26 % |
+
+**What moved** (the largest changes):
+
+| Parameter | v2 | v3 | Reading |
+|---|---|---|---|
+| territory weight | (none) | 0.135 | clear the ball upfield when deep, don't play into the press |
+| outlet | (none) | ball below −64 % of our half; waits at −14 % | one man stays up to receive the clearance |
+| cover | ball below 75 % of their half; 140 px | always; 126 px (166 px in our third) | a cover man is always goal-side |
+| poke radius | 312 px | 500 px | poke the ball away under pressure in most of our half |
+| goal-mouth guard trigger | 103 px | 141 px | a marker guards the goal mouth earlier |
+| support spacing | 184 px | 118 px | supporters stand a bit closer, more short options |
+| where direct finishing starts | halfway | 15 % into their half | build a little longer before driving at goal |
+| shot value weight | 0.327 | 0.405 | value chances more |
+| keeper sweeping (style) | 0.12 | 0.44 | the keeper comes out for balls behind the defence |
+
+The picture is a team that **gets the ball out of danger first and builds from there**, with a man always goal-side and one always
+up.
+
+**Against the whole field.** Because the second run only played the 10 strongest nets, v2 and v3 then played every other ladder
+entry (41 teams and nets, both sides, 2 seeds, same seeds for both):
+
+| Opponents | Matches | Points per match (v2 → v3) | Goal difference per match | z (points / goal difference) |
+|---|---|---|---|---|
+| all 41 | 164 | 1.18 → **1.53** | −0.12 → **+0.34** | **2.8 / 3.6** |
+| 25 trained nets and RL teams | 100 | 0.87 → **1.33** | −0.41 → **+0.19** | **2.8 / 3.4** |
+| 16 rule teams | 64 | 1.66 → 1.84 | +0.34 → +0.56 | 0.9 / 1.4 |
+
+It lost a little against a few rule teams (Bulls, Arrows) and gained most against the mid-table nets (t48, team46, the `x_anchor`
+and `x_wide` runs), which it now beats more often than not. On the Lab ladder the new file started from zero and stands at
+**1613 ± 134 after 180 games**; the interval overlaps the first tuned version's 1664 ± 154, and the paired match-up above is the
+sharper test of the two.
+
+## 10. Limits and next steps
 
 - **Scoring is still the weak point.** Before tuning: 1.07 goals per match in the full round robin against all 41 other teams; the
   tuning helped mostly by making it shoot earlier. The direct finishing borrowed from the handmade bots
   works, but a finishing model of its own (one-timers across the box, cut-backs) is the obvious next lever.
-- **The strongest nets are still ~230 Elo higher.** They win goal-line scrambles with numbers; Opus refuses to swarm by design.
+- **The strongest nets are still ~250 Elo higher.** They win goal-line scrambles with numbers; Opus refuses to swarm by design.
   Closing the rest of the gap under the realism rule probably needs a planner that simulates whole sequences in the real match
   engine (a rollout of each candidate action for ~1 s with all ten players), not single kicks. A longer tuning run (more matches per
   candidate, more generations) is the cheaper next step.
@@ -343,7 +444,8 @@ play is intact: 3+ players around the ball 4.1 % of the time (3.2 % before, Silv
 python3 tools/team_bench.py opus_high --rl                    # vs every rule team and RL Team 4/5
 python3 tools/team_bench.py opus_high --vs net:models/jit8_best.json,net:data/models/rl_5v5_arena_v5.json
 python3 lab/ladder.py round --pairs 10 --workers 4             # more ladder games (the Lab ranking)
-python3 tools/tune_opus.py --gens 24 --seeds 2 --workers 3     # the auto-tuning (resumes; logs/tune/); its defaults are now the tuned values
+python3 tools/tune_opus.py --gens 30 --seeds 2 --workers 3 --sigma 0.12 --out logs/tune2   # the second run (resumes); it starts
+                                                               # from the values in the code, so a new run continues from v3
 ```
 
 Watch it: `python3 web/app.py`, then Quick Match → Rule Based League → Opus 5.5 High, control "Watch".

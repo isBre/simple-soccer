@@ -111,15 +111,18 @@ Silver Arrows, the strongest handmade team), so the difference is only how it pl
   Pass predictions are calibrated: passes rated over 95 % safe are kept about 90 % of the time.
 - **Opponents' half**: the carrier drives at goal and shoots like the handmade bots (`StyleBot._decide_action` with the Opus
   style), with the Opus shape around him.
-- **Tuned**: its 27 constants (distances, margins, value weights, four style values) were tuned with CMA-ES against 10 trained nets
-  (`tools/tune_opus.py`): +0.33 points and +0.55 goal difference per match against the nets on fresh seeds (z 3.2 / 4.9).
-- Elo (the Lab's ranking, `lab/ladder.py`, as `rules:opus_high`): **1664 ± 154, 17th of 42** after tuning (1471 before): the top rule
-  team by ~380 points, above RL Team 2 and 3, ~230 below RL Team 5. The one-off round robin before tuning is in
-  [docs/elo_ranking.md](docs/elo_ranking.md).
-- Measured with `python3 tools/team_bench.py opus_high --rl` (5v5 arena, 3 min, both sides): 1.94 points per match against the 16
-  rule teams (positive record against every one, 0.33 goals conceded per match), 3.1 goals conceded per match against RL Team 4/5
-  (Silver Arrows: 5.8). It plays as a team: 3+ of its outfield players are within 120 px of the ball ~4 % of the time (Silver
-  Arrows ~5 %, RL Team 5 ~28 %), ~23 passes per match at ~79 % completion (Silver Arrows ~10 at ~60 %).
+- **Tuned**: its constants (distances, margins, value weights, four style values) were tuned with CMA-ES against 10 trained nets
+  (`tools/tune_opus.py`), twice. The second run (31 numbers) added a territory term (deep in our half, a kick that gains ground
+  is worth more even if it may be lost) and an outlet player who stays up when we defend deep. Fresh seeds, second run vs first:
+  +0.44 points and +0.47 goal difference per match against the nets (z 4.5 / 4.9); against every other ladder entry
+  1.18 -> 1.53 points per match (z 2.8).
+- Elo (the Lab's ranking, `lab/ladder.py`, as `rules:opus_high`): **1613 ± 134 after 180 games** of the current version (the
+  version bump reset it; the first tuned version had 1664 ± 154 from 60 games, 1471 before tuning): the top rule team by ~300
+  points, in the middle of the trained nets. The one-off round robin before tuning is in [docs/elo_ranking.md](docs/elo_ranking.md).
+- Measured with `python3 tools/team_bench.py opus_high --rl` (5v5 arena, 3 min, both sides, 2 seeds): 2.10 points per match
+  against the 16 rule teams and RL Team 4/5 (1.36 goals for, 0.47 against). It plays as a team: 3+ of its outfield players are
+  within 120 px of the ball ~6 % of the time (Silver Arrows ~5 %, RL Team 5 ~28 %), ~19 passes per match at ~80 % completion
+  (Silver Arrows ~10 at ~60 %), a quarter of its goals assisted.
 
 Physics is identical for every team. Attributes (finishing, passing, defending, positioning, reaction) and styles only change AI behaviour.
 
