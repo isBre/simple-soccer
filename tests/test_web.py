@@ -1,4 +1,4 @@
-"""Smoke test of the web app (web/app.py), no Godot needed: starts it on a free port and checks
+"""Smoke test of the web app (web/app.py): starts it on a free port and checks
   pages      the shell, styles and scripts are served; the Lab API answers (/api/v1/runs, /api/docs)
   catalog    leagues, teams, pitches, formations
   live       a match played over the WebSocket (/ws/match, at 8x speed) ends with the same result as the same setup simulated

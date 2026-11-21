@@ -12,7 +12,7 @@ Two observation layouts exist (`selfplay.py --obs`, `env.py` config `obs`, chose
 - **`legacy` (54 numbers):** me first, ball, the 4 teammates and 5 opponents in slot order, ball and opponent goal relative to me, and a one-hot of the player's slot. The first RL teams (RL Team 1-5) use it.
 
 - `env.py`: the environment (episodes, random starts, every reward term) on the match core (`soccer/`); no Godot.
-  An exact copy of the earlier Godot environment (`tests/test_env.py`).
+  Started as an exact copy of the earlier Godot environment; `tests/test_env.py` guards it.
 - `client.py`: vector env over N worker processes (several envs each). `ppo.py`: PPO + curriculum + model export.
 - `evaluate.py league_eval`: plays a model against all 16 teams on both sides (full matches, all cores) and
   writes `teams_info.json` (strengths, tiers, 4 held-out teams that are never trained against).

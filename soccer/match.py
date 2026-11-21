@@ -1,6 +1,6 @@
 """The match: a deterministic (seeded) Haxball-style simulation at a fixed 60 Hz. Physics, match rules, touches, stats,
-grades and the result. Line-by-line port of Godot's MatchSim (scripts/core/match_sim.gd), checked tick by tick against it
-(tests/test_match.py). Positions and velocities are complex numbers: x = .real, y = .imag.
+grades and the result. Started as a line-by-line port of the Godot game's MatchSim (matched it tick by tick before Godot was removed);
+tests/test_match.py now guards it against stored matches. Positions and velocities are complex numbers: x = .real, y = .imag.
 
 The AI is plugged in as `match.ai` (soccer.ai.MatchAI by default): it is asked once per AI tick to update the team plans
 and set the inputs of the bots that are due, exactly when Godot's MatchSim asked its brain."""
