@@ -24,7 +24,8 @@ Design and reasoning: [docs/experiment_pipeline.md](../docs/experiment_pipeline.
 2. trains with `selfplay.py` (`--fast_every 50`: every 50 updates training pauses for a **fast check**, `eval_checkpoint.py --mode fast`: 24 short matches against every 3rd rule team plus head to head against the start net, a few minutes);
 3. stops the run early as `diverged` (training points vs the rule bots under 70% of their starting value, after 60 updates) or `regressed` (two fast checks in a row worse than the baseline by more than 2 standard errors);
 4. otherwise runs a **full evaluation** of the last checkpoint and compares it with the baseline (`tracker.compare`: league points and goal difference, verdict better / worse / no difference at 1.96 standard errors).
-After a reboot (the Pi's hardware watchdog reboots a frozen Pi) the runner resumes the running experiment from its last checkpoint. `--viewer` (the service runs with it) plays the live demo match (`lab/live.py`, below) and opens the dashboard full screen on the Pi's 1024x600 touch screen (Chromium kiosk, `http://127.0.0.1:8080/?kiosk=1#/live`, own profile `~/.config/soccer-kiosk`). Both are started again if they close, so `kill`-ing the match reloads its code.
+After a reboot (the Pi's hardware watchdog reboots a frozen Pi) the runner resumes the running experiment from its last checkpoint. `--viewer` (the service runs with it) plays the live demo match (`lab/live.py`, below), started again if it closes, so `kill`-ing the match reloads its code. The Pi's 1024x600 touch screen shows the dashboard full screen through its own service, `soccer-kiosk` (`lab/kiosk.py`: Chromium kiosk on `http://127.0.0.1:8080/?kiosk=1#/live`, own profile `~/.config/soccer-kiosk`, restarted by systemd if it closes), whether the Pi trains or only shows.
+Every evaluation writes `logs/sp_eval/<name>.txt` (readable text) and `<name>.json` (the same numbers as one record, built by `rl/eval_checkpoint.py` from the `RESULT` lines of `rl/evaluate.py`; `tracker.add_result` stores it as is, and parses the text only for files from before the JSON). Training progress: `logs/<tag>_train.jsonl` (one line per logged update, `tracker.train_rows`; older runs: the progress lines of `logs/<tag>.out`).
 Everything is plain files: `exp/results.jsonl` (one record per evaluation, kind fast|full, league points / goal difference / head to head / behaviour, each with standard errors), `exp/results.md` (table, rewritten after every evaluation),
 `exp/runs/<name>/status.json`, `exp/runner.log`; finished specs move to `exp/done/`, broken ones to `exp/failed/`. `EXP_MLFLOW=1` also mirrors every evaluation to MLflow (`pip install mlflow-skinny`, no server;
 copy `exp/mlruns/` to another computer and run `mlflow ui` there).
@@ -37,7 +38,7 @@ reference band; Training: PPO health small multiples, reward composition; Evalua
 **Ranking** (one Elo rating for every team of every league from matches between them, `lab/ladder.py`: the runner plays a round of 6 pairs whenever the queue is empty, `touch exp/ladder_off` stops it; table with 95% intervals, rating history, latest matches), **Dataset** (the user's recorded play from the Game, `data/human/`: moves, heatmaps, which situations are covered, a replay of every match; `il/analysis.py`), **Compare** (any number of runs against the first, same protocol only, paired forest plot, metric table, overlaid curves) and **Pi** (temperature, load, memory, clock on a time axis with reboot markers; an offline banner
 appears on every page when the Pi stops answering). Run colours are hashed from the run name. On the Pi's 1024x600 touch screen the kiosk layout (`?kiosk=1`) uses a side rail and draws the live match at 15 fps.
 Open `http://<pi-address>:8080` from any computer on the network.
-Safety against the freezes seen on the Pi: the learning step uses 2 torch threads (`--learn_threads`), `rl/net_server.py` pins numpy/OpenBLAS to one thread (with the venv's OpenBLAS a net server spun 28 threads and starved the simulation: evaluations took 3x longer), and `lab/systemd/watchdog.conf` turns on the hardware watchdog (15 s).
+Safety against the freezes seen on the Pi: the learning step uses 2 torch threads (`--learn_threads`), `rl/evaluate.py` pins numpy/OpenBLAS to one thread in every evaluation process (with the venv's OpenBLAS the old net servers spun 28 threads and starved the simulation: evaluations took 3x longer), and `lab/systemd/watchdog.conf` turns on the hardware watchdog (15 s).
 
 ## Live demo match (`lab/live.py`)
 
@@ -57,7 +58,10 @@ git pull
 sudo systemctl disable --now soccer-oppnet; sudo rm -f /etc/systemd/system/soccer-oppnet.service
 sudo rm -f /etc/systemd/system/soccer-{exp,dashboard,health}.service && sudo cp lab/systemd/soccer-*.service /etc/systemd/system/
 sudo systemctl daemon-reload && sudo systemctl restart soccer-exp soccer-dashboard soccer-health
+sudo systemctl enable --now soccer-kiosk          # once: the kiosk is its own service since 2026-11-21 (the runner no longer opens it)
 ```
+`git lfs version` must work on the Pi (`sudo apt install git-lfs && git lfs install` once): the nets in `models/` and the recordings
+in `data/human/` are Git LFS files, and without it they arrive as small pointer files.
 
 (The units moved from `tools/systemd/` to `lab/systemd/` and point at `lab/`; `soccer-oppnet`, the net server of the old Godot live
 viewer, is gone: `lab/live.py` loads the opponent net itself. Godot is no longer needed on the Pi. `soccer-dashboard` now runs `web/app.py`

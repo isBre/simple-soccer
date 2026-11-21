@@ -1,0 +1,18 @@
+# The project's dependencies and packages. Nothing needs installing to run it: every script works from a checkout as
+# `python3 <dir>/<script>.py` (it puts the project root on the import path itself). `pip install -e .` in a venv also works.
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "simple-soccer"
+version = "0.1.0"
+description = "Haxball-style 5v5 football: match core, rule-based and RL teams, the web game and the experiment Lab"
+dependencies = ["numpy"]              # the match core, the game, evaluations and the Lab
+
+[project.optional-dependencies]
+train = ["torch"]                     # rl/selfplay.py, rl/ppo.py, rl/distill.py, il/train.py
+mlflow = ["mlflow-skinny"]            # optional mirror of exp/results.jsonl (EXP_MLFLOW=1, lab/tracker.py)
+
+[tool.setuptools.packages.find]
+include = ["soccer*", "game*", "rl*", "lab*", "il*"]

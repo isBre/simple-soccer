@@ -18,14 +18,13 @@ from http.server import ThreadingHTTPServer
 from urllib.parse import unquote
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-for _p in (ROOT, os.path.join(ROOT, "lab"), os.path.dirname(os.path.abspath(__file__))):
-    if _p not in sys.path:
-        sys.path.insert(0, _p)
+if ROOT not in sys.path:
+    sys.path.insert(0, ROOT)
 for _v in ("OPENBLAS_NUM_THREADS", "OMP_NUM_THREADS", "MKL_NUM_THREADS"):   # tiny matrix products: no BLAS thread pools
     os.environ.setdefault(_v, "1")
 
-import dashboard as lab_api   # noqa: E402  (lab/dashboard.py)
-import ws                     # noqa: E402  (web/ws.py)
+from lab import dashboard as lab_api   # noqa: E402
+import ws                              # noqa: E402  (web/ws.py, next to this script)
 
 _game = None
 

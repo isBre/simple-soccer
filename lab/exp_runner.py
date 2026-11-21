@@ -29,7 +29,8 @@ import subprocess
 import sys
 import time
 
-import tracker
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))   # the project root BEFORE lab/ (lab/lab.py would hide the lab package)
+from lab import tracker  # noqa: E402
 
 ROOT, EXP = tracker.ROOT, tracker.EXP
 CKPT = os.path.join(ROOT, "out_5v5", "ckpt")
@@ -54,7 +55,7 @@ def json_of(path):
 def stop_stale_workers():
     """Leftovers of a killed trainer or evaluation (they would hold the ports and the CPU). Training workers end on their own
     when their trainer is gone (their pipe closes)."""
-    for pat in ("rl/eval_checkpoint.py", "rl/evaluate.py", "rl/net_server.py --port", "lab/live.py --tag"):
+    for pat in ("rl/eval_checkpoint.py", "rl/evaluate.py", "lab/live.py --tag"):
         out = subprocess.run(["pgrep", "-f", pat], stdout=subprocess.PIPE, text=True).stdout.split()
         for pid in out:
             if int(pid) != os.getpid():
@@ -104,51 +105,24 @@ def last_checkpoint(tag):
 
 
 def progress(tag):
-    """(update, training points per match vs the rule bots, number of matches) from the last training log line."""
-    path = os.path.join(ROOT, "logs", tag + ".out")
-    if not os.path.exists(path):
+    """(update, training points per match vs the rule bots, number of matches) of the last logged update."""
+    rows = tracker.train_rows(tag)
+    if not rows:
         return 0, None, 0
-    for line in reversed(open(path, errors="replace").read().splitlines()[-400:]):
-        m = re.search(r"sp upd (\d+) \| pts/m vs rules (?:(\S+)\((\d+)\)|-)", line)
-        if m:
-            return int(m.group(1)), (float(m.group(2)) if m.group(2) else None), int(m.group(3) or 0)
-    return 0, None, 0
-
-
-KIOSK_PROFILE = os.path.expanduser("~/.config/soccer-kiosk")          # own Chromium profile: no keyring prompt, no restore bubble
-KIOSK_URL = "http://127.0.0.1:8080/?kiosk=1#/live"
+    r = rows[-1]
+    return int(r["upd"]), r.get("rules"), int(r.get("n_rules") or 0)
 
 
 def start_viewer(tag, model):
-    """--viewer: the live demo match (lab/live.py: the newest checkpoint on the match core, streamed to the dashboard) and the
-    dashboard full screen on the Pi's touch screen (Chromium kiosk)."""
-    procs = [viewer_window(tag, model)]
-    ensure_kiosk()
-    return procs
+    """--viewer: the live demo match (lab/live.py: the newest checkpoint on the match core, streamed to the dashboard). The Pi's
+    screen shows it through the kiosk, its own service (lab/kiosk.py, soccer-kiosk)."""
+    return [viewer_window(tag, model)]
 
 
 def viewer_window(tag, model):
     """The match shown live: lab/live.py (restarted by the runner if it stops)."""
     return subprocess.Popen([sys.executable, os.path.join(ROOT, "lab", "live.py"), "--tag", tag, "--start", model],
                             cwd=ROOT, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-
-
-def ensure_kiosk():
-    """The web dashboard full screen on the Pi's screen (1024x600 touch screen, layout ?kiosk=1). It is not tied to an experiment:
-    it stays open between experiments and is started again if it was closed."""
-    if not sys.platform.startswith("linux"):                       # a laptop (macOS): the live match only, the dashboard is opened by hand
-        return
-    if subprocess.run(["pgrep", "-f", "user-data-dir=" + KIOSK_PROFILE], stdout=subprocess.DEVNULL).returncode == 0:
-        return
-    # native Wayland (the Pi's desktop is labwc): under X11 compatibility the touch screen arrives as a mouse and a finger drag selects
-    # instead of scrolling
-    env = {**os.environ, "WAYLAND_DISPLAY": "wayland-0", "XDG_RUNTIME_DIR": "/run/user/%d" % os.getuid(), "DISPLAY": ":0",
-           "XAUTHORITY": os.path.expanduser("~/.Xauthority")}
-    env.pop("DBUS_SESSION_BUS_ADDRESS", None)
-    subprocess.Popen(["chromium", "--ozone-platform=wayland", "--kiosk", "--app=" + KIOSK_URL, "--user-data-dir=" + KIOSK_PROFILE, "--password-store=basic",
-                      "--no-first-run", "--noerrdialogs", "--disable-infobars", "--disable-session-crashed-bubble", "--disable-translate",
-                      "--disable-features=Translate,TranslateUI", "--overscroll-history-navigation=0", "--disable-pinch", "--touch-events=enabled",
-                      "--check-for-update-interval=31536000"], env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
 
 
 def viewer_target():
@@ -168,7 +142,7 @@ def viewer_target():
 
 def view_only():
     """--viewer-only: no training and no ladder here (the experiments run on another computer, lab/mac_sync.py copies their files
-    in); only the live demo match and the kiosk, following whichever experiment is current."""
+    in); only the live demo match, following whichever experiment is current."""
     stop_stale_workers()
     live, cur = None, None
     while True:
@@ -178,7 +152,6 @@ def view_only():
                 live.terminate()
             live, cur = viewer_window(tag, model), tag
             log("viewer: live demo follows %s" % tag)
-        ensure_kiosk()
         time.sleep(30)
 
 
@@ -252,8 +225,6 @@ def run_experiment(spec_path, viewer=False):
             if viewer and procs and procs[-1].poll() is not None:
                 log("viewer closed (exit %s): starting it again" % procs[-1].returncode)
                 procs[-1] = viewer_window(tag, start_json)
-            if viewer:
-                ensure_kiosk()
             upd, pts, n = progress(tag)
             if pts is not None and n >= 96 and base_train is None:
                 base_train = pts
@@ -363,8 +334,8 @@ def ladder_round():
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--loop", action="store_true", help="keep waiting for new specs (the service); default: run the queue once and exit")
-    ap.add_argument("--viewer", action="store_true", help="play the live match (headless) and show the dashboard on the Pi's screen")
-    ap.add_argument("--viewer-only", action="store_true", help="no training: only the live demo and the kiosk (experiments run on another computer)")
+    ap.add_argument("--viewer", action="store_true", help="play the live match (headless; the Pi's screen shows it through the soccer-kiosk service)")
+    ap.add_argument("--viewer-only", action="store_true", help="no training: only the live demo (experiments run on another computer)")
     a = ap.parse_args()
     if a.viewer_only:
         view_only()

@@ -1,12 +1,13 @@
 """Complete evaluation of one checkpoint, cheap enough to run next to training on a Raspberry Pi.
 
-Starts numpy net servers (rl/net_server.py) for the checkpoint and for the reference nets, then runs rl/evaluate.py:
+Runs rl/evaluate.py (the nets are loaded in its worker processes):
   1. league_eval      all 16 rule-based teams, both sides (pts/m, GF/GA per team, per tier, trained-against vs held-out teams)
   2. behaviour_stats  direction changes/s, kick presses, spacing, keeper distance, passes, key passes (RL net vs rule bots)
   3. h2h_eval         head to head against RL Team 4 and against the weights the run started from (RL Team 5)
   and, to see what the net's sampling costs, the same net playing its BEST move (greedy): the league on every 2nd team and
   the behaviour numbers, written with a "greedy " prefix. The behaviour pass also writes HEAT lines (position heatmaps per slot).
-and writes everything to --out (text, one block per part, last line "DONE <seconds>"). Run at low priority.
+and writes everything to --out (text, one block per part, last line "DONE <seconds>") and the same numbers as JSON to
+<out without .txt>.json (record(): what lab/tracker.py stores in exp/results.jsonl). Run at low priority.
 
   python3 rl/eval_checkpoint.py --model out_5v5/ckpt/jit6_u100.json --out logs/sp_eval/jit6_u100.txt [--games 1] [--duration 90]
 """
@@ -15,33 +16,15 @@ import json
 import os
 import shutil
 import re
-import socket
 import subprocess
 import sys
 import time
 
-from client import ROOT
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if ROOT not in sys.path:                     # run as a script: the project root, for the package imports
+    sys.path.insert(0, ROOT)
 
 REFERENCES = [("RL Team 4", "data/models/rl_5v5_arena_v4.json"), ("RL Team 5", "data/models/rl_5v5_arena_v5.json")]
-
-
-def free_port():
-    with socket.socket() as s:
-        s.bind(("127.0.0.1", 0))
-        return s.getsockname()[1]
-
-
-def start_server(model):
-    port = free_port()
-    proc = subprocess.Popen([sys.executable, os.path.join(ROOT, "rl", "net_server.py"), "--port", str(port), "--model", os.path.join(ROOT, model)],
-                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    for _ in range(100):
-        try:
-            socket.create_connection(("127.0.0.1", port), timeout=0.2).close()
-            return proc, port
-        except OSError:
-            time.sleep(0.1)
-    raise RuntimeError("net server did not start for " + model)
 
 
 def run_eval(scene, args, timeout=3 * 3600):
@@ -53,6 +36,33 @@ def run_eval(scene, args, timeout=3 * 3600):
         return out.stdout.splitlines()
     except subprocess.TimeoutExpired:
         return ["TIMEOUT %s after %d s" % (scene, timeout)]
+
+
+def results_of(lines):
+    """The RESULT lines of an evaluation part (rl/evaluate.py result_line) as dicts."""
+    return [json.loads(l[7:]) for l in lines if l.startswith("RESULT ")]
+
+
+def record(model, mode, games, duration, h2h_games, parts, seconds):
+    """The evaluation as one dict: checkpoint, protocol, league / greedy / h2h summaries, behaviour (RL team and rule bots),
+    scout, every match [group, opponent, side, seed, goals for, goals against], seconds. parts: [(group, RESULT dict)] in the
+    order they ran, group = "league" | "greedy" | "behaviour" | "h2h"."""
+    r = {"checkpoint": model, "protocol": "%s/g%d/d%.0f" % (mode, games, duration), "h2h_games": h2h_games,
+         "league": {}, "greedy": {}, "h2h": {}, "behaviour": {}, "matches": [], "seconds": int(seconds)}
+    for group, d in parts:
+        if d["part"] == "league":
+            r[group] = d["summary"]
+            r["matches"] += [[group] + m for m in d["matches"]]
+        elif d["part"] == "h2h":
+            r["h2h"][d["name"]] = d["summary"]
+            r["matches"] += [["h2h", d["name"]] + m for m in d["matches"]]
+        elif d["part"] == "behaviour" and group == "behaviour":     # the greedy behaviour pass only goes to the text file
+            r["behaviour"] = d.get("rl", {})
+            if "rule" in d:
+                r["behaviour_rule"] = d["rule"]
+            if "scout" in d:
+                r["scout"] = d["scout"]
+    return r
 
 
 def run_tag(model):
@@ -105,45 +115,56 @@ def main():
         sys.exit("no such model: " + a.model)
     res_model = "res://" + model
     t0 = time.time()
-    servers = []
     tag, upd = run_tag(model)
     flag = os.path.join(ROOT, "logs", "%s_eval_running.json" % tag) if tag else None
     if flag:                                    # the viewer shows an "evaluation running" banner while this file exists
         json.dump({"pid": os.getpid(), "checkpoint": os.path.basename(model)[:-5], "started": int(t0), "paused": a.paused}, open(flag, "w"))
     lines = ["EVAL %s | mode %s | league games/side %d | duration %.0fs | h2h games/side %d" % (model, a.mode, a.games, a.duration, a.h2h_games)]
+    parts = []
+
+    def part(group, what, args, keep, prefix=""):
+        out = run_eval(what, args)
+        parts.extend((group, d) for d in results_of(out))
+        return [prefix + l for l in out if keep(l)]
+
     try:
-        proc, port = start_server(model)
-        servers.append(proc)
-        keep = re.compile(r"^(LEAGUE|team |SUMMARY|MATCH |\S+\s+(weak|average|strong|elite)\s)")
-        behaviour = re.compile(r"^(RL Team|rule-based|scores|HEAT|SCOUT)")
+        league_re = re.compile(r"^(LEAGUE|team |SUMMARY|MATCH |\S+\s+(weak|average|strong|elite)\s)").match
+        behaviour_re = re.compile(r"^(RL Team|rule-based|scores|HEAT|SCOUT)").match
+        league = ["--model", res_model, "--games", str(a.games), "--duration", str(a.duration)]
         if scout:
             refs = []
         else:
-            lines += ["# league"] + [l for l in run_eval("league_eval", ["--model", res_model, "--remote", str(port), "--games", str(a.games), "--duration", str(a.duration)] + (["--stride", "3"] if fast else [])) if keep.match(l)]
+            lines += ["# league"] + part("league", "league_eval", league + (["--stride", "3"] if fast else []), league_re)
         if not fast:
-            lines += ["# behaviour"] + [l for l in run_eval("behaviour_stats", ["--remote", str(port)]) if behaviour.match(l)]
+            lines += ["# behaviour"] + part("behaviour", "behaviour_stats", ["--model", res_model], behaviour_re)
         if not fast and not scout:
             lines += ["# greedy (best move instead of sampling)"]
-            lines += ["greedy " + l for l in run_eval("league_eval", ["--model", res_model, "--remote", str(port), "--games", str(a.games), "--duration", str(a.duration), "--stride", "2", "--greedy"]) if keep.match(l)]
-            lines += ["greedy " + l for l in run_eval("behaviour_stats", ["--remote", str(port), "--greedy"]) if re.match(r"^(RL Team|rule-based)", l)]
+            lines += part("greedy", "league_eval", league + ["--stride", "2", "--greedy"], league_re, "greedy ")
+            lines += part("greedy behaviour", "behaviour_stats", ["--model", res_model, "--greedy"],
+                          re.compile(r"^(RL Team|rule-based)").match, "greedy ")
         lines += ["# head to head"]
         for name, ref in refs:
-            rproc, rport = start_server(ref)
-            servers.append(rproc)
-            lines += [l for l in run_eval("h2h_eval", ["--a", str(port), "--b", str(rport), "--name", name, "--games", str(a.h2h_games), "--duration", str(a.duration)]) if l.startswith(("H2H", "MATCH "))]
+            lines += part("h2h", "h2h_eval", ["--a", res_model, "--b", os.path.join(ROOT, ref), "--name", name, "--games", str(a.h2h_games),
+                                              "--duration", str(a.duration)], lambda l: l.startswith(("H2H", "MATCH ")))
     finally:
-        for p in servers:
-            p.terminate()
         if flag and os.path.exists(flag):
             os.remove(flag)
     if a.mode == "full":
         update_best(model, lines)
-    lines.append("DONE %d" % (time.time() - t0))
+    seconds = time.time() - t0
+    lines.append("DONE %d" % seconds)
     os.makedirs(os.path.dirname(os.path.abspath(a.out)), exist_ok=True)
-    tmp = a.out + ".tmp"
-    with open(tmp, "w") as f:
-        f.write("\n".join(lines) + "\n")
-    os.replace(tmp, a.out)              # the file only exists once the evaluation is complete
+    rec = record(model, a.mode, a.games, a.duration, a.h2h_games, parts, seconds)
+    for path, text in ((json_path(a.out), json.dumps(rec) + "\n"), (a.out, "\n".join(lines) + "\n")):
+        tmp = path + ".tmp"
+        with open(tmp, "w") as f:
+            f.write(text)
+        os.replace(tmp, path)           # the text file appears last, only once the evaluation (and its JSON) is complete
+
+
+def json_path(out):
+    """logs/sp_eval/x_u100.txt -> logs/sp_eval/x_u100.json"""
+    return os.path.splitext(out)[0] + ".json"
 
 
 if __name__ == "__main__":

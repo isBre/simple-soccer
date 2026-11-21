@@ -1,3 +1,6 @@
 # Normalize EOL for all files that Git considers text files.
 * text=auto eol=lf
 models/*.pt filter=lfs diff=lfs merge=lfs -text
+# recorded play and the JSON copies of the nets: binary-like, every new file would stay in the history forever
+data/human/*.npz filter=lfs diff=lfs merge=lfs -text
+models/*.json filter=lfs diff=lfs merge=lfs -text

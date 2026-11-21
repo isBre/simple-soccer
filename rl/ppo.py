@@ -21,7 +21,11 @@ import torch
 import torch.nn as nn
 from torch.distributions import Bernoulli, Categorical
 
-from client import ROOT, VecEnv
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if ROOT not in sys.path:                     # run as a script: the project root, for the package imports
+    sys.path.insert(0, ROOT)
+
+from rl.client import VecEnv   # noqa: E402
 
 OUT = os.path.join(ROOT, "out_5v5")
 OBS_DIM = 54

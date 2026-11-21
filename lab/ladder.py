@@ -17,7 +17,7 @@ allowed. Results: exp/ladder.jsonl, one line per match (append only).
 How ratings are computed (fit()): Bradley-Terry on all stored results at once (win 1, draw 0.5, loss 0), on the Elo scale
 (400 points = 10:1 odds), with a weak prior (each rating ~ N(1500, 400)) so a team that never lost stays finite. The order of the
 matches does not matter, and every rating gets a 95% interval from the curvature of the likelihood. A snapshot of the ratings after
-each round goes to exp/ladder_ratings.jsonl (the history chart).
+each round goes to exp/ladder_ratings.jsonl (the history chart; older snapshots are thinned to one per hour).
 
   python3 lab/ladder.py roster                         the entries and their files
   python3 lab/ladder.py round [--pairs 8] [--workers 3] one round (2 matches per pair), then the new ratings
@@ -42,6 +42,8 @@ EXP = os.path.join(ROOT, "exp")
 RESULTS = os.path.join(EXP, "ladder.jsonl")
 HISTORY = os.path.join(EXP, "ladder_ratings.jsonl")
 OFF = os.path.join(EXP, "ladder_off")
+HISTORY_DENSE_H = 6              # hours of history kept after every round; older snapshots: the last one of each hour
+HISTORY_MAX_LINES = 600          # the file is thinned when it grows past this
 NET_SQUAD = "rl_team_5"
 PROTOCOL = "ladder/d90"
 DURATION = 90.0
@@ -262,10 +264,40 @@ def play_round(pairs_n=8, workers=3, path=RESULTS, seed=None):
             f.write(json.dumps(r) + "\n")
     rat = fit(ros, results(path))
     if path == RESULTS:
-        with open(HISTORY, "a") as f:
-            f.write(json.dumps({"t": time.strftime("%Y-%m-%dT%H:%M:%S"), "matches": len(valid(results(path), ros)),
-                                "elo": {k: round(v["elo"], 1) for k, v in rat.items() if v["games"]}}) + "\n")
+        append_history({"t": time.strftime("%Y-%m-%dT%H:%M:%S"), "matches": len(valid(results(path), ros)),
+                        "elo": {k: round(v["elo"], 1) for k, v in rat.items() if v["games"]}})
     return {"matches": len(recs), "seconds": round(time.time() - t0, 1), "pairs": pairs, "ratings": rat}
+
+
+def thin_history(lines, now=None):
+    """The snapshot lines to keep: every one of the last HISTORY_DENSE_H hours, before that the last one of each hour
+    (the ratings are refitted from all matches every round, so nothing is lost: ladder.jsonl keeps every match)."""
+    cutoff = time.strftime("%Y-%m-%dT%H:%M:%S", time.localtime((now or time.time()) - HISTORY_DENSE_H * 3600))
+    keep, last_of_hour = [], {}
+    for i, line in enumerate(lines):
+        try:
+            t = json.loads(line)["t"]
+        except (ValueError, KeyError, TypeError):
+            continue
+        if t >= cutoff:
+            keep.append(i)
+        else:
+            last_of_hour[t[:13]] = i
+    return [lines[i] for i in sorted(set(keep) | set(last_of_hour.values()))]
+
+
+def append_history(snap, path=HISTORY):
+    """Appends a ratings snapshot (the Ranking page's history chart); past HISTORY_MAX_LINES lines the file is thinned
+    (thin_history), so it no longer grows by a snapshot every few minutes forever."""
+    with open(path, "a") as f:
+        f.write(json.dumps(snap) + "\n")
+    with open(path) as f:
+        lines = [l if l.endswith("\n") else l + "\n" for l in f if l.strip()]
+    if len(lines) > HISTORY_MAX_LINES:
+        tmp = path + ".tmp"
+        with open(tmp, "w") as f:
+            f.writelines(thin_history(lines))
+        os.replace(tmp, path)
 
 
 def ranking(path=RESULTS):

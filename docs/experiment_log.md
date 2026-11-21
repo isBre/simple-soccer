@@ -20,7 +20,7 @@ dashboard: `http://<pi-address>:8080`. Newest entries at the bottom; the agent a
 - **No hand-made positioning terms for defence or the keeper** (goal-line cover, keeper position): the user wants the net to find its own
   solution, e.g. high pressing without a keeper (2026-11-16).
 - **Learning rate 5e-5** with a 30-update warm-up after every (re)start. 3e-4 and 1e-4 runs drifted away from the warm start.
-- **Raspberry Pi 4 (4 cores, 3.8 GB).** Training on 3 workers (2 rule + 1 self-play), learning step on 2 threads, net servers on 1 BLAS thread.
+- **Raspberry Pi 4 (4 cores, 3.8 GB).** Training on 3 workers (2 rule + 1 self-play), learning step on 2 threads, evaluation processes on 1 BLAS thread (the nets run inside them since 2026-11-21; before, in separate net servers).
   The live viewer runs on the Pi's touch screen (no keyboard) next to training.
 
 ## History before the pipeline

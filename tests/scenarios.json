@@ -1,5 +1,5 @@
 {
-  "_doc": "Matches recorded in Godot (tests/godot/record_match.gd) and replayed tick by tick in Python (tests/test_match.py). control: 0 none, 1 one human player, 2 whole team (Q switches).",
+  "_doc": "Matches played by tests/test_match.py and compared with tests/golden/match_<name>.json (a scripted human where control is set). control: 0 none, 1 one human player, 2 whole team (Q switches).",
   "pitches": {
     "test_walls": {"id": "test_walls", "name": "Test walls", "sizes": [3], "half_w": 330.0, "half_h": 160.0, "goal_half": 60.0,
                    "net_depth": 40.0, "out_x": 380.0, "out_y": 190.0, "center_r": 70.0, "post_r": 8.0,

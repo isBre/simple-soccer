@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Runs on the computer that TRAINS (the Mac). Keeps the Pi's dashboard and kiosk in step with it, over ssh + rsync, every --interval s:
 
-  1. pushes results, run states, logs and checkpoints to the Pi (exp/, logs/x_*.out, logs/sp_eval/, out_5v5/ckpt/*.pt|json; never the
+  1. pushes results, run states, logs and checkpoints to the Pi (exp/, logs/x_*.out and x_*_train.jsonl, logs/sp_eval/, out_5v5/ckpt/*.pt|json; never the
      big *.train_state files, the queue, the audit log or the cancel flags);
   2. deletes from the Pi's queue every spec this computer already started or finished;
   3. pulls the Pi's queue (agents / people add, move and cancel specs there with lab/lab.py) and the Pi's cancel flags, so the runner here
@@ -52,7 +52,7 @@ def sync(pi, pi_root):
     # 1. push
     ok &= run(rs + ["--exclude=/queue/", "--exclude=*.cancel", "--exclude=/audit.jsonl", "--exclude=/hidden_runs.json",
                     "--exclude=/ladder_off", "--exclude=*.tmp", EXP + "/", "%s:%s/exp/" % (pi, pi_root)])
-    ok &= run(rs + ["--include=x_*.out", "--include=sp_eval/", "--include=sp_eval/***", "--include=check/", "--include=check/***",
+    ok &= run(rs + ["--include=x_*.out", "--include=x_*_train.jsonl", "--include=sp_eval/", "--include=sp_eval/***", "--include=check/", "--include=check/***",
                     "--exclude=*", os.path.join(ROOT, "logs") + "/", "%s:%s/logs/" % (pi, pi_root)])
     ckpt = os.path.join(ROOT, "out_5v5", "ckpt")
     if os.path.isdir(ckpt):

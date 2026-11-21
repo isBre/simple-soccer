@@ -1,7 +1,7 @@
 """One RL episode source on top of the match core (soccer.match): the learner controls players of team 0 with ONE shared
 policy (one observation per player, soccer/ai/nets.py). With `with_keeper` the goalkeeper slot is a normal learner player
 too: no rule-based keeper, no fixed formation. The rule-based players (opponents, a kept keeper) are played by the match AI.
-Line-by-line port of the Godot environment (rl/rl_env.gd), checked step by step against it (tests/test_env.py).
+Started as a line-by-line port of the Godot environment (rl/rl_env.gd); tests/test_env.py guards it against stored runs.
 
 Config (configure()):
   n_active     number of learner-controlled players (1..5); the rest of team 0 is removed ("ghosts")

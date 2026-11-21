@@ -6,9 +6,8 @@ import time
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
-sys.path.insert(0, os.path.join(ROOT, "rl"))
 from soccer.match import Match, make_config     # noqa: E402
-from env import RLEnv                           # noqa: E402
+from rl.env import RLEnv                        # noqa: E402
 
 t0, ticks = time.time(), 0
 ids = ["aurora", "cobalt", "granite", "tide"]

@@ -9,8 +9,8 @@ on the experiments, start here. People: the same applies; the dashboard (the Lab
 - `exp/schema.json`: what every metric means, its unit and direction, the evaluation protocols and the comparison rules.
 - The match itself (physics, rules, stats, AI) is the Python core `soccer/`; training (`rl/env.py`) and evaluations
   (`rl/evaluate.py`) and the Live demo match (`lab/live.py`) run on it. The web app (`web/app.py`, port 8080) has two areas: Game (the
-  playable game, back end `game/`) and Lab (this pipeline's dashboard). There is no Godot any more; `tests/` checks the core against
-  the Godot implementation it replaced (README "Tests").
+  playable game, back end `game/`) and Lab (this pipeline's dashboard). There is no Godot any more; `python3 tests/run_all.py` runs
+  the regression tests (README "Tests"; re-record `tests/golden/` with `--update` only for an intended change of behaviour).
 
 ## Look (read-only, compact JSON)
 ```

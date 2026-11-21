@@ -1,7 +1,7 @@
 """Godot's RandomNumberGenerator (PCG32, core/math/random_pcg.h and random_number_generator.h of Godot 4.6), so a match
 in Python draws exactly the kickoffs and penalties a Godot match draws with the same seed.
 
-Bit for bit: seeding, state, randi, randi_range, randf, randf_range (checked against Godot by tests/test_rng.py).
+Bit for bit: seeding, state, randi, randi_range, randf, randf_range (matched Godot exactly; tests/test_rng.py guards the outputs).
 randfn is computed like Godot's float version (32-bit cos and log); this module uses correctly rounded cos / log, while
 the C library behind Godot is occasionally one bit off (macOS: about 1 draw in 250), so a rare randfn value differs in
 its last bit (a relative 1e-7). Godot itself differs between platforms there (macOS libm vs Linux glibc)."""
