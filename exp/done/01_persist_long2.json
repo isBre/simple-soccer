@@ -1,0 +1,18 @@
+{
+ "name": "persist_long2",
+ "start": "out_5v5/ckpt/x_kickstart_persist_u400.pt",
+ "updates": 600,
+ "lr": 5e-05,
+ "rewards": {
+  "w_wall": 0.0
+ },
+ "args": {
+  "teacher": "out_5v5/ckpt/jit8_best.pt",
+  "kl_coef": 0.12,
+  "kl_decay": 1000,
+  "opp_models": "out_5v5/ckpt/jit8_best.pt,data/models/rl_5v5_arena_v4.json,data/models/rl_5v5_arena_v5.json",
+  "pfsp": 0.75
+ },
+ "notes": "Longer run of the best recipe (kickstart_persist u400: best h2h GD vs RL4/RL5 in the 80-game evaluation, -0.26 / -0.35), 600 more updates, same settings as the cancelled kickstart_persist_long. Queued on the user's 'continue' while the observation question is open: the only lever left that does not change the observation. Expectation: flat; it checks that 400 updates did not stop short of a slow gain.",
+ "control": "kickstart_persist"
+}
