@@ -38,7 +38,10 @@ python3 lab/lab.py queue validate spec.json       # checks name, start checkpoin
 python3 lab/lab.py queue add spec.json [--position 1]
 python3 lab/lab.py queue move NAME --position 1
 python3 lab/lab.py queue cancel NAME              # running: stops within 30 s ('cancelled'); queued: moved to exp/parked/
+python3 lab/lab.py ladder archive [--label L] [--yes]   # ONLY when the user asks: starts the Elo ranking over
 ```
+`ladder archive` moves every stored ladder match and the rating history to `exp/ladder_archive/<date>[_<label>]/` (kept, no longer
+counted); without `--yes` it only shows what would move. The user decides when the ranking is reset; never do it on your own.
 A spec: `{"name": "xga", "start": "out_5v5/ckpt/t48_u100.pt", "updates": 300, "lr": 5e-5, "rewards": {"w_xga": 2.0},
 "args": {"seed": 11}, "control": "minimal", "notes": "why"}`. `rewards` override the minimal set and `args` the training defaults
 (`lab/tracker.py`: MINIMAL, DEFAULTS); any `rl/selfplay.py` option is allowed. Names are unique forever (a used name is refused).

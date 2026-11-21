@@ -325,6 +325,36 @@ def ranking(path=RESULTS):
             "recent": v[-30:]}
 
 
+ARCHIVE = os.path.join(EXP, "ladder_archive")
+
+
+def archive(label="", dry_run=False, results_path=RESULTS, history_path=HISTORY, archive_dir=ARCHIVE):
+    """Starts the ranking over, only when the user decides (never automatically): moves every stored match (ladder.jsonl) and the
+    rating history (ladder_ratings.jsonl) to exp/ladder_archive/<date>[_<label>]/, with info.json (when, how many matches, the
+    ranking at that moment). Nothing is deleted; archived matches simply no longer count. Run it on the machine that plays the
+    ladder (with lab/MAC.md's setup: the Mac, whose exp/ is copied to the Pi). Returns what moved (or would move)."""
+    res = results(results_path)
+    name = time.strftime("%Y-%m-%d") + ("_" + "".join(c if c.isalnum() or c in "-_" else "_" for c in label) if label else "")
+    dest, k = os.path.join(archive_dir, name), 2
+    while os.path.exists(dest):
+        dest, k = os.path.join(archive_dir, "%s_%d" % (name, k)), k + 1
+    info = {"archived": time.strftime("%Y-%m-%dT%H:%M:%S"), "label": label, "matches": len(res),
+            "first": res[0]["t"] if res else None, "last": res[-1]["t"] if res else None,
+            "files": [os.path.basename(p) for p in (results_path, history_path) if os.path.exists(p)],
+            "folder": os.path.relpath(dest, ROOT)}
+    if res and results_path == RESULTS:
+        info["top"] = [{"id": r["id"], "elo": r["elo"], "games": r["games"]} for r in ranking(results_path)["rows"][:20]]
+    if dry_run or not info["files"]:
+        return info
+    os.makedirs(dest)
+    for p in (results_path, history_path):
+        if os.path.exists(p):
+            os.replace(p, os.path.join(dest, os.path.basename(p)))
+    with open(os.path.join(dest, "info.json"), "w") as f:
+        json.dump(info, f, indent=1)
+    return info
+
+
 def main():
     ap = argparse.ArgumentParser()
     sub = ap.add_subparsers(dest="cmd", required=True)

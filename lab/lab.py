@@ -13,6 +13,7 @@ so it works even when the dashboard is down. Every command prints one JSON objec
   python3 lab/lab.py ranking [--league rl]           Elo ranking of every team of every league (lab/ladder.py), 95% intervals
   python3 lab/lab.py queue list | validate F | add F [--position N] | cancel NAME | move NAME N
   python3 lab/lab.py schema                          what every metric means (unit, direction, protocol)
+  python3 lab/lab.py ladder archive [--label L] [--yes]   start the Elo ranking over (only when the user asks; matches kept)
 Definitions: AGENTS.md and exp/schema.json.
 """
 import argparse
@@ -433,12 +434,29 @@ def cmd_ranking(a):
             "rows": [{k: x.get(k) for k in keep} for x in rows]}
 
 
+def cmd_ladder(a):
+    """Starts the Elo ranking over, when the user decides: `ladder archive` shows what would move, `ladder archive --yes` moves
+    every stored match and the rating history to exp/ladder_archive/<date>[_<label>]/ (kept, no longer counted; audited)."""
+    from lab import ladder
+    if a.action != "archive":
+        raise LabError("unknown ladder action %r" % a.action, "python3 lab/lab.py ladder archive [--label NAME] [--yes]")
+    info = ladder.archive(a.label or "", dry_run=not a.yes)
+    if not info["files"]:
+        raise LabError("nothing to archive: no exp/ladder.jsonl here", "run it on the machine that plays the ladder (lab/MAC.md)")
+    if not a.yes:
+        return {"dry_run": True, "would_archive": info,
+                "hint": "this starts the Elo ranking over (every team back to 1500, placement matches first); add --yes to do it"}
+    audit("ladder_archive", folder=info["folder"], matches=info["matches"], label=info["label"])
+    return {"archived": info}
+
+
 def cmd_schema(_a):
     return json.load(open(os.path.join(EXP, "schema.json")))
 
 
 COMMANDS = {"status": cmd_status, "runs": cmd_runs, "run": cmd_run, "evals": cmd_evals, "best": cmd_best, "compare": cmd_compare,
-            "ablation": cmd_ablation, "events": cmd_events, "queue": cmd_queue, "schema": cmd_schema, "ranking": cmd_ranking}
+            "ablation": cmd_ablation, "events": cmd_events, "queue": cmd_queue, "schema": cmd_schema, "ranking": cmd_ranking,
+            "ladder": cmd_ladder}
 
 
 def envelope(data):
@@ -479,6 +497,10 @@ def parser():
     sub.add_parser("schema")
     p = sub.add_parser("ranking")
     p.add_argument("--league", help="rules | rl | ml | dl")
+    p = sub.add_parser("ladder", help="ladder archive [--label NAME] [--yes]: start the Elo ranking over (only when the user asks)")
+    p.add_argument("action", choices=["archive"])
+    p.add_argument("--label", help="a word for the archive folder, e.g. before_v2_rewards")
+    p.add_argument("--yes", action="store_true", help="really do it (without it: only show what would move)")
     return ap
 
 
