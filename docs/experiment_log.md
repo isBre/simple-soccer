@@ -13,6 +13,9 @@ dashboard: `http://<pi-address>:8080`. Newest entries at the bottom; the agent a
   Minimal set: goals, passing (progressive / ok / failed, individual credit, receive, key pass, xA), cooperation (capped at 8/match),
   "open for a pass", spacing **only while our team has the ball**, kick discipline. Off: shaping, twitching, keeper-far, too-far-from-ball,
   xG for/against, win/draw bonus, tackles, goal-side, opponent-in-our-half, compactness.
+- **Role-free derived observation features are allowed** (user yes, 2026-11-21): observation `rank` (56 numbers) = `team` + for me and my
+  4 teammates (nearest first) the rank in our team by distance to the ball and by depth (`soccer/ai/nets.py` `ranks`). No slot, no fixed role.
+  `team` stays the default; nets with 56 inputs pick the rank observation automatically everywhere (`features_for`).
 - **w_wall 0.02 is in the default reward set** (user yes, 2026-11-18; earlier runs and the specs of `persist_*` keep 0 so their controls stay valid). Full reward register with evidence: `docs/rewards.md`.
 - **No hand-made positioning terms for defence or the keeper** (goal-line cover, keeper position): the user wants the net to find its own
   solution, e.g. high pressing without a keeper (2026-11-16).
@@ -210,3 +213,10 @@ New scouting numbers `ball_corner_pct` / `ball_corner_ours_pct` (ball within 150
 ### Note 2026-11-21 06:20: 80-game head-to-head of `persist_long2` u600 (`logs/h2h_big/x_persist_long2_u600.txt`)
 - RL Team 4 **1.07** (se 0.14, GD -0.38), RL Team 5 **1.00** (se 0.13, GD -0.41). The 16-game values of the review (1.44 / 1.12) were noise: with 80 games the checkpoint lands inside the same band as the four others (0.76-1.09 vs RL Team 4, 0.85-0.95 vs RL Team 5), at the top of it but not different from `kickstart_persist` u400 (1.09 / 0.90). 600 more updates of the best recipe gave nothing measurable: the plateau of 46-number nets against RL4/RL5 holds for every run so far.
 - Queue stays empty until the user decides on role-free derived observation features.
+
+### Note 2026-11-21 10:20: observation question answered, `rank_persist` queued (on the MacBook Air)
+- The user OK'd role-free derived features. New layout `rank` (56): `team` + 10 ranks (ball-distance rank and depth rank of me and my 4 teammates, nearest first, each /4). The ranks are a function of the 46 positions, so they add no information, only remove the need for a 128-wide MLP to sort 5 points; they fix no role (they change with the situation).
+- `rank_persist`: start = `kickstart_persist` u400 widened to 56 inputs with zero weights (`rl/pad_inputs.py`; identical outputs at u0), everything else exactly `persist_long2` (recipe, seed 7, 600 updates), control `persist_long2`. A single-variable test of the observation.
+- Runs on the user's MacBook Air (M4, fanless) instead of the Pi: same batch and worker settings as the Pi runs (so it stays comparable), started with background QoS (efficiency cores), nice 10, evaluations capped at 3 processes (`SOCCER_PROCS=3`, new in `rl/evaluate.py`), no ladder loop afterwards. The runner skips the Pi's kiosk browser off Linux.
+- Read-out: h2h vs RL Team 4 / 5 against the 80-game band of 46-number nets (0.76-1.09 / 0.85-1.00); if the 16-game h2h looks better, confirm with an 80-game run before believing it.
+

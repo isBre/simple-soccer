@@ -136,6 +136,8 @@ def viewer_window(tag, model):
 def ensure_kiosk():
     """The web dashboard full screen on the Pi's screen (1024x600 touch screen, layout ?kiosk=1). It is not tied to an experiment:
     it stays open between experiments and is started again if it was closed."""
+    if not sys.platform.startswith("linux"):                       # a laptop (macOS): the live match only, the dashboard is opened by hand
+        return
     if subprocess.run(["pgrep", "-f", "user-data-dir=" + KIOSK_PROFILE], stdout=subprocess.DEVNULL).returncode == 0:
         return
     # native Wayland (the Pi's desktop is labwc): under X11 compatibility the touch screen arrives as a mouse and a finger drag selects

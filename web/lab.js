@@ -57,6 +57,16 @@ function throttle(hex) {
   const list = (bits) => names.filter((_, i) => bits & (1 << i)).join(", ");
   return { text: now ? list(now) : "OK now", cls: now ? "neg" : "warn", sub: past ? "since boot: " + list(past) : "" };
 }
+// The health box describes whatever machine the pipeline runs on (lab/lab.py machine): the Pi reports throttle flags,
+// a Mac its thermal pressure (macOS slows the CPU from "moderate" up), power source and battery charge.
+function powerState(pi) {
+  if (pi.kind !== "mac") return throttle(pi.throttled);
+  const lv = pi.thermal, src = pi.power ? (pi.power === "AC" ? "on AC" : "on battery") + (pi.battery_pct != null ? " · " + f(pi.battery_pct, 0) + "%" : "") : "";
+  if (lv == null) return { text: "–", cls: "", sub: src };
+  return { text: lv === 0 ? "OK" : "thermal " + pi.thermal_text, cls: lv === 0 ? "pos" : lv === 1 ? "warn" : "neg", sub: src };
+}
+function machineName(pi) { return pi?.name || "Raspberry Pi"; }
+function tempWarn(pi) { return pi?.temp_warn ?? 75; }
 function ema(points, a) {
   if (!a) return points;
   let m = null;
@@ -211,7 +221,7 @@ function viewNow() {
     const spec = (o.queue.queued.find((q) => q.name === run.run) || {});
     const pct = run.target ? Math.min(100, (100 * (run.update || 0)) / run.target) : 0;
     const mode = run.evaluating ? "eval" : run.stalled ? "stale" : "";
-    const lbl = run.evaluating ? badge("evaluating") : run.stalled ? `<span class="badge failed">no progress for ${dur(run.log_age_s)}</span>` : badge("running");
+    const lbl = run.thermal_pause ? `<span class="badge evaluating" title="lab/thermal_guard.py: resumes at ${f(run.thermal_pause.resume, 1)} °C">paused to cool · ${f(run.thermal_pause.temp, 1)} °C</span>` : run.evaluating ? badge("evaluating") : run.stalled ? `<span class="badge failed">no progress for ${dur(run.log_age_s)}</span>` : badge("running");
     const delta = run.train_pts_vs_rules != null && run.train_pts_at_start != null ? run.train_pts_vs_rules - run.train_pts_at_start : null;
     const lf = row.latest_fast;
     hero = `<section class="hero ${mode}"><div class="hero-top"><div class="min0"><div class="eyebrow">Running experiment${run.started ? " · since " + esc(ago(run.started).replace(" ago", "")) : ""}</div><h1>${runLink(run.run)}</h1>
@@ -238,16 +248,16 @@ function viewNow() {
   } else {
     hero = `<section class="hero idle"><div class="hero-top"><div><div class="eyebrow">Runner ${esc(st.runner.service || "")}</div><h1>Idle</h1></div>${badge("idle")}</div>${queueLine(o.queue.queued)}</section>`;
   }
-  const th = throttle(pi.throttled), hasPi = pi.last_sample != null;
+  const th = powerState(pi), hasPi = pi.last_sample != null, cores = pi.cores || 4, mac = pi.kind === "mac";
   const hl = (o.health || []).filter((r) => r.t && r.t.includes("T"));
   const vit = (k, color, lo, hi) => sparkline(hl.map((r) => [parseT(r.t), r[k]]).filter((p) => p[1] != null), color, 110, 26, lo, hi);
   const rb = st.last_reboot, mem = hasPi ? pi.mem_free_mb : null;
-  const vitals = `<section class="card vitals"><div class="card-h"><h2>Raspberry Pi</h2><a href="#/pi">details →</a></div>
-    <div class="vrow"><span>Temperature</span><b class="${pi.temp_c > 75 ? "neg" : ""}">${f(pi.temp_c, 1)} °C</b>${vit("temp", css("--c2"), 30, 85)}</div>
-    <div class="vrow"><span>CPU load</span><b>${f(pi.load_1m, 1)} <small>/ 4</small></b>${vit("load", css("--c1"), 0, 12)}</div>
-    <div class="vrow"><span>Free memory</span><b class="${mem != null && mem < 500 ? "neg" : ""}">${mem != null ? f(mem / 1024, 1) : "–"} GB</b>${vit("mem_mb", css("--c3"), 0, 3800)}</div>
-    <div class="vrow"><span>Power</span><b class="${th.cls}">${esc(th.text)}</b><span class="muted small">${pi.uptime_hours != null ? "up " + dur(pi.uptime_hours * 3600) : ""}</span></div>
-    ${!hasPi ? '<div class="muted small">No health samples (logs/pi_health.log): the health service is not running here.</div>' : ""}
+  const vitals = `<section class="card vitals"><div class="card-h"><h2 title="${esc(pi.chip || "")}">${esc(machineName(pi))}${pi.chip ? ` <span class="muted small">${esc(pi.chip)}</span>` : ""}</h2><a href="#/pi">details →</a></div>
+    <div class="vrow"><span>${esc(pi.temp_label || "Temperature")}</span><b class="${pi.temp_c > tempWarn(pi) ? "neg" : ""}">${f(pi.temp_c, 1)} °C</b>${vit("temp", css("--c2"), mac ? 20 : 30, mac ? 50 : 85)}</div>
+    <div class="vrow"><span>CPU load</span><b>${f(pi.load_1m, 1)} <small>/ ${cores}</small></b>${vit("load", css("--c1"), 0, cores * 3)}</div>
+    <div class="vrow"><span>Free memory</span><b class="${mem != null && mem < 500 ? "neg" : ""}">${mem != null ? f(mem / 1024, 1) : "–"} <small>/ ${f((pi.mem_total_mb || 3800) / 1024, 0)}</small> GB</b>${vit("mem_mb", css("--c3"), 0, pi.mem_total_mb || 3800)}</div>
+    <div class="vrow"><span>${mac ? "Thermal" : "Power"}</span><b class="${th.cls}">${esc(th.text)}</b><span class="muted small">${[th.sub && mac ? th.sub : "", pi.uptime_hours != null ? "up " + dur(pi.uptime_hours * 3600) : ""].filter(Boolean).map(esc).join(" · ")}</span></div>
+    ${!hasPi ? '<div class="muted small">No health samples (logs/pi_health.log): start <span class="mono">python3 lab/health_log.py</span> (the Pi: service soccer-health).</div>' : ""}
     ${rb ? `<div class="vnote">Last reboot ${esc(ago(rb.back))} · last sample before it ${esc(rb.last_seen.replace("T", " "))}: load ${f(rb.last_sample.load, 1)}, ${f(rb.last_sample.mem_mb, 0)} MB free, ${f(rb.last_sample.temp, 0)} °C</div>` : ""}</section>`;
   const focus = run ? run.run : last?.name;
   let curve = '<div class="empty">Nothing trained yet</div>';
@@ -302,7 +312,7 @@ function eventItem(e) {
     return { cls: m[2] === "done" ? "finished" : "stopped", html: `${run(m[1])} finished: ${esc(m[2])}${ver}` };
   }
   if (e.kind === "stopped" && (m = /^(\S+): (\S+) at update (\d+)/.exec(t))) return { cls: "stopped", html: `${run(m[1])} stopped at u${m[3]}: ${esc(m[2])}` };
-  if (e.kind === "reboot") return { cls: "reboot", html: `Pi rebooted <span class="muted">${esc(t.replace(/^Pi rebooted\s*/, ""))}</span>` };
+  if (e.kind === "reboot") return { cls: "reboot", html: `${esc((/^(.*?) rebooted/.exec(t) || [, "Pi"])[1])} rebooted <span class="muted">${esc(t.replace(/^.*? rebooted\s*/, ""))}</span>` };
   if (/^ladder: /.test(t)) return { cls: "info", group: "ladder", html: "ladder round" };
   if (/^viewer closed/.test(t)) return { cls: "info", group: "viewer", html: "Live viewer restarted" };
   return { cls: e.kind === "error" ? "error" : "info", html: esc(t) };
@@ -988,20 +998,23 @@ function viewDocs(id) {
 function viewPi() {
   const o = state.ov; if (!o) return '<div class="empty">Loading…</div>';
   if (!state.health || state.health.hours !== state.piHours) loadHealth();
-  const pi = o.status.pi, th = throttle(pi.throttled), H = state.health;
+  const pi = o.status.pi, th = powerState(pi), H = state.health, cores = pi.cores || 4, mac = pi.kind === "mac", name = machineName(pi);
   const rows = (H?.rows || []).filter((r) => r.t && r.t.includes("T"));
   const vl = (H?.reboots || []).map((r) => ({ x: parseT(r.back), label: "reboot (last seen " + r.last_seen.slice(11, 16) + ")" }));
   const mk = (k) => rows.map((r) => ({ x: parseT(r.t), y: r[k] }));
   const opt = { height: 180, time: true, vlines: vl, gap: 120 };
   const win = [3, 12, 48].map((h) => `<button class="pill ${state.piHours === h ? "on" : ""}" data-hours="${h}">${h} h</button>`).join("");
   const last = rows[rows.length - 1];
-  return `<div class="head"><div><h1>Raspberry Pi</h1><p>One sample every 10 s (<span class="mono">logs/pi_health.log</span>). Red lines mark reboots; the last sample before one shows what the Pi was doing.</p></div><div class="pills">${win}</div></div>
-    <div class="kpis">${kpi("Temperature", `${f(pi.temp_c, 1)}<small>°C</small>`)}${kpi("CPU load", `${f(pi.load_1m, 1)}<small>/ 4</small>`)}${kpi("Free memory", `${f(pi.mem_free_mb == null ? null : pi.mem_free_mb / 1024, 2)}<small>GB</small>`)}${kpi("Power", esc(th.text), esc(th.sub || ""), th.cls)}${kpi("Uptime", dur(pi.uptime_hours * 3600), "boot " + esc(pi.boot_id || ""))}${kpi("Last sample", last ? ago(last.t) : "–", "watchdog: reboot after 15 s frozen")}</div>
+  const lastChart = mac
+    ? `<section class="card"><div class="card-h"><h3>Thermal pressure <span class="muted small">0 nominal · 1 moderate · 2 heavy</span></h3></div>${lineChart([{ name: "thermal", color: css("--c4"), points: mk("thermal") }], { ...opt, yMin: 0, refs: [{ y: 1, label: "CPU slowed from here" }], key: "pc", emptyText: "no dated samples yet" })}</section>`
+    : `<section class="card"><div class="card-h"><h3>CPU clock MHz</h3></div>${lineChart([{ name: "clock", color: css("--c4"), points: mk("clock_mhz") }], { ...opt, yMin: 0, key: "pc", emptyText: "no dated samples yet" })}</section>`;
+  return `<div class="head"><div><h1>${esc(name)}${pi.chip ? ` <span class="muted">${esc(pi.chip)}</span>` : ""}</h1><p>One sample every 10 s (<span class="mono">logs/pi_health.log</span>). Red lines mark reboots; the last sample before one shows what the machine was doing.${mac ? " macOS gives no CPU temperature without admin rights: the temperature is the battery's, which on a fanless MacBook follows the chassis." : ""}</p></div><div class="pills">${win}</div></div>
+    <div class="kpis">${kpi(pi.temp_label || "Temperature", `${f(pi.temp_c, 1)}<small>°C</small>`)}${kpi("CPU load", `${f(pi.load_1m, 1)}<small>/ ${cores}</small>`)}${kpi("Free memory", `${f(pi.mem_free_mb == null ? null : pi.mem_free_mb / 1024, 2)}<small>${pi.mem_total_mb ? "/ " + f(pi.mem_total_mb / 1024, 0) + " " : ""}GB</small>`)}${kpi(mac ? "Thermal" : "Power", esc(th.text), esc(th.sub || ""), th.cls)}${kpi("Uptime", dur(pi.uptime_hours * 3600), "boot " + esc(pi.boot_id || ""))}${kpi("Last sample", last ? ago(last.t) : "–", pi.watchdog ? "watchdog: reboot after 15 s frozen" : "")}</div>
     <div class="grid g2">
-      <section class="card"><div class="card-h"><h3>Temperature °C</h3></div>${lineChart([{ name: "temperature", color: css("--c2"), points: mk("temp") }], { ...opt, refs: [{ y: 80, label: "throttles at 80" }], key: "pt", emptyText: "no dated samples yet" })}</section>
-      <section class="card"><div class="card-h"><h3>CPU load (1 min)</h3></div>${lineChart([{ name: "load", color: css("--c1"), points: mk("load") }], { ...opt, yMin: 0, refs: [{ y: 4, label: "4 cores" }], key: "pl", emptyText: "no dated samples yet" })}</section>
+      <section class="card"><div class="card-h"><h3>${esc(pi.temp_label || "Temperature")} °C</h3></div>${lineChart([{ name: "temperature", color: css("--c2"), points: mk("temp") }], { ...opt, refs: mac ? [] : [{ y: 80, label: "throttles at 80" }], key: "pt", emptyText: "no dated samples yet" })}</section>
+      <section class="card"><div class="card-h"><h3>CPU load (1 min)</h3></div>${lineChart([{ name: "load", color: css("--c1"), points: mk("load") }], { ...opt, yMin: 0, refs: [{ y: cores, label: cores + " cores" }], key: "pl", emptyText: "no dated samples yet" })}</section>
       <section class="card"><div class="card-h"><h3>Free memory MB</h3></div>${lineChart([{ name: "free", color: css("--c3"), points: mk("mem_mb") }], { ...opt, yMin: 0, key: "pm", emptyText: "no dated samples yet" })}</section>
-      <section class="card"><div class="card-h"><h3>CPU clock MHz</h3></div>${lineChart([{ name: "clock", color: css("--c4"), points: mk("clock_mhz") }], { ...opt, yMin: 0, key: "pc", emptyText: "no dated samples yet" })}</section>
+      ${lastChart}
     </div>`;
 }
 
@@ -1222,10 +1235,10 @@ async function poll() {
 function setPulse(ok) {
   const p = $("#pulse"), off = $("#offline"), pi = $("#pichip"), s = state.ov?.status?.pi;
   p.className = "pulse " + (ok ? "ok" : "err");
-  if (pi && s) pi.innerHTML = `<i class="${s.temp_c > 75 || (s.throttled && s.throttled !== "0x0") ? "warn" : "ok"}"></i>${f(s.temp_c, 0)}°C · load ${f(s.load_1m, 1)}`;
+  if (pi && s) { pi.innerHTML = `<i class="${s.temp_c > tempWarn(s) || (s.throttled && s.throttled !== "0x0") || s.thermal > 0 ? "warn" : "ok"}"></i>${f(s.temp_c, 0)}°C · load ${f(s.load_1m, 1)}`; pi.title = machineName(s); }
   const down = !ok && state.firstFail && Date.now() - state.firstFail > 25000;
   off.hidden = !down;
-  if (down) off.innerHTML = `<b>The Pi stopped answering</b>${state.lastOk ? " · last data " + new Date(state.lastOk).toLocaleTimeString() + " (" + dur((Date.now() - state.lastOk) / 1000) + " ago)" : ""} · if it froze, the watchdog reboots it and the runner resumes`;
+  if (down) off.innerHTML = `<b>The ${esc(machineName(s))} stopped answering</b>${state.lastOk ? " · last data " + new Date(state.lastOk).toLocaleTimeString() + " (" + dur((Date.now() - state.lastOk) / 1000) + " ago)" : ""}${s?.watchdog !== false ? " · if it froze, the watchdog reboots it and the runner resumes" : " · if it slept or rebooted, start the runner again"}`;
 }
 
 // ---------- routing and events ----------
