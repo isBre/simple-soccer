@@ -1,0 +1,17 @@
+[Unit]
+Description=Soccer live demo and kiosk only (lab/exp_runner.py --viewer-only; the experiments run on another computer)
+After=network-online.target
+Conflicts=soccer-exp.service
+
+[Service]
+User=isbre
+WorkingDirectory=/home/isbre/simple-soccer
+ExecStart=/home/isbre/rl-venv/bin/python /home/isbre/simple-soccer/lab/exp_runner.py --viewer-only
+Nice=10
+Restart=always
+RestartSec=30
+KillMode=control-group
+TimeoutStopSec=30
+
+[Install]
+WantedBy=multi-user.target

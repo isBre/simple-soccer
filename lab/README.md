@@ -10,6 +10,7 @@ Runs the training experiments unattended on the Raspberry Pi and shows them on a
 | `lab.py` | the agent CLI (read-only views, queue edits); `/api/v1` of the dashboard serves the same |
 | `dashboard.py` | the Lab's JSON API; the web app (`web/app.py`, service `soccer-dashboard`, port 8080) serves it, the pages are `web/lab.js` |
 | `live.py` | the dashboard's live demo match (newest checkpoint vs a random or picked opponent, real time) |
+| `mac_sync.py`, [`MAC.md`](MAC.md) | training on a Mac while the Pi only shows it: the sync script (Mac -> Pi results and checkpoints, Pi -> Mac queue and cancels) and `exp_runner.py --viewer-only` (service `soccer-exp-viewer`) |
 | `pi_health_log.sh` | one health line every 10 s (service `soccer-health`) |
 | `systemd/` | the services and the hardware-watchdog setting |
 

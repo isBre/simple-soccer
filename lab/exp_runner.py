@@ -149,6 +149,37 @@ def ensure_kiosk():
                       "--check-for-update-interval=31536000"], env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
 
 
+def viewer_target():
+    """(tag, start model) the live demo should show: the running experiment, else the most recently updated one (status files
+    written here or copied from another computer that trains, see lab/MAC.md). (None, None) when there is none."""
+    best = None
+    for f in glob.glob(os.path.join(EXP, "runs", "*", "status.json")):
+        try:
+            st = json.load(open(f))
+            key = (st.get("state") == "running", os.path.getmtime(f))
+            if st.get("tag") and (best is None or key > best[0]):
+                best = (key, st["tag"], json_of(st["spec"]["start"]))
+        except (OSError, ValueError, KeyError):
+            continue
+    return (best[1], best[2]) if best else (None, None)
+
+
+def view_only():
+    """--viewer-only: no training and no ladder here (the experiments run on another computer, lab/mac_sync.py copies their files
+    in); only the live demo match and the kiosk, following whichever experiment is current."""
+    stop_stale_workers()
+    live, cur = None, None
+    while True:
+        tag, model = viewer_target()
+        if tag and (tag != cur or live is None or live.poll() is not None):
+            if live is not None and live.poll() is None:
+                live.terminate()
+            live, cur = viewer_window(tag, model), tag
+            log("viewer: live demo follows %s" % tag)
+        ensure_kiosk()
+        time.sleep(30)
+
+
 def reference_for(spec, base_name, rows):
     """(name, record) a finished run is judged against: the control run's full evaluation at the closest update (same protocol)
     when the spec names a "control", otherwise the start net's full evaluation."""
@@ -331,7 +362,11 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--loop", action="store_true", help="keep waiting for new specs (the service); default: run the queue once and exit")
     ap.add_argument("--viewer", action="store_true", help="play the live match (headless) and show the dashboard on the Pi's screen")
+    ap.add_argument("--viewer-only", action="store_true", help="no training: only the live demo and the kiosk (experiments run on another computer)")
     a = ap.parse_args()
+    if a.viewer_only:
+        view_only()
+        return
     for d in ("queue", "running", "runs", "done", "failed", "parked"):
         os.makedirs(os.path.join(EXP, d), exist_ok=True)
     tracker.write_markdown()
