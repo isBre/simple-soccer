@@ -15,23 +15,23 @@ short.
 ## In one minute
 
 - **Plays as a team.** At any moment exactly one outfield player plays the ball; the other three have jobs (rest defence,
-  striker, support / cover, marking). It has 3+ outfield players around the ball **~5 % of the time** (Silver Arrows 5 %, RL Team 5
-  28 %) and plays **~16 passes a match at 83 %** (Silver Arrows ~10 at 59 %).
+  striker, support / cover, marking). It has 3+ outfield players around the ball **~6 % of the time** (Silver Arrows 5 %, RL Team 5
+  28 %) and plays **~18 passes a match at 80 %** (Silver Arrows ~10 at 59 %).
 - **Thinks with physics.** In build-up it simulates ~50 kicks per decision (three aim samples each) and every player's exact
   reach, and picks the kick by who gets to the ball first and what that is worth.
 - **Tuned against the nets, twice.** Its numbers were tuned with CMA-ES against 10 trained nets. The second run (section 9)
   added a territory term and an outlet player after measuring that the nets pinned it in its own third; on fresh seeds it added
   **+0.44 points and +0.47 goal difference per match against the nets** (z = 4.5 and 4.9) over the first tuned version.
 - **Strength:**
-  - **Against the whole field** (every other ladder entry, both sides, same seeds): **1.53 points per match, +0.34 goal
-    difference** (first tuned version 1.18 and −0.12; z = 2.8 and 3.6). Against the 25 trained nets and RL teams alone:
-    1.33 points, +0.19 goal difference.
-  - **Lab ranking (v4, with the first-time hit, section 10):** **1623 Elo (95 % 1558–1689) after 164 games**, 20th of 42, the
-    top rule team by ~340 points (Silver Arrows 1284), in the middle of the trained nets. Against the whole field v4 adds
-    +0.25 points and +0.30 goal difference per match over v3 on the same seeds.
-  - **Trained nets:** still behind the best ones (jit8 ~1860, RL Team 5 ~1870), but it now beats most of the `x_*` runs and the
-    team46 / t48 nets on the same seeds.
-  - **Against the rule teams:** ~1.8–2.1 points per match, positive goal difference against every one of them.
+  - **Against the whole field** (every other ladder entry, both sides, same seeds): **1.79 points per match, +0.61 goal
+    difference** (v4 1.69 and +0.47; first tuned version ~1.2 and −0.1). Against the 25 trained nets and RL teams alone:
+    1.54 points, +0.33 goal difference.
+  - **Lab ranking (v5, section 11):** **1679 Elo (95 % 1613–1745) after 164 games**, 18th of 42, the top rule team by ~400
+    points (Silver Arrows 1283), ahead of 8 of the 25 trained nets and RL teams. v4 (the first-time hit, section 10) was 1623; v5
+    stops wasting the ball in the opponents' third, counter-presses there and skips shots the defenders will reach.
+  - **Trained nets:** still ~200 Elo behind the best ones (jit8 ~1884, RL Team 5 ~1875).
+  - **Against the rule teams:** 2.28 points per match in the ladder (42 won, 20 drawn, 2 lost), positive goal difference
+    against every one of them.
 
 ![Live match: defending](opus/screen_defending.jpg)
 *A live match in the browser, before tuning (Opus in orange defends the left goal). One player (#5) engages the man on the ball; the others hold
@@ -474,7 +474,53 @@ middle of the trained nets (RL Team 2 1613, team46_w256 1655). The best nets are
 The ladder on `main` gained thousands of matches since v3 was rated, so v3's 1613 is on a different scale; the paired whole-field
 comparison above is the test of v4 against v3.
 
-## 11. Limits and next steps
+## 11. Fourth round: breaking down a deep defence (v5)
+
+**Where the points went.** v4's ladder games split very unevenly: against the 25 nets and RL teams 1.35 points per match,
+against the 16 handmade teams 2.17, but with **25 draws in 64 games** and under one goal per 90 s. jit8 wins 99 % of the same
+games. Played against the 16 handmade teams (96 matches each, 90 s):
+
+| Per 90 s | Opus v4 | jit8 |
+|---|---|---|
+| Win / draw | 53 % / 41 % | 99 % / 1 % |
+| Goals | 0.96 | 3.26 |
+| Ball time in their third | 48 s | 73 s |
+| Shots from < 150 px / > 300 px | 2.7 / 3.9 | 9.8 / 0.0 |
+
+The three tuning runs never saw this: their fitness used only the 10 nets. A fourth run with the handmade teams in the fitness
+(weighted 16 / 41, as in the ladder field, 15 generations) also tied v4 (2.127 vs 2.110 on validation), so this was again a
+missing behaviour, not missing numbers.
+
+**How the attacks ended.** Tracing every Opus touch in the opponents' third and who touched the ball next (per 90 s): forward
+first-time hits that nobody of ours reaches lost the ball 4.5 times (kept 1.4); dribbles lost it 4.7 times; shots were blocked
+or saved 5.3 times for 0.2 goals. The first was v4's own change: built to get out of our third under the press, it also
+knocked the ball into a packed defence up the pitch.
+
+**Three changes, each confirmed on fresh seeds** (paired, every other ladder entry, both sides; points / goal difference per match):
+
+| Change | What it does | Gain (z) |
+|---|---|---|
+| First-time hit up the pitch only as a pass or a shot (`FIRST_CLEAR_UPTO` 0.33) | from the start of their third a hit to nobody is not taken; the player plays the ball properly | +0.12 / +0.12 (2.3 / 2.4), 328 matches |
+| Counter-press (`CP_FROM` 0, `CP_TICKS` 120) | ball lost in their half: for 2 s the nearest free player presses it too, the others keep their jobs | with the above, handmade teams +0.29 / +0.45 (3.5 / 4.8) |
+| Shot veto (`SHOT_VETO` 0.35) | the finisher's shot from more than 150 px is simulated with Opus's kick model (`_evaluate`, defenders' reach after `SHOT_READ`); below a 35 % clean chance the carrier keeps the ball | +0.12 / +0.19 (2.0 / 3.1), nets +0.16 / +0.23 (2.1 / 3.1) |
+
+The counter-press alone did nothing measurable (it only pays once the attack stops giving the ball straight back). Tried and
+left out: a second runner at the far post, Opus's own kick choice in the final third instead of the finisher (−0.40 points,
+z −4.2), no long shots, a shorter shooting range, more passing (all within noise). A pass of the finisher now also records its
+kicker, so the receiver is told the ball is his (a bug; no measurable effect).
+
+**v5 against v4** on new seeds (328 matches): all entries 1.69 → **1.79** points (z 1.5), goal difference +0.47 → **+0.61**
+(z 2.1); handmade teams 1.93 → **2.18** (z 2.6), +0.70 → **+1.05** (z 3.5); nets unchanged (1.54 / +0.33).
+
+**team_bench** (16 handmade teams + RL Team 4/5, 3 min, both sides, 2 seeds): **2.52 points** per match (v4 2.26), 2.48 goals
+for, 0.35 against; 115 won, 18 drawn, 11 lost. Still a team: 3+ outfield players around the ball 6.4 % of the time, mean spacing
+270 px, 17.9 passes per match at 80 %, 18 % of goals assisted.
+
+**Lab ranking.** 164 games (83 won, 52 drawn, 29 lost; handmade teams 42-20-2, nets and RL teams 41-32-27): **1679 Elo (95 %
+1613–1745)**, 18th of 42, +56 on v4 (1623) on the same ladder. The top handmade team by ~400, ahead of team46_w256 and the
+kickstart run; the best nets are still ~200 higher (jit8 1884, RL Team 5 1875).
+
+## 12. Limits and next steps
 
 - **Scoring is still the weak point.** Before tuning: 1.07 goals per match in the full round robin against all 41 other teams; the
   tuning helped mostly by making it shoot earlier. The direct finishing borrowed from the handmade bots

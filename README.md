@@ -122,13 +122,17 @@ Silver Arrows, the strongest handmade team), so the difference is only how it pl
 - First-time hit (v4): a player who reaches a moving ball kicks it at once when it would go forwards, instead of stopping it
   with his body under pressure. Same seeds against every other ladder entry: 1.48 -> 1.73 points per match, goal difference
   +0.20 -> +0.49. A third tuning run tied it, so its numbers stay.
-- Elo (the Lab's ranking, `lab/ladder.py`, as `rules:opus_high`): **1623 (95 % 1558–1689) after 164 games** of v4: 20th of 42,
-  the top rule team by ~340 points, in the middle of the trained nets (jit8 1886, RL Team 5 1876). The one-off round robin
-  before tuning is in [docs/elo_ranking.md](docs/elo_ranking.md).
-- Measured with `python3 tools/team_bench.py opus_high --rl` (5v5 arena, 3 min, both sides, 2 seeds): 2.26 points per match
-  against the 16 rule teams and RL Team 4/5 (1.79 goals for, 0.39 against). It plays as a team: 3+ of its outfield players are
-  within 120 px of the ball ~5 % of the time (Silver Arrows ~5 %, RL Team 5 ~28 %), ~16 passes per match at ~83 % completion
-  (Silver Arrows ~10 at ~60 %), a quarter of its goals assisted.
+- v5: up the pitch the first-time hit is only a pass or a shot, a ball lost high up is counter-pressed by a second player
+  for 2 s, and the finisher skips a shot from distance that the simulation says the defenders will reach. Same seeds against
+  every other ladder entry: 1.69 -> 1.79 points per match, goal difference +0.47 -> +0.61; against the handmade teams
+  1.93 -> 2.18 (z 2.6).
+- Elo (the Lab's ranking, `lab/ladder.py`, as `rules:opus_high`): **1679 (95 % 1613–1745) after 164 games** of v5: 18th of 42,
+  the top rule team by ~400 points, ahead of 8 of the 25 trained nets and RL teams (jit8 1884, RL Team 5 1875; v4 was 1623). The
+  one-off round robin before tuning is in [docs/elo_ranking.md](docs/elo_ranking.md).
+- Measured with `python3 tools/team_bench.py opus_high --rl` (5v5 arena, 3 min, both sides, 2 seeds): 2.52 points per match
+  against the 16 rule teams and RL Team 4/5 (2.48 goals for, 0.35 against). It plays as a team: 3+ of its outfield players are
+  within 120 px of the ball ~6 % of the time (Silver Arrows ~5 %, RL Team 5 ~28 %), ~18 passes per match at ~80 % completion
+  (Silver Arrows ~10 at ~60 %), 18 % of its goals assisted.
 
 Physics is identical for every team. Attributes (finishing, passing, defending, positioning, reaction) and styles only change AI behaviour.
 
