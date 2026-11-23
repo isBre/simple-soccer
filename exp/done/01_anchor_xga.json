@@ -1,0 +1,17 @@
+{
+ "name": "anchor_xga",
+ "start": "out_5v5/ckpt/x_kickstart_best.pt",
+ "updates": 300,
+ "lr": 5e-05,
+ "rewards": {
+  "w_wall": 0.02,
+  "w_xga": 2.0
+ },
+ "args": {
+  "teacher": "out_5v5/ckpt/jit8_best.pt",
+  "kl_coef": 0.3,
+  "kl_decay": 300
+ },
+ "control": "anchor_wall_strong",
+ "notes": "First parked reward term back, one at a time (docs/rewards.md: xga goes first, on the anchored line). Exactly the anchor_wall_strong recipe (the highest-rated net of ours in the Elo ladder, 1828, above every persist run at 1744-1765) plus w_xga 2.0: penalty for the xG of the opponent's chances, a dense version of goals conceded. Start x_kickstart_best = kickstart u600 (kept over u50 by the lcb rule; the same start as the control, x_kickstart_u600 is not on the Mac). Trained on the MacBook Air while the user is at the gym. Read-out: Elo and aga of x_anchor_xga_best vs anchor_wall_strong (1828, aga 0.389) once the ladder has settled."
+}

@@ -1,0 +1,105 @@
+{
+ "state": "done",
+ "spec": {
+  "name": "rank_anchor",
+  "obs": "rank",
+  "start": "out_5v5/ckpt/x_rank_anchor_start.pt",
+  "updates": 300,
+  "lr": 5e-05,
+  "rewards": {
+   "w_wall": 0.02
+  },
+  "args": {
+   "teacher": "out_5v5/ckpt/jit8_best.pt",
+   "kl_coef": 0.3,
+   "kl_decay": 300
+  },
+  "control": "anchor_wall_strong",
+  "notes": "The rank observation (56 = team + 10 role-free ranks, user OK 2026-11-21) on the anchor recipe, the highest-rated line in the Elo ladder (anchor_wall_strong 1828), since rank_persist tested it only on the persist line (rated lower). Start = kickstart u600 (x_kickstart_best) widened to 56 inputs with zero weights (rl/pad_inputs.py: identical play at u0); everything else exactly anchor_wall_strong (w_wall 0.02, KL 0.3 to jit8 decaying to 0 at u300, lr 5e-5, 300 updates). Single variable vs the control: the observation. Queued behind anchor_xga while the user is at the gym. Read-out: Elo and aga of x_rank_anchor_best vs anchor_wall_strong once the ladder has settled."
+ },
+ "baseline_run": "start:x_rank_anchor_start",
+ "started": 1795260417,
+ "tag": "x_rank_anchor",
+ "target_updates": 300,
+ "effective_rewards": {
+  "pass_individual": 1,
+  "w_recv": 0.1,
+  "w_open": 0.003,
+  "w_key_pass": 0.25,
+  "w_xa": 2.5,
+  "coop_cap": 8,
+  "random_start": 0.6,
+  "shaping": 0,
+  "w_keeper": 0,
+  "w_jitter": 0,
+  "w_far": 0,
+  "w_xg": 0,
+  "w_xga": 0,
+  "w_win": 0,
+  "w_draw": 0,
+  "w_tackle": 0,
+  "w_goalside": 0,
+  "w_opp_half": 0,
+  "w_compact": 0,
+  "w_wall": 0.02,
+  "w_corner": 0
+ },
+ "effective_args": {
+  "lr": 5e-05,
+  "updates": 300,
+  "workers_rule": 2,
+  "workers_self": 1,
+  "envs_per_worker": 16,
+  "rollout": 128,
+  "minibatch": 4096,
+  "ckpt_every": 25,
+  "fast_every": 50,
+  "elo_pairs": 12,
+  "fast_rules": 0,
+  "learn_threads": 2,
+  "seed": 7,
+  "teacher": "out_5v5/ckpt/jit8_best.pt",
+  "kl_coef": 0.3,
+  "kl_decay": 300
+ },
+ "seed": 7,
+ "git_commit": "a8c2325",
+ "git_dirty": false,
+ "boot_id": null,
+ "restarts": [],
+ "control": "anchor_wall_strong",
+ "net": {
+  "sizes": [
+   56,
+   128,
+   128,
+   10
+  ],
+  "label": "56-128-128-10",
+  "params": 25098
+ },
+ "name": "rank_anchor",
+ "updated": 1795261838,
+ "update": 300,
+ "train_pts": 2.83,
+ "base_train": 2.85,
+ "bad_checks": 0,
+ "recorded": [],
+ "recorded_est": [
+  50,
+  100,
+  150,
+  200,
+  250,
+  300
+ ],
+ "train_s": 847,
+ "stop_reason": "budget",
+ "finished": 1795261838,
+ "final_update": 300,
+ "verdict": null,
+ "cost_hours": {
+  "train": 0.24,
+  "eval": 0.09
+ }
+}

@@ -1,0 +1,17 @@
+{
+ "start": "out_5v5/ckpt/x_kickstart_best.pt",
+ "updates": 300,
+ "lr": 5e-05,
+ "rewards": {
+  "w_wall": 0.02
+ },
+ "args": {
+  "teacher": "out_5v5/ckpt/jit8_best.pt",
+  "kl_coef": 0.3,
+  "kl_decay": 300,
+  "seed": 11
+ },
+ "name": "anchor_wall_s11",
+ "control": "anchor_wall_strong",
+ "notes": "Seed replicate of anchor_wall_repro (seed 11 instead of 7): the Elo spread of one recipe between seeds, needed to read every single-run difference. Base recipe = anchor_wall_strong (rule bots + self-play, KL 0.3 to jit8 decaying to 0 at u300, w_wall 0.02, lr 5e-5, start kickstart u600 = x_kickstart_best). Trained on the MacBook Air while the user is at work (2026-11-23). Judge by Elo and agf / aga after the ladder has settled. Compare with anchor_wall_repro (same core, seed 7), queued first; control is set to anchor_wall_strong only because a control must exist when the spec is added."
+}

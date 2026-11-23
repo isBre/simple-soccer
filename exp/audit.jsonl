@@ -22,3 +22,11 @@
 {"t": "2026-11-19T20:18:11", "action": "queue_add", "name": "persist_wallcorner", "position": null}
 {"t": "2026-11-20T08:28:25", "action": "queue_add", "name": "persist_long2", "position": null}
 {"t": "2026-11-21T10:17:03", "action": "queue_add", "name": "rank_persist", "position": null}
+{"t": "2026-11-21T12:08:16", "action": "queue_add", "name": "anchor_xga", "position": null}
+{"t": "2026-11-21T12:11:29", "action": "queue_add", "name": "rank_anchor", "position": null}
+{"t": "2026-11-23T08:27:57", "action": "queue_add", "name": "anchor_wall_repro", "position": null}
+{"t": "2026-11-23T08:27:57", "action": "queue_add", "name": "anchor_wall_s11", "position": null}
+{"t": "2026-11-23T08:27:57", "action": "queue_add", "name": "anchor_wall_s23", "position": null}
+{"t": "2026-11-23T08:27:57", "action": "queue_add", "name": "anchor_long", "position": null}
+{"t": "2026-11-23T08:27:57", "action": "queue_add", "name": "anchor_pfsp", "position": null}
+{"t": "2026-11-23T08:27:57", "action": "queue_add", "name": "anchor_klslow", "position": null}

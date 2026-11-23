@@ -1,5 +1,5 @@
 {
- "state": "running",
+ "state": "done",
  "spec": {
   "name": "rank_persist",
   "obs": "rank",
@@ -81,9 +81,9 @@
   "params": 25098
  },
  "name": "rank_persist",
- "updated": 1795254076,
- "update": 266,
- "train_pts": 2.89,
+ "updated": 1795255850,
+ "update": 600,
+ "train_pts": 2.85,
  "base_train": 2.92,
  "bad_checks": 0,
  "recorded": [
@@ -91,7 +91,36 @@
   100,
   150,
   200,
-  250
+  250,
+  300,
+  350,
+  400,
+  450,
+  500,
+  550,
+  600
  ],
- "train_s": 1118
+ "train_s": 2329,
+ "stop_reason": "budget",
+ "finished": 1795255850,
+ "final_update": 600,
+ "verdict": {
+  "pts": -0.0938,
+  "pts_se": 0.1298,
+  "gd": 0.0625,
+  "gd_se": 0.3267,
+  "n": 32,
+  "paired": true,
+  "z": -0.7221,
+  "z_gd": 0.1913,
+  "p": 0.4702,
+  "mde": 0.3635,
+  "verdict": "no difference",
+  "reference": "persist_long2",
+  "update": 600
+ },
+ "cost_hours": {
+  "train": 0.65,
+  "eval": 0.19
+ }
 }

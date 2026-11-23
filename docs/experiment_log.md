@@ -233,3 +233,72 @@ New scouting numbers `ball_corner_pct` / `ball_corner_ours_pct` (ball within 150
   who is better. They are now relative to the average rating: about ±25-30 after 700-900 games.
 - During training every fast check adds an estimated Elo: 24 matches, half spread over the ranking, half near the checkpoint's level,
   only its own rating fitted. Checked on three nets with known ladder ratings (4 estimates each): mean within 40 Elo of the ladder value.
+
+### Review 2026-11-21 (afternoon): `rank_persist`, `anchor_xga`, `rank_anchor` (MacBook Air, judged by Elo and goals)
+Ladder after 640 extra matches (40 rounds of 8 pairs, played to place the three new entries; about 170 games each, ±55 Elo; the old
+entries ±25-30). Line by line, against the control of each run:
+
+| entry | Elo (95%) | agf | aga | control (Elo, agf, aga) |
+|---|---|---|---|---|
+| `anchor_xga` (best u300) | **1684** (1629-1740) | 1.90 | **0.82** | `anchor_wall_strong` 1806 (1778-1833), 1.99, 0.41 |
+| `rank_anchor` (best u150) | 1784 (1727-1841) | 1.96 | 0.47 | `anchor_wall_strong` 1806, 1.99, 0.41 |
+| `rank_persist` (u600) | 1726 (1670-1781) | 1.50 | 0.48 | `kickstart_persist` 1730 (1705-1755), 1.69, 0.51 (`persist_long2` has no ladder entry on the Mac) |
+
+- **Elo reorders the old runs.** `anchor_wall_strong` (anchor recipe: rule bots + self-play, KL 0.3 -> 0 by u300, w_wall 0.02) is the
+  strongest of our nets, 1806, about 60-80 above every persist run (strong opponents + PFSP), although in league points they all
+  looked the same (2.81-2.94). The persist line is not the better line; the anchor line is.
+- **`anchor_xga`** (anchor_wall_strong + `w_xga` 2.0, start kickstart u600, 300 updates): **clearly worse**, -122 Elo, the intervals do
+  not overlap. It concedes **twice** as many goals (aga 0.82 vs 0.41) while scoring about the same: the penalty on the opponent's xG
+  made the defence worse, not better. Full evaluation u300: 2.78 pts, h2h RL Team 4 / 5 **0.50 / 0.38** (control 1.25 / 0.69, 16 games).
+  Style: possession 53.8%, field tilt 63.5%, wall 10.3%. Training estimates were +70 to +190 vs its start (kickstart u600, 1602),
+  so it learned, just less than the control.
+- **`rank_anchor`** (anchor_wall_strong recipe on the 56-number rank observation, start kickstart u600 widened with zero weights):
+  **no difference**, -22 Elo inside the intervals, agf / aga 1.96 / 0.47 vs 1.99 / 0.41 (aga se 0.045). Best checkpoint u150
+  (estimate 1810); full evaluation u150 2.88 pts, h2h 1.19 / 0.88. The u300 checkpoint drifted into corners (ours-in-corner 19.1%).
+- **`rank_persist`**: no difference to the persist line either (1726 vs 1730).
+- Meaning: the rank features (sorting help, no new information) do not move a 128-wide net, on either recipe. `w_xga` 2.0 hurts on
+  the anchored line (to "not good" in `docs/rewards.md`). The anchor recipe is the best base we have; the gap to jit8 / RL Team 5
+  (1853) is about 45 Elo.
+- Setup notes: the Mac runner (`lab/mac_run.sh`) exits when the queue is empty, so new entries are not settled by the ladder
+  afterwards; run `python3 lab/ladder.py round --pairs 8 --rounds 40` (about 20 min) before reading their Elo. The thermal guard
+  defaults were 30 / 29 °C, below the battery's idle temperature on AC (30.6 °C), so the guard never resumed: now 33 / 32 °C.
+  Queue: empty.
+
+### Review 2026-11-23: reproducibility, seed noise and the anchor vs persist differences (MacBook Air, judged by Elo and goals)
+Six runs on the anchor recipe (start kickstart u600 = `x_kickstart_best`, rule bots + self-play, KL 0.3 to jit8 decaying to 0 by u300,
+w_wall 0.02, lr 5e-5, 46-128-128-10, Python core, commit be1d62d), then 120 ladder rounds (8 pairs) to settle them: about 320 games per
+new entry (±40 Elo), the older entries 900-1100 games (±25). Ratings of every entry moved with the extra matches; the Saturday
+numbers above are replaced by these.
+
+| entry (best checkpoint) | what it tests | Elo (95%) | agf | aga | h2h RL4 / RL5 (best ckpt, 16 games) |
+|---|---|---|---|---|---|
+| `anchor_wall_strong` (u200) | Saturday's best, trained on the Pi's old core | 1788 (1763-1813) | 1.86 | 0.43 | 1.38 / 1.00 |
+| `anchor_wall_repro` (u250) | exact re-run, seed 7, Python core | **1747** (1706-1788) | 1.88 | 0.57 | 1.31 / 0.88 |
+| `anchor_wall_s11` (u250) | seed 11 | 1703 (1663-1744) | 1.64 | 0.68 | 0.94 / 0.62 |
+| `anchor_wall_s23` (u100) | seed 23 | 1682 (1642-1723) | 1.48 | 0.61 | 1.06 / 1.06 |
+| `anchor_long` (u150) | 900 updates, KL fading to 0 by u900 | 1744 (1703-1784) | 1.65 | 0.49 | 0.69 / 0.94 |
+| `anchor_klslow` (u200) | persist KL schedule (kl_decay 1000) | 1732 (1691-1772) | 1.45 | 0.44 | 1.00 / 0.75 |
+| `anchor_pfsp` (u250) | persist opponents (jit8, RL4, RL5) + PFSP 0.75 | 1722 (1681-1762) | 1.74 | 0.58 | 1.00 / 1.00 |
+| `rank_anchor` (u150) | rank observation (Saturday) | 1743 (1703-1784) | 1.71 | 0.49 | 1.19 / 0.88 |
+| `anchor_xga` (u300) | `w_xga` 2.0 (Saturday) | 1658 (1617-1698) | 1.81 | **0.89** | 0.50 / 0.38 |
+| jit8_best / RL Team 5 | the teacher / best handmade-RL team | 1838 / 1835 | 2.01 / 2.13 | 0.35 / 0.44 | |
+
+- **Seed noise is about 65 Elo.** One recipe, three seeds: 1747, 1703, 1682 (mean 1711). Adjacent seeds overlap, the extremes barely.
+  Any single-run difference smaller than about 65 Elo cannot be read; from now on a variant needs 2-3 seeds (or a large effect).
+- **`anchor_wall_strong` does not reproduce.** The same spec and seed on the Python core rates 41 lower (intervals overlap) and 77
+  above the seed mean: partly the old core, partly a lucky seed. The anchor line's real level on the Python core is about 1710-1750.
+- **Opponents and KL schedule explain nothing.** `anchor_pfsp` (1722) and `anchor_klslow` (1732) sit inside the seed band, so neither
+  difference between the anchor and persist lines is shown to matter; the persist runs (1694-1723) are themselves at the band's floor.
+- **Longer training does not help, and the end of it hurts.** `anchor_long`'s best checkpoint is u150 (1744, inside the band); after
+  the KL had faded its estimates fell (u500-u550 about 1600, u900 1478) and the u900 full evaluation dropped to 2.09 pts, h2h 0.62 / 0.31.
+  Same pattern as the unanchored runs: without the teacher the net drifts down. Best checkpoints of all six runs are u100-u250.
+- **`rank_anchor`** stays "no difference" (1743, inside the band). **`anchor_xga`** is now at the band's lower edge on Elo (1658, overlaps
+  s23), but its goals conceded (0.89) are above every seed (0.57-0.68): still "not good".
+- **No net reaches the teacher.** Every run gains about +120-160 over its start (`kickstart` best 1583) and stops 90-150 below jit8
+  (1838), the net it is anchored to; the plateau of the 46-number net is unchanged.
+- Style (full evaluation of the last checkpoint): `anchor_klslow` u300 is back at the wall (20.3%, the others 7-10%) and keeps the goal
+  guarded 68% of the time; `anchor_pfsp` u300 pushes highest (field tilt 77%, PPDA 0.13, 18.5 shots, ours-in-corner 19%).
+- Setup notes: the 8 runs and the ladder ran on the MacBook Air (6 runs 08:28-11:32, then `logs/after_queue.sh`: 120 ladder rounds
+  until 12:32). The thermal guard (33 / 32 °C) logged no pause. Queue: empty.
+- Next, in the user's hands: stop single-term tests at one seed. Either replicate variants over 2-3 seeds, or look for something that
+  should move the net by more than about 65 Elo (the 46-number plateau, the teacher gap).

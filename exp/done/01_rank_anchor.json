@@ -1,0 +1,17 @@
+{
+ "name": "rank_anchor",
+ "obs": "rank",
+ "start": "out_5v5/ckpt/x_rank_anchor_start.pt",
+ "updates": 300,
+ "lr": 5e-05,
+ "rewards": {
+  "w_wall": 0.02
+ },
+ "args": {
+  "teacher": "out_5v5/ckpt/jit8_best.pt",
+  "kl_coef": 0.3,
+  "kl_decay": 300
+ },
+ "control": "anchor_wall_strong",
+ "notes": "The rank observation (56 = team + 10 role-free ranks, user OK 2026-11-21) on the anchor recipe, the highest-rated line in the Elo ladder (anchor_wall_strong 1828), since rank_persist tested it only on the persist line (rated lower). Start = kickstart u600 (x_kickstart_best) widened to 56 inputs with zero weights (rl/pad_inputs.py: identical play at u0); everything else exactly anchor_wall_strong (w_wall 0.02, KL 0.3 to jit8 decaying to 0 at u300, lr 5e-5, 300 updates). Single variable vs the control: the observation. Queued behind anchor_xga while the user is at the gym. Read-out: Elo and aga of x_rank_anchor_best vs anchor_wall_strong once the ladder has settled."
+}

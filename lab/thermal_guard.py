@@ -7,7 +7,7 @@ Writes logs/thermal_guard.json ({"paused", "since", "temp", "max", "resume", "pa
 and appends every pause / resume to exp/runner.log. Without a fresh health sample (older than 60 s) it pauses too: no reading, no heat.
 Stops on its own when the runner is gone (and always leaves the processes running).
 
-  python3 lab/thermal_guard.py --max 30 --resume 29
+  python3 lab/thermal_guard.py --max 33 --resume 32
 """
 import argparse
 import json
@@ -75,8 +75,8 @@ def log(msg):
 def main():
     global MATCH, STATE, RUNNER_LOG
     ap = argparse.ArgumentParser()
-    ap.add_argument("--max", type=float, default=30.0, help="pause above this temperature (°C)")
-    ap.add_argument("--resume", type=float, default=29.0, help="resume at or below this temperature (°C)")
+    ap.add_argument("--max", type=float, default=33.0, help="pause above this temperature (°C)")
+    ap.add_argument("--resume", type=float, default=32.0, help="resume at or below this temperature (°C)")
     ap.add_argument("--every", type=float, default=10.0, help="seconds between checks")
     ap.add_argument("--match", default=MATCH, help="command line of the root process to guard (tests: a dummy)")
     ap.add_argument("--state", default=STATE, help="state file (tests: a scratch path)")
