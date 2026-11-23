@@ -520,11 +520,47 @@ for, 0.35 against; 115 won, 18 drawn, 11 lost. Still a team: 3+ outfield players
 1613–1745)**, 18th of 42, +56 on v4 (1623) on the same ladder. The top handmade team by ~400, ahead of team46_w256 and the
 kickstart run; the best nets are still ~200 higher (jit8 1884, RL Team 5 1875).
 
-## 12. Limits and next steps
+## 12. Fifth round: what did not work (no v6)
+
+**Where the 200 Elo to jit8 is** (ladder games against the same opponents, per match):
+
+| | Opus v5 | jit8 |
+|---|---|---|
+| Handmade teams: points / goals for / against | 2.28 / 1.36 / 0.09 | 2.98 / 2.91 / 0.05 |
+| Nets and RL teams: points / goals for / against | 1.55 / 0.92 / 0.60 | 2.01 / 1.32 / 0.41 |
+
+Most of the gap is goals against the handmade teams' deep defence. Defence is not the problem: Opus's opponent-adjusted goals
+against (0.41) are close to jit8's (0.32).
+
+**Diagnosis.** jit8 lives around the opponents' box. Against the handmade teams it gets the ball back in their third about 51
+times per match, 69 % of them within half a second and 94 % before the ball leaves their third. Opus gets 21 such chances, wins
+36 % back within half a second, and lets about a quarter escape their third. Against the nets both teams lose nearly every ball
+they win in their own third within a moment. The difference is where the ball is won: Opus starts 59 possessions per match in
+its own third and 15 in midfield; jit8 starts 28 and 40. Shot by shot against the handmade teams, Opus's first-time hits from
+beyond 150 px are 8 of its 10.6 shots per match, score almost nothing and are mostly blocked.
+
+**Tried, paired against every ladder entry (8–12 seeds, both sides), none kept** (points / goal difference per match against
+v5, z values):
+
+| Change | Result |
+|---|---|
+| First-time shot from beyond 150 px only with a simulated clean chance ≥ 0.2 / 0.35 / 0.5 | handmade teams −0.09 / −0.26 (z −1.2 / −2.6) and similar. Those hits keep the ball in their third even when blocked. |
+| Markers of men near the ball stand in the passing lane, from a third up / from halfway | within noise (|z| ≤ 0.8) |
+| Two counter-pressers instead of one; rest defender up to 25 % into their half | within noise; the direction flipped between seed sets |
+| A supporter waits for the second ball at the edge of their box (210 px) | handmade teams +0.15 (z +2.2), nets −0.16 / −0.19 (z −2.6 / −3.1) on 12 fresh seeds |
+| The same, only against a deep block (3+ outfield players behind the ball: 36 % of our attacks against the handmade teams, 11 % against the nets) | handmade teams +0.10 (z +1.5), nets ±0; all +0.04 (z +0.9): too small |
+| The finisher's dribble or shot is replaced by a simulated pass worth more by a margin of 0.05 / 0.15 / 0.3 | −0.17 / −0.08 / −0.05 points, goal difference z −3.7 / −2.5 / −3.1. Worse against both groups. |
+
+The last result confirms v5's own finding (Opus's kick choice in the final third, −0.40): the single-kick model rates a pass by
+the spot where it arrives, but against a packed box the receiver loses the ball more often than the handmade finisher's
+dribble or shot does. v5 stays the current version.
+
+## 13. Limits and next steps
 
 - **Scoring is still the weak point.** Before tuning: 1.07 goals per match in the full round robin against all 41 other teams; the
   tuning helped mostly by making it shoot earlier. The direct finishing borrowed from the handmade bots
-  works, but a finishing model of its own (one-timers across the box, cut-backs) is the obvious next lever.
+  works. Replacing it with Opus's single-kick passes (cut-backs) was worse every time (section 12): a finishing model of its own
+  has to value what the receiver can do next, not only the arrival spot.
 - **The strongest nets are still ~250 Elo higher.** They win goal-line scrambles with numbers; Opus refuses to swarm by design.
   Closing the rest of the gap under the realism rule probably needs a planner that simulates whole sequences in the real match
   engine (a rollout of each candidate action for ~1 s with all ten players), not single kicks. A longer tuning run (more matches per
