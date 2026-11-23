@@ -15,8 +15,8 @@ short.
 ## In one minute
 
 - **Plays as a team.** At any moment exactly one outfield player plays the ball; the other three have jobs (rest defence,
-  striker, support / cover, marking). It has 3+ outfield players around the ball **~6 % of the time** (Silver Arrows 5 %, RL Team 5
-  28 %) and plays **~19 passes a match at 80 %** (Silver Arrows ~10 at 59 %).
+  striker, support / cover, marking). It has 3+ outfield players around the ball **~5 % of the time** (Silver Arrows 5 %, RL Team 5
+  28 %) and plays **~16 passes a match at 83 %** (Silver Arrows ~10 at 59 %).
 - **Thinks with physics.** In build-up it simulates ~50 kicks per decision (three aim samples each) and every player's exact
   reach, and picks the kick by who gets to the ball first and what that is worth.
 - **Tuned against the nets, twice.** Its numbers were tuned with CMA-ES against 10 trained nets. The second run (section 9)
@@ -26,9 +26,9 @@ short.
   - **Against the whole field** (every other ladder entry, both sides, same seeds): **1.53 points per match, +0.34 goal
     difference** (first tuned version 1.18 and −0.12; z = 2.8 and 3.6). Against the 25 trained nets and RL teams alone:
     1.33 points, +0.19 goal difference.
-  - **Lab ranking:** **1613 ± 134 Elo after 180 games**, 20th of 42, the top rule team by ~300 points (Silver Arrows 1313), in
-    the middle of the trained nets. The ladder rates the current file only, so the version bump started it from zero; the
-    interval still overlaps the first tuned version's 1664 ± 154 (60 games), and the paired match-up above is the sharper test.
+  - **Lab ranking (v4, with the first-time hit, section 10):** **1623 Elo (95 % 1558–1689) after 164 games**, 20th of 42, the
+    top rule team by ~340 points (Silver Arrows 1284), in the middle of the trained nets. Against the whole field v4 adds
+    +0.25 points and +0.30 goal difference per match over v3 on the same seeds.
   - **Trained nets:** still behind the best ones (jit8 ~1860, RL Team 5 ~1870), but it now beats most of the `x_*` runs and the
     team46 / t48 nets on the same seeds.
   - **Against the rule teams:** ~1.8–2.1 points per match, positive goal difference against every one of them.
@@ -426,7 +426,55 @@ and `x_wide` runs), which it now beats more often than not. On the Lab ladder th
 **1613 ± 134 after 180 games**; the interval overlaps the first tuned version's 1664 ± 154, and the paired match-up above is the
 sharper test of the two.
 
-## 10. Limits and next steps
+## 10. Third round: hitting the ball first time
+
+**What the match logs showed.** After the second round Opus still lost the ball cheaply under the nets' press. The touch log
+showed how: a player who reached a moving ball under pressure first stopped it with his body and then looked for the best kick.
+The nets' runners were already on him in those few ticks. With a kick of +5 px/tick and KICK_RANGE 4 px, the ball that comes off a
+body touch is slow and goes wherever the contact sends it. One that is kicked at once keeps its pace and goes where we choose.
+
+**The change** (`OpusBot._first_time`). Every outfield player who is within kick range of the ball and not already kicking
+checks one thing: where would the ball go if he kicked it now? With $\hat n$ the unit vector from the player to the ball and
+$v_b$ the ball's velocity, the ball leaves along
+
+$$\hat u = \frac{v_b + 5\,\hat n}{\lVert v_b + 5\,\hat n \rVert}.$$
+
+If that direction goes forward, $\hat u_x \cdot a > \text{FIRST\_FWD}$ (with $a = \pm 1$ the attacking direction), he kicks.
+The kick is labelled through the same `_evaluate` simulation as every other kick (pass to a team-mate, shot if the line reaches
+the goal mouth, or a clearance), so passes and assists are still counted and the receiver still knows the ball is for him. The
+keeper never does it, and `FIRST_UPTO` limits how far up the field it applies (1.0 = everywhere).
+
+**Variants** (paired, the same fresh seeds; "base" = v3 without the hit):
+
+| Variant | Opponents | Matches | Points | Goal difference | Δ points (z) |
+|---|---|---|---|---|---|
+| base (v3) | 10 tuning nets | 200 | 1.08 | −0.17 | |
+| hit if forward > 0.2, whole field | 10 tuning nets | 200 | **1.59** | **+0.42** | **+0.51 (4.1)** |
+| hit if forward > 0, whole field | 10 tuning nets | 200 | 1.55 | +0.26 | +0.47 (4.0) |
+| hit if forward > 0, own third only | 10 tuning nets | 200 | 1.33 | +0.01 | +0.25 (2.2) |
+| base (v3) | rule teams | 72 | 1.83 | +0.63 | |
+| hit if forward > 0.2, whole field | rule teams | 72 | 1.99 | +0.74 | +0.15 (0.9) |
+
+Against **every other ladder entry** (41 entries × 2 seeds × both sides = 164 matches): 1.48 → **1.73 points** per match (z 2.0),
+goal difference +0.20 → **+0.49** (z 2.4). Against the 25 trained nets and RL teams: 1.26 → 1.68 points (z 2.4); against the rule
+teams nothing changed (1.83 / 1.81). The style stays a team style: ~16 passes a match at 83 %, 3+ outfield players around the ball
+~5 % of the time.
+
+**Third tuning run.** CMA-ES started from these values (33 numbers now, with `FIRST_FWD` and `FIRST_UPTO`), 20 generations,
+~3 h on 3 workers. Its best candidate tied the starting point on the validation matches (1.7625 vs 1.762), so the code keeps
+the values above. The search is no longer finding gains of the size a full evaluation can see; the next gain has to come from a
+new behaviour, as this one did, not from the numbers.
+
+**team_bench** (16 rule teams + RL Team 4/5, both sides, 2 seeds): **2.26 points** per match (v3 2.10), 1.79 goals for, 0.39
+against.
+
+**Lab ranking.** v4 played every other ladder entry twice from each side (164 matches, 73 won, 55 drawn, 36 lost) and
+is rated **1623 Elo (95 % 1558–1689)**, 20th of 42. That is the top rule team by ~340 (Silver Arrows 1284) and level with the
+middle of the trained nets (RL Team 2 1613, team46_w256 1655). The best nets are still ~250 higher (jit8 1886, RL Team 5 1876).
+The ladder on `main` gained thousands of matches since v3 was rated, so v3's 1613 is on a different scale; the paired whole-field
+comparison above is the test of v4 against v3.
+
+## 11. Limits and next steps
 
 - **Scoring is still the weak point.** Before tuning: 1.07 goals per match in the full round robin against all 41 other teams; the
   tuning helped mostly by making it shoot earlier. The direct finishing borrowed from the handmade bots
@@ -444,8 +492,8 @@ sharper test of the two.
 python3 tools/team_bench.py opus_high --rl                    # vs every rule team and RL Team 4/5
 python3 tools/team_bench.py opus_high --vs net:models/jit8_best.json,net:data/models/rl_5v5_arena_v5.json
 python3 lab/ladder.py round --pairs 10 --workers 4             # more ladder games (the Lab ranking)
-python3 tools/tune_opus.py --gens 30 --seeds 2 --workers 3 --sigma 0.12 --out logs/tune2   # the second run (resumes); it starts
-                                                               # from the values in the code, so a new run continues from v3
+python3 tools/tune_opus.py --gens 20 --seeds 2 --workers 3 --sigma 0.1 --out logs/tune3    # the third run (resumes); it starts
+                                                               # from the values in the code, so a new run continues from v4
 ```
 
 Watch it: `python3 web/app.py`, then Quick Match → Rule Based League → Opus 5.5 High, control "Watch".
