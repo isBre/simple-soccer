@@ -13,7 +13,9 @@ different is how it thinks:
 - Defending goal-side: the presser approaches the ball from between it and our goal, so a touch or a kick sends it away.
 - Finishing: in the opponents' half the carrier drives at goal and shoots like the handmade bots (StyleBot._decide_action with
   this team's style), which converted better than the simulated choice there; the Opus shape stays around him (the simulated
-  kicks decide the build-up in our half).
+  kicks decide the build-up in our half). A shot from distance that the simulation says the defenders will reach is not taken.
+- A ball at a player's feet is hit first time when the kick goes forwards (in the opponents' third only as a pass or a shot),
+  and a ball lost high up is counter-pressed by a second player for two seconds.
 
 Plugged in through the style (data/styles/opus_high.json: "brain": "opus"); see soccer/ai/__init__.py."""
 import math
@@ -58,6 +60,14 @@ OUTLET_X = -0.142       # where the outlet waits (share of the half, 0 = halfway
 TERR = 0.135            # territory: a kick deep in our half that we may lose is worth this x depth x the ground it gains
 FIRST_FWD = 0.2         # first time: a ball at an outfield player's feet is hit at once if it would go at least this forward (cos)
 FIRST_UPTO = 1.0        # ... up to this share of the half beyond halfway (1 = the whole pitch; -1 = never)
+# v5 (2026-11-23, measured against every ladder entry; docs section 11)
+FIRST_CLEAR_UPTO = 0.33 # ... but beyond this share of the half only when it is a pass or a shot (2 = always)
+CP_FROM = 0.0           # counter-press: ball lost beyond this share of the half (2 = off) ...
+CP_TICKS = 120          # ... for this many ticks a second player presses the ball too
+SHOT_VETO = 0.35        # finisher: a shot whose clean chance (simulated) is below this is not taken (0 = off) ...
+SHOT_VETO_FROM = 150.0  # ... from further than this from goal
+BOX2_FROM = 2.0         # deep attack: beyond this share of the half a second runner attacks the far post (2 = off; no gain measured)
+BOX2_DEPTH = 60.0       # px from the goal line where the second runner waits
 SUPPORT_EVERY = 6                                  # ticks between two support-spot searches
 
 
@@ -166,6 +176,8 @@ class OpusBrain:
         self.t_us = INF
         self.t_them = INF
         self.opp_primary = None
+        self.lost_tick = -999
+        self.lost_x = 0.0
 
     # ------------------------------------------------------------ team plan
 
@@ -177,6 +189,9 @@ class OpusBrain:
         mates = m.team_lists[self.team]
         opps = m.team_lists[1 - self.team]
         lt = m.last_touch
+        if self.has_possession and lt is not None and lt.team != self.team:
+            self.lost_tick = m.tick                   # just lost the ball: where (for the counter-press)
+            self.lost_x = ball.real * ax
         self.has_possession = lt is not None and lt.team == self.team
         self.opp_possession = lt is not None and lt.team != self.team
         self.danger = ball.real * -ax > hw * 0.4
@@ -298,6 +313,12 @@ class OpusBrain:
             self.targets[st_.uid] = complex(ax * (hw - BOX_DEPTH), sy * BOX_Y)
             self.jobs[st_.uid] = "box"
             free = [sp for sp in free if sp is not st_]
+            if bx > hw * BOX2_FROM and free:
+                # deep in their third: a second runner attacks the far post (balls across the box, rebounds)
+                r2 = max(free, key=lambda sp: sp.pos.real * ax + (40.0 if self.jobs.get(sp.uid) == "box2" else 0.0))
+                self.targets[r2.uid] = complex(ax * (hw - BOX2_DEPTH), sy * pd.goal_half * 1.3)
+                self.jobs[r2.uid] = "box2"
+                free = [sp for sp in free if sp is not r2]
         if m.tick - self._support_tick >= SUPPORT_EVERY or any(sp.uid not in self._support for sp in free):
             self._support_tick = m.tick
             self._support = self._support_spots(m, free, ax, ball, carrier)
@@ -370,6 +391,14 @@ class OpusBrain:
         other_keeper = m.brains[1 - self.team].keeper if m.brains[1 - self.team] is not None else None
         bx = ball.real * ax
         self.cover = None
+        if (free and bx > hw * CP_FROM and self.lost_x > hw * CP_FROM and m.tick - self.lost_tick < CP_TICKS
+                and self.primary is not None):
+            # counter-press: just lost the ball high up, the nearest free player presses it too for a moment (the ball
+            # is won back before they can play out); the others keep their jobs
+            p2 = min(free, key=lambda sp: abs(sp.pos - ball) - (30.0 if self.jobs.get(sp.uid) == "press2" else 0.0))
+            self.targets[p2.uid] = ball
+            self.jobs[p2.uid] = "press2"
+            free = [sp for sp in free if sp is not p2]
         if OUTLET_FROM > -1.0 and bx < hw * OUTLET_FROM and len(free) >= 3:
             # outlet: deep in our half the most advanced free player stays up on the far side, so a clearance finds someone
             out = max(free, key=lambda sp: sp.pos.real * ax + (40.0 if self.jobs.get(sp.uid) == "outlet" else 0.0))
@@ -463,6 +492,8 @@ class OpusBot(StyleBot):
                 self._press(m, p, brain, bpos, bvel)
         elif p is brain.keeper and len(m.team_lists[p.team]) > 1:
             self._keeper(m, p, bpos, bvel)
+        elif brain.jobs.get(p.uid) == "press2":
+            self._press(m, p, brain, bpos, bvel)
         else:
             self._move_off_ball(m, p, brain)
         if not p.input_kick and p is not brain.keeper:
@@ -494,6 +525,8 @@ class OpusBot(StyleBot):
             ty = m.ball_pos.imag + u.imag * (ax * pd.half_w - m.ball_pos.real) / u.real
             shot = 1 if abs(ty) < pd.goal_half - m.ball_r else 0
         _, kind_of, recv_of, _ = self._evaluate(m, p, m.ball_pos, m.ball_vel, 0.0, n, [u], [shot])
+        if kind_of[0] == "clear" and m.ball_pos.real * ax > m.pitch.half_w * FIRST_CLEAR_UPTO:
+            return                             # up the pitch a hit to nobody only gives the ball back: play it properly
         p.input_kick = True
         p.kick_intent = kind_of[0]
         if kind_of[0] == "pass" and recv_of[0] is not None:
@@ -559,6 +592,8 @@ class OpusBot(StyleBot):
             # StyleBot._decide_action), with the Opus team shape around the carrier
             brain.chasers = [p]
             StyleBot._go_for_ball(self, m, p, brain, bpos, bvel)
+            if p.input_kick and p.kick_intent == "pass":
+                brain.pass_kicker = p          # the pass stays live until someone else touches the ball
             return
         bp, t = intercept(m, p, bpos, bvel)
         self._icp_t = min(t, 160.0)
@@ -586,6 +621,25 @@ class OpusBot(StyleBot):
             brain.pass_target = self._recv
             brain.pass_kicker = p
             brain.pass_tick = m.tick
+
+    def _decide_action(self, m, p, brain, bp):
+        """The finisher's choice (StyleBot), with one check of our own: a shot from distance that the simulation says the
+        defenders will reach (clean chance below SHOT_VETO) is not taken; the carrier keeps the ball and goes on."""
+        StyleBot._decide_action(self, m, p, brain, bp)
+        if self._kind != "shoot" or SHOT_VETO <= 0.0:
+            return
+        ax = m.attack_dir(p.team)
+        goal = complex(ax * m.pitch.half_w, 0.0)
+        if abs(bp - goal) < SHOT_VETO_FROM or _nearest_dist(m.team_lists[1 - p.team], bp) < 40.0:
+            return                             # close in, or about to lose it anyway: shoot
+        approach = normalized(bp - p.pos) if abs(bp - p.pos) > 1.0 else complex(ax, 0.0)
+        d = normalized(self._aim - bp)
+        _, _, _, ok3 = self._evaluate(m, p, bp, self._bv_contact, self._icp_t, approach, [d], [1])
+        if float(ok3[0]) < SHOT_VETO:
+            self._kind = "dribble"
+            self._kick = False
+            self._err = 0.0
+            self._aim = self._dribble_aim(m, p, bp, goal)
 
     def _evaluate(self, m, p, bp, vc, t0, approach, dirs, kinds):
         """Value of kicking the ball (at bp, moving at vc when the kick lands, t0 ticks from now) in each direction: the

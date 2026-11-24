@@ -2,7 +2,8 @@
 nets with CMA-ES. The structure (one player on the ball, jobs for the others) is not touched: only distances, margins, weights.
 
 Fitness of a parameter set = points per match + 0.5 x goal difference per match against the nets in NETS, 5v5 arena, 90 s (the
-ladder's protocol), both sides. All candidates of one generation play the same seeds (paired); the seeds change every generation.
+ladder's protocol), both sides. With --rules the 16 rule teams play too (one seed each per generation) and the two groups are
+weighted as in the ladder field (25 nets / RL teams, 16 rule teams). All candidates of one generation play the same seeds (paired); the seeds change every generation.
 Every VALIDATE_EVERY generations the CMA mean is played on fixed validation seeds (more matches): the best of those is the result.
 
   python3 tools/tune_opus.py [--gens 40] [--seeds 4] [--workers N] [--out logs/tune]   (resumes from <out>/state.pkl)
@@ -25,6 +26,10 @@ sys.path.insert(0, ROOT)
 NETS = ["data/models/rl_5v5_arena_v2.json", "data/models/rl_5v5_arena_v4.json", "data/models/rl_5v5_arena_v5.json",
         "models/jit8_best.json", "models/x_anchor_wall_strong_best.json", "models/x_wide_persist_best.json",
         "models/x_persist_lr_best.json", "models/x_kickstart_best.json", "models/t48_best.json", "models/team46_w256.json"]
+RULES = ["arrows", "aurora", "borealis", "bulls", "cobalt", "dune", "ember", "fern", "granite", "harbor", "lime", "onyx",
+         "owls", "rose", "scorpions", "tide"]
+W_RULES = 16.0 / 41.0          # --rules: the rule teams' share of the ladder field (16 of the 41 other entries)
+USE_RULES = False
 DURATION = 90.0
 VALIDATE_EVERY = 4
 VAL_SEEDS = 8
@@ -45,6 +50,11 @@ PARAMS = [
     ("TERR", 0.0, 0.0, 0.4), ("COVER_OWN", 140.0, 40.0, 220.0), ("OUTLET_FROM", -1.0, -1.0, 0.0), ("OUTLET_X", 0.0, -0.5, 0.4),
     # third run (2026-11-21): hitting the ball first time
     ("FIRST_FWD", 0.2, -0.3, 0.8), ("FIRST_UPTO", -1.0, -1.0, 1.0),
+    # fourth run (2026-11-23): the rule teams in the fitness; counter-press, second runner, the finisher's shooting range
+    ("CP_FROM", 2.0, -0.5, 2.0), ("CP_TICKS", 120.0, 30.0, 300.0), ("BOX2_FROM", 2.0, 0.0, 2.0), ("BOX2_DEPTH", 60.0, 20.0, 160.0),
+    ("style.shoot_range", 0.6, 0.2, 1.0),
+    # v5 (2026-11-23): first-time hits up the pitch only as passes / shots, the finisher's shot veto
+    ("FIRST_CLEAR_UPTO", 2.0, -0.5, 2.0), ("SHOT_VETO", 0.0, 0.0, 0.8),
 ]
 N = len(PARAMS)
 LO = np.array([p[2] for p in PARAMS])
@@ -90,10 +100,12 @@ def play(job):
     params, net, seed, side = job
     apply(params)
     from soccer.match import Match, make_config
-    a, b = ("opus_high", "rl_team_5") if side == 0 else ("rl_team_5", "opus_high")
+    opp = net[5:] if net.startswith("team:") else "rl_team_5"
+    a, b = ("opus_high", opp) if side == 0 else (opp, "opus_high")
     c = make_config(a, b, "arena", 5, DURATION, seed)
     c.nets = [None, None]
-    c.nets[1 - side] = {"model": os.path.join(ROOT, net)}
+    if not net.startswith("team:"):
+        c.nets[1 - side] = {"model": os.path.join(ROOT, net)}
     m = Match(c)
     m.run_to_end()
     return m.scores[side], m.scores[1 - side]
@@ -101,19 +113,36 @@ def play(job):
 
 def fitness_many(pool, cands, seeds):
     """Fitness of each parameter dict in cands, all on the same (net, seed, side) set. Returns [(fitness, pts, gd)]."""
-    jobs, owner = [], []
+    jobs, owner, grp = [], [], []
     for ci, prm in enumerate(cands):
         for net in NETS:
             for s in seeds:
                 for side in (0, 1):
                     jobs.append((prm, net, s, side))
                     owner.append(ci)
+                    grp.append(0)
+        if USE_RULES:          # one seed per rule team (both sides): 16 x 2 matches
+            for k, t in enumerate(RULES):
+                for side in (0, 1):
+                    jobs.append((prm, "team:" + t, seeds[k % len(seeds)] + 50, side))
+                    owner.append(ci)
+                    grp.append(1)
     res = pool.map(play, jobs, chunksize=2)
     out = []
     for ci in range(len(cands)):
-        r = [res[k] for k in range(len(res)) if owner[k] == ci]
-        pts = sum(3 if g > a else (1 if g == a else 0) for g, a in r) / len(r)
-        gd = sum(g - a for g, a in r) / len(r)
+        parts = []
+        for g in (0, 1):
+            r = [res[k] for k in range(len(res)) if owner[k] == ci and grp[k] == g]
+            if r:
+                pts = sum(3 if x > y else (1 if x == y else 0) for x, y in r) / len(r)
+                gd = sum(x - y for x, y in r) / len(r)
+                parts.append((pts, gd))
+        if len(parts) == 2:
+            w = (1.0 - W_RULES, W_RULES)
+            pts = w[0] * parts[0][0] + w[1] * parts[1][0]
+            gd = w[0] * parts[0][1] + w[1] * parts[1][1]
+        else:
+            pts, gd = parts[0]
         out.append((pts + 0.5 * gd, pts, gd))
     return out
 
@@ -171,8 +200,11 @@ def main():
     ap.add_argument("--sigma", type=float, default=0.15)
     ap.add_argument("--out", default=os.path.join(ROOT, "logs", "tune"))
     ap.add_argument("--show", action="store_true")
+    ap.add_argument("--rules", action="store_true", help="also play the 16 rule teams (weighted as in the ladder field)")
     ap.add_argument("--workers", type=int, default=os.cpu_count() or 2, help="parallel matches (fewer = cooler laptop)")
     a = ap.parse_args()
+    global USE_RULES
+    USE_RULES = a.rules
     os.makedirs(a.out, exist_ok=True)
     state_f, log_f, best_f = (os.path.join(a.out, f) for f in ("state.pkl", "log.jsonl", "best.json"))
     if a.show:
