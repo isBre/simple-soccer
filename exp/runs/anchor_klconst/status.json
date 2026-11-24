@@ -1,0 +1,111 @@
+{
+ "state": "done",
+ "spec": {
+  "name": "anchor_klconst",
+  "start": "out_5v5/ckpt/x_kickstart_best.pt",
+  "updates": 600,
+  "lr": 5e-05,
+  "rewards": {
+   "w_wall": 0.02
+  },
+  "args": {
+   "teacher": "out_5v5/ckpt/jit8_best.pt",
+   "kl_coef": 0.15,
+   "kl_decay": 1000000000,
+   "seed": 7
+  },
+  "control": "anchor_wall_repro",
+  "notes": "Constant teacher KL 0.15 over 600 updates (kl_decay 1e9: never fades). In the 2026-11-23 runs every best checkpoint came at u100-u250, where the 0.3 -> 0 schedule had KL 0.2-0.05, and anchor_long declined once the KL was gone (u900 est. 1478). Does a permanent anchor at that level keep the gains and keep improving past u300? Base recipe = anchor recipe (start kickstart u600 = x_kickstart_best, rule bots + self-play, teacher jit8, w_wall 0.02, lr 5e-5). Seed noise of that recipe is about 65 Elo (2026-11-23 review), so each variant runs on two seeds (7, 11) against the matching seed of the plain recipe. Trained on the MacBook Air, 2026-11-23 evening. Judge by Elo and agf / aga after the ladder has settled."
+ },
+ "baseline_run": "start:x_kickstart_best",
+ "started": 1795453305,
+ "tag": "x_anchor_klconst",
+ "target_updates": 600,
+ "effective_rewards": {
+  "pass_individual": 1,
+  "w_recv": 0.1,
+  "w_open": 0.003,
+  "w_key_pass": 0.25,
+  "w_xa": 2.5,
+  "coop_cap": 8,
+  "random_start": 0.6,
+  "shaping": 0,
+  "w_keeper": 0,
+  "w_jitter": 0,
+  "w_far": 0,
+  "w_xg": 0,
+  "w_xga": 0,
+  "w_win": 0,
+  "w_draw": 0,
+  "w_tackle": 0,
+  "w_goalside": 0,
+  "w_opp_half": 0,
+  "w_compact": 0,
+  "w_wall": 0.02,
+  "w_corner": 0
+ },
+ "effective_args": {
+  "lr": 5e-05,
+  "updates": 600,
+  "workers_rule": 2,
+  "workers_self": 1,
+  "envs_per_worker": 16,
+  "rollout": 128,
+  "minibatch": 4096,
+  "ckpt_every": 25,
+  "fast_every": 50,
+  "elo_pairs": 12,
+  "fast_rules": 0,
+  "learn_threads": 2,
+  "seed": 7,
+  "teacher": "out_5v5/ckpt/jit8_best.pt",
+  "kl_coef": 0.15,
+  "kl_decay": 1000000000
+ },
+ "seed": 7,
+ "git_commit": "288aaec",
+ "git_dirty": false,
+ "boot_id": null,
+ "restarts": [],
+ "control": "anchor_wall_repro",
+ "net": {
+  "sizes": [
+   46,
+   128,
+   128,
+   10
+  ],
+  "label": "46-128-128-10",
+  "params": 23818
+ },
+ "name": "anchor_klconst",
+ "updated": 1795455388,
+ "update": 600,
+ "train_pts": 2.86,
+ "base_train": 2.66,
+ "bad_checks": 0,
+ "recorded": [],
+ "recorded_est": [
+  50,
+  100,
+  150,
+  200,
+  250,
+  300,
+  350,
+  400,
+  450,
+  500,
+  550,
+  600
+ ],
+ "train_s": 1451,
+ "stop_reason": "budget",
+ "finished": 1795455388,
+ "final_update": 600,
+ "verdict": null,
+ "cost_hours": {
+  "train": 0.4,
+  "eval": 0.07
+ }
+}

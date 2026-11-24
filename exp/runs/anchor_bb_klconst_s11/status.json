@@ -1,0 +1,112 @@
+{
+ "state": "done",
+ "spec": {
+  "name": "anchor_bb_klconst_s11",
+  "start": "out_5v5/ckpt/x_kickstart_best.pt",
+  "updates": 600,
+  "lr": 5e-05,
+  "rewards": {
+   "w_wall": 0.02
+  },
+  "args": {
+   "teacher": "out_5v5/ckpt/jit8_best.pt",
+   "seed": 11,
+   "kl_coef": 0.15,
+   "kl_decay": 1000000000,
+   "rollout": 256
+  },
+  "control": "anchor_wall_s11",
+  "notes": "Both promising changes together: rollout 256 and constant teacher KL 0.15 (never fades), 600 updates. anchor_bigbatch was provisionally ahead on both seeds, anchor_klconst kept its level to u600 where anchor_long collapsed. Read only together with the single-change runs. Base recipe = anchor recipe (start kickstart u600 = x_kickstart_best, rule bots + self-play, teacher jit8, w_wall 0.02, lr 5e-5). Seed noise of that recipe is about 65 Elo, so variants run on more than one seed and are compared with the plain recipe of the same seed (seed 7 anchor_wall_repro, 11 anchor_wall_s11, 23 anchor_wall_s23). Trained on the MacBook Air, night of 2026-11-23. Judge by Elo and agf / aga after the ladder has settled."
+ },
+ "baseline_run": "start:x_kickstart_best",
+ "started": 1795478317,
+ "tag": "x_anchor_bb_klconst_s11",
+ "target_updates": 600,
+ "effective_rewards": {
+  "pass_individual": 1,
+  "w_recv": 0.1,
+  "w_open": 0.003,
+  "w_key_pass": 0.25,
+  "w_xa": 2.5,
+  "coop_cap": 8,
+  "random_start": 0.6,
+  "shaping": 0,
+  "w_keeper": 0,
+  "w_jitter": 0,
+  "w_far": 0,
+  "w_xg": 0,
+  "w_xga": 0,
+  "w_win": 0,
+  "w_draw": 0,
+  "w_tackle": 0,
+  "w_goalside": 0,
+  "w_opp_half": 0,
+  "w_compact": 0,
+  "w_wall": 0.02,
+  "w_corner": 0
+ },
+ "effective_args": {
+  "lr": 5e-05,
+  "updates": 600,
+  "workers_rule": 2,
+  "workers_self": 1,
+  "envs_per_worker": 16,
+  "rollout": 256,
+  "minibatch": 4096,
+  "ckpt_every": 25,
+  "fast_every": 50,
+  "elo_pairs": 12,
+  "fast_rules": 0,
+  "learn_threads": 2,
+  "seed": 11,
+  "teacher": "out_5v5/ckpt/jit8_best.pt",
+  "kl_coef": 0.15,
+  "kl_decay": 1000000000
+ },
+ "seed": 11,
+ "git_commit": "288aaec",
+ "git_dirty": false,
+ "boot_id": null,
+ "restarts": [],
+ "control": "anchor_wall_s11",
+ "net": {
+  "sizes": [
+   46,
+   128,
+   128,
+   10
+  ],
+  "label": "46-128-128-10",
+  "params": 23818
+ },
+ "name": "anchor_bb_klconst_s11",
+ "updated": 1795481976,
+ "update": 600,
+ "train_pts": 2.92,
+ "base_train": 2.94,
+ "bad_checks": 0,
+ "recorded": [],
+ "recorded_est": [
+  50,
+  100,
+  150,
+  200,
+  250,
+  300,
+  350,
+  400,
+  450,
+  500,
+  550,
+  600
+ ],
+ "train_s": 3034,
+ "stop_reason": "budget",
+ "finished": 1795481976,
+ "final_update": 600,
+ "verdict": null,
+ "cost_hours": {
+  "train": 0.84,
+  "eval": 0.07
+ }
+}

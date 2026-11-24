@@ -1,0 +1,17 @@
+{
+ "name": "anchor_klconst_s23",
+ "start": "out_5v5/ckpt/x_kickstart_best.pt",
+ "updates": 600,
+ "lr": 5e-05,
+ "rewards": {
+  "w_wall": 0.02
+ },
+ "args": {
+  "teacher": "out_5v5/ckpt/jit8_best.pt",
+  "kl_coef": 0.15,
+  "kl_decay": 1000000000,
+  "seed": 23
+ },
+ "control": "anchor_wall_s23",
+ "notes": "Third seed (23). Constant teacher KL 0.15 over 600 updates (kl_decay 1e9: never fades). In the 2026-11-23 runs every best checkpoint came at u100-u250, where the 0.3 -> 0 schedule had KL 0.2-0.05, and anchor_long declined once the KL was gone (u900 est. 1478). Does a permanent anchor at that level keep the gains and keep improving past u300? Base recipe = anchor recipe (start kickstart u600 = x_kickstart_best, rule bots + self-play, teacher jit8, w_wall 0.02, lr 5e-5). Seed noise of that recipe is about 65 Elo (2026-11-23 review), so each variant runs on two seeds (7, 11) against the matching seed of the plain recipe. Trained on the MacBook Air, night of 2026-11-23. Judge by Elo and agf / aga after the ladder has settled."
+}

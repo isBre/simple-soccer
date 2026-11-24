@@ -302,3 +302,38 @@ numbers above are replaced by these.
   until 12:32). The thermal guard (33 / 32 °C) logged no pause. Queue: empty.
 - Next, in the user's hands: stop single-term tests at one seed. Either replicate variants over 2-3 seeds, or look for something that
   should move the net by more than about 65 Elo (the 46-number plateau, the teacher gap).
+
+### Review 2026-11-24 07:45: batch size and constant teacher KL, over seeds (MacBook Air, judged by Elo and goals)
+Thirteen runs on the anchor recipe (start `x_kickstart_best`, rule bots + self-play, teacher jit8, w_wall 0.02, lr 5e-5, Python core,
+commit be1d62d) between 2026-11-23 18:01 and 2026-11-24 05:21, each variant on seeds 7 / 11 / 23 against the plain recipe on the same
+seeds plus a fourth plain seed (31); then 120 ladder rounds (8 pairs) on each of the two evenings. New entries have 260-490 games
+(±35-45), the old ones 950-1050. The whole scale moved down about 30 Elo with the extra matches (jit8 1838 -> 1788): only differences
+inside this table are comparable, the numbers of the review above are superseded.
+
+| recipe | seeds | Elo of each seed (best checkpoint) | mean | sd | agf | aga | train time / run |
+|---|---|---|---|---|---|---|---|
+| plain: rollout 128, KL 0.3 -> 0 by u300, 300 upd | 7, 11, 23, 31 | 1701, 1663, 1622, 1669 | **1664** | 32 | 1.46 | 0.66 | 0.24 h |
+| `anchor_klconst*`: KL 0.15 constant, 600 upd | 7, 11, 23 | 1658, 1696, 1682 | 1679 | 19 | 1.38 | **0.55** | 0.43 h |
+| `anchor_bigbatch*`: rollout 256 | 7, 11, 23 | 1708, 1688, 1703 | **1700** | 10 | 1.60 | 0.58 | 0.43 h |
+| `anchor_batch512*`: rollout 512 | 7, 11, 23 | 1710, 1702, 1701 | **1704** | 5 | 1.55 | 0.55 | 0.87 h |
+| `anchor_bb_klconst*`: rollout 256 + KL 0.15 constant, 600 upd | 7, 11, 23 | 1695, 1668, 1712 | 1692 | 22 | 1.49 | 0.55 | 0.87 h |
+| jit8_best / RL Team 5 / `anchor_wall_strong` | | 1788 / 1784 / 1730 | | | 1.79 / 1.90 / 1.62 | 0.40 / 0.49 / 0.49 | |
+
+- **Larger batches help, probably.** Rollout 256: +36 over the plain mean (Welch z 2.1), 512: +40 (z 2.4); same seed, every batch run is
+  at or above its plain twin (256: +7, +25, +81; 512: +9, +39, +79). With 3-4 seeds and four comparisons (Holm) and few degrees of
+  freedom this is a strong hint, not proof; part of the gap is the weak plain seed 23 (1622).
+- **The seed spread shrinks with the batch:** sd 32 (128) -> 10 (256) -> 5 (512). This fits the reading of the 2026-11-23 review that
+  the 65-Elo seed noise comes from noisy updates.
+- **512 is not better than 256 and costs twice the time** (0.87 h vs 0.43 h per 300 updates, the evaluations unchanged). If anything
+  becomes the default it is rollout 256.
+- **Constant KL 0.15 does not raise Elo** (+15, inside the noise) but lowers goals conceded (0.55 vs 0.66) and keeps the level to u600:
+  no collapse like `anchor_long` after its KL faded. Best checkpoints of the constant-KL runs lie anywhere from u150 to u550.
+  Combined with rollout 256 it adds nothing over rollout 256 alone (1692 vs 1700).
+- **The teacher gap stays:** the best runs reach about 1700-1710, 80 below jit8 (1788) and RL Team 5; `anchor_wall_strong` (old core)
+  is still the best single entry of ours (1730).
+- Earlier single runs on this scale: `anchor_long` 1694, `rank_anchor` 1692, `anchor_klslow` 1682, `anchor_pfsp` 1677, `anchor_xga`
+  1607 (aga 0.99): the 2026-11-23 readings stand (all inside the plain band except xga, which concedes the most).
+- Full evaluations (league points 2.62-3.00) and the 16-game h2h vs RL Team 4 / 5 (0.31-1.62) do not separate the recipes either.
+- Setup: the Mac runner chained two queues and two ladder settlings (`logs/after_queue.sh`, `logs/next_batch.sh`); the 8080 dashboard
+  ran as its own process (`logs/dashboard_mac.out`) because the app's preview server was stopped twice. Thermal guard never logged a pause.
+- Open for the user: make rollout 256 the training default (`lab/tracker.py` DEFAULTS), and whether to confirm it with more seeds first.
