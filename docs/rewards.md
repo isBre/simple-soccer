@@ -20,7 +20,7 @@ Seed noise (2026-11-23): one recipe over three seeds spans **65 Elo** (1682-1747
 
 Not rewards but loss terms and settings that proved essential:
 - **Teacher KL (kickstarting)**, `kl_coef` 0.2-0.5 towards jit8: the only thing that stopped the 46-number net drifting down. Unanchored runs (`minimal`, `wall`, `strong_opponents`) all declined; anchored ones stayed at 2.8-2.9.
-- **Batch size** (2026-11-24, 3 seeds each): rollout 256 / 512 rate about +36 / +40 Elo over rollout 128 (z 2.1 / 2.4) and shrink the seed spread from sd 32 to 10 / 5. 512 costs twice the time of 256 for no extra gain. Not yet the default (the user's call).
+- **Batch size** (2026-11-24, 3 seeds each): rollout 256 / 512 rate about +36 / +40 Elo over rollout 128 (z 2.1 / 2.4) and shrink the seed spread from sd 32 to 10 / 5. 512 costs twice the time of 256 for no extra gain. **Rollout 256 is the default since 2026-11-24** (user yes).
 - **Constant teacher KL 0.15** (2026-11-24, 3 seeds): no Elo gain (+15), fewer goals conceded (0.55 vs 0.66), no decline up to u600.
 - **Learning rate 5e-5** with a 30-update warm-up (3e-4 and 1e-4 drifted without an anchor).
 

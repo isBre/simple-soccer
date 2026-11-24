@@ -23,6 +23,10 @@ dashboard: `http://<pi-address>:8080`. Newest entries at the bottom; the agent a
 - **w_wall 0.02 is in the default reward set** (user yes, 2026-11-18; earlier runs and the specs of `persist_*` keep 0 so their controls stay valid). Full reward register with evidence: `docs/rewards.md`.
 - **No hand-made positioning terms for defence or the keeper** (goal-line cover, keeper position): the user wants the net to find its own
   solution, e.g. high pressing without a keeper (2026-11-16).
+- **Rollout 256 is the training default** (user yes, 2026-11-24, after `anchor_bigbatch*` / `anchor_batch512*`: about +36 Elo and a
+  smaller seed spread over 3 seeds). Runs started earlier keep 128 on a resume and in the dashboard (`lab/tracker.py` `ROLLOUT_ON`,
+  `defaults_for`). The plain controls `anchor_wall_repro` / `_s11` / `_s23` / `_s31` are rollout 128; the `anchor_bigbatch*` runs are
+  the controls of the new default.
 - **Learning rate 5e-5** with a 30-update warm-up after every (re)start. 3e-4 and 1e-4 runs drifted away from the warm start.
 - **Raspberry Pi 4 (4 cores, 3.8 GB).** Training on 3 workers (2 rule + 1 self-play), learning step on 2 threads, evaluation processes on 1 BLAS thread (the nets run inside them since 2026-11-21; before, in separate net servers).
   The live viewer runs on the Pi's touch screen (no keyboard) next to training.
@@ -336,4 +340,5 @@ inside this table are comparable, the numbers of the review above are superseded
 - Full evaluations (league points 2.62-3.00) and the 16-game h2h vs RL Team 4 / 5 (0.31-1.62) do not separate the recipes either.
 - Setup: the Mac runner chained two queues and two ladder settlings (`logs/after_queue.sh`, `logs/next_batch.sh`); the 8080 dashboard
   ran as its own process (`logs/dashboard_mac.out`) because the app's preview server was stopped twice. Thermal guard never logged a pause.
-- Open for the user: make rollout 256 the training default (`lab/tracker.py` DEFAULTS), and whether to confirm it with more seeds first.
+- Decision (user, 2026-11-24): rollout 256 is the training default from now on (standing decisions). Twice the samples per update
+  means about twice the time per update: on the Pi a 300-update run takes about twice as long as before.

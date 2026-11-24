@@ -91,8 +91,8 @@ def baseline(start_json):
     return name
 
 
-def selfplay_cmd(spec, tag, start, start_update):
-    rewards, args = tracker.effective(spec)
+def selfplay_cmd(spec, tag, start, start_update, started=None):
+    rewards, args = tracker.effective(spec, started)
     cmd = [sys.executable, os.path.join(ROOT, "rl", "selfplay.py"), "--obs", spec.get("obs", "team"), "--start", start, "--start_update", str(start_update),
            "--tag", tag, "--eval_every", "0", "--log_every", "2", "--fast_ref", json_of(spec["start"]),
            "--baseline", os.path.join(ROOT, spec["start"])]          # the frozen benchmark is always the net the experiment started from (also after a resume)
@@ -209,7 +209,7 @@ def run_experiment(spec_path, viewer=False):
         dest = os.path.join(EXP, "running", os.path.basename(spec_path))
         shutil.move(spec_path, dest)
         spec_path = dest
-    rewards, args = tracker.effective(spec)
+    rewards, args = tracker.effective(spec, st.get("started"))      # a resumed run keeps the defaults it started with
     start_json = json_of(spec["start"])
     fast_rules = int(args.get("fast_rules", 1) or 0)
     base_name = baseline(start_json) if fast_rules else "start:" + os.path.basename(start_json)[:-5]
@@ -246,7 +246,7 @@ def run_experiment(spec_path, viewer=False):
         if viewer:
             procs += start_viewer(tag, start_json)
         out = open(os.path.join(ROOT, "logs", tag + ".out"), "a")
-        proc = subprocess.Popen(selfplay_cmd(spec, tag, os.path.join(ROOT, start), start_update), cwd=ROOT, stdout=out, stderr=subprocess.STDOUT)
+        proc = subprocess.Popen(selfplay_cmd(spec, tag, os.path.join(ROOT, start), start_update, st.get("started")), cwd=ROOT, stdout=out, stderr=subprocess.STDOUT)
         log("started %s (pid %d)" % (name, proc.pid))
         last = time.time()
         while proc.poll() is None:

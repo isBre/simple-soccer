@@ -40,8 +40,17 @@ def minimal_for(started):
         m["w_wall"] = 0
     return m
 
-DEFAULTS = {"lr": 5e-5, "updates": 300, "workers_rule": 2, "workers_self": 1, "envs_per_worker": 16, "rollout": 128, "minibatch": 4096,
+DEFAULTS = {"lr": 5e-5, "updates": 300, "workers_rule": 2, "workers_self": 1, "envs_per_worker": 16, "rollout": 256, "minibatch": 4096,
             "ckpt_every": 25, "fast_every": 50, "elo_pairs": 12, "fast_rules": 0, "learn_threads": 2, "seed": 7}
+ROLLOUT_ON = 1795503346          # since this moment (2026-11-24, user decision after the batch-size runs `anchor_bigbatch*`) the default rollout is 256; earlier runs had 128
+
+
+def defaults_for(started):
+    """The training defaults as they were when a run started (a resumed or displayed older run keeps rollout 128); None = starting now."""
+    d = dict(DEFAULTS)
+    if started is not None and not (isinstance(started, (int, float)) and started >= ROLLOUT_ON):
+        d["rollout"] = 128
+    return d
 FINISHED = ("done", "diverged", "regressed", "cancelled", "failed")
 
 
@@ -132,10 +141,10 @@ def validate_spec(spec):
     return errs
 
 
-def effective(spec):
-    """(rewards, args) a spec really trains with: the defaults merged with its overrides."""
+def effective(spec, started=None):
+    """(rewards, args) a spec really trains with: the defaults (as of `started`, the run's first start; None = now) merged with its overrides."""
     rewards = {**MINIMAL, **spec.get("rewards", {})}
-    args = {**DEFAULTS, **{k: spec[k] for k in ("lr", "updates") if k in spec}, **spec.get("args", {})}
+    args = {**defaults_for(started), **{k: spec[k] for k in ("lr", "updates") if k in spec}, **spec.get("args", {})}
     return rewards, args
 
 
