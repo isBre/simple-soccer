@@ -126,10 +126,17 @@ Silver Arrows, the strongest handmade team), so the difference is only how it pl
   for 2 s, and the finisher skips a shot from distance that the simulation says the defenders will reach. Same seeds against
   every other ladder entry: 1.69 -> 1.79 points per match, goal difference +0.47 -> +0.61; against the handmade teams
   1.93 -> 2.18 (z 2.6).
-- Elo (the Lab's ranking, `lab/ladder.py`, as `rules:opus_high`): **1679 (95 % 1613–1745) after 164 games** of v5: 18th of 42,
-  the top rule team by ~400 points, ahead of 8 of the 25 trained nets and RL teams (jit8 1884, RL Team 5 1875; v4 was 1623). The
+- v6, thinking ahead: in the opponents' third the carrier plays every realistic option 75 ticks (1.25 s) forward in a copy of
+  the match (the finisher's choice, shots at the best spot and both posts, dribbles at goal and at angles, passes to feet and
+  through balls into space ahead of each team-mate) against a generic handmade defence, and takes the best outcome. Nobody
+  else moves differently, so it stays a team. 12 fresh seeds against every other ladder entry: 1.87 -> 2.17 points per match,
+  goal difference +0.72 -> +1.34 (z 7.3 / 10.7). In the browser game the rollouts run on worker processes
+  (`SOCCER_OPUS_WORKERS`); short stutters during its attacks remain.
+- Elo (the Lab's ranking, `lab/ladder.py`, as `rules:opus_high`): **1776 (95 % 1707–1844) after 164 games** of v6: 5th of 42,
+  the top rule team by ~500 points, behind only jit8 (1883), RL Team 5 (1874), RL Team 4 (1856) and anchor_wall_strong (1837)
+  (v5 was 1679, v4 1623). The
   one-off round robin before tuning is in [docs/elo_ranking.md](docs/elo_ranking.md).
-- Measured with `python3 tools/team_bench.py opus_high --rl` (5v5 arena, 3 min, both sides, 2 seeds): 2.52 points per match
+- Measured (v5) with `python3 tools/team_bench.py opus_high --rl` (5v5 arena, 3 min, both sides, 2 seeds): 2.52 points per match
   against the 16 rule teams and RL Team 4/5 (2.48 goals for, 0.35 against). It plays as a team: 3+ of its outfield players are
   within 120 px of the ball ~6 % of the time (Silver Arrows ~5 %, RL Team 5 ~28 %), ~18 passes per match at ~80 % completion
   (Silver Arrows ~10 at ~60 %), 18 % of its goals assisted.

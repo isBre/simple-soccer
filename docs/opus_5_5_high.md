@@ -26,12 +26,11 @@ short.
   - **Against the whole field** (every other ladder entry, both sides, same seeds): **1.79 points per match, +0.61 goal
     difference** (v4 1.69 and +0.47; first tuned version ~1.2 and −0.1). Against the 25 trained nets and RL teams alone:
     1.54 points, +0.33 goal difference.
-  - **Lab ranking (v5, section 11):** **1679 Elo (95 % 1613–1745) after 164 games**, 18th of 42, the top rule team by ~400
-    points (Silver Arrows 1283), ahead of 8 of the 25 trained nets and RL teams. v4 (the first-time hit, section 10) was 1623; v5
-    stops wasting the ball in the opponents' third, counter-presses there and skips shots the defenders will reach.
-  - **Trained nets:** still ~200 Elo behind the best ones (jit8 ~1884, RL Team 5 ~1875).
-  - **Against the rule teams:** 2.28 points per match in the ladder (42 won, 20 drawn, 2 lost), positive goal difference
-    against every one of them.
+  - **Lab ranking (v6, section 13):** **1776 Elo (95 % 1707–1844) after 164 games**, **5th of 42**, the top rule team by ~500
+    points (Silver Arrows 1283), ahead of 21 of the 25 trained nets and RL teams. v6 plays the finisher's options 1.25 s forward
+    in a copy of the match before choosing (shots at the posts, dribbles at angles, passes, through balls). v5 was 1679, v4 1623.
+  - **Trained nets:** ~60–110 Elo behind the best four (jit8 1883, RL Team 5 1874, RL Team 4 1856, anchor_wall_strong 1837).
+  - **Against the rule teams:** 2.72 points per match in the ladder (56 won, 6 drawn, 2 lost; 2.44 goals for, 0.12 against).
 
 ![Live match: defending](opus/screen_defending.jpg)
 *A live match in the browser, before tuning (Opus in orange defends the left goal). One player (#5) engages the man on the ball; the others hold
@@ -520,7 +519,7 @@ for, 0.35 against; 115 won, 18 drawn, 11 lost. Still a team: 3+ outfield players
 1613–1745)**, 18th of 42, +56 on v4 (1623) on the same ladder. The top handmade team by ~400, ahead of team46_w256 and the
 kickstart run; the best nets are still ~200 higher (jit8 1884, RL Team 5 1875).
 
-## 12. Fifth round: what did not work (no v6)
+## 12. Fifth round: what did not work
 
 **Where the 200 Elo to jit8 is** (ladder games against the same opponents, per match):
 
@@ -555,18 +554,89 @@ The last result confirms v5's own finding (Opus's kick choice in the final third
 the spot where it arrives, but against a packed box the receiver loses the ball more often than the handmade finisher's
 dribble or shot does. v5 stays the current version.
 
-## 13. Limits and next steps
+## 13. Sixth round: thinking ahead (v6)
 
-- **Scoring is still the weak point.** Before tuning: 1.07 goals per match in the full round robin against all 41 other teams; the
-  tuning helped mostly by making it shoot earlier. The direct finishing borrowed from the handmade bots
-  works. Replacing it with Opus's single-kick passes (cut-backs) was worse every time (section 12): a finishing model of its own
-  has to value what the receiver can do next, not only the arrival spot.
-- **The strongest nets are still ~250 Elo higher.** They win goal-line scrambles with numbers; Opus refuses to swarm by design.
-  Closing the rest of the gap under the realism rule probably needs a planner that simulates whole sequences in the real match
-  engine (a rollout of each candidate action for ~1 s with all ten players), not single kicks. A longer tuning run (more matches per
-  candidate, more generations) is the cheaper next step.
-- **Its interval on the ladder is still wide** (60 games); the runner narrows it once this branch is on `main` and the Pi plays more
-  rounds.
+Every earlier change tuned single-kick decisions. Section 12 showed why that stalled in the final third: the kick model rates a
+pass by where it arrives, not by what happens next. v6 plays the candidates forward instead.
+
+**The rollout planner** (`RO`, `_rollout_choice`). When the carrier in the opponents' third is about to play the ball (within
+60 px of it), it takes the finisher's choice and every alternative and plays each one **75 ticks (1.25 s) forward in a copy of
+the match**: all ten players, the real physics, Opus's own team brain for our side. The opponents in the copy are a generic
+handmade team ("balanced"), not their real brain or net: Opus knows where they are, not how they think. The outcome is +1 / −1
+for a goal, otherwise the value of the ball for whoever touched it last (`pos_value`, negative when it is theirs). Another
+candidate replaces the finisher's choice only when it does better by 0.03. A copy costs ~1.7 ms (`_clone`: `copy.deepcopy`
+with the static data shared) and a rollout ~13 ms; a full 90 s match takes ~7 s of CPU instead of ~1 s.
+
+The candidates are what a real attacker considers:
+
+| Candidate | |
+|---|---|
+| The finisher's own choice (`StyleBot._decide_action`) | always the reference |
+| Shot at the best spot, at the near post, at the far post (`RO_POSTS`) | within 420 px of goal; posts inset by the player's aim error |
+| Dribble at goal, and at ±0.5 / ±1.0 rad off the line to goal (`RO_DRIB`) | going at a defender at an angle opens a lane |
+| Pass to each outfield team-mate 40–380 px away | aimed where he will be |
+| Ball into the space 60 / 120 / 190 px ahead of each team-mate (`RO_THRU`) | the through ball: the runner meets it |
+
+It never moves anyone else: the shape (jobs) around the ball is unchanged, so it cannot turn into a swarm.
+
+**Measured** (paired against every ladder entry, both sides; points / goal difference per match, z):
+
+| Step | Seeds | All entries | Nets and RL teams | Handmade teams |
+|---|---|---|---|---|
+| Planner (finisher's choice, one shot, one dribble, passes to feet) vs v5 | 8 | +0.04 / +0.19 (0.9 / 2.8) | −0.09 / +0.02 | +0.26 / +0.44 (3.1 / 3.7) |
+| ... confirmed on fresh seeds | 12 | +0.13 / +0.27 (2.7 / 5.1) | +0.03 / +0.13 (0.6 / 2.0) | +0.25 / +0.49 (3.9 / 5.7) |
+| + posts, through balls 80 / 150, dribbles ±0.6 | 8 | +0.18 / +0.34 (3.4 / 5.1) | +0.16 / +0.24 (2.2 / 2.9) | +0.20 / +0.52 (2.9 / 4.4) |
+| + posts, through balls 60 / 120 / 190, dribbles ±0.5 / ±1.0 (v6), fresh seeds | 12 | +0.19 / +0.43 (4.7 / 7.5) | +0.14 / +0.21 (2.5 / 3.4) | +0.28 / +0.76 (4.6 / 7.3) |
+
+Each kind of candidate alone was small (posts +0.00, through balls +0.05, dribbles +0.09 points); together they add up, and the
+richer set beat the smaller one on the same seeds. The planner chooses better the more realistic options it can try.
+
+**Tried and left out:**
+
+| Change | Result |
+|---|---|
+| Margin 0.08 instead of 0.03 | slightly weaker on both seed sets (+0.09 vs +0.13 points on fresh seeds) |
+| Rollouts in build-up too (`RO_MID`: the simulation's best 3 kicks and carrying the ball) | −0.06 / −0.05 (z −1.1 / −0.9): there the kick model already chooses as well |
+| Outcome averaged over 2 or 3 generic opponent styles (+ high press, + park the bus) (`RO_STYLES`) | +0.01 then −0.08 / −0.09 on fresh seeds: noise, at twice the cost |
+| 50 / 110 ticks forward instead of 75 | −0.15 (z −2.9) / +0.01 |
+| A measured expected-threat table (logistic fit of goals within 10 s on 440 k possession samples) as the value of a spot | +0.11 (z 1.8) on 8 seeds, −0.10 (z −2.2) on 12 fresh ones |
+
+**v6 against v5, 12 fresh seeds** (paired, every ladder entry, both sides): **2.17 vs 1.87 points per match (+0.30, z 7.3),
+goal difference +1.34 vs +0.72 (+0.62, z 10.7)**; against the nets and RL teams 1.83 vs 1.57 (z 4.8), against the handmade teams
+2.70 vs 2.34 (z 5.8). Building the full candidate set also fixed a latent bug: a pass candidate pointed at the real team-mate
+instead of his copy, so in the rollout the receiver was never told the ball was coming (neutral on its own).
+
+**Lab ranking.** 164 games (108 won, 30 drawn, 26 lost): **1776 Elo (95 % 1707–1844)**, 5th of 42, +97 on v5 (1679). Against
+the handmade teams 2.72 points per match (56-6-2; goals 2.44 for, 0.12 against; v5 2.28, 1.36 / 0.09); against the nets and RL
+teams 1.80 (52-24-24; 1.21 / 0.56; v5 1.55, 0.92 / 0.60). Above it: jit8 1883, RL Team 5 1874, RL Team 4 1856 and
+anchor_wall_strong 1837; the gap to the best net went from ~200 to ~108.
+
+**Thinking takes no time, and that matters.** In the real game a plan of ~12 rollouts costs ~150 ms of CPU. Spreading the
+rollouts over the following ticks (the player keeps doing what he did while he thinks, 8 or 12 ticks of latency) cost
+−0.20 / −0.24 points per match (z −3.8 / −4.5); a 1-tick version played like v6 (−0.05, z −0.8), so the loss is the latency
+itself, not a bug. Reusing a plan's winner for 20 ticks instead of re-planning at every decision (`RO_REPLAN`) cost −0.13 points
+and −0.32 goal difference (z −2.6 / −4.7): the defenders move and the plan goes stale. Both stay off.
+
+**Live play** (`game/session.py` calls `opus.realtime()`): in the browser game the rollouts of an Opus team run on a pool of worker
+processes (`SOCCER_OPUS_WORKERS`, default CPUs − 2, at most 6), each candidate loaded from one pickled copy of the match. The
+result is bit-for-bit the same as in-process (same score and tick hash over a full match). On a MacBook Air it halves the
+hitches (99th percentile frame gap 132 → 65 ms, worst 230 → 98 ms), but during Opus attacks ~1.4 frames a second still arrive
+late. Ladder, A/B and tournament runs stay in-process.
+
+## 14. Limits and next steps
+
+- **The planner only works in the opponents' third.** In build-up the single-kick model chose as well as rollouts did (section
+  13). A planner for defending (who presses, who covers) has not been tried.
+- **The opponents in a rollout are a generic handmade team.** It predicts handmade defenders better than nets: the planner's gain
+  against the nets is about half its gain against the handmade teams. A cheap learned model of how the nets move could narrow that
+  without reading their code during a match.
+- **The best nets are still ~100 Elo higher** (jit8 1883). They win goal-line scrambles with numbers; Opus refuses to swarm by
+  design.
+- **It costs CPU**: ~7 s per 90 s match instead of ~1 s (slower for big tournaments). In the live game a plan arrives in one
+  tick, so even with the worker pool there are short stutters during Opus attacks; thinking ahead of time or reusing plans both
+  cost strength (section 13). Faster rollouts (a lighter copy of the match, fewer candidates per player) are the way out.
+- **Its interval on the ladder is still wide** (164 games); the runner narrows it once this branch is on `main` and the Pi plays
+  more rounds.
 
 ## Reproduce
 

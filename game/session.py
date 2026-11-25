@@ -22,6 +22,8 @@ import random
 import time
 
 from game import api, recorder
+from soccer.ai import opus
+from soccer.ai.opus import OpusBrain
 from soccer.match import ENDED, GOAL, PLAYING, SINGLE, Match
 
 TICK = 1.0 / 60.0
@@ -91,6 +93,8 @@ def _run(ws, rec):
         first = next((x for x in msgs if isinstance(x, dict) and "setup" in x), None)
     try:
         m = Match(api.config(first["setup"]))
+        if any(isinstance(b, OpusBrain) for b in m.brains):
+            opus.realtime()                             # its finisher's rollouts on worker processes: no stalls
         puzzle = first.get("puzzle") is not None
         if puzzle:
             m.puzzle_layout(int(first["puzzle"]))
