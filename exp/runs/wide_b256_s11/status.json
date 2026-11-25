@@ -1,0 +1,107 @@
+{
+ "state": "done",
+ "spec": {
+  "name": "wide_b256_s11",
+  "start": "out_5v5/ckpt/x_wide_kickstart_best.pt",
+  "updates": 300,
+  "lr": 5e-05,
+  "rewards": {
+   "w_wall": 0.02
+  },
+  "args": {
+   "teacher": "out_5v5/ckpt/jit8_best.pt",
+   "kl_coef": 0.3,
+   "kl_decay": 300,
+   "hidden": 256,
+   "seed": 11
+  },
+  "control": "anchor_bigbatch_s11",
+  "notes": "Net size: the anchor recipe on the wide net 46-256-256-10, from wide_kickstart's best (the 256-wide distillation of jit8; it rated about 100 Elo above the 128-wide kickstart start). The 2026-11-25 review found that recipe tuning does not move the 128-wide net (best runs 70-90 below jit8); does twice the width lift the ceiling? Compared with anchor_bigbatch of the same seed (128-wide, same recipe) and with its own start net (different start, so both readings matter). Recipe otherwise = the default anchor recipe (rule bots + self-play, rollout 256, teacher jit8 KL 0.3 -> 0 by u300, w_wall 0.02, lr 5e-5, 300 updates). Seeds 7 / 11 / 23. Trained on the MacBook Air, 2026-11-25. Judge by Elo and agf / aga after the ladder has settled."
+ },
+ "baseline_run": "start:x_wide_kickstart_best",
+ "started": 1795620914,
+ "tag": "x_wide_b256_s11",
+ "target_updates": 300,
+ "effective_rewards": {
+  "pass_individual": 1,
+  "w_recv": 0.1,
+  "w_open": 0.003,
+  "w_key_pass": 0.25,
+  "w_xa": 2.5,
+  "coop_cap": 8,
+  "random_start": 0.6,
+  "shaping": 0,
+  "w_keeper": 0,
+  "w_jitter": 0,
+  "w_far": 0,
+  "w_xg": 0,
+  "w_xga": 0,
+  "w_win": 0,
+  "w_draw": 0,
+  "w_tackle": 0,
+  "w_goalside": 0,
+  "w_opp_half": 0,
+  "w_compact": 0,
+  "w_wall": 0.02,
+  "w_corner": 0
+ },
+ "effective_args": {
+  "lr": 5e-05,
+  "updates": 300,
+  "workers_rule": 2,
+  "workers_self": 1,
+  "envs_per_worker": 16,
+  "rollout": 256,
+  "minibatch": 4096,
+  "ckpt_every": 25,
+  "fast_every": 50,
+  "elo_pairs": 12,
+  "fast_rules": 0,
+  "learn_threads": 2,
+  "seed": 11,
+  "teacher": "out_5v5/ckpt/jit8_best.pt",
+  "kl_coef": 0.3,
+  "kl_decay": 300,
+  "hidden": 256
+ },
+ "seed": 11,
+ "git_commit": "da7c6c0",
+ "git_dirty": false,
+ "boot_id": null,
+ "restarts": [],
+ "control": "anchor_bigbatch_s11",
+ "net": {
+  "sizes": [
+   46,
+   256,
+   256,
+   10
+  ],
+  "label": "46-256-256-10",
+  "params": 80394
+ },
+ "name": "wide_b256_s11",
+ "updated": 1795623156,
+ "update": 300,
+ "train_pts": 2.85,
+ "base_train": 2.8,
+ "bad_checks": 0,
+ "recorded": [],
+ "recorded_est": [
+  50,
+  100,
+  150,
+  200,
+  250,
+  300
+ ],
+ "train_s": 1669,
+ "stop_reason": "budget",
+ "finished": 1795623156,
+ "final_update": 300,
+ "verdict": null,
+ "cost_hours": {
+  "train": 0.46,
+  "eval": 0.09
+ }
+}

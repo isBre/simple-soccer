@@ -1,0 +1,18 @@
+{
+ "name": "wide_b256",
+ "start": "out_5v5/ckpt/x_wide_kickstart_best.pt",
+ "updates": 300,
+ "lr": 5e-05,
+ "rewards": {
+  "w_wall": 0.02
+ },
+ "args": {
+  "teacher": "out_5v5/ckpt/jit8_best.pt",
+  "kl_coef": 0.3,
+  "kl_decay": 300,
+  "hidden": 256,
+  "seed": 7
+ },
+ "control": "anchor_bigbatch",
+ "notes": "Net size: the anchor recipe on the wide net 46-256-256-10, from wide_kickstart's best (the 256-wide distillation of jit8; it rated about 100 Elo above the 128-wide kickstart start). The 2026-11-25 review found that recipe tuning does not move the 128-wide net (best runs 70-90 below jit8); does twice the width lift the ceiling? Compared with anchor_bigbatch of the same seed (128-wide, same recipe) and with its own start net (different start, so both readings matter). Recipe otherwise = the default anchor recipe (rule bots + self-play, rollout 256, teacher jit8 KL 0.3 -> 0 by u300, w_wall 0.02, lr 5e-5, 300 updates). Seeds 7 / 11 / 23. Trained on the MacBook Air, 2026-11-25. Judge by Elo and agf / aga after the ladder has settled."
+}

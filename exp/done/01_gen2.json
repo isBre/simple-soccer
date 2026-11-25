@@ -1,0 +1,16 @@
+{
+ "name": "gen2",
+ "start": "out_5v5/ckpt/x_b256_lr1e4_s23_best.pt",
+ "updates": 300,
+ "lr": 5e-05,
+ "rewards": {
+  "w_wall": 0.02
+ },
+ "args": {
+  "teacher": "out_5v5/ckpt/jit8_best.pt",
+  "kl_coef": 0.3,
+  "kl_decay": 300,
+  "seed": 7
+ },
+ "notes": "Second generation: the anchor recipe again, started from the best net we have on the 46-number line, b256_lr1e4_s23 best (1738, level with RL Team 4), still anchored to jit8. Do gains stack when the recipe is repeated from a stronger start, or does it fall back to the 1675-1700 plateau? Reference = its start net (1738). Recipe otherwise = the default anchor recipe (rule bots + self-play, rollout 256, teacher jit8 KL 0.3 -> 0 by u300, w_wall 0.02, lr 5e-5, 300 updates). Seeds 7 / 11 / 23. Trained on the MacBook Air, 2026-11-25. Judge by Elo and agf / aga after the ladder has settled."
+}

@@ -1,0 +1,104 @@
+{
+ "state": "done",
+ "spec": {
+  "name": "gen2_s23",
+  "start": "out_5v5/ckpt/x_b256_lr1e4_s23_best.pt",
+  "updates": 300,
+  "lr": 5e-05,
+  "rewards": {
+   "w_wall": 0.02
+  },
+  "args": {
+   "teacher": "out_5v5/ckpt/jit8_best.pt",
+   "kl_coef": 0.3,
+   "kl_decay": 300,
+   "seed": 23
+  },
+  "notes": "Second generation: the anchor recipe again, started from the best net we have on the 46-number line, b256_lr1e4_s23 best (1738, level with RL Team 4), still anchored to jit8. Do gains stack when the recipe is repeated from a stronger start, or does it fall back to the 1675-1700 plateau? Reference = its start net (1738). Recipe otherwise = the default anchor recipe (rule bots + self-play, rollout 256, teacher jit8 KL 0.3 -> 0 by u300, w_wall 0.02, lr 5e-5, 300 updates). Seeds 7 / 11 / 23. Trained on the MacBook Air, 2026-11-25. Judge by Elo and agf / aga after the ladder has settled."
+ },
+ "baseline_run": "start:x_b256_lr1e4_s23_best",
+ "started": 1795627689,
+ "tag": "x_gen2_s23",
+ "target_updates": 300,
+ "effective_rewards": {
+  "pass_individual": 1,
+  "w_recv": 0.1,
+  "w_open": 0.003,
+  "w_key_pass": 0.25,
+  "w_xa": 2.5,
+  "coop_cap": 8,
+  "random_start": 0.6,
+  "shaping": 0,
+  "w_keeper": 0,
+  "w_jitter": 0,
+  "w_far": 0,
+  "w_xg": 0,
+  "w_xga": 0,
+  "w_win": 0,
+  "w_draw": 0,
+  "w_tackle": 0,
+  "w_goalside": 0,
+  "w_opp_half": 0,
+  "w_compact": 0,
+  "w_wall": 0.02,
+  "w_corner": 0
+ },
+ "effective_args": {
+  "lr": 5e-05,
+  "updates": 300,
+  "workers_rule": 2,
+  "workers_self": 1,
+  "envs_per_worker": 16,
+  "rollout": 256,
+  "minibatch": 4096,
+  "ckpt_every": 25,
+  "fast_every": 50,
+  "elo_pairs": 12,
+  "fast_rules": 0,
+  "learn_threads": 2,
+  "seed": 23,
+  "teacher": "out_5v5/ckpt/jit8_best.pt",
+  "kl_coef": 0.3,
+  "kl_decay": 300
+ },
+ "seed": 23,
+ "git_commit": "da7c6c0",
+ "git_dirty": false,
+ "boot_id": null,
+ "restarts": [],
+ "control": null,
+ "net": {
+  "sizes": [
+   46,
+   128,
+   128,
+   10
+  ],
+  "label": "46-128-128-10",
+  "params": 23818
+ },
+ "name": "gen2_s23",
+ "updated": 1795629856,
+ "update": 300,
+ "train_pts": 2.85,
+ "base_train": 2.77,
+ "bad_checks": 0,
+ "recorded": [],
+ "recorded_est": [
+  50,
+  100,
+  150,
+  200,
+  250,
+  300
+ ],
+ "train_s": 1517,
+ "stop_reason": "budget",
+ "finished": 1795629856,
+ "final_update": 300,
+ "verdict": null,
+ "cost_hours": {
+  "train": 0.42,
+  "eval": 0.09
+ }
+}

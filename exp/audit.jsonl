@@ -52,3 +52,10 @@
 {"t": "2026-11-24T08:07:09", "action": "queue_add", "name": "b256_lr1e4_s23", "position": null}
 {"t": "2026-11-24T08:07:10", "action": "queue_add", "name": "b256_long_s23", "position": null}
 {"t": "2026-11-24T08:07:10", "action": "queue_add", "name": "b256_corner_s23", "position": null}
+{"t": "2026-11-25T15:22:17", "action": "queue_add", "name": "wide_b256", "position": null}
+{"t": "2026-11-25T15:22:17", "action": "queue_add", "name": "gen2", "position": null}
+{"t": "2026-11-25T15:22:17", "action": "queue_add", "name": "wide_b256_s11", "position": null}
+{"t": "2026-11-25T15:22:18", "action": "queue_add", "name": "gen2_s11", "position": null}
+{"t": "2026-11-25T15:22:18", "action": "queue_add", "name": "wide_b256_s23", "position": null}
+{"t": "2026-11-25T15:22:18", "action": "queue_add", "name": "gen2_s23", "position": null}
+{"t": "2026-11-25T15:54:53", "action": "queue_add", "name": "anchor_marathon", "position": null}
