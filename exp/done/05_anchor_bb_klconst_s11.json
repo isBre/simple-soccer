@@ -1,0 +1,18 @@
+{
+ "name": "anchor_bb_klconst_s11",
+ "start": "out_5v5/ckpt/x_kickstart_best.pt",
+ "updates": 600,
+ "lr": 5e-05,
+ "rewards": {
+  "w_wall": 0.02
+ },
+ "args": {
+  "teacher": "out_5v5/ckpt/jit8_best.pt",
+  "seed": 11,
+  "kl_coef": 0.15,
+  "kl_decay": 1000000000,
+  "rollout": 256
+ },
+ "control": "anchor_wall_s11",
+ "notes": "Both promising changes together: rollout 256 and constant teacher KL 0.15 (never fades), 600 updates. anchor_bigbatch was provisionally ahead on both seeds, anchor_klconst kept its level to u600 where anchor_long collapsed. Read only together with the single-change runs. Base recipe = anchor recipe (start kickstart u600 = x_kickstart_best, rule bots + self-play, teacher jit8, w_wall 0.02, lr 5e-5). Seed noise of that recipe is about 65 Elo, so variants run on more than one seed and are compared with the plain recipe of the same seed (seed 7 anchor_wall_repro, 11 anchor_wall_s11, 23 anchor_wall_s23). Trained on the MacBook Air, night of 2026-11-23. Judge by Elo and agf / aga after the ladder has settled."
+}

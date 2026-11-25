@@ -1,0 +1,17 @@
+{
+ "start": "out_5v5/ckpt/x_kickstart_best.pt",
+ "updates": 300,
+ "lr": 5e-05,
+ "rewards": {
+  "w_wall": 0.02
+ },
+ "args": {
+  "teacher": "out_5v5/ckpt/jit8_best.pt",
+  "kl_coef": 0.3,
+  "kl_decay": 300,
+  "seed": 31
+ },
+ "name": "anchor_wall_s31",
+ "control": "anchor_wall_repro",
+ "notes": "Fourth seed (31) of the plain anchor recipe (rollout 128, KL 0.3 -> 0 by u300, w_wall 0.02, lr 5e-5, start x_kickstart_best): seeds 7 / 11 / 23 spread 65 Elo, one more seed makes the noise band and the mean of the control firmer for every variant. Trained on the MacBook Air, night of 2026-11-23. Judge by Elo and agf / aga after the ladder has settled."
+}

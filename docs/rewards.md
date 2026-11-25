@@ -16,20 +16,24 @@ no hand-made positioning for defence or keeper (decided by the user, 2026-11-14 
 | `random_start` 0.6 | | 60% of episodes start from a random layout | in the minimal set |
 | **`w_wall` 0.02** | **default since 2026-11-18** | penalty for a player pressed against the outer wall 2+ decisions in a row | `anchor_wall_strong`: wall time **8.4%** vs 21.9% (control), 17.9% at 0.005; league 2.81 vs 2.91 (z -0.6, no cost). Added to the defaults by the user's yes |
 
-Not rewards but loss terms that proved essential:
+Seed noise (2026-11-23): one recipe over three seeds spans **65 Elo** (1682-1747). A single run that differs by less cannot be read; test a term over 2-3 seeds.
+
+Not rewards but loss terms and settings that proved essential:
 - **Teacher KL (kickstarting)**, `kl_coef` 0.2-0.5 towards jit8: the only thing that stopped the 46-number net drifting down. Unanchored runs (`minimal`, `wall`, `strong_opponents`) all declined; anchored ones stayed at 2.8-2.9.
-- **Learning rate 5e-5** with a 30-update warm-up (3e-4 and 1e-4 drifted without an anchor).
+- **Batch size** (2026-11-24, 3 seeds each): rollout 256 / 512 rate about +36 / +40 Elo over rollout 128 (z 2.1 / 2.4) and shrink the seed spread from sd 32 to 10 / 5. 512 costs twice the time of 256 for no extra gain. **Rollout 256 is the default since 2026-11-24** (user yes).
+- **Constant teacher KL 0.15** (2026-11-24, 3 seeds): no Elo gain (+15), fewer goals conceded (0.55 vs 0.66), no decline up to u600.
+- **Length** (2026-11-25, 3 seeds on rollout 256): 600 updates with the KL fading over 600: +9, inside the noise; no late collapse.
+- **Learning rate 5e-5** with a 30-update warm-up (3e-4 and 1e-4 drifted without an anchor). 1e-4 with the anchor and rollout 256 (2026-11-25, 3 seeds): +17 Elo, inside the noise, seed spread sd 40 vs 10: no reason to change.
 
 ## 1b. Being tested now
 | Term | Weight | What it does | Evidence |
 |---|---|---|---|
-| `w_corner` | 0.01 (`anchor_corner2`), 0.04 (`anchor_corner_strong`) | penalty to every learner per decision while our team put the ball in a corner (last touch ours, ball within 150 px of both lines) | the user's idea (2026-11-18). Scouting of `anchor_ctrl` / `anchor_wall_strong`: ball in a corner **22.9% / 23.4%** of the time (about twice the share of the pitch the corners cover), **13.4% / 14.4%** after our touch. 0.01 (`anchor_corner2`, 2026-11-19): ours-in-corner 12.0% vs 14.4%, league 2.81 vs 2.81: no cost, effect inside the scouting noise. 0.04 (`anchor_corner_strong`, 2026-11-19): ours-in-corner **10.0%**, any corner **16.9%** (dose response 14.4 → 12.0 → 10.0), league 2.69 vs 2.81 (z -0.8, no difference); possession 41.7% (others 45–52%) and fewer passes (22.8 vs 29.5): watch. Works at 0.04; to the defaults only if the user agrees. Being combined with w_wall on the wide net (`wide_wallcorner`) |
+| (nothing at the moment) | | | `w_corner` moved to section 3 on 2026-11-25 |
 
 ## 2. Unsure (never tested alone on a stable line, or tested only inside a mix)
-Parked in `exp/parked/`; `xga` goes first when they come back. The test belongs on the anchored line (start `kickstart` u600, KL on), one term per run against `anchor_ctrl`-style controls.
+Parked in `exp/parked/`; `xga` was retested first (2026-11-21, `anchor_xga`: worse, see section 3). The test belongs on the anchored line (start `kickstart` u600, KL on), one term per run against `anchor_ctrl`-style controls.
 | Term | Idea | What we know |
 |---|---|---|
-| `w_xga` | dense version of goals conceded (opponent xG) | only seen inside the full mix (t46/t47), which declined; the RL review picked it first to retest |
 | `w_win`, `w_draw` | bonus at the end of the match | only inside the full mix |
 | `w_tackle` (cap `def_cap`) | tackles and interceptions | only inside the full mix |
 | `w_xg` (cap `xg_cap`) | quality of own shots | only inside the full mix |
@@ -44,5 +48,7 @@ Parked in `exp/parked/`; `xga` goes first when they come back. The test belongs 
 | **heavier goal-side 0.01 and compact 0.008** (t47 from u100) | u100 1.88 -> u200 1.19 right after the change; reverting did not recover it. Treat as harmful until retested alone |
 | **hand-made defence / keeper positioning** (goal-line cover, keeper position) | excluded by the user's decision: the net should find its own solution (e.g. high pressing without a keeper) |
 | **unanchored training** (any reward set) | `minimal` 1.79 -> 0.67, `wall` 1.58 -> 0.96, `strong_opponents` 1.88 -> 1.29 within 200 updates. A loss problem, not a reward term |
+| **`w_xga` 2.0** on the anchored line (`anchor_xga`, 2026-11-21) | Elo **1658** (ladder of 2026-11-23) vs 1682-1747 for three seeds of the same recipe without it (`anchor_wall_repro`, `_s11`, `_s23`): at the lower edge on Elo, but it concedes **0.89** per match (adjusted) vs 0.57-0.68 for every seed, scoring about the same (1.81 vs 1.48-1.88); h2h RL4 / RL5 0.50 / 0.38. The penalty on the opponent's xG made the defence worse. A smaller weight was not tried |
+| **`w_corner` 0.04** (corner penalty, the user's idea 2026-11-18) | Single runs (2026-11-19) cut corner play (ours-in-corner 14.4% -> 12.0% at 0.01 -> 10.0% at 0.04) with no visible cost in league points. Over three seeds on rollout 256 (`b256_corner*`, 2026-11-25): Elo **1629** vs 1675 for the same seeds without it (-46, z -2.4, below on every seed), scored 1.26 vs 1.50; the corner effect showed on one seed only (8.0% vs 13.6%; the others 12.5% / 12.1% vs 11.9% / 11.7%) |
 | **`w_wall` 0.005** | too weak: 17.9% vs 21.9% wall time, within noise |
 | more training of what we have (`kickstart_strong`, `anchor_ctrl`) | flat: +0.06 and +0.09 pts, no difference; the rule league is saturated near 3 |

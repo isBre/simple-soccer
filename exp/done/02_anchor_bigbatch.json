@@ -1,0 +1,18 @@
+{
+ "name": "anchor_bigbatch",
+ "start": "out_5v5/ckpt/x_kickstart_best.pt",
+ "updates": 300,
+ "lr": 5e-05,
+ "rewards": {
+  "w_wall": 0.02
+ },
+ "args": {
+  "teacher": "out_5v5/ckpt/jit8_best.pt",
+  "kl_coef": 0.3,
+  "kl_decay": 300,
+  "rollout": 256,
+  "seed": 7
+ },
+ "control": "anchor_wall_repro",
+ "notes": "Batch size: rollout 256 instead of 128 (twice the samples per update, same lr, same KL schedule 0.3 -> 0 by u300). The seed spread (1682-1747) suggests noisy updates; does a larger batch lift the level or narrow the spread? Costs about twice the time per update. Base recipe = anchor recipe (start kickstart u600 = x_kickstart_best, rule bots + self-play, teacher jit8, w_wall 0.02, lr 5e-5). Seed noise of that recipe is about 65 Elo (2026-11-23 review), so each variant runs on two seeds (7, 11) against the matching seed of the plain recipe. Trained on the MacBook Air, 2026-11-23 evening. Judge by Elo and agf / aga after the ladder has settled."
+}

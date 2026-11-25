@@ -1,0 +1,18 @@
+{
+ "name": "anchor_bigbatch_s23",
+ "start": "out_5v5/ckpt/x_kickstart_best.pt",
+ "updates": 300,
+ "lr": 5e-05,
+ "rewards": {
+  "w_wall": 0.02
+ },
+ "args": {
+  "teacher": "out_5v5/ckpt/jit8_best.pt",
+  "seed": 23,
+  "kl_coef": 0.3,
+  "kl_decay": 300,
+  "rollout": 256
+ },
+ "control": "anchor_wall_s23",
+ "notes": "Third seed of anchor_bigbatch (rollout 256, KL 0.3 -> 0 by u300): seeds 7 / 11 were provisionally +40 / +17 over the plain recipe (inside the error bars); a third seed makes it 3 vs 3. Base recipe = anchor recipe (start kickstart u600 = x_kickstart_best, rule bots + self-play, teacher jit8, w_wall 0.02, lr 5e-5). Seed noise of that recipe is about 65 Elo, so variants run on more than one seed and are compared with the plain recipe of the same seed (seed 7 anchor_wall_repro, 11 anchor_wall_s11, 23 anchor_wall_s23). Trained on the MacBook Air, night of 2026-11-23. Judge by Elo and agf / aga after the ladder has settled."
+}

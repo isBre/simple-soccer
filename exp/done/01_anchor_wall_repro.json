@@ -1,0 +1,16 @@
+{
+ "start": "out_5v5/ckpt/x_kickstart_best.pt",
+ "updates": 300,
+ "lr": 5e-05,
+ "rewards": {
+  "w_wall": 0.02
+ },
+ "args": {
+  "teacher": "out_5v5/ckpt/jit8_best.pt",
+  "kl_coef": 0.3,
+  "kl_decay": 300
+ },
+ "name": "anchor_wall_repro",
+ "control": "anchor_wall_strong",
+ "notes": "Exact re-run of anchor_wall_strong (same spec, seed 7) on the current Python match core. anchor_wall_strong (1806) was trained on the Pi's old core; its same-seed descendants on the Python core (anchor_corner2 1738, anchor_corner_strong 1735) rate about 70 lower. This is the proper control for anchor_xga / rank_anchor and the runs below. Base recipe = anchor_wall_strong (rule bots + self-play, KL 0.3 to jit8 decaying to 0 at u300, w_wall 0.02, lr 5e-5, start kickstart u600 = x_kickstart_best). Trained on the MacBook Air while the user is at work (2026-11-23). Judge by Elo and agf / aga after the ladder has settled."
+}

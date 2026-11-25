@@ -1,0 +1,19 @@
+{
+ "name": "rank_persist",
+ "obs": "rank",
+ "start": "out_5v5/ckpt/x_rank_start.pt",
+ "updates": 600,
+ "lr": 5e-05,
+ "rewards": {
+  "w_wall": 0.0
+ },
+ "args": {
+  "teacher": "out_5v5/ckpt/jit8_best.pt",
+  "kl_coef": 0.12,
+  "kl_decay": 1000,
+  "opp_models": "out_5v5/ckpt/jit8_best.pt,data/models/rl_5v5_arena_v4.json,data/models/rl_5v5_arena_v5.json",
+  "pfsp": 0.75
+ },
+ "notes": "First run with role-free derived observation features (user OK 2026-11-21): obs 'rank' = the 46-number team observation + 10 ranks (me and my 4 teammates nearest first: rank in our team by distance to the ball and by depth). Start = kickstart_persist u400 with zero weights on the 10 new inputs (rl/pad_inputs.py: plays identically at u0). Everything else is persist_long2 (same recipe, seed, 600 updates), so the only difference vs the control is the observation. Trained on the MacBook Air (M4, fanless), background QoS. Expectation: if sorting players is what the 128-wide net cannot do, h2h vs RL4/RL5 should rise above the 0.76-1.09 band.",
+ "control": "persist_long2"
+}

@@ -124,7 +124,7 @@ def settings(st, spec):
     if rew is None or args is None:                    # queued: as it would start now
         rew, args = tracker.effective(spec)
     rew = {**tracker.minimal_for(lab_time(st.get("started"))), **rew}   # older status files lack rewards added later
-    args = {**tracker.DEFAULTS, **args}
+    args = {**tracker.defaults_for(lab_time(st.get("started"))), **args}
     out = {"start": ("start", spec.get("start"))}
     out.update({k: ("reward", v) for k, v in rew.items()})
     out.update({k: ("option", v) for k, v in args.items() if k not in OPERATIONAL})
@@ -143,7 +143,7 @@ def changes(st, spec):
     else:
         ctrl = None
         mn = tracker.minimal_for(lab_time(st.get("started")))
-        ref = {**{k: ("reward", v) for k, v in mn.items()}, **{k: ("option", v) for k, v in tracker.DEFAULTS.items()}}
+        ref = {**{k: ("reward", v) for k, v in mn.items()}, **{k: ("option", v) for k, v in tracker.defaults_for(lab_time(st.get("started"))).items()}}
         skip = ("start",)                              # the start net is the reference itself
     out = []
     for k, (kind, v) in mine.items():

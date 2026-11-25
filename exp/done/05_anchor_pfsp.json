@@ -1,0 +1,18 @@
+{
+ "start": "out_5v5/ckpt/x_kickstart_best.pt",
+ "updates": 300,
+ "lr": 5e-05,
+ "rewards": {
+  "w_wall": 0.02
+ },
+ "args": {
+  "teacher": "out_5v5/ckpt/jit8_best.pt",
+  "kl_coef": 0.3,
+  "kl_decay": 300,
+  "opp_models": "out_5v5/ckpt/jit8_best.pt,data/models/rl_5v5_arena_v4.json,data/models/rl_5v5_arena_v5.json",
+  "pfsp": 0.75
+ },
+ "name": "anchor_pfsp",
+ "control": "anchor_wall_strong",
+ "notes": "Opponents only: anchor recipe + the persist line's strong opponents (jit8, RL4, RL5) with PFSP 0.75. The persist runs rate 60-80 below the anchor line and differ in opponents and in the KL schedule; this isolates the opponents. Base recipe = anchor_wall_strong (rule bots + self-play, KL 0.3 to jit8 decaying to 0 at u300, w_wall 0.02, lr 5e-5, start kickstart u600 = x_kickstart_best). Trained on the MacBook Air while the user is at work (2026-11-23). Judge by Elo and agf / aga after the ladder has settled. Compare with anchor_wall_repro (same core, seed 7), queued first; control is set to anchor_wall_strong only because a control must exist when the spec is added."
+}
