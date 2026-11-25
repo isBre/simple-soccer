@@ -342,3 +342,33 @@ inside this table are comparable, the numbers of the review above are superseded
   ran as its own process (`logs/dashboard_mac.out`) because the app's preview server was stopped twice. Thermal guard never logged a pause.
 - Decision (user, 2026-11-24): rollout 256 is the training default from now on (standing decisions). Twice the samples per update
   means about twice the time per update: on the Pi a 300-update run takes about twice as long as before.
+
+### Review 2026-11-25: learning rate, length and `w_corner` on the rollout-256 default, over seeds (MacBook Air, judged by Elo and goals)
+Nine runs on the new default (anchor recipe, rollout 256: start `x_kickstart_best`, rule bots + self-play, teacher jit8 KL 0.3 -> 0,
+w_wall 0.02, lr 5e-5), each variant on seeds 7 / 11 / 23 against `anchor_bigbatch*` of the same seed; 2026-11-24 08:07 - 23:07, then 120
+ladder rounds until 00:06. New entries about 250 games (±40), the controls 320-510. The scale moved down again (jit8 1788 -> 1764):
+only differences inside this table are comparable.
+
+| recipe | Elo of seeds 7 / 11 / 23 (best checkpoint) | mean | sd | agf | aga | vs control (Welch z) |
+|---|---|---|---|---|---|---|
+| control `anchor_bigbatch*` (rollout 256, 300 upd) | 1675 / 1666 / 1685 (u250 / u250 / u250) | **1675** | 10 | 1.50 | 0.61 | |
+| `b256_lr1e4*`: lr 1e-4 | 1666 / 1672 / **1738** (u250 / u250 / u300) | 1692 | 40 | **1.67** | 0.63 | +17 (0.7) |
+| `b256_long*`: 600 upd, KL 0.3 -> 0 by u600 | 1698 / 1649 / 1706 (u550 / u450 / u300) | 1684 | 31 | 1.47 | 0.57 | +9 (0.5) |
+| `b256_corner*`: + `w_corner` 0.04 | 1642 / 1593 / 1652 (u250 / u50 / u150) | **1629** | 32 | 1.26 | 0.66 | **-46 (-2.4)** |
+| reference: rollout 128 (4 seeds), rollout 512 | 1641 (sd 31), 1686 (sd 2) | | | | | |
+| jit8_best / RL Team 5 / `anchor_wall_strong` | 1764 / 1761 / 1706 | | | 1.69 / 1.80 / 1.53 | 0.42 / 0.52 / 0.52 | |
+
+- **`w_corner` 0.04 costs Elo.** Below the control on every seed (-33, -73, -33), scores fewer goals (1.26 vs 1.50). Its effect on corner
+  play only showed on seed 7 (ours-in-corner 8.0% vs 13.6%, any corner 16.1% vs 22.7%); seeds 11 / 23 were at the control's level
+  (12.5% / 12.1% vs 11.9% / 11.7%). The single-run result of 2026-11-19 (10.0%, "no cost") does not hold over seeds: to "not good".
+- **lr 1e-4: no difference.** Seed 23 is the best of the batch (1738), seeds 7 / 11 equal the control; more goals scored (1.67 vs 1.50) but
+  the seed spread is back to sd 40 (control 10). It undoes what the larger batch bought. lr 5e-5 stays.
+- **600 updates: no difference.** +9, but no collapse after the KL has faded either (on rollout 128, `anchor_long` fell to about 1480 by
+  u900); slightly fewer goals conceded (0.57 vs 0.61). Two of three best checkpoints are late (u450, u550).
+- **Overall, three days on the Mac:** the larger batch is the only change that helped (+35, smaller spread); KL schedules, opponents,
+  length, learning rate, the rank observation and the reward terms tried (`w_xga`, `w_corner`) are noise or worse. The best runs stay
+  70-90 Elo below jit8 / RL Team 5. The plateau of the 46-number net is not moved by tuning the PPO recipe.
+- Setup: the Mac slept 13:26-21:33 during `b256_long_s23` (on battery, no health samples); the runner resumed when it woke, nothing was
+  lost. The thermal guard logged no pause.
+- Next, for the user: a bigger lever than recipe tuning (net size or the distillation of the teacher on the current default, the
+  observation within the standing decisions), or stop the recipe search here.

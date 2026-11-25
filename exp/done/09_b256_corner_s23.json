@@ -1,0 +1,18 @@
+{
+ "name": "b256_corner_s23",
+ "start": "out_5v5/ckpt/x_kickstart_best.pt",
+ "updates": 300,
+ "lr": 5e-05,
+ "rewards": {
+  "w_wall": 0.02,
+  "w_corner": 0.04
+ },
+ "args": {
+  "teacher": "out_5v5/ckpt/jit8_best.pt",
+  "kl_coef": 0.3,
+  "kl_decay": 300,
+  "seed": 23
+ },
+ "control": "anchor_bigbatch_s23",
+ "notes": "w_corner 0.04 (penalty while our team has put the ball in a corner) over three seeds: as single runs it cut corner play (ours-in-corner 14.4% -> 10.0%) with no clear cost, but never over seeds. One term at a time (standing decision). Base recipe = the anchor recipe on the new default rollout 256 (start x_kickstart_best, rule bots + self-play, teacher jit8 KL 0.3 -> 0 by u300, w_wall 0.02, lr 5e-5), i.e. anchor_bigbatch (1700 over seeds 7 / 11 / 23, sd 10). Each variant runs on seeds 7 / 11 / 23 against the anchor_bigbatch run of the same seed. Trained on the MacBook Air, 2026-11-24. Judge by Elo and agf / aga after the ladder has settled."
+}

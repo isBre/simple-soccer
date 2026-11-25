@@ -43,3 +43,12 @@
 {"t": "2026-11-23T20:49:07", "action": "queue_add", "name": "anchor_batch512_s23", "position": null}
 {"t": "2026-11-23T20:49:07", "action": "queue_add", "name": "anchor_bb_klconst_s23", "position": null}
 {"t": "2026-11-23T20:49:07", "action": "queue_add", "name": "anchor_wall_s31", "position": null}
+{"t": "2026-11-24T08:07:09", "action": "queue_add", "name": "b256_lr1e4", "position": null}
+{"t": "2026-11-24T08:07:09", "action": "queue_add", "name": "b256_long", "position": null}
+{"t": "2026-11-24T08:07:09", "action": "queue_add", "name": "b256_corner", "position": null}
+{"t": "2026-11-24T08:07:09", "action": "queue_add", "name": "b256_lr1e4_s11", "position": null}
+{"t": "2026-11-24T08:07:09", "action": "queue_add", "name": "b256_long_s11", "position": null}
+{"t": "2026-11-24T08:07:09", "action": "queue_add", "name": "b256_corner_s11", "position": null}
+{"t": "2026-11-24T08:07:09", "action": "queue_add", "name": "b256_lr1e4_s23", "position": null}
+{"t": "2026-11-24T08:07:10", "action": "queue_add", "name": "b256_long_s23", "position": null}
+{"t": "2026-11-24T08:07:10", "action": "queue_add", "name": "b256_corner_s23", "position": null}
