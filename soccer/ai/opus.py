@@ -18,6 +18,8 @@ different is how it thinks:
   and a ball lost high up is counter-pressed by a second player for two seconds.
 
 Plugged in through the style (data/styles/opus_high.json: "brain": "opus"); see soccer/ai/__init__.py."""
+import copy
+import os
 import math
 
 import numpy as np
@@ -25,7 +27,7 @@ import numpy as np
 from ..match import KICK_RANGE, KICK_STRENGTH
 from ..rating import shot_xg
 from ..vec import INF, clamp, dot, from_angle, lerpf, normalized, rotated
-from .rules import StyleBot, _compensated_dir, intercept
+from .rules import StyleBot, TeamBrain, _ball_time, _compensated_dir, intercept
 
 DAMP = 0.99
 TS = np.arange(1.0, 151.0, 2.0)                    # ticks after the kick at which the ball path is sampled
@@ -68,6 +70,26 @@ SHOT_VETO = 0.35        # finisher: a shot whose clean chance (simulated) is bel
 SHOT_VETO_FROM = 150.0  # ... from further than this from goal
 BOX2_FROM = 2.0         # deep attack: beyond this share of the half a second runner attacks the far post (2 = off; no gain measured)
 BOX2_DEPTH = 60.0       # px from the goal line where the second runner waits
+# v6: expected threat measured from play (Opus vs every ladder entry, 492 matches, 443k possession samples, 2026-11-24): the
+# chance the team on the ball scores within 10 s, by a logistic model of the shot angle, progress, how many of their outfield
+# players are goal-side of the ball and the nearest opponent. Replaces the hand formula in pos_value when XT = 1.
+XT = 0
+FP_MARGIN = 9.0         # final third: a simulated pass worth this much more than the finisher's dribble / shot is played (9 = off) ...
+FP_OK = 0.6             # ... if it arrives with at least this chance ...
+FP_FROM = 0.33          # ... beyond this share of the half
+SECOND_FROM = 2.0       # attack beyond this share of the half against a deep block: one supporter waits for the second ball (2 = off) ...
+SECOND_DEPTH = 210.0    # ... this far from their goal line, on the ball's side, ...
+RO = 1                  # final third: the finisher's choice is checked by playing the candidates forward (rollouts; 0 = off) ...
+RO_H = 75               # ... this many ticks, in a copy of the match where the opponents are a generic team (RO_STYLE) ...
+RO_MARGIN = 0.03        # ... and another candidate replaces the finisher's choice when it scores this much better
+RO_STYLE = "balanced"
+RO_NEAR = 60.0          # ... only when the carrier is this close to the ball (about to play it)
+RO_REPLAN = 0           # a new plan only this many ticks after the last one; in between its winner is kept (0 = every decision)
+RO_POSTS = 1            # extra candidates: shots at the near and the far post ...
+RO_THRU = (60.0, 120.0, 190.0)  # ... balls into the space this far ahead of each team-mate (through balls) ...
+RO_DRIB = (-1.0, -0.5, 0.5, 1.0)  # ... and carrying the ball at these angles (radians) off the line to goal
+SECOND_NB = 3           # ... when at least this many of their outfield players are goal-side of the ball
+XT_W = (-4.3998, 2.9908, 5.8547, -3.2558, -3.5797, 2.4600, 0.0806, 0.2492, 0.8553, -2.4097, 1.5043, -1.3011)
 SUPPORT_EVERY = 6                                  # ticks between two support-spot searches
 
 
@@ -138,7 +160,162 @@ def pos_value(m, team, pt):
     gx = ax * pd.half_w
     xg = shot_xg(pt, gx, pd.goal_half)
     prog = (pt.real * ax / pd.half_w + 1.0) * 0.5
+    if XT:
+        other = m.brains[1 - team]
+        kp = getattr(other, "keeper", None)
+        x = pt.real * ax
+        nb, dopp = 0, INF
+        for o in m.team_lists[1 - team]:
+            d = abs(o.pos - pt)
+            if d < dopp:
+                dopp = d
+            if o is not kp and o.pos.real * ax > x:
+                nb += 1
+        return xt_value(xg, prog, nb, dopp)
     return VAL0 + VALXG * xg + VALPROG * prog * prog
+
+
+def _clone(m, opp):
+    """A copy of the match for a rollout: shared static data is not copied, and team `opp` is played by a generic team
+    (RO_STYLE) instead of its own brain / net (Opus does not read the opponents' minds)."""
+    from ..data import database
+    st = database().styles[RO_STYLE]
+    memo = {id(m.cfg): m.cfg, id(m.ev_log): [], id(m.brains[opp]): None}
+    for s_ in m.styles:
+        memo[id(s_)] = s_
+    for p in m.team_lists[opp]:
+        memo[id(p.bot_ai)] = None
+        memo[id(p.pdef)] = p.pdef
+    for p in m.players:
+        if hasattr(p, "pdef"):
+            memo[id(p.pdef)] = p.pdef
+    memo[id(st)] = st
+    c = copy.deepcopy(m, memo)
+    c._rollout = True
+    c.log_events = False
+    c.brains[opp] = TeamBrain(opp, st)
+    for p in c.team_lists[opp]:
+        p.bot_ai = StyleBot(st)
+    c.brains[opp].update(c)
+    return c
+
+
+def _set_cand(c, b, cand, err):
+    """Give the copy's carrier bot a candidate (kind, kick, aim, mate uid)."""
+    kind, kick, aim, mate = cand
+    b._kind, b._kick, b._aim = kind, kick, aim
+    b._mate = c.by_uid[mate] if mate is not None else None
+    b._err = err if kick else 0.0
+    b._decided = c.tick
+
+
+def _play_out(c, team, s0):
+    """RO_H ticks of a rollout copy: +1 / -1 for a goal, else the value of the ball for whoever touched it last."""
+    for _ in range(RO_H):
+        c.step()
+        if c.scores[team] > s0[team]:
+            return 1.0
+        if c.scores[1 - team] > s0[1 - team]:
+            return -1.0
+    lt = c.last_touch
+    if lt is not None and lt.team == team:
+        return pos_value(c, team, c.ball_pos)
+    return -pos_value(c, 1 - team, c.ball_pos)
+
+
+# Rollouts in worker processes (live play only: the web app calls use_pool). The answers are the same as in-process; the
+# decision tick just takes ~1/n of the time, so a live match does not stall while the finisher thinks.
+_POOL = None
+_POOL_N = 0
+
+
+def use_pool(n):
+    """Run the finisher's rollouts on n worker processes (0 = in-process). The processes start on first use."""
+    global _POOL, _POOL_N
+    if _POOL is not None:
+        _POOL.shutdown(wait=False, cancel_futures=True)
+    _POOL, _POOL_N = None, max(0, int(n))
+
+
+def _pool():
+    global _POOL
+    if _POOL is None and _POOL_N > 0:
+        import concurrent.futures
+        import multiprocessing
+        _POOL = concurrent.futures.ProcessPoolExecutor(_POOL_N, mp_context=multiprocessing.get_context("spawn"),
+                                                       initializer=_pool_init)
+    return _POOL
+
+
+def realtime():
+    """A match played in real time (the web game) has an Opus team: put its rollouts on worker processes, so a decision
+    tick does not stall the stream (~45 ms instead of ~150 ms at the worst), and start the workers now. The answers are the
+    same either way. Workers: SOCCER_OPUS_WORKERS, else the CPU count minus 2, at most 6."""
+    global _REALTIME
+    if not _REALTIME:
+        _REALTIME = True
+        n = os.environ.get("SOCCER_OPUS_WORKERS")
+        use_pool(int(n) if n is not None else min(6, max(0, (os.cpu_count() or 1) - 2)))
+    pool = _pool()
+    if pool is not None:
+        for _ in range(_POOL_N):
+            pool.submit(_noop)
+
+
+_REALTIME = False
+
+
+def _noop():
+    return None
+
+
+def _pool_init():
+    try:
+        os.nice(5)
+    except OSError:
+        pass
+
+
+def _pool_job(blob, team, uid, s0, cands, err):
+    """Score candidates on a pickled rollout copy: each one plays out on its own fresh load of it."""
+    import pickle
+    out = []
+    for cand in cands:
+        c = pickle.loads(blob)
+        _set_cand(c, c.by_uid[uid].bot_ai, cand, err)
+        out.append(_play_out(c, team, s0))
+    return out
+
+
+def _scores(m, p, cands, err):
+    """Rollout score of each candidate (kind, kick, aim, mate): one copy of the match with the generic opponents, pickled
+    once, then loaded fresh for every candidate; on the worker pool when there is one (same answers, less waiting)."""
+    import pickle
+    team = p.team
+    blob = pickle.dumps(_clone(m, 1 - team), protocol=pickle.HIGHEST_PROTOCOL)
+    plain = [c[:3] + ((c[3].uid if c[3] is not None else None),) for c in cands]
+    s0 = list(m.scores)
+    pool = _pool()
+    if pool is None:
+        return _pool_job(blob, team, p.uid, s0, plain, err)
+    n = min(_POOL_N, len(plain))
+    futs = [pool.submit(_pool_job, blob, team, p.uid, s0, plain[i::n], err) for i in range(n)]
+    scores = [0.0] * len(plain)
+    for i, f in enumerate(futs):
+        for j, v in enumerate(f.result()):
+            scores[i + j * n] = v
+    return scores
+
+
+def xt_value(xg, prog, nb, dopp):
+    """The measured expected threat (XT_W): works on floats and on numpy arrays."""
+    w = XT_W
+    nbn = np.minimum(nb, 4) / 4.0
+    free = (nb == 0) * 1.0
+    pr = np.minimum(dopp, 120.0) / 120.0
+    z = (w[0] + w[1] * xg + w[2] * prog + w[3] * prog * prog + w[4] * nbn + w[5] * nbn * prog + w[6] * free * prog
+         + w[7] * pr + w[8] * pr * prog + w[9] * xg * nbn + w[10] * nbn * nbn + w[11] * nbn * prog * prog)
+    return 1.0 / (1.0 + np.exp(-z))
 
 
 class OpusBrain:
@@ -178,6 +355,7 @@ class OpusBrain:
         self.opp_primary = None
         self.lost_tick = -999
         self.lost_x = 0.0
+        self._second = None
 
     # ------------------------------------------------------------ team plan
 
@@ -319,12 +497,25 @@ class OpusBrain:
                 self.targets[r2.uid] = complex(ax * (hw - BOX2_DEPTH), sy * pd.goal_half * 1.3)
                 self.jobs[r2.uid] = "box2"
                 free = [sp for sp in free if sp is not r2]
+        if bx > hw * SECOND_FROM and free and self._n_behind(m, ax, bx) >= SECOND_NB:
+            # second ball against a deep block: blocked shots and clearances come out to the edge of the box
+            spt = complex(ax * (hw - SECOND_DEPTH), clamp(ball.imag * 0.5, -hh * 0.4, hh * 0.4))
+            sb = min(free, key=lambda sp: abs(sp.pos - spt) - (40.0 if sp is self._second else 0.0))
+            self._second = sb
+            self.targets[sb.uid] = spt
+            self.jobs[sb.uid] = "second"
+            free = [sp for sp in free if sp is not sb]
         if m.tick - self._support_tick >= SUPPORT_EVERY or any(sp.uid not in self._support for sp in free):
             self._support_tick = m.tick
             self._support = self._support_spots(m, free, ax, ball, carrier)
         for sp in free:
             self.targets[sp.uid] = self._support.get(sp.uid, sp.pos)
             self.jobs[sp.uid] = "support"
+
+    def _n_behind(self, m, ax, bx):
+        """How many of their outfield players are goal-side of the ball (how deep they defend)."""
+        kp = getattr(m.brains[1 - self.team], "keeper", None)
+        return sum(1 for o in m.team_lists[1 - self.team] if o is not kp and o.pos.real * ax > bx)
 
     def _support_spots(self, m, free, ax, ball, carrier):
         """Open spots for the supporting players: valuable, reachable by a pass, away from opponents and from each other."""
@@ -346,11 +537,18 @@ class OpusBrain:
         ang = np.abs(np.arctan2(pd.goal_half - gy, dxg) - np.arctan2(-pd.goal_half - gy, dxg))
         xg = np.clip((ang / 1.8) ** 1.6 * 0.75, 0.01, 0.8)
         prog = (gx / hw + 1.0) * 0.5
-        val = (VAL0 + VALXG * xg + VALPROG * prog * prog) / 0.35
         # space: distance to the nearest opponent, and how open the lane from the ball is
         ox = np.array([o.pos.real for o in opps])[:, None]
         oy = np.array([o.pos.imag for o in opps])[:, None]
         d_opp = np.sqrt((ox - wx[None]) ** 2 + (oy - gy[None]) ** 2).min(axis=0)
+        if XT:
+            other = m.brains[1 - self.team]
+            kp = getattr(other, "keeper", None)
+            oxo = np.array([o.pos.real * ax for o in opps if o is not kp])[:, None]
+            nb = (oxo > gx[None]).sum(axis=0) if len(oxo) else np.zeros_like(gx)
+            val = xt_value(xg, prog, nb, d_opp) / 0.35
+        else:
+            val = (VAL0 + VALXG * xg + VALPROG * prog * prog) / 0.35
         lx, ly = wx - ball.real, gy - ball.imag
         l2 = np.maximum(lx * lx + ly * ly, 1.0)
         tt = np.clip(((ox - ball.real) * lx[None] + (oy - ball.imag) * ly[None]) / l2[None], 0.0, 1.0)
@@ -626,6 +824,110 @@ class OpusBot(StyleBot):
         """The finisher's choice (StyleBot), with one check of our own: a shot from distance that the simulation says the
         defenders will reach (clean chance below SHOT_VETO) is not taken; the carrier keeps the ball and goes on."""
         StyleBot._decide_action(self, m, p, brain, bp)
+        self._veto(m, p, bp)
+        if FP_MARGIN < 9.0 and self._kind in ("dribble", "shoot"):
+            self._final_pass(m, p, brain, bp)
+        if RO and not getattr(m, "_rollout", False) and abs(p.pos - bp) < RO_NEAR:
+            self._rollout_choice(m, p, brain, bp)
+
+    # ------------------------------------------------------------ rollouts
+
+    def _rollout_choice(self, m, p, brain, bp):
+        """Play each candidate (the finisher's choice, a shot, a dribble at goal, a pass to each team-mate in range) RO_H
+        ticks forward in a copy of the match. In the copy our team plays as Opus and the opponents as a generic team (we do
+        not know how they think, only where they are); the outcome is a goal (+1 / -1) or the value of the ball for whoever
+        has it at the end. Another candidate replaces the finisher's choice only when it does clearly better."""
+        lp = getattr(self, "_last_plan", None)
+        if RO_REPLAN and lp is not None and m.tick - lp[0] <= RO_REPLAN:
+            if lp[1] is not None:                   # the plan's winner holds: no new rollouts yet
+                kind, kick, aim, uid = lp[1]
+                self._kind, self._kick, self._aim = kind, kick, aim
+                self._mate = m.by_uid.get(uid) if uid is not None else None
+                self._err = p.rng.gauss(0.0, p.err_finish if kind == "shoot" else p.err_pass) if kick else 0.0
+            return
+        cands = self._ro_cands(m, p, brain, bp)
+        if len(cands) < 2:
+            return
+        err = self._err
+        scores = _scores(m, p, cands, err)
+        best = max(range(len(cands)), key=lambda i: scores[i])
+        self._last_plan = (m.tick, None)
+        if best != 0 and scores[best] > scores[0] + RO_MARGIN:
+            kind, kick, aim, mate = cands[best]
+            self._kind, self._kick, self._aim, self._mate = kind, kick, aim, mate
+            self._err = p.rng.gauss(0.0, p.err_finish if kind == "shoot" else p.err_pass) if kick else 0.0
+            self._last_plan = (m.tick, (kind, kick, aim, mate.uid if mate is not None else None))
+
+    def _ro_cands(self, m, p, brain, bp):
+        """The candidates: this bot's current choice first, then shots, dribbles, passes to feet and into space."""
+        ax = m.attack_dir(p.team)
+        pd = m.pitch
+        goal = complex(ax * pd.half_w, 0.0)
+        cands = [(self._kind, self._kick, self._aim, self._mate)]
+        if self._kind != "shoot" and abs(bp - goal) < 420.0:
+            cands.append(("shoot", True, self._shot_eval(m, p, bp, goal, ax)[0], None))
+        if self._kind != "dribble":
+            cands.append(("dribble", False, self._dribble_aim(m, p, bp, goal), None))
+        if RO_POSTS and abs(bp - goal) < 420.0:
+            gh = pd.goal_half - 14.0
+            gh = max(gh - min(gh * 0.85, 1.5 * p.err_finish * abs(bp - goal)), 12.0)
+            for y in (-gh, gh):
+                cands.append(("shoot", True, complex(goal.real + ax * 10.0, y), None))
+        for off in RO_DRIB:
+            dr = rotated(normalized(goal - bp), off)
+            q2 = bp + dr * 120.0
+            if abs(q2.imag) < pd.half_h - 25.0:
+                cands.append(("dribble", False, bp + dr * 400.0, None))
+        for q in m.team_lists[p.team]:
+            if q is p or q is brain.keeper:
+                continue
+            dist = abs(bp - q.pos)
+            if q is not self._mate and 40.0 < dist < 380.0:
+                aim = q.pos + q.vel * min(_ball_time(dist), 40.0) * 0.8
+                aim = complex(clamp(aim.real, -pd.half_w + 15.0, pd.half_w - 15.0), clamp(aim.imag, -pd.half_h + 15.0, pd.half_h - 15.0))
+                cands.append(("pass", True, aim, q))
+            for lead in RO_THRU:
+                aim = q.pos + complex(ax * lead, 0.0)
+                if abs(aim.real) > pd.half_w - 20.0 or (aim.real - bp.real) * ax < 20.0:
+                    continue
+                if 40.0 < abs(aim - bp) < 420.0:
+                    cands.append(("pass", True, aim, q))
+        return cands
+
+    def _final_pass(self, m, p, brain, bp):
+        """The finisher dribbles or shoots; when the simulation finds a pass that is clearly worth more (a team-mate free
+        in a better spot: the cut-back, the ball across the box), play the pass instead."""
+        ax = m.attack_dir(p.team)
+        pd = m.pitch
+        if bp.real * ax < pd.half_w * FP_FROM:
+            return
+        keeper = brain.keeper
+        approach = normalized(bp - p.pos) if abs(bp - p.pos) > 1.0 else complex(ax, 0.0)
+        dirs = [from_angle(2.0 * math.pi * k / N_DIRS) for k in range(N_DIRS)]
+        for q in m.team_lists[p.team]:
+            if q is not p and q is not keeper and abs(q.pos - bp) > 40.0:
+                dirs.append(normalized(q.pos + q.vel * 12.0 - bp))
+        vals3, kind_of, recv_of, ok3 = self._evaluate(m, p, bp, self._bv_contact, self._icp_t, approach, dirs, [0] * len(dirs))
+        best_i, best_v = -1, -INF
+        for i in range(len(dirs)):
+            if kind_of[i] == "pass" and recv_of[i] is not None and recv_of[i] is not keeper and float(ok3[i]) >= FP_OK \
+                    and float(vals3[i]) > best_v:
+                best_i, best_v = i, float(vals3[i])
+        if best_i < 0:
+            return
+        if self._kind == "shoot":
+            cur = float(self._evaluate(m, p, bp, self._bv_contact, self._icp_t, approach, [normalized(self._aim - bp)], [1])[0][0])
+        else:
+            cur = self._carry_value(m, p, bp, ax)[0]
+        if best_v > cur + FP_MARGIN:
+            d = dirs[best_i]
+            self._kind = "pass"
+            self._kick = True
+            self._mate = recv_of[best_i]
+            self._aim = bp + d * 400.0
+            self._err = p.rng.gauss(0.0, p.err_pass)
+
+    def _veto(self, m, p, bp):
         if self._kind != "shoot" or SHOT_VETO <= 0.0:
             return
         ax = m.attack_dir(p.team)
