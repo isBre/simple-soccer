@@ -1,13 +1,12 @@
-"""Teams (data/teams/*.json): an identity (name, colours, kit, logo), a tactic and a line-up of players (soccer/players.py).
+"""Teams (data/teams/*.json): an identity (name, colours, kit, logo) and a line-up of players (soccer/players.py). A team has
+no tactic: every player plays the same in any team (the brain that coordinates a team's rule-based players takes its settings
+from those players, data.Style.blend).
 
   lineup     five player ids in order of preference; a match of size N fields the first N who can play that size (the same
              player may appear several times: a team of five copies of one player is the usual case)
-  style      the team tactic: which brain coordinates the rule-based players and how (data/styles)
-  formations formation per team size (data/formations.json): the spots the players take, team tactics only; any player can
-             stand on any spot
 
-The formation spot is the only "position" there is. Labels in formations.json (GK, DEF, MID, FWD) name the spot's line for
-the rule-based AI; the match itself never reads them."""
+Every team takes the same kickoff spots for a size (data/formations.json "defaults"). Labels there (GK, DEF, MID, FWD) name a
+spot's line for the rule-based AI; the match itself never reads them, and any player can stand on any spot."""
 from .data import default_formation, formation_slots
 
 
@@ -17,20 +16,13 @@ class Team:
         self.id = str(d.get("id", ""))
         self.name = str(d.get("name", self.id))
         self.short = str(d.get("short", self.name[:3].upper()))
-        self.style_id = str(d.get("style", "balanced"))
-        self.formations = d.get("formations", {})
         self.lineup_ids = [str(x) for x in d.get("lineup", [])]
         self.league = str(d.get("league", "rules"))
         # part of the RL evaluation league (rl/evaluate.py: the 16 original rule teams); teams added later set "rl_eval": false
         # so the RL protocol and every earlier evaluation stay comparable
         self.rl_eval = bool(d.get("rl_eval", False))
         self.players = []                     # PlayerDef per lineup entry (Database fills it)
-
-    def formation_for(self, size):
-        f = str(self.formations.get(str(size), ""))
-        if f and len(formation_slots(f)) == size:
-            return f
-        return default_formation(size)
+        self.custom = False                   # built in the game (data/my_teams, local)
 
     def eligible(self, size):
         """The players of the line-up who can play this size, in line-up order."""
@@ -39,14 +31,14 @@ class Team:
     def can_play(self, size):
         return bool(self.eligible(size))
 
-    def lineup(self, size, formation=""):
-        """[(PlayerDef, line, fx, fy)] for a match of this size: the formation's spots filled with the first eligible players of
-        the line-up (repeated from the top if fewer than `size` can play)."""
+    def lineup(self, size):
+        """[(PlayerDef, line, fx, fy)] for a match of this size: the size's kickoff spots filled with the first eligible players
+        of the line-up (repeated from the top if fewer than `size` can play)."""
         pool = self.eligible(size)
         if not pool:
             raise ValueError("team %s has nobody who can play %dv%d" % (self.id, size, size))
-        fname = formation if formation and len(formation_slots(formation)) == size else self.formation_for(size)
-        return [(pool[i % len(pool)], line, float(fx), float(fy)) for i, (line, fx, fy) in enumerate(formation_slots(fname))]
+        spots = formation_slots(default_formation(size))
+        return [(pool[i % len(pool)], line, float(fx), float(fy)) for i, (line, fx, fy) in enumerate(spots)]
 
     def kinds(self):
         return sorted({p.kind for p in self.players})

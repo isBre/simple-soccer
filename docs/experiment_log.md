@@ -12,12 +12,18 @@ dashboard: `http://<pi-address>:8080`. Newest entries at the bottom; the agent a
   against mixed ladder entries, about ±140). Points against the rule bots saturate near 3 and are kept only as a health check.
 - **No fixed roles.** One net drives all 5 players; the observation has no player slot or ID, so roles must come from the situation (decided 2026-11-14).
 - **Players and teams** (user, 2026-11-27; branch `game-players`, phase A): a **player** is a brain with a name (`data/players`: rule-based
-  style + skill, Opus, or a net), every player has the same body; a **team** is an identity, a tactic and a line-up of 5 players, mixed
+  style + skill, Opus, or a net), every player has the same body; a **team** is an identity and a line-up of 5 players (no tactic, no formation: every player plays its own style), mixed
   line-ups allowed (`soccer/teams.py`, `soccer/ai/lineup.py`). **No keeper role** in the match (any player takes the kickoff, no saves,
   the rule AI picks a goal guard by situation from the formation's spots); **no shootouts**: a knockout draw is golden-goal overtime
   without a time limit. The old nets are players that only play 5v5 (46 / 54 inputs); the ladder's old team ratings no longer apply
   to the rule teams (their files changed). Next: phase B (game UI), C (local rating database, player and team Elo per size), D (55-number
   observation with on/off flags and whose kickoff, curriculum 1v0 -> 5v5 from scratch).
+- **Fair information: every player sees the public view only** (user, 2026-11-27; `docs/public_view.md`, `soccer/ai/view.py`,
+  enforced by `tests/test_view.py`). A player may use what a spectator could know (the ball and anonymous bodies with their last
+  32 ticks, clock, score, overtime, state, kickoff, last touch, pitch, the public physics) and anything it computes from it; never
+  the match engine or another team's inside (brain, plan, memory, random numbers, buttons). Players are anonymous: only your own
+  skill is known (others are judged with the generic skill 70). No team tactics: a team's rule players share one brain whose
+  settings come from them. Every net observation is a function of the view. Opus 5.5 High is parked until it plans from the view.
 - **Observation `team` (46 numbers):** me, my 4 teammates nearest first, the 5 opponents nearest first, the ball (positions and velocities,
   normalised), a kickoff flag and a goal-celebration flag. No goal positions, no "ball relative to me", no score, no time.
 - **Reward terms come back one at a time** on top of the minimal set, each as its own experiment judged by a full evaluation (2026-11-16).

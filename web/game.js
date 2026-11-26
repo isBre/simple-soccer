@@ -1,7 +1,8 @@
 // The Game area: Simple Soccer in the browser. The pages are those of the Godot game (main menu, quick match, teams and players,
 // tournaments, match report) and the match itself is played by the Python match core on the server: game/session.py streams
 // every tick over a WebSocket, this page draws it and sends the keyboard (or a controller, game/pad.js) back.
-// Routes: #/game · #/game/quick · #/game/puzzle · #/game/teams[/<id>] · #/game/tournament/new · #/game/tournament · #/game/match · #/game/report
+// Routes: #/game · #/game/quick · #/game/puzzle · #/game/teams[/<id>] · #/game/players[/<id>] · #/game/build[/<team id>[/copy]]
+//         · #/game/tournament/new · #/game/tournament · #/game/match · #/game/report
 //         · #/game/sounds (every sound and song on its own button; not linked)
 // Sound: the menu music (web/music.js) plays on every page but the match and stops in the Lab; menu clicks, the two sound
 // buttons in the top bar and the M (music) / N (all sound) keys are set up at the bottom of this file.
@@ -13,6 +14,8 @@ import { match, stopMatch } from "./game/match.js";
 import { menu } from "./game/menu.js";
 import { padStep } from "./game/pad.js";   // Xbox / standard controller: polled and turned into the same keys
 import { puzzlePage } from "./game/puzzle.js";
+import { builder } from "./game/builder.js";
+import { playerPage, playersList } from "./game/players.js";
 import { teamSelect } from "./game/quick.js";
 import { drawMatch } from "./game/render.js";
 import { report } from "./game/report.js";
@@ -36,6 +39,8 @@ async function show(parts) {
   if (a === "quick") return teamSelect();
   if (a === "puzzle") return puzzlePage();
   if (a === "teams") return teams(b ? decodeURIComponent(b) : "");
+  if (a === "players") return b ? playerPage(decodeURIComponent(b)) : playersList();
+  if (a === "build") return builder(b ? decodeURIComponent(b) : "", parts[2] === "copy");
   if (a === "tournament" && b === "new") return tourNew();
   if (a === "tournament") return tourHub();
   if (a === "match" && G.pending) return match(G.pending);

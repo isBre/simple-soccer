@@ -187,7 +187,7 @@ export function teamSelect() {
     const both = SIZES.filter((n) => st.team[0].sizes.includes(n) && st.team[1].sizes.includes(n));
     if (both.length && !both.includes(SIZES[size.get()])) size.set(SIZES.indexOf(both[both.length - 1]));
     const setup = { home: st.team[0].id, away: st.team[1].id, pitch: P[pitchIdx].id, size: SIZES[size.get()], duration: MINUTES[mins.get()] * 60,
-      seed: Math.floor(Math.random() * 2147483647), human_team: 0, allow_draw: true, formations: ["", ""], ...pc.human() };
+      seed: Math.floor(Math.random() * 2147483647), human_team: 0, allow_draw: true, ...pc.human() };
     play({ setup, rematch: true, done: (res) => showReport(res, "#/game/quick"), quit: () => go("#/game/quick") });
   }
   $("#ks-go", v).onclick = start;

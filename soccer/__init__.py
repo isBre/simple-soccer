@@ -3,7 +3,7 @@ keyboard) sits on top; training, evaluations (rl/) and the Lab's live demo (lab/
 
   data.py     loads the JSON files under data/: pitches, styles, formations, players, teams
   players.py  a player: a brain with a name (rule-based style + skill, Opus, or a net) and the team sizes it can play
-  teams.py    a team: identity, tactic (style, formations) and a line-up of players (mixed line-ups allowed)
+  teams.py    a team: identity and a line-up of players (mixed line-ups allowed); no tactic, no formation
   match.py    the match: physics at 60 ticks/s, kickoffs, touches, passes and shots, goals, golden-goal overtime, result
               (no keeper role, no shootout: every player has the same body and the same rules)
   stats.py    per-player counters          rating.py   xG of a shot, value of a pass

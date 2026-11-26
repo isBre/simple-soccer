@@ -95,7 +95,7 @@ def league_teams():
     ids, info = [], {}
     for i, t in enumerate(teams):
         ids.append(t.id)
-        info[t.id] = {"id": t.id, "strength": snapped(t.strength(), 0.1), "style": t.style_id, "tier": tiers[min(i // 4, 3)],
+        info[t.id] = {"id": t.id, "strength": snapped(t.strength(), 0.1), "style": t.players[0].style_id, "tier": tiers[min(i // 4, 3)],
                       "held_out": i % 4 == 1}
     return ids, info
 

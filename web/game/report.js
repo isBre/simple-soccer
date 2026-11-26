@@ -1,5 +1,5 @@
 // The Game (web/game.js has the overview): the match report.
-import { $, G, esc, go, mount, shell, table } from "./core.js";
+import { $, G, esc, go, mount, playerLink, shell, table } from "./core.js";
 import { match } from "./match.js";
 import { text } from "./render.js";
 
@@ -28,7 +28,7 @@ export function report(res, cont) {
   const cols = [{ t: "#", w: 40 }, { t: "Player" }, { t: "G", w: 40, a: "r" }, { t: "A", w: 40, a: "r" }, { t: "Shots", w: 64, a: "r" },
     { t: "Passes", w: 72, a: "r" }, { t: "Key", w: 46, a: "r" }, { t: "Tkl", w: 46, a: "r" }, { t: "Int", w: 46, a: "r" }, { t: "Drb", w: 46, a: "r" }, { t: "Blk", w: 46, a: "r" }];
   const ptable = (team) => table(cols, res.players.filter((p) => p.team === team).map((p) => ({
-    cells: [{ text: p.slot + 1, color: "var(--g-muted)" }, esc(p.name), p.goals, p.assists, `${p.shots_on_target}/${p.shots}`, `${p.passes_ok}/${p.passes_ok + p.passes_failed}`,
+    cells: [{ text: p.slot + 1, color: "var(--g-muted)" }, playerLink(p.id, p.name), p.goals, p.assists, `${p.shots_on_target}/${p.shots}`, `${p.passes_ok}/${p.passes_ok + p.passes_failed}`,
       p.key_passes, p.tackles, p.interceptions, p.dribbles, p.blocks] })));
   const v = mount(shell(`<section class="rp-head" style="--c0:#${T[0].colors[0]};--c1:#${T[1].colors[0]}">
       <div class="rp-team"><span class="rp-crest"></span><div class="rp-name">${esc(T[0].name)}</div><div class="rp-goals">${scorers(0)}</div></div>

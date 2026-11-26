@@ -2,16 +2,16 @@
 size); what differs is how it decides. Three kinds:
 
   rules   the rule-based AI (soccer/ai/rules.py) with a playing style (data/styles) and a skill 0-100
-  opus    the Opus planner (soccer/ai/opus.py) with its style and a skill
   net     a trained neural net (`model`, a game-model JSON); it can only play the team sizes its observation fits
+  (opus   the Opus planner, parked until it plans from the public view: soccer/ai/lineup.py, docs/public_view.md)
 
 `skill` only changes the AI's precision and reaction (soccer/ai/skill.py: aim errors, positioning noise, perception delay,
 thinking time), never the physics. A net ignores it; it is kept so rule-based opponents read every player the same way.
-There are no positions and no keeper: which formation spot a player takes is the team's tactic (soccer/teams.py)."""
+There are no positions, no keeper and no tactics: a player plays its own style in any team (soccer/teams.py)."""
 import json
 import os
 
-KINDS = ("rules", "opus", "net")
+KINDS = ("rules", "opus", "net")              # "opus" loads but is parked: it plays as the balanced rule-based AI
 SIZES = (1, 2, 3, 4, 5)
 DEFAULT_SKILL = 70
 

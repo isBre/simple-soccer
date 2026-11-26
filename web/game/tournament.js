@@ -1,5 +1,5 @@
 // The Game (web/game.js has the overview): new tournament and the tournament hub.
-import { $, CHEV, CONTROLS, G, api, btn, card, eloText, esc, go, header, leagueTeams, loadT, mount, overlay, pitchOf, playsText, prefs, savePrefs, saveT, shell, table, teamCell, view } from "./core.js";
+import { $, CHEV, CONTROLS, G, api, btn, card, eloText, esc, go, header, leagueTeams, loadT, mount, overlay, pitchOf, playerLink, playsText, prefs, savePrefs, saveT, shell, table, teamCell, view } from "./core.js";
 import { match, play } from "./match.js";
 import { menu } from "./menu.js";
 import { SIZES, drawReel, listPick, playControls, prefIdx, seg, youPill } from "./quick.js";
@@ -189,7 +189,7 @@ export function playersTab(t, vw) {
     const body = rows.length ? table([{ t: "#", w: 36 }, { t: "Player" }, { t: col, w: 76, a: "r" }], rows.map((ps, i) => {
       const mine = ps.team === t.user_team;
       const val = String(ps[kind]);
-      return { hl: mine, cells: [{ text: i + 1, color: "var(--g-muted)" }, teamCell(G.byId[ps.team] || { id: ps.team }, ps.name, "", 22), { text: val, bold: true }] };
+      return { hl: mine, cells: [{ text: i + 1, color: "var(--g-muted)" }, `<span class="teamcell">${Draw.logoTag(ps.team, 22)}${playerLink(ps.id, ps.name)}</span>`, { text: val, bold: true }] };
     })) : '<p class="gh-empty">No matches played yet.</p>';
     return `<section class="gp-card"><h2>${esc(title)}</h2>${body}</section>`;
   }).join("")}</div>`;

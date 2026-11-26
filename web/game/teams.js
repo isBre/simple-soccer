@@ -1,5 +1,6 @@
 // The Game (web/game.js has the overview): teams and their players.
-import { $, G, eloText, esc, go, leagueTeams, mount, playsText, prefs, savePrefs, shell, table, whoDrives } from "./core.js";
+import { $, G, eloText, esc, go, leagueTeams, mount, playerLink, playsText, prefs, savePrefs, shell, table, whoDrives } from "./core.js";
+import { badge } from "./players.js";
 import { match, play } from "./match.js";
 import { menu } from "./menu.js";
 import { closeLists, listPick } from "./quick.js";
@@ -35,18 +36,19 @@ export function teams(id) {
     // the line-up: each player once, with how many slots it fills
     const counts = {};
     t.lineup.forEach((id) => { counts[id] = (counts[id] || 0) + 1; });
-    const cols = [{ t: "Player" }, { t: "Type", w: 130 }, { t: "Style", w: 130 }, { t: "Skill", w: 60, a: "r" }, { t: "Slots", w: 60, a: "r" }, { t: "Sizes", w: 90, a: "r" }];
+    const cols = [{ t: "", w: 46 }, { t: "Player" }, { t: "Type", w: 130 }, { t: "Style", w: 130 }, { t: "Skill", w: 60, a: "r" }, { t: "Slots", w: 60, a: "r" }, { t: "Sizes", w: 90, a: "r" }];
     const prow = Object.keys(counts).map((id) => G.playerById[id]).filter(Boolean).map((p) => ({
-      cells: [`${esc(p.name)}<div class="g-caption gt-about">${esc(p.description)}</div>`, { text: p.kind_label, color: "var(--g-muted)" },
+      cells: [badge(p, 30), playerLink(p.id, p.name), { text: p.kind_label, color: "var(--g-muted)" },
         { text: p.style_label || "–", color: "var(--g-muted)" }, p.skill ?? "–", "×" + counts[p.id],
         { text: p.sizes.length === 5 ? "all" : p.sizes.map((n) => n + "v" + n).join(" "), color: "var(--g-muted)" }] }));
     const d = $("#t-detail", v);
     d.innerHTML = `<section class="gp-hero row" style="--kc:#${t.colors[0]}"><div class="ks-mark" aria-hidden="true"></div><span class="gt-crest"></span>
         <div class="gt-info"><div class="gp-pill">${esc(t.league_name)}</div><h1 class="gt-name">${esc(t.name)}</h1><div class="ks-elo">${esc(eloText(t))}</div>
         <p class="gt-plays">${esc(playsText(t))}</p><div class="gt-who">${esc(whoDrives(t))}</div></div>
-        <button type="button" class="ks-go gt-play" id="t-play">Quick match</button></section>
+        <div class="gt-actions"><button type="button" class="ks-go gt-play" id="t-play">Quick match</button>
+          <a class="ks-btn2 gt-edit" href="#/game/build/${encodeURIComponent(t.id)}${t.custom ? "" : "/copy"}">${t.custom ? "Edit team" : "Copy and edit"}</a></div></section>
       <section class="gp-card"><h2>Line-up</h2>${table(cols, prow)}
-        <div class="g-caption">Every player has the same body; the skill only changes how precise a rule-based player is. A match of N per side fields the first N of the line-up who can play that size.</div></section>`;
+        <div class="g-caption">Every player has the same body; the skill only changes how precise a rule-based player is. A match of N per side fields the first N of the line-up who can play that size. Click a player for who it is and how it was made.</div></section>`;
     $(".ks-mark", d).append(Draw.logoCanvas(t.logo, 560));
     $(".gt-crest", d).append(Draw.logoCanvas(t.logo, 150));
     $("#t-play", d).onclick = () => playWith(t);

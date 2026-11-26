@@ -183,8 +183,12 @@ def _clone(m, opp):
     from ..data import database
     st = database().styles[RO_STYLE]
     memo = {id(m.cfg): m.cfg, id(m.ev_log): [], id(m.brains[opp]): None}
-    for s_ in m.styles:
-        memo[id(s_)] = s_
+    for p in m.players:                               # styles are shared data: never copied
+        s_ = getattr(p.bot_ai, "style", None)
+        if s_ is not None:
+            memo[id(s_)] = s_
+    for b in m.team_brains[0] + m.team_brains[1]:
+        memo[id(b.style)] = b.style
     for b in m.team_brains[opp]:
         memo[id(b)] = None
     for p in m.team_lists[opp]:
@@ -383,7 +387,7 @@ class OpusBrain:
         elapsed_frac = 1.0 - m.time_left / max(m.duration, 1.0)
         self.urgency = clamp(behind * 0.5, -1.0, 1.0) * clamp((elapsed_frac - 0.55) / 0.35, 0.0, 1.0)
 
-        # who guards the goal: the player on the formation's goal spot (a fixed guard, the team's tactic); any bot if there is none
+        # who guards the goal: the player on the deepest kickoff spot (a fixed guard); any bot if there is none
         if self.keeper is None or self.keeper.is_human:
             self.keeper = None
             if len(mates) > 1:

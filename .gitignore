@@ -17,3 +17,6 @@ exp/**/*.tmp
 
 # imitation-learning models trained locally (il/train.py)
 out_il/
+
+# teams built in the game (Build a team): local to this machine, never pushed
+data/my_teams/

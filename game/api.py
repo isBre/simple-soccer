@@ -1,9 +1,10 @@
-"""What the browser game needs from the match core: the catalog (leagues, players, teams, pitches, formations), match setup
+"""What the browser game needs from the match core: the catalog (leagues, players, teams, pitches), match setup
 from the page's choices, and whole matches simulated in parallel (tournament rounds).
 
 A "setup" is the page's description of one match: {"home", "away", "pitch", "size", "duration", "seed", "control"
 ("none" | "single" | "team"), "human_team", "player" (single control: the line-up slot 0..size-1 to play, "" = auto),
-"formations": [home, away], "allow_draw" (False: golden-goal overtime), "record" (save the human's play, game/recorder.py)}."""
+"allow_draw" (False: golden-goal overtime), "record" (save the human's play, game/recorder.py)}. Teams have no tactic or formation:
+every team takes the same kickoff spots for a size and every player plays its own style."""
 import json
 import math
 import os
@@ -17,14 +18,19 @@ if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
 from soccer import match as sm                                       # noqa: E402
-from soccer.data import database, formation_slots, formations, resolve_kits, team_colors   # noqa: E402
+from soccer import data as sd                                         # noqa: E402
+from soccer.data import database, resolve_kits, team_colors   # noqa: E402
 
 LEAGUES = [{"id": "rules", "name": "Rule Based League"}, {"id": "rl", "name": "Reinforcement Learning League"},
-           {"id": "mixed", "name": "Mixed League"}]
+           {"id": "mixed", "name": "Mixed League"}, {"id": sd.MY_LEAGUE, "name": "My Teams"}]
+# what a team built in the game can be made of (web/draw.js draws every one of them)
+KITS = ("solid", "stripes", "halves", "hoops", "band", "chevron")
+CREST = {"shape": ("shield", "circle", "hex", "diamond"), "pattern": ("solid", "stripes", "halves", "band", "quarters", "chevron"),
+         "symbol": ("star", "bolt", "crown", "ring", "cross", "none")}
+LINEUP = 5
 CONTROL = {"none": sm.NONE, "single": sm.SINGLE, "team": sm.TEAM}
 STYLE_PARAMS = ("line_height", "press", "marking", "directness", "pass_bias", "width")
 KIND_LABEL = {"rules": "Rule-based", "opus": "Opus planner", "net": "Neural net (RL)"}
-NET_DESCRIPTION = "Every player is the same neural net, trained with reinforcement learning. It finds its own shape (5v5 only)."
 
 
 def league_index(league_id):
@@ -184,10 +190,6 @@ def describe(tid):
     return s[0].upper() + s[1:]
 
 
-def formation_options(size):
-    return [k for k in formations()["formations"] if len(formation_slots(k)) == size]
-
-
 def player_info(p):
     """A player for the page: who it is, what drives it, how it was made, the sizes it can play."""
     db = database()
@@ -199,22 +201,17 @@ def player_info(p):
 
 
 def team_info(t, elo=None):
-    db = database()
-    style = db.style_of(t)
     net = bool(t.ml_model)
     s = t.strength()
     elo = elo_table() if elo is None else elo
     e = elo.get(ladder_id(t))
     return {"id": t.id, "name": t.name, "short": t.short, "league": t.league,
             "league_name": league_name(t.league), "colors": team_colors(t), "kit": str(t.raw.get("kit", "solid")),
-            "logo": t.raw.get("logo", {}), "net": net, "style": style.id, "kinds": t.kinds(),
-            "style_label": "Neural net (RL)" if net else style.name,
-            "style_description": NET_DESCRIPTION if net else style.description,
+            "logo": t.raw.get("logo", {}), "net": net, "kinds": t.kinds(),
             "plays": describe(t.id), "elo": None if e is None else round(e),
-            "style_params": {} if net else {k: getattr(style, k) for k in STYLE_PARAMS},
-            "strength": s, "stars": stars(s), "formation_for": {str(n): t.formation_for(n) for n in range(1, 6)},
+            "strength": s, "stars": stars(s),
             "sizes": [n for n in range(1, 6) if t.can_play(n)],
-            "lineup": [p.id for p in t.players],
+            "lineup": [p.id for p in t.players], "custom": t.custom,
             "lineup_for": {str(n): [p.id for p, _, _, _ in t.lineup(n)] for n in range(1, 6) if t.can_play(n)}}
 
 
@@ -235,13 +232,95 @@ def catalog():
                          "half_w": p.half_w, "half_h": p.half_h, "goal_half": p.goal_half,
                          "colors": {k: str(p.raw.get("colors", {}).get(k, d)).lstrip("#")
                                     for k, d in (("pitch", "718c5a"), ("outer", "5b7347"), ("line", "c7e6bd"))}} for p in pitches],
-            "formations": {str(n): formation_options(n) for n in range(1, 6)}}
+            "builder": {"kits": list(KITS), "crest": {k: list(v) for k, v in CREST.items()}, "lineup": LINEUP,
+                        "styles": [{"id": s.id, "name": s.name, "description": s.description, "brain": s.brain,
+                                    "params": {k: getattr(s, k) for k in STYLE_PARAMS}}
+                                   for s in sorted(db.styles.values(), key=lambda s: s.name)]}}
+
+
+# ---------- teams built in the game (data/my_teams, local to this machine) ----------
+class Invalid(ValueError):
+    """A team the builder sent that cannot be saved (the message says why)."""
+
+
+def _hexcol(v, what):
+    v = str(v or "").lstrip("#").lower()
+    if len(v) != 6 or any(c not in "0123456789abcdef" for c in v):
+        raise Invalid("%s must be a colour like ff8800" % what)
+    return v
+
+
+def _slug(name):
+    s = "".join(c if c.isalnum() else "_" for c in name.lower()).strip("_")
+    while "__" in s:
+        s = s.replace("__", "_")
+    return s[:32] or "team"
+
+
+def save_team(d):
+    """Checks a team from the builder and writes data/my_teams/<id>.json. A new team gets an id from its name ("my_<name>");
+    an existing id must be one of the built teams (the teams of data/teams are copied, never edited). Returns its team_info."""
+    db = database()
+    name = " ".join(str(d.get("name", "")).split())
+    if not 1 <= len(name) <= 30:
+        raise Invalid("the name needs 1 to 30 characters")
+    short = "".join(str(d.get("short") or name[:3]).split()).upper()[:4] or name[:3].upper()
+    colors = d.get("colors") or {}
+    c1, c2 = _hexcol(colors.get("primary"), "the main colour"), _hexcol(colors.get("secondary"), "the second colour")
+    kit = str(d.get("kit", "solid"))
+    if kit not in KITS:
+        raise Invalid("unknown kit %r" % kit)
+    lg = d.get("logo") or {}
+    logo = {}
+    for k, opts in CREST.items():
+        v = str(lg.get(k, opts[0]))
+        if v not in opts:
+            raise Invalid("unknown crest %s %r" % (k, v))
+        logo[k] = v
+    logo.update({"c1": c1, "c2": c2, "c3": _hexcol(lg.get("c3", "ffffff"), "the crest symbol colour")})
+    lineup = [str(x) for x in d.get("lineup") or []]
+    if len(lineup) != LINEUP:
+        raise Invalid("a line-up has %d players" % LINEUP)
+    bad = [x for x in lineup if x not in db.players or db.players[x].hidden]
+    if bad:
+        raise Invalid("unknown players: %s" % ", ".join(bad))
+    tid = str(d.get("id") or "")
+    if tid:
+        if tid not in db.teams or not db.teams[tid].custom:
+            raise Invalid("only teams built in the game can be changed (copy %s to make your own)" % tid)
+    else:
+        base = tid = "my_" + _slug(name)
+        k = 2
+        while tid in db.teams:
+            tid, k = "%s_%d" % (base, k), k + 1
+    out = {"id": tid, "name": name, "short": short, "colors": {"primary": c1, "secondary": c2}, "kit": kit, "logo": logo,
+           "lineup": lineup, "league": sd.MY_LEAGUE}
+    folder = sd.my_teams_dir()
+    os.makedirs(folder, exist_ok=True)
+    tmp = os.path.join(folder, tid + ".json.tmp")
+    with open(tmp, "w") as f:
+        json.dump(out, f, indent=2)
+        f.write("\n")
+    os.replace(tmp, os.path.join(folder, tid + ".json"))
+    sd.reload()
+    return team_info(database().teams[tid])
+
+
+def delete_team(tid):
+    """Removes a team built in the game (the teams of data/teams cannot be deleted from the game)."""
+    t = database().teams.get(str(tid))
+    if t is None or not t.custom:
+        raise Invalid("only teams built in the game can be deleted")
+    os.remove(os.path.join(sd.my_teams_dir(), t.id + ".json"))
+    sd.reload()
 
 
 def config(setup):
     """A MatchConfig from a setup (see the module docstring); unknown teams or pitches raise KeyError, a team that cannot play
     the size (only 5v5 nets in its line-up) raises ValueError."""
     all_teams = teams()
+    if setup["home"] not in all_teams or setup["away"] not in all_teams:
+        all_teams = sd.reload().teams                # a team built since this process loaded the data (tournament workers)
     size = int(setup.get("size", 3))
     for k in ("home", "away"):
         if setup[k] not in all_teams:
@@ -255,8 +334,6 @@ def config(setup):
     slot = str(setup.get("player", "")).strip()
     c.human_slot = int(slot) if slot.isdigit() and int(slot) < size else -1
     c.allow_draw = bool(setup.get("allow_draw", True))
-    fs = list(setup.get("formations") or ["", ""])[:2]
-    c.formations = [str(f) if f and len(formation_slots(str(f))) == c.team_size else "" for f in fs] + [""] * (2 - len(fs))
     return c
 
 

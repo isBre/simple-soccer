@@ -12,6 +12,8 @@ export const ICON = {
   puzzle: '<circle cx="12" cy="13.5" r="7.5"/><path d="M12 9.5v4l2.6 2M9.5 2.5h5M12 2.5V6"/>',
   trophy: '<path d="M8 21h8M12 16.5V21M7 3.5h10V9a5 5 0 0 1-10 0zM7 5.5H4V7a3 3 0 0 0 3 3M17 5.5h3V7a3 3 0 0 1-3 3"/>',
   shield: '<path d="M12 3l8 3v6c0 4.8-3.4 8-8 9-4.6-1-8-4.2-8-9V6z"/><path d="M9 12l2 2 4-4"/>',
+  people: '<circle cx="9" cy="8" r="3.2"/><path d="M3.5 20c.6-3.4 2.8-5.4 5.5-5.4s4.9 2 5.5 5.4"/><circle cx="17" cy="9" r="2.6"/><path d="M15.6 14.2c2.6-.3 4.4 1.5 4.9 4.8"/>',
+  build: '<path d="M4 20h16M6 20V9l6-5 6 5v11"/><path d="M10 20v-5h4v5"/>',
   arrow: '<path d="M5 12h14M13 6l6 6-6 6"/>',
 };
 export const icon = (k, px = 22) => `<svg width="${px}" height="${px}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICON[k]}</svg>`;
@@ -24,10 +26,12 @@ export function menu() {
     return [a, rest[Math.floor(Math.random() * rest.length)] || C.teams.find((t) => t.id !== a.id)];
   })();
   const vs = `<span class="gm-vs">${Draw.logoTag(pair[0].id, 18)}<span>${esc(pair[0].name)}</span><i>vs</i><span>${esc(pair[1].name)}</span>${Draw.logoTag(pair[1].id, 18)}</span>`;
-  const items = (save ? [["resume", "Continue tournament", "#/game/tournament", save.title || "Your saved tournament"]] : [])
-    .concat([["puzzle", "Puzzle", "#/game/puzzle", "One-minute rounds from random positions"],
-      ["trophy", "New tournament", "#/game/tournament/new", "One league or all of them"],
-      ["shield", "Teams and players", "#/game/teams", `${C.teams.length} teams in ${C.leagues.length} leagues`]]);
+  const items = (save ? [["resume", "Continue", "#/game/tournament", save.title || "Your saved tournament"]] : [])
+    .concat([["puzzle", "Puzzle", "#/game/puzzle", "One-minute rounds"],
+      ["trophy", "Tournament", "#/game/tournament/new", "One league or all"],
+      ["shield", "Teams", "#/game/teams", `${C.teams.length} in ${C.leagues.length} leagues`],
+      ["people", "Players", "#/game/players", `${C.players.length} players`],
+      ["build", "Build a team", "#/game/build", "Your own line-up"]]);
   const ranked = C.teams.slice().sort((a, b) => (b.elo || 0) - (a.elo || 0));
   const crests = ranked.map((t) => `<a href="#/game/teams/${encodeURIComponent(t.id)}" title="${esc(t.name)}${t.elo ? " · Elo " + t.elo : ""}" tabindex="-1">${Draw.logoTag(t.id, 34)}</a>`).join("");
   const bug = (t) => `${Draw.logoTag(t.id, 20)}<b>${esc(t.short || t.name.slice(0, 3).toUpperCase())}</b>`;
@@ -37,10 +41,9 @@ export function menu() {
     <div class="gm-in">
       <div class="gm-kicker">5-a-side football</div>
       <h1 class="gm-title"><span>Simple</span><span>Soccer</span></h1>
-      <p class="gm-sub">Play against ${C.teams.length} teams: handmade rule bots and nets trained by self-play.</p>
       <nav class="gm-list" aria-label="Main menu">
         <a class="gm-play gm-link" href="#/game/quick"><span class="gm-play-t"><b>Quick match</b>${last.length === 2 ? vs : "<span>Pick two teams and play</span>"}</span>${icon("arrow", 26)}</a>
-        ${items.map(([ic, label, href, sub], k) => `<a class="gm-item gm-link" href="${href}"><span class="gm-ic">${icon(ic)}</span><span class="gm-t"><b>${esc(label)}</b><small>${esc(sub)}</small></span><kbd>${k + 2}</kbd></a>`).join("")}
+        <div class="gm-grid">${items.map(([ic, label, href, sub], k) => `<a class="gm-item gm-link" href="${href}"><span class="gm-ic">${icon(ic)}</span><span class="gm-t"><b>${esc(label)}</b><small>${esc(sub)}</small></span><kbd>${k + 2}</kbd></a>`).join("")}</div>
       </nav>
     </div>
     <div class="gm-reel" aria-label="Teams by Elo"><div class="gm-reel-track">${crests}${crests.replace(/<a /g, '<a aria-hidden="true" ')}</div></div>

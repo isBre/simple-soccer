@@ -6,6 +6,12 @@ import os
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA = os.path.join(ROOT, "data")
+MY_LEAGUE = "mine"                 # the league of the teams built in the game (data/my_teams)
+
+
+def my_teams_dir():
+    """Where the teams built in the game are kept: data/my_teams (local, ignored by git), or $SOCCER_MY_TEAMS (tests)."""
+    return os.environ.get("SOCCER_MY_TEAMS") or os.path.join(DATA, "my_teams")
 
 STYLE_KEYS = ("line_height", "compactness", "width", "press", "marking", "directness", "shoot_range", "pass_bias", "risk",
               "keeper_sweep", "forward_stay", "support_dist", "fluidity", "attack_commit", "intercept", "counter_press",
@@ -35,7 +41,8 @@ class Pitch:
 
 
 class Style:
-    """Team tactics (StyleDef). All 0..1 unless noted."""
+    """A rule-based player's playing style (StyleDef). All 0..1 unless noted. Teams have no style of their own: the brain that
+    coordinates a team's rule-based players uses theirs (Style.blend)."""
 
     def __init__(self, d):
         self.id = str(d.get("id", "balanced"))
@@ -44,6 +51,19 @@ class Style:
         self.brain = str(d.get("brain", "rules"))       # "rules" (TeamBrain + StyleBot) or "opus" (soccer/ai/opus.py)
         for k in STYLE_KEYS:
             setattr(self, k, float(d.get(k, STYLE_DEFAULTS[k])))
+
+    @staticmethod
+    def blend(styles):
+        """The style of a team brain from the styles of the players it commands: the style itself when they all share it (five
+        copies of one player play exactly as that player), else every setting averaged over the players."""
+        styles = list(styles)
+        if len({s.id for s in styles}) <= 1:
+            return styles[0] if styles else Style({})
+        out = Style({"id": "+".join(sorted({s.id for s in styles})), "name": " + ".join(sorted({s.name for s in styles})),
+                     "brain": styles[0].brain})
+        for k in STYLE_KEYS:
+            setattr(out, k, sum(getattr(s, k) for s in styles) / len(styles))
+        return out
 
     def to_dict(self):
         d = {"id": self.id, "name": self.name, "description": self.description}
@@ -86,7 +106,7 @@ class Database:
     """Everything under data/: pitches, styles, players and teams (line-ups of players). Loading checks that every team's
     line-up names known players and every player's style exists, so a broken file fails at once with its name."""
 
-    def __init__(self, root=ROOT, extra_team_dirs=()):
+    def __init__(self, root=ROOT, extra_team_dirs=(), my_teams=True):
         from .players import PlayerDef
         from .teams import Team
         data = os.path.join(root, "data")
@@ -99,17 +119,21 @@ class Database:
                 raise ValueError("player %s: unknown style %r" % (p.id, p.style_id))
             self.players[p.id] = p
         self.teams = {}
-        for d in [os.path.join(data, "teams")] + list(extra_team_dirs):
+        dirs = [os.path.join(data, "teams")] + list(extra_team_dirs)
+        mine = my_teams_dir() if my_teams else None
+        for d in dirs + ([mine] if mine else []):
             for t in (Team(x) for x in _load_dir(d)):
                 missing = [i for i in t.lineup_ids if i not in self.players]
                 if missing or not t.lineup_ids:
+                    if d == mine:                    # a built team whose player was removed: skipped, never fatal
+                        print("data: %s skipped (%s)" % (t.id, "unknown players " + ", ".join(missing) if missing else "empty line-up"))
+                        continue
                     raise ValueError("team %s: line-up %s" % (t.id, "names unknown players " + ", ".join(missing) if missing
                                                               else "is empty"))
+                if d == mine:
+                    t.custom, t.league, t.rl_eval = True, MY_LEAGUE, False
                 t.players = [self.players[i] for i in t.lineup_ids]
                 self.teams[t.id] = t
-
-    def style_of(self, team):
-        return self.styles.get(team.style_id, self.styles.get("balanced", Style({})))
 
     def style_of_player(self, player):
         return self.styles.get(player.style_id, self.styles.get("balanced", Style({})))
@@ -150,3 +174,10 @@ def database():
     if _DB is None:
         _DB = Database()
     return _DB
+
+
+def reload():
+    """Forget the loaded data (after a team was built or deleted in the game); the next database() reads the files again."""
+    global _DB
+    _DB = None
+    return database()

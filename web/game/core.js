@@ -24,10 +24,19 @@ export async function api(path, body) {
   if (!r.ok) throw new Error(d.error || "HTTP " + r.status);
   return d;
 }
-export async function catalog() {
-  if (!G.cat) { G.cat = await api("/api/game/catalog"); for (const t of G.cat.teams) G.byId[t.id] = t; for (const p of G.cat.players) G.playerById[p.id] = p; }
+export async function catalog(fresh = false) {
+  if (!G.cat || fresh) {
+    G.cat = await api("/api/game/catalog");
+    G.byId = {}; G.playerById = {};
+    for (const t of G.cat.teams) G.byId[t.id] = t;
+    for (const p of G.cat.players) G.playerById[p.id] = p;
+  }
   return G.cat;
 }
+// a player's name as a link to its page (players removed since the page loaded: plain text)
+export const playerLink = (id, name) => (G.playerById[id] ? `<a class="pl-link" href="#/game/players/${encodeURIComponent(id)}">${esc(name ?? G.playerById[id].name)}</a>` : esc(name ?? id));
+export const KIND_SHORT = { rules: "Rule-based", opus: "Opus", net: "Net" };
+export const sizesText = (sizes) => (sizes.length === 5 ? "all sizes" : sizes.map((n) => n + "v" + n).join(" "));
 export const loadT = () => { try { return JSON.parse(localStorage.getItem(SAVE) || "null"); } catch (e) { return null; } };
 export const saveT = (t) => { try { localStorage.setItem(SAVE, JSON.stringify(t)); } catch (e) {} };
 export const leagueTeams = (id) => G.cat.teams.filter((t) => t.league === id);

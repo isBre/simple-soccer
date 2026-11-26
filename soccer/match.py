@@ -79,7 +79,7 @@ class Player(Disc):
         self.team = 0
         self.slot = 0
         self.uid = 0                 # team * 16 + slot
-        self.line = "MID"            # line of the formation spot (GK / DEF / MID / FWD): team tactic, read only by the AI
+        self.line = "MID"            # line of the kickoff spot (GK / DEF / MID / FWD), the same for every team; read only by the AI
         self.pdef = None             # players.PlayerDef: who this is (name, kind, style, skill)
         self.brain = None            # the team brain that commands this player (soccer/ai/lineup.py)
         self.is_human = False
@@ -103,8 +103,7 @@ class MatchConfig:
 
     def __init__(self):
         self.pitch = None
-        self.teams = [None, None]           # data.Team; [0] attacks right (left side), [1] attacks left
-        self.styles = [None, None]          # data.Style per team (None = the team's own style)
+        self.teams = [None, None]           # teams.Team; [0] attacks right (left side), [1] attacks left
         self.team_size = 3
         self.duration = 180.0
         self.score_limit = 0
@@ -114,12 +113,8 @@ class MatchConfig:
         self.human_team = 0
         self.auto_switch = False
         self.human_slot = -1                # SINGLE control: the line-up slot the human plays (-1 = auto: the most advanced spot)
-        self.formations = ["", ""]
         self.nets = [None, None]            # {"model": path} | {"dict": model} | None: one net for the whole team instead of its line-up
         self.net_temperature = 1.0
-
-    def get_style(self, t):
-        return self.styles[t] if self.styles[t] is not None else database().style_of(self.teams[t])
 
 
 def make_config(team_a, team_b, pitch_id="arena", size=5, duration=180.0, seed=1, db=None) -> MatchConfig:
@@ -146,7 +141,6 @@ class Match:
         self.players = []
         self.team_lists = [[], []]
         self.by_uid = {}
-        self.styles = []
         self.reset_count = 0
         self.bseg = []                      # walls for the ball: (a, b, bc)
         self.pseg = []                      # walls for the players
@@ -193,6 +187,7 @@ class Match:
         self.team_touch_player = [None, None]
         self.team_touch_tick = [-999, -999]
         self.ball_hist = [0j] * HIST
+        self.pos_hist = [{} for _ in range(HIST)]   # every player's position in the last HIST ticks (public: soccer/ai/view.py)
         self.hist_idx = 0
         self.stats = MatchStats()
         self.events = []
@@ -273,13 +268,11 @@ class Match:
 
     def _build_players(self):
         cfg = self.cfg
-        for t in (0, 1):
-            self.styles.append(cfg.get_style(t))
         self.movers.append(self.ball)
         for t in (0, 1):
             team = cfg.teams[t]
             ax = self.attack_dir(t)
-            for i, (pdef, line, fx, fy) in enumerate(team.lineup(cfg.team_size, cfg.formations[t])):
+            for i, (pdef, line, fx, fy) in enumerate(team.lineup(cfg.team_size)):
                 p = Player()
                 p.team = t
                 p.slot = i
@@ -316,6 +309,7 @@ class Match:
         self.pending_shot_team = -1
         self.carry_p = None
         self.ball_hist = [0j] * HIST
+        self.pos_hist = [{} for _ in range(HIST)]
         self.reset_count += 1
         self._setup_kickoff_taker()
 
@@ -514,6 +508,7 @@ class Match:
             self.kickoff_waits.append(self.tick - self.kickoff_start)
 
         self.ball_hist[self.hist_idx] = self.ball.pos
+        self.pos_hist[self.hist_idx] = {p.uid: p.pos for p in self.players}
         self.hist_idx = (self.hist_idx + 1) % HIST
 
         if self.state == PLAYING and not self.kickoff_active and self.last_touch is not None:

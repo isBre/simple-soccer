@@ -79,6 +79,8 @@ def roster():
     db = database()
     out = []
     for t in sorted(db.teams.values(), key=lambda t: t.id):
+        if t.custom:                          # teams built in the game (local) are not part of the experiment ladder
+            continue
         path = os.path.join(ROOT, "data", "teams", t.id + ".json")
         sha = _sha(path) if os.path.exists(path) else ""
         if t.ml_model:

@@ -1,5 +1,7 @@
-"""Rule-based AI: TeamBrain coordinates one team (who chases the ball, who is the carrier, who keeps goal, who marks whom,
-who runs onto an opponent's pass), StyleBot plays one player from the team's style and the player's attributes.
+"""Rule-based AI: TeamBrain coordinates a team's rule-based players (who chases the ball, who is the carrier, who guards the
+goal, who marks whom, who runs onto an opponent's pass), StyleBot plays one player from its own style and skill. Both decide
+from the team's public view only (`m` here is a soccer/ai/view.py View, never the match; docs/public_view.md): others are
+anonymous bodies judged with the generic skill, the opponents' goal guard is inferred (View.deepest).
 Jobs of a StyleBot (given by the team brain each tick, never fixed): goal guard / chaser (plays the ball: shoot, pass, dribble, clear) / off-ball (shape, support, marking)."""
 import math
 
@@ -43,7 +45,7 @@ def _intercept_table(rd: float):
 _ITAB = {}
 
 
-def intercept(m, p, bpos: complex, bvel: complex):
+def intercept(m, p, bpos: complex, bvel: complex, delay=None):
     """Earliest point on the ball's (predictable) path the player can get to: (point, ticks); ticks = INF if none within 160.
     A player accelerates at 0.1 with damping 0.96: top speed 2.4 px/tick, 24-tick time constant."""
     touch = (p.radius + m.ball_r) * 0.6
@@ -51,7 +53,7 @@ def intercept(m, p, bpos: complex, bvel: complex):
     bx, by, vx, vy = bpos.real, bpos.imag, bvel.real, bvel.imag
     px, py, pvx, pvy = p.pos.real, p.pos.imag, p.vel.real, p.vel.imag
     sqrt = math.sqrt
-    for t, q, run, grow in _intercept_table(float(p.reaction_delay) + 2.0):
+    for t, q, run, grow in _intercept_table(float(p.reaction_delay if delay is None else delay) + 2.0):
         x = bx + vx * q
         x = -hw if x < -hw else (hw if x > hw else x)
         y = by + vy * q
@@ -88,7 +90,7 @@ class TeamBrain:
 
     def _pick_keeper(self, m, mates, ax):
         """Who guards the goal: the rearmost non-chasing player. The player on the formation's goal spot (line "GK", a spot of
-        the team's tactic, not a player's role) gets a head start that shrinks with style.fluidity (0 = the goal spot always
+        the same for every team, not a player's role) gets a head start that shrinks with style.fluidity (0 = the goal spot always
         guards, 1 = whoever is deepest); the current guard keeps the job unless someone else is clearly deeper (no flicker)."""
         if len(mates) <= 1:
             self.keeper = None
@@ -260,7 +262,7 @@ class TeamBrain:
         if not free:
             return
         own_goal = complex(-ax * m.pitch.half_w, 0.0)
-        other_keeper = m.brains[1 - self.team].keeper
+        other_keeper = m.deepest(1 - self.team)       # who seems to guard their goal (the view: never the opponents' plan)
         threats = []
         for op in opps:
             if op is other_keeper and len(opps) > 1:
@@ -360,8 +362,8 @@ class StyleBot:
         p.kick_intent = ""
         p.input_dir = 0j
         brain = p.brain
-        bpos = m.ball_at(p.reaction_delay)
-        bold = m.ball_at(p.reaction_delay + 4)
+        bpos = m.ball_at(self.reaction_delay)
+        bold = m.ball_at(self.reaction_delay + 4)
         bvel = (bpos - bold) / 4.0
         is_chaser = p in brain.chasers
 
@@ -411,17 +413,17 @@ class StyleBot:
 
     def _go_for_ball(self, m, p, brain, bpos, bvel):
         # exact meeting point with the (predictable) ball path instead of a rough lead
-        bp, t = intercept(m, p, bpos, bvel)
+        bp, t = intercept(m, p, bpos, bvel, self.reaction_delay)
         self._icp_t = min(t, 160.0)
         self._bv_contact = bvel * (0.99 ** self._icp_t)
-        if m.tick - self._decided > p.think_ticks:
+        if m.tick - self._decided > self.think_ticks:
             self._decide_action(m, p, brain, bp)
             self._decided = m.tick
         self._play_ball(m, p, brain, bp)
 
     def _decide_action(self, m, p, brain, bp):
         st = self.style
-        rng = p.rng
+        rng = self.rng
         ax = m.attack_dir(p.team)
         pd = m.pitch
         opp_goal = complex(ax * pd.half_w, 0.0)
@@ -442,7 +444,7 @@ class StyleBot:
                 self._kind = "shoot"
                 self._kick = True
                 self._aim = target
-                self._err = rng.gauss(0.0, p.err_finish)
+                self._err = rng.gauss(0.0, self.err_finish)
                 return
 
         pass_chance = st.pass_bias
@@ -465,7 +467,7 @@ class StyleBot:
             aim = best.pos + best.vel * min(_ball_time(dist), 40.0) * 0.8
             self._aim = complex(clamp(aim.real, -pd.half_w + 15.0, pd.half_w - 15.0),
                                 clamp(aim.imag, -pd.half_h + 15.0, pd.half_h - 15.0))
-            self._err = rng.gauss(0.0, p.err_pass)
+            self._err = rng.gauss(0.0, self.err_pass)
             return
 
         if brain.danger and pressure < 80.0:
@@ -473,14 +475,14 @@ class StyleBot:
             self._kick = True
             sy = 1.0 if bp.imag >= 0.0 else -1.0
             self._aim = complex(ax * pd.half_w * 0.4, sy * pd.half_h * 0.8)
-            self._err = rng.gauss(0.0, p.err_pass)
+            self._err = rng.gauss(0.0, self.err_pass)
             return
 
         if st.directness > 0.8 and not in_front and rng.random() < 0.4:
             self._kind = "long"
             self._kick = True
             self._aim = complex(opp_goal.real * 0.7, bp.imag * 0.5)
-            self._err = rng.gauss(0.0, p.err_pass)
+            self._err = rng.gauss(0.0, self.err_pass)
             return
 
         self._kind = "dribble"
@@ -492,7 +494,7 @@ class StyleBot:
         included). Returns (target, clearance). Players with poor vision sometimes pick at random."""
         # aim inside the goal mouth with a margin that covers this player's aim error at this distance
         gh = m.pitch.goal_half - 14.0
-        margin = min(gh * 0.85, 1.5 * p.err_finish * abs(bp - opp_goal))
+        margin = min(gh * 0.85, 1.5 * self.err_finish * abs(bp - opp_goal))
         gh = max(gh - margin, 12.0)
         gx = opp_goal.real + ax * 10.0
         best_t, best_c, best_lane = complex(gx, 0.0), -INF, 0.0
@@ -503,13 +505,12 @@ class StyleBot:
             c = lane + abs(y) / gh * 12.0       # corners are harder for the keeper
             if c > best_c:
                 best_c, best_t, best_lane = c, t, lane
-        if p.rng.random() > p.vision + 0.4:
-            best_t = complex(gx, p.rng.uniform(-gh, gh))
+        if self.rng.random() > self.vision + 0.4:
+            best_t = complex(gx, self.rng.uniform(-gh, gh))
             best_lane = _lane_clearance(m, p.team, bp, best_t)
         return best_t, best_lane
 
-    @staticmethod
-    def _dribble_aim(m, p, bp, opp_goal):
+    def _dribble_aim(self, m, p, bp, opp_goal):
         """Carry the ball towards goal but steer around opponents (with a bit of look-ahead on their movement)."""
         pd = m.pitch
         look = 120.0 * min(pd.half_w / 370.0, 1.3)
@@ -526,7 +527,7 @@ class StyleBot:
                 opos = op.pos + op.vel * 10.0
                 t = clamp(dot(opos - bp, dr) / look, 0.0, 1.0)
                 clear = min(clear, abs(opos - (bp + dr * look * t)))
-            s += min(clear, 90.0) * (0.3 + p.vision * 0.9)
+            s += min(clear, 90.0) * (0.3 + self.vision * 0.9)
             if abs(probe.imag) > pd.half_h - 25.0:
                 s -= 40.0
             if s > best_s:
@@ -551,11 +552,11 @@ class StyleBot:
                 continue
             tgt = mp.pos + mp.vel * min(_ball_time(dist), 40.0) * 0.8
             open_ = _lane_clearance(m, p.team, bp, tgt)
-            if open_ < lerpf(16.0, 34.0, p.vision):
+            if open_ < lerpf(16.0, 34.0, self.vision):
                 continue
             # can an opponent get to the lane before the ball does?
             margin = _pass_margin(m, p.team, bp, tgt)
-            if margin < lerpf(-45.0, -5.0, p.vision):
+            if margin < lerpf(-45.0, -5.0, self.vision):
                 continue
             rp = min(_nearest_opp_dist(m, p.team, mp.pos), 140.0)
             progress = to.real * ax
@@ -614,7 +615,7 @@ class StyleBot:
         pd = m.pitch
         hw, hh = pd.half_w, pd.half_h
         bx = bpos.real * ax / hw
-        role = p.line                         # the line of this player's formation spot (team tactic)
+        role = p.line                         # the line of this player's kickoff spot (the same for every team)
         fx = p.home.real
         if role == "GK":
             # the player on the goal spot plays as a defender while someone else guards the goal
@@ -667,16 +668,16 @@ class StyleBot:
             target = lerp(target, cover, 0.6 if role == "DEF" else 0.35)
             o2 = brain.marks.get(p.slot)
             if o2 is not None:
-                spot = lerp(lerp(o2.pos, own_goal2, 0.3), bpos, 0.22 * p.defend_q)
-                target = lerp(target, spot, st.marking * 0.5 * lerpf(0.6, 1.2, p.defend_q))
+                spot = lerp(lerp(o2.pos, own_goal2, 0.3), bpos, 0.22 * self.defend_q)
+                target = lerp(target, spot, st.marking * 0.5 * lerpf(0.6, 1.2, self.defend_q))
         elif not brain.has_possession and p.slot in brain.marks:
             o = brain.marks[p.slot]
             own_goal = complex(-ax * hw, 0.0)
-            spot = lerp(lerp(o.pos, own_goal, 0.3), bpos, 0.22 * p.defend_q)
-            target = lerp(target, spot, min(st.marking * lerpf(0.6, 1.2, p.defend_q), 1.0))
+            spot = lerp(lerp(o.pos, own_goal, 0.3), bpos, 0.22 * self.defend_q)
+            target = lerp(target, spot, min(st.marking * lerpf(0.6, 1.2, self.defend_q), 1.0))
 
         if m.tick - self._noise_tick > 90:
-            self._noise = complex(p.rng.gauss(0.0, 1.0), p.rng.gauss(0.0, 1.0)) * p.pos_noise * 0.5
+            self._noise = complex(self.rng.gauss(0.0, 1.0), self.rng.gauss(0.0, 1.0)) * self.pos_noise * 0.5
             self._noise_tick = m.tick
         target += self._noise
         target = complex(clamp(target.real, -hw + 20.0, hw - 20.0), clamp(target.imag, -hh + 20.0, hh - 20.0))
@@ -714,7 +715,7 @@ class StyleBot:
                     dv = pt - p.pos
                     dl = abs(dv)
                     along = dot(p.vel, dv / max(dl, 1.0))
-                    te = max(t - float(p.reaction_delay) - 2.0, 0.0)    # he sees the ball late and decides every 2nd tick
+                    te = max(t - float(self.reaction_delay) - 2.0, 0.0)    # he sees the ball late and decides every 2nd tick
                     reach = 2.4 * te + (along - 2.4) * 24.0 * (1.0 - math.exp(-te / 24.0))
                     if reach * 0.92 >= dl - touch:
                         # aim a little further down the path: sitting in the ball's way guarantees the touch

@@ -1,12 +1,14 @@
 """The game's HTTP API (served by web/app.py under /api/game/):
-  GET  /api/game/catalog          leagues, players, teams (logos, kits, line-ups, ratings), pitches, formations per team size
+  GET  /api/game/catalog          leagues, players, teams (logos, kits, line-ups, ratings), pitches, builder options
   POST /api/game/tournament       {"action": ..., "t": tournament?, ...} -> {"t": tournament, "view": {...}} (game/tournament.py)
        new       {"league" ("all" = every league, mixed), "user", "count", "format", "pitch", "size", "duration"}: a new tournament (random opponents and seed)
        view      the derived view of a stored tournament
        simulate  plays every unplayed match of the current round (all cores), then records them
        fixture   -> {"setup", "index"}: the player's next match, to play live (/ws/match)
        record    {"index", "result"}: stores the result of the player's live match
-The browser keeps the tournament (localStorage); the server keeps nothing."""
+  POST /api/game/team             {"action": "save", "team": {...}} -> {"team": team_info} | {"action": "delete", "id"}: the teams built in
+                                  the game (data/my_teams, local to this machine; the teams of data/teams can only be copied)
+The browser keeps the tournament (localStorage); the server keeps nothing but the built teams."""
 import random
 
 from game import api, tournament as tn
@@ -78,8 +80,16 @@ def handle(method, path, body):
             return 200, api.catalog()
         if method == "POST" and path == "/api/game/tournament":
             return 200, tournament(body or {})
+        if method == "POST" and path == "/api/game/team":
+            b = body or {}
+            if b.get("action") == "save":
+                return 200, {"team": api.save_team(b.get("team") or {})}
+            if b.get("action") == "delete":
+                api.delete_team(b.get("id"))
+                return 200, {"deleted": b.get("id")}
+            raise BadRequest("unknown action %r" % b.get("action"))
         return 404, {"error": "unknown: %s %s" % (method, path)}
-    except BadRequest as e:
+    except (BadRequest, api.Invalid) as e:
         return 400, {"error": str(e)}
     except (KeyError, IndexError, TypeError, ValueError) as e:
         return 400, {"error": "%s: %s" % (type(e).__name__, e)}

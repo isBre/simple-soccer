@@ -246,6 +246,7 @@ class RLEnv:
         sim.assist_cand = None
         sim.pending_shot_team = -1
         sim.ball_hist = [sim.ball.pos] * HIST
+        sim.pos_hist = [{p.uid: p.pos for p in sim.players} for _ in range(HIST)]   # the public history starts here too
 
     def _potential(self):
         """Shaping potential: ball close to the opponent goal, nearest agent close to the ball."""
