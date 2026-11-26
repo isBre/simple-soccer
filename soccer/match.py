@@ -18,6 +18,7 @@ KICK_RANGE = 4.0
 GOAL_PAUSE = 210
 AI_PERIOD = 2
 HIST = 32
+SWITCH_WINDOW = 60      # ticks (1 s): a Q within this time of the previous one moves on to the next player of the same ranking
 PLAYING, GOAL, ENDED = 0, 1, 2
 KIND_BALL, KIND_PLAYER, KIND_STATIC = 1, 2, 4
 NONE, SINGLE, TEAM = 0, 1, 2                  # MatchConfig.ControlMode
@@ -201,6 +202,7 @@ class Match:
         self.ev_log = []
         self.mom_uid = -1
         self.controlled = None
+        self._switch_order, self._switch_idx, self._switch_last = [], 0, -10 ** 9
         self.human_dir = 0j
         self.human_kick = False
         self._build_stadium()
@@ -381,19 +383,48 @@ class Match:
         self.human_dir = d
         self.human_kick = kick
 
-    def switch_controlled(self):
-        """TEAM control mode: hand control to the teammate nearest to the ball."""
+    def switch_controlled(self, now=None):
+        """TEAM control mode, the Q key. The first press takes the teammate nearest to the ball; another press within
+        SWITCH_WINDOW of the previous one takes the next player of the same ranking (made at the first press, so it does not
+        reshuffle while the players move): 2nd nearest, 3rd, ..., the keeper last, then back to the player you started from.
+        `now` is the caller's clock in ticks (the web session counts real frames, so the window also runs during the kickoff
+        intro and at fast-forward speeds); default the match tick.
+        While the human team waits to take a kickoff, the new player becomes the taker (placed behind the ball, the old taker goes
+        back to his kickoff spot) and the keeper is skipped. A kick held through the switch needs a fresh press on the new player."""
         if self.cfg.control != TEAM:
             return
-        best, best_d = None, math.inf
-        for p in self.team_lists[self.cfg.human_team]:
-            if p is self.controlled:
-                continue
-            d = abs(p.pos - self.ball.pos) ** 2
-            if d < best_d:
-                best_d, best = d, p
-        if best is not None:
-            self.set_controlled(best)
+        now = self.tick if now is None else now
+        lst = self.team_lists[self.cfg.human_team]
+        own_kickoff = self._human_kickoff_wait()
+        order, idx = self._switch_order, self._switch_idx
+        chain = now - self._switch_last <= SWITCH_WINDOW and 0 <= idx < len(order) and order[idx] is self.controlled
+        if not chain:
+            keeper_last = len(lst) > 1
+            others = sorted((p for p in lst if p is not self.controlled),
+                            key=lambda p: (keeper_last and p.role == "GK", abs(p.pos - self.ball.pos)))
+            order = others + ([self.controlled] if self.controlled is not None else [])
+            idx = -1
+        for _ in range(len(order)):
+            idx = (idx + 1) % len(order)
+            if not (own_kickoff and order[idx].role == "GK" and len(lst) > 1):
+                break
+        self._switch_order, self._switch_idx, self._switch_last = order, idx, now
+        p = order[idx] if order else None
+        if p is None or p is self.controlled:
+            return
+        old = self.controlled
+        self.set_controlled(p)
+        if self.human_kick:
+            p.kick_used = True
+        if own_kickoff:
+            old.pos, p.pos = old.spawn, -self.kickoff_dir * (p.radius + self.ball.radius + 2.0)
+            old.vel = p.vel = 0j
+            self.kickoff_taker = p
+
+    def _human_kickoff_wait(self) -> bool:
+        """The human team's kickoff, not taken yet, with the controlled player as the taker."""
+        return self.state == PLAYING and self.kickoff_active and self.kickoff_team == self.cfg.human_team \
+            and self.controlled is not None and self.kickoff_taker is self.controlled
 
     # ------------------------------------------------------------ simulation
 

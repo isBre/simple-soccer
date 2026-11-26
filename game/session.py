@@ -9,7 +9,7 @@ Page -> server (JSON):
                                            controls a random player of their team (keeper included). The Puzzle page plays rounds of
                                            these back to back.
   {"in": [dx, dy, kick]}                   the human's keys (direction normalised by the page), sent when they change
-  {"switch": 1}                            TEAM control: hand control to the teammate nearest the ball
+  {"switch": 1}                            TEAM control: the teammate nearest the ball; again within 1 s: the next nearest (Match.switch_controlled)
   {"pause": true|false}  {"speed": 1|2|4|8}  {"quit": 1}
 Server -> page:
   {"k": "m", ...}   once: teams (kits, logos), players, pitch, statics
@@ -107,7 +107,7 @@ def _run(ws, rec):
     if recorder.wanted(first["setup"], m):
         rec.append(recorder.Recorder(m, {**first["setup"], "puzzle": first.get("puzzle")}, min_rows=30 if puzzle else recorder.MIN_ROWS))
     ws.send({**meta(m), "rec": bool(rec)})
-    human, switch, paused, speed = (0j, False), False, False, 1
+    human, switch, paused, speed, clock = (0j, False), False, False, 1, 0      # clock: frames played (the Q window)
     intro, intro_id, result_sent = (PUZZLE_READY if puzzle else 0), -1, False
     goal_end = None
     next_t = time.monotonic()
@@ -141,14 +141,16 @@ def _run(ws, rec):
         if paused or result_sent:
             continue
         events = []
+        clock += 1
         if m.state == PLAYING and m.kickoff_active and m.kickoff_start != intro_id:
             intro_id, intro = m.kickoff_start, INTRO_TICKS
+        if switch:                                          # at once, also during the kickoff intro (picks the kickoff taker)
+            m.set_human_input(*human)
+            m.switch_controlled(clock)
+            switch = False
         if intro > 0:
             intro -= 1
         else:
-            if switch:
-                m.switch_controlled()
-                switch = False
             m.set_human_input(*human)
             n_ev = len(m.events)
             for _ in range(speed):
