@@ -103,7 +103,7 @@ export function syncOverlay(M, f) {
     <div class="mo-sc small">${esc(m.teams[0].name)} <b>${f.sc[0]} – ${f.sc[1]}</b> ${esc(m.teams[1].name)}</div>
     <div class="mo-btns col"><button type="button" class="ks-go" data-act="pause">Resume ${k("Esc")}</button>
       ${M.p.session ? "" : `<button type="button" class="ks-btn2" data-act="restart">Restart ${k("R")}</button>`}<button type="button" class="ks-btn2" data-act="quit">Quit the match ${k("M")}</button></div>
-    <div class="mo-keys"><span>${k("WASD")} ${k("↑↓←→")} move</span><span>${k("Space")} ${k("X")} kick</span>${m.control === 2 ? `<span>${k("Q")} switch player</span>` : ""}<span>${k("T")} speed</span><span>${k("N")} sound ${Sound.on ? "on" : "off"}</span></div>
+    <div class="mo-keys"><span>${k("WASD")} ${k("↑↓←→")} move</span><span>${k("Space")} ${k("X")} kick</span>${m.control === 2 ? `<span>${k("Q")} switch player (tap again: next)</span>` : ""}<span>${k("T")} speed</span><span>${k("N")} sound ${Sound.on ? "on" : "off"}</span></div>
     ${padConnected() ? `<div class="mo-keys"><span>Controller:</span><span>${k("L")} move</span><span>${k("A")} ${k("X")} ${k("RT")} kick</span>${m.control === 2 ? `<span>${k("LB")} ${k("RB")} switch</span>` : ""}<span>${k("☰")} pause</span><span>${k("⧉")} speed</span></div>
     <div class="mo-keys"><span>Paused:</span><span>${k("A")} resume</span>${M.p.session ? "" : `<span>${k("Y")} restart</span>`}<span>${k("⧉")} quit</span></div>` : ""}</div>`;
   else {
