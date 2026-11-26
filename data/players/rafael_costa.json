@@ -1,0 +1,12 @@
+{
+ "id": "rafael_costa",
+ "name": "Rafael Costa",
+ "kind": "rules",
+ "style": "counter_attack",
+ "skill": 73,
+ "description": "Dune Hawks' rule player. Plays Counter-Attack: sits back, then breaks fast with forwards held high.",
+ "origin": {
+  "made": "2026-11-27",
+  "from": "the squad of the team dune"
+ }
+}

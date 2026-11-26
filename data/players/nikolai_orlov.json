@@ -1,0 +1,12 @@
+{
+ "id": "nikolai_orlov",
+ "name": "Nikolai Orlov",
+ "kind": "rules",
+ "style": "sharpshooters",
+ "skill": 84,
+ "description": "A true long-range shooter: when a lane opens he rarely misses the target. Plays Sharpshooters: shoots from distance as soon as a lane opens up.",
+ "origin": {
+  "made": "2026-11-27",
+  "from": "a variation of the sharpshooters style"
+ }
+}

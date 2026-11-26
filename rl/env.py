@@ -122,17 +122,18 @@ class RLEnv:
         self.episode_id += 1
         self.steps = 0
         self.ep_return = 0.0
-        # learner team: controlled players, the rest are ghosts (or the rule-based keeper)
+        # learner team: controlled players, the rest are ghosts (or the rule-based keeper). "Keeper" here is the player on the
+        # formation's goal spot (line "GK", soccer/teams.py): a spot of the line-up, there is no keeper role in the match
         self.agents = []
         ghosts = []
         ordered = []
         for p in sim.team_lists[0]:
-            if p.role == "GK":
+            if p.line == "GK":
                 ordered.insert(0, p)
             else:
                 ordered.append(p)
         for p in ordered:
-            is_gk = p.role == "GK"
+            is_gk = p.line == "GK"
             if len(self.agents) < self.n_active and (self.with_keeper or not is_gk):
                 self.agents.append(p)
                 p.bot = False
@@ -144,7 +145,7 @@ class RLEnv:
         if self.opp_external:
             ordered1 = []
             for p in sim.team_lists[1]:
-                if p.role == "GK":
+                if p.line == "GK":
                     ordered1.insert(0, p)
                 else:
                     ordered1.append(p)
@@ -154,7 +155,7 @@ class RLEnv:
         if self.opp == "none":
             ghosts += list(sim.team_lists[1])
         elif self.opp == "keeper":
-            ghosts += [p for p in sim.team_lists[1] if p.role != "GK"]
+            ghosts += [p for p in sim.team_lists[1] if p.line != "GK"]
         for g in ghosts:
             self._ghost(g)
         if self.match_mode:
@@ -223,7 +224,7 @@ class RLEnv:
         sim.ball.vel = complex(math.cos(a), math.sin(a)) * sp
         placed = [sim.ball.pos]
         for p in list(sim.players):
-            if p.team == 1 and p.role == "GK":
+            if p.team == 1 and p.line == "GK":
                 p.pos = p.spawn                       # an opposing keeper starts on its line
                 p.vel = 0j
                 placed.append(p.pos)
@@ -289,7 +290,7 @@ class RLEnv:
         hi_x = hi_y = -1.0e9
         n = 0
         for a in self.agents:
-            if a.role == "GK":
+            if a.line == "GK":
                 continue
             qx, qy = a.pos.real * self.sim.attack_dir(0), a.pos.imag
             lo_x, lo_y, hi_x, hi_y = min(lo_x, qx), min(lo_y, qy), max(hi_x, qx), max(hi_y, qy)
@@ -345,7 +346,7 @@ class RLEnv:
                         if d < self.space_radius and abs(b.pos - bp) > 70.0:
                             r -= self.w_space * (1.0 - d / self.space_radius)
                             self._acc("space", -self.w_space * (1.0 - d / self.space_radius) / n_learn)
-            if self.w_far > 0.0 and a.role != "GK" and da > self.far_radius:   # an outfield player far away from the play
+            if self.w_far > 0.0 and a.line != "GK" and da > self.far_radius:   # an outfield player far away from the play
                 pen = self.w_far * min((da - self.far_radius) / self.far_radius, 1.0)
                 r -= pen
                 self._acc("far", -pen / n_learn)
@@ -373,7 +374,7 @@ class RLEnv:
                     r += gain_t
                     self._acc("tackle", gain_t / n_learn)
                 self.prev_def[a.uid] = cd
-            if self.w_goalside > 0.0 and a.role != "GK" and self._opp_has_ball():
+            if self.w_goalside > 0.0 and a.line != "GK" and self._opp_has_ball():
                 own_goal = complex(-pd.half_w * sim.attack_dir(0), 0.0)
                 if abs(a.pos - own_goal) < abs(bp - own_goal) and _seg_dist(a.pos, bp, own_goal) < self.goalside_lane:
                     r += self.w_goalside
@@ -393,7 +394,7 @@ class RLEnv:
                 r += coop
                 self._acc("coop", coop / n_learn)
                 self.prev_ps[a.uid] = cur
-            if self.w_keeper > 0.0 and a.role == "GK":
+            if self.w_keeper > 0.0 and a.line == "GK":
                 dg = abs(a.pos - complex(-pd.half_w, 0.0))
                 if dg > self.keeper_free:
                     r -= self.w_keeper * min((dg - self.keeper_free) / self.keeper_free, 1.0)

@@ -92,7 +92,7 @@ export function teamSelect() {
   const st = { side: 0, team: [first(0), first(1)] };
   let pitchIdx = Math.max(0, P.findIndex((p) => p.id === (prefs.pitch || "arena")));
   const v = mount(`<div class="ks">
-    <div class="ks-top"><nav class="ks-links"><a href="#/game">‹ Menu</a><a id="ks-teams" href="#/game/teams">Teams and squads</a></nav>
+    <div class="ks-top"><nav class="ks-links"><a href="#/game">‹ Menu</a><a id="ks-teams" href="#/game/teams">Teams and players</a></nav>
       <div class="ks-keys" id="ks-keys"></div></div>
     <div class="ks-split">${[0, 1].map((i) => `<section class="ks-side" data-side="${i}" tabindex="0" aria-label="${i ? "Away" : "Home"} team">
         <div class="ks-mark" aria-hidden="true"></div><div class="ks-role"><span class="ks-who"></span><span>${i ? "Away" : "Home"}</span></div>
@@ -183,6 +183,9 @@ export function teamSelect() {
       .map(([k, d]) => `<span><kbd>${k}</kbd> ${d}</span>`).join("");
   }
   function start() {
+    // a team of 5v5-only nets cannot play smaller sizes: the match is played at the largest size both teams can play
+    const both = SIZES.filter((n) => st.team[0].sizes.includes(n) && st.team[1].sizes.includes(n));
+    if (both.length && !both.includes(SIZES[size.get()])) size.set(SIZES.indexOf(both[both.length - 1]));
     const setup = { home: st.team[0].id, away: st.team[1].id, pitch: P[pitchIdx].id, size: SIZES[size.get()], duration: MINUTES[mins.get()] * 60,
       seed: Math.floor(Math.random() * 2147483647), human_team: 0, allow_draw: true, formations: ["", ""], ...pc.human() };
     play({ setup, rematch: true, done: (res) => showReport(res, "#/game/quick"), quit: () => go("#/game/quick") });

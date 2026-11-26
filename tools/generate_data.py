@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generates the starter data (pitches, play styles, 8 fictional teams) as JSON.
+"""Generates the starter data (pitches, play styles) as JSON.
 Re-run to regenerate; edit the JSON files directly to customise."""
 import json, os, random
 
@@ -108,101 +108,6 @@ for k, v in styles.items():
     v["id"] = k
     dump(os.path.join(ROOT, "styles", k + ".json"), v)
 
-# -------------------------------------------------------------------- teams
-FIRST = ["Luca", "Marek", "Tomas", "Ivo", "Nils", "Ruben", "Kofi", "Dario", "Emil", "Jonas", "Felix", "Anton",
-         "Bruno", "Oskar", "Teo", "Milan", "Sven", "Hugo", "Pavel", "Arjun", "Sami", "Elio", "Niko", "Rafa",
-         "Ciro", "Matej", "Yann", "Leon", "Dani", "Otto", "Remo", "Zeno"]
-LAST = ["Varga", "Moretti", "Halvorsen", "Okafor", "Brandt", "Castell", "Dragan", "Ferrante", "Gallo", "Holm",
-        "Ivanek", "Jarvis", "Kovac", "Lindgren", "Marchetti", "Novak", "Orsini", "Petrov", "Quaranta", "Rinaldi",
-        "Sandoval", "Torres", "Ulrich", "Vidal", "Weiss", "Xander", "Yilmaz", "Zanetti", "Bellini", "Carraro",
-        "Dumont", "Eklund", "Fabbri", "Giordano", "Haas", "Iliev", "Janssen", "Keller", "Lombardi", "Mazur"]
-used = set()
-
-
-def make_name():
-    while True:
-        n = random.choice(FIRST) + " " + random.choice(LAST)
-        if n not in used:
-            used.add(n)
-            return n
-
-
-def clamp(v):
-    return int(max(38, min(96, round(v))))
-
-
-def make_player(tid, idx, pos, number, base):
-    bonus = {
-        "GK": dict(finishing=-25, passing=-5, defending=5, positioning=10, reaction=12),
-        "DEF": dict(finishing=-8, passing=0, defending=10, positioning=5, reaction=0),
-        "MID": dict(finishing=0, passing=10, defending=0, positioning=3, reaction=2),
-        "FWD": dict(finishing=10, passing=0, defending=-10, positioning=0, reaction=4),
-    }[pos]
-    attrs = {k: clamp(base + bonus[k] + random.gauss(0, 6)) for k in bonus}
-    return dict(id="%s_%d" % (tid, idx), name=make_name(), number=number, pos=pos, attrs=attrs)
-
-
-# Base rating = team strength tier (no difficulty levels: strong teams are teams with strong players).
-# elite 79-82, average 64-72, weak 55-58.
-teams = [
-    dict(id="aurora", name="Aurora FC", short="AUR", primary="f2c230", secondary="1b2a5c", kit="halves",
-         style="tiki_taka", base=82,
-         logo=dict(shape="shield", pattern="halves", symbol="star", c1="f2c230", c2="1b2a5c", c3="ffffff")),
-    dict(id="borealis", name="Borealis Wolves", short="BOR", primary="3aa0d8", secondary="0d1b2a", kit="stripes",
-         style="high_press", base=79,
-         logo=dict(shape="hex", pattern="chevron", symbol="bolt", c1="3aa0d8", c2="0d1b2a", c3="ffffff")),
-    dict(id="cobalt", name="Cobalt Rangers", short="COB", primary="2f5fd0", secondary="f2f2f2", kit="solid",
-         style="total_football", base=55,
-         logo=dict(shape="circle", pattern="stripes", symbol="ring", c1="2f5fd0", c2="f2f2f2", c3="f2f2f2")),
-    dict(id="dune", name="Dune Hawks", short="DUN", primary="d98b3a", secondary="4a2c12", kit="hoops",
-         style="counter_attack", base=70,
-         logo=dict(shape="diamond", pattern="band", symbol="crown", c1="d98b3a", c2="4a2c12", c3="fff1d0")),
-    dict(id="ember", name="Ember City", short="EMB", primary="d6402f", secondary="1a1a1a", kit="halves",
-         style="long_ball", base=58,
-         logo=dict(shape="shield", pattern="quarters", symbol="bolt", c1="d6402f", c2="1a1a1a", c3="ffffff")),
-    dict(id="fern", name="Fern Valley", short="FER", primary="2e9e5b", secondary="f4f1de", kit="stripes",
-         style="wing_play", base=64,
-         logo=dict(shape="circle", pattern="chevron", symbol="star", c1="2e9e5b", c2="f4f1de", c3="ffffff")),
-    dict(id="granite", name="Granite Athletic", short="GRA", primary="8b8f98", secondary="22252b", kit="solid",
-         style="catenaccio", base=72,
-         logo=dict(shape="hex", pattern="stripes", symbol="cross", c1="8b8f98", c2="22252b", c3="ffffff")),
-    dict(id="harbor", name="Harbor Sharks", short="HAR", primary="8e3fb8", secondary="e8e8e8", kit="hoops",
-         style="all_out_attack", base=67,
-         logo=dict(shape="diamond", pattern="halves", symbol="ring", c1="8e3fb8", c2="e8e8e8", c3="ffffff")),
-    dict(id="tide", name="Teal Tide", short="TID", primary="1fa39a", secondary="0b2e3a", kit="stripes",
-         style="gegenpress", base=76,
-         logo=dict(shape="circle", pattern="chevron", symbol="bolt", c1="1fa39a", c2="0b2e3a", c3="ffffff")),
-    dict(id="onyx", name="Onyx Titans", short="ONY", primary="2a2a2e", secondary="ffd54a", kit="solid",
-         style="man_to_man", base=75,
-         logo=dict(shape="hex", pattern="band", symbol="crown", c1="2a2a2e", c2="ffd54a", c3="ffd54a")),
-    dict(id="lime", name="Lime Comets", short="LIM", primary="a4d12a", secondary="1b3a0e", kit="hoops",
-         style="switch_play", base=68,
-         logo=dict(shape="diamond", pattern="stripes", symbol="star", c1="a4d12a", c2="1b3a0e", c3="ffffff")),
-    dict(id="rose", name="Rose Falcons", short="ROS", primary="e0679b", secondary="3a1030", kit="halves",
-         style="sharpshooters", base=62,
-         logo=dict(shape="shield", pattern="quarters", symbol="ring", c1="e0679b", c2="3a1030", c3="ffffff")),
-    dict(id="arrows", name="Silver Arrows", short="ARR", primary="c9ced6", secondary="1a2a4a", kit="stripes",
-         style="zone_trap", base=84,
-         logo=dict(shape="shield", pattern="chevron", symbol="cross", c1="c9ced6", c2="1a2a4a", c3="ffffff")),
-    dict(id="bulls", name="Maroon Bulls", short="BUL", primary="7a1f2b", secondary="f1e3c8", kit="solid",
-         style="dribblers", base=57,
-         logo=dict(shape="circle", pattern="band", symbol="bolt", c1="7a1f2b", c2="f1e3c8", c3="f1e3c8")),
-    dict(id="scorpions", name="Sand Scorpions", short="SCO", primary="d8c27a", secondary="5a3b17", kit="hoops",
-         style="park_the_bus", base=55,
-         logo=dict(shape="hex", pattern="halves", symbol="cross", c1="d8c27a", c2="5a3b17", c3="ffffff")),
-    dict(id="owls", name="Mint Owls", short="OWL", primary="7fd6b0", secondary="12332b", kit="halves",
-         style="balanced", base=70,
-         logo=dict(shape="diamond", pattern="quarters", symbol="star", c1="7fd6b0", c2="12332b", c3="ffffff")),
-]
-for t in teams:
-    tid = t["id"]
-    roster = []
-    layout = [("GK", 1), ("DEF", 4), ("DEF", 5), ("MID", 8), ("MID", 10), ("FWD", 9), ("FWD", 11)]
-    for i, (pos, num) in enumerate(layout):
-        roster.append(make_player(tid, i, pos, num, t["base"]))
-    out = dict(id=tid, name=t["name"], short=t["short"],
-               colors=dict(primary=t["primary"], secondary=t["secondary"]),
-               kit=t["kit"], logo=t["logo"], style=t["style"], formations={}, players=roster)
-    dump(os.path.join(ROOT, "teams", tid + ".json"), out)
-
-print("generated", len(pitches), "pitches,", len(styles), "styles,", len(teams), "teams")
+# Teams and players are curated by hand since 2026-11-27 (data/teams: line-ups; data/players: rule-based, Opus and net
+# players, see README "Players, teams and kickoff"); this script no longer writes them.
+print("generated", len(pitches), "pitches,", len(styles), "styles (teams and players: edit data/teams and data/players)")

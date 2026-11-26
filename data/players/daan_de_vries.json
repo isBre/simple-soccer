@@ -1,0 +1,12 @@
+{
+ "id": "daan_de_vries",
+ "name": "Daan de Vries",
+ "kind": "rules",
+ "style": "total_football",
+ "skill": 56,
+ "description": "Cobalt Rangers' rule player. Plays Total Football: fluid roles: anyone keeps goal, anyone attacks. High line, constant pressing.",
+ "origin": {
+  "made": "2026-11-27",
+  "from": "the squad of the team cobalt"
+ }
+}

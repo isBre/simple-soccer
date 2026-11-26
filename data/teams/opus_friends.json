@@ -1,0 +1,29 @@
+{
+  "id": "opus_friends",
+  "name": "Opus & Friends",
+  "short": "O&F",
+  "colors": {
+    "primary": "e07a5f",
+    "secondary": "3d405b"
+  },
+  "kit": "halves",
+  "logo": {
+    "shape": "diamond",
+    "pattern": "halves",
+    "symbol": "bolt",
+    "c1": "e07a5f",
+    "c2": "3d405b",
+    "c3": "ffffff"
+  },
+  "style": "opus_high",
+  "formations": {},
+  "lineup": [
+    "opus",
+    "opus",
+    "lars_holm",
+    "nikolai_orlov",
+    "yaw_boateng"
+  ],
+  "league": "mixed",
+  "rl_eval": false
+}

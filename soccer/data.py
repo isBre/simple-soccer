@@ -1,5 +1,5 @@
-"""Game data for the match core: pitches, styles, players, teams, formations and line-ups, read from the JSON files under
-data/ (pitches, styles, teams, formations.json); the web game (game/api.py) shows the same data."""
+"""Game data for the match core: pitches, styles, formations, players (soccer/players.py) and teams (soccer/teams.py), read
+from the JSON files under data/ (pitches, styles, players, teams, formations.json); the web game (game/api.py) shows the same data."""
 import glob
 import json
 import os
@@ -13,12 +13,6 @@ STYLE_KEYS = ("line_height", "compactness", "width", "press", "marking", "direct
 STYLE_DEFAULTS = dict(line_height=0.5, compactness=0.5, width=1.0, press=0.5, marking=0.4, directness=0.5, shoot_range=0.55,
                       pass_bias=0.6, risk=0.4, keeper_sweep=0.3, forward_stay=0.3, support_dist=150.0, fluidity=0.6,
                       attack_commit=0.4, intercept=0.5, counter_press=0.0, long_shot=0.0, switch_play=0.0)
-
-
-def roundi(x: float) -> int:
-    """Godot's roundi: halves away from zero."""
-    import math
-    return int(math.floor(x + 0.5)) if x >= 0.0 else -int(math.floor(-x + 0.5))
 
 
 class Pitch:
@@ -57,31 +51,6 @@ class Style:
         return d
 
 
-class PlayerDef:
-    def __init__(self, d):
-        self.id = str(d.get("id", ""))
-        self.name = str(d.get("name", "Player"))
-        self.number = int(d.get("number", 1))
-        self.pos = str(d.get("pos", "MID"))
-        a = d.get("attrs", {})
-        self.finishing = int(a.get("finishing", 60))
-        self.passing = int(a.get("passing", 60))
-        self.defending = int(a.get("defending", 60))
-        self.positioning = int(a.get("positioning", 60))
-        self.reaction = int(a.get("reaction", 60))
-
-    def overall(self) -> int:
-        if self.pos == "GK":
-            v = self.positioning * 0.35 + self.reaction * 0.4 + self.defending * 0.25
-        elif self.pos == "DEF":
-            v = self.defending * 0.4 + self.positioning * 0.25 + self.passing * 0.2 + self.reaction * 0.15
-        elif self.pos == "MID":
-            v = self.passing * 0.35 + self.positioning * 0.2 + self.defending * 0.15 + self.reaction * 0.15 + self.finishing * 0.15
-        else:
-            v = self.finishing * 0.4 + self.reaction * 0.2 + self.passing * 0.2 + self.positioning * 0.2
-        return roundi(v)
-
-
 _FORMATIONS = None
 
 
@@ -101,53 +70,6 @@ def default_formation(size):
     return formations()["defaults"].get(str(size), "1-2-1-1")
 
 
-class Team:
-    """A team (TeamDef): identity, style, formations per size, optional net (ml_model) and its squad."""
-
-    def __init__(self, d):
-        self.raw = d
-        self.id = str(d.get("id", ""))
-        self.name = str(d.get("name", self.id))
-        self.style_id = str(d.get("style", "balanced"))
-        self.formations = d.get("formations", {})
-        self.ml_model = str(d.get("ml_model", ""))
-        self.league = str(d.get("league", "rl" if self.ml_model else "rules"))
-        # part of the RL evaluation league (rl/evaluate.py: the 16 original rule teams); teams added later set "rl_eval": false
-        # so the RL protocol and every earlier evaluation stay comparable
-        self.rl_eval = bool(d.get("rl_eval", not self.ml_model))
-        self.players = [PlayerDef(p) for p in d.get("players", [])]
-
-    def strength(self):
-        """Team rating: average overall of the best 5 players (TeamDef.strength)."""
-        best = sorted((p.overall() for p in self.players), reverse=True)[:5]
-        return sum(best) / len(best) if best else 0.0
-
-    def formation_for(self, size):
-        f = str(self.formations.get(str(size), ""))
-        if f and len(formation_slots(f)) == size:
-            return f
-        return default_formation(size)
-
-    def lineup(self, size, formation=""):
-        """[(PlayerDef, role, fx, fy)] for this team size: the best player for each slot of the formation
-        (TeamDef.lineup: by overall, the first one whose position fits, else the best remaining outfielder)."""
-        fname = formation
-        if not fname or len(formation_slots(fname)) != size:
-            fname = self.formation_for(size)
-        pool = sorted(self.players, key=lambda p: -p.overall())     # stable, like Godot's sort for distinct values
-        out = []
-        for role, fx, fy in formation_slots(fname):
-            pick = next((p for p in pool if p.pos == role), None)
-            if pick is None:
-                pick = next((p for p in pool if p.pos != "GK" or role == "GK"), None)
-            if pick is None and pool:
-                pick = pool[0]
-            if pick is not None:
-                pool.remove(pick)
-                out.append((pick, role, float(fx), float(fy)))
-        return out
-
-
 def _load_dir(path):
     out = []
     for f in sorted(glob.glob(os.path.join(path, "*.json"))):
@@ -161,19 +83,36 @@ def _load_dir(path):
 
 
 class Database:
-    """Everything under data/ (the Godot Database autoload, without the UI parts)."""
+    """Everything under data/: pitches, styles, players and teams (line-ups of players). Loading checks that every team's
+    line-up names known players and every player's style exists, so a broken file fails at once with its name."""
 
     def __init__(self, root=ROOT, extra_team_dirs=()):
+        from .players import PlayerDef
+        from .teams import Team
         data = os.path.join(root, "data")
         self.pitches = {p.id: p for p in (Pitch(d) for d in _load_dir(os.path.join(data, "pitches")))}
         self.styles = {s.id: s for s in (Style(d) for d in _load_dir(os.path.join(data, "styles")))}
+        self.players = {}
+        for d in _load_dir(os.path.join(data, "players")):
+            p = PlayerDef(d, root)
+            if p.kind != "net" and p.style_id not in self.styles:
+                raise ValueError("player %s: unknown style %r" % (p.id, p.style_id))
+            self.players[p.id] = p
         self.teams = {}
         for d in [os.path.join(data, "teams")] + list(extra_team_dirs):
             for t in (Team(x) for x in _load_dir(d)):
+                missing = [i for i in t.lineup_ids if i not in self.players]
+                if missing or not t.lineup_ids:
+                    raise ValueError("team %s: line-up %s" % (t.id, "names unknown players " + ", ".join(missing) if missing
+                                                              else "is empty"))
+                t.players = [self.players[i] for i in t.lineup_ids]
                 self.teams[t.id] = t
 
     def style_of(self, team):
         return self.styles.get(team.style_id, self.styles.get("balanced", Style({})))
+
+    def style_of_player(self, player):
+        return self.styles.get(player.style_id, self.styles.get("balanced", Style({})))
 
 
 def _hex(c, default):

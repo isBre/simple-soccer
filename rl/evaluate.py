@@ -319,7 +319,7 @@ class Behaviour:
             team = m.team_lists[t]
             if t == 0:
                 for p in team:
-                    self.roles[p.slot] = p.role
+                    self.roles[p.slot] = p.line          # the formation spot of the slot (rule teams)
                     _bin(self.heat[p.slot], p.pos, m, t)
                 _bin(self.heat[5], m.ball.pos, m, t)
                 self._scout_tick(m, team)

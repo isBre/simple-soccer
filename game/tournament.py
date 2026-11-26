@@ -20,7 +20,7 @@ FORMAT_NAMES = ["League (round robin)", "Knockout cup", "Groups + knockout"]
 
 def _fx(home, away, stage, group):
     return {"home": home, "away": away, "stage": stage, "group": group, "played": False, "hg": 0, "ag": 0,
-            "pens": [], "winner": "", "mom": "", "goals": []}
+            "ot": False, "winner": "", "goals": []}
 
 
 def _round_robin(ids):
@@ -142,15 +142,13 @@ def _table_add(row, gf, ga):
         row["l"] += 1
 
 
-def _avg(ps):
-    return float(ps["rating_sum"]) / max(1.0, float(ps["apps"]))
+TOP_KINDS = ("goals", "assists", "shots")
 
 
 def top_players(t, kind, n=8):
-    """kind: goals / assists / rating / motm / saves."""
-    rows = [ps for ps in t["player_stats"].values() if not (kind == "rating" and int(ps["apps"]) < 1)]
-    value = _avg if kind == "rating" else (lambda ps: float(ps.get(kind, 0)))
-    return sorted(rows, key=lambda ps: (-value(ps), -_avg(ps)))[:n]
+    """kind: goals / assists / shots. A row is one player of one team (copies of a player in a line-up count together)."""
+    rows = list(t["player_stats"].values())
+    return sorted(rows, key=lambda ps: (-float(ps.get(kind, 0)), int(ps["apps"]), ps["name"]))[:n]
 
 
 def view(t):
@@ -158,7 +156,7 @@ def view(t):
     r = current_round(t)
     out = {"round_name": r["name"], "round_index": t["round_index"], "user_fixture": user_fixture(t), "eliminated": user_eliminated(t),
            "pending": len(pending_fixtures(t)), "finished": t["finished"], "champion": t["champion"],
-           "top": {k: top_players(t, k) for k in ("goals", "assists", "rating", "motm")}}
+           "top": {k: top_players(t, k) for k in TOP_KINDS}}
     if t["format"] == LEAGUE:
         out["tables"] = [{"title": "", "rows": standings(t), "qualify": 0}]
     elif t["format"] == GROUPS:
@@ -175,29 +173,28 @@ def record(t, index, res):
     f = current_round(t)["fixtures"][index]
     f["played"] = True
     f["hg"], f["ag"] = int(res["scores"][0]), int(res["scores"][1])
-    f["pens"] = list(res.get("shootout") or [])
+    f["ot"] = bool(res.get("overtime"))
     w = int(res["winner"])
     f["winner"] = "" if w == -1 else (f["home"] if w == 0 else f["away"])
     f["goals"] = [{"clock": e["clock"], "team": e["team"], "scorer": e["scorer_name"], "own": e["own"]} for e in res["events"]]
-    for p in res["players"]:
-        if int(p["uid"]) == int(res["mom"]):
-            f["mom"] = "%s (%.1f)" % (p["name"], p["rating"])
     _add_stats(t, res)
     advance_if_complete(t)
     return t
 
 
 def _add_stats(t, res):
+    """Goals, assists and shots per player and team; a player fielded several times by one team is one row (one appearance)."""
+    seen = set()
     for p in res["players"]:
-        ps = t["player_stats"].setdefault(p["id"], {"id": p["id"], "name": p["name"], "team": res["teams"][int(p["team"])],
-                                                    "pos": p["role"], "apps": 0, "goals": 0, "assists": 0, "rating_sum": 0.0,
-                                                    "motm": 0, "saves": 0, "shots": 0})
-        ps["apps"] += 1
-        for k in ("goals", "assists", "saves", "shots"):
+        team = res["teams"][int(p["team"])]
+        key = team + "/" + p["id"]
+        ps = t["player_stats"].setdefault(key, {"id": p["id"], "name": p["name"], "team": team, "apps": 0,
+                                                "goals": 0, "assists": 0, "shots": 0})
+        if key not in seen:
+            ps["apps"] += 1
+            seen.add(key)
+        for k in ("goals", "assists", "shots"):
             ps[k] += int(p[k])
-        ps["rating_sum"] += float(p["rating"])
-        if int(p["uid"]) == int(res["mom"]):
-            ps["motm"] += 1
 
 
 def advance_if_complete(t):

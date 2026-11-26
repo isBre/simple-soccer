@@ -4,7 +4,7 @@ import { menu, showcase } from "./menu.js";
 import { text } from "./render.js";
 import { report } from "./report.js";
 
-export const G = { cat: null, byId: {}, keyHandler: null, match: null, pending: null, report: null, tab: 0, busy: false, pz: null, showcase: null };
+export const G = { cat: null, byId: {}, playerById: {}, keyHandler: null, match: null, pending: null, report: null, tab: 0, busy: false, pz: null, showcase: null };
 export const SAVE = "soccer.tournament";
 export const CONTROLS = ["single", "team", "none"];
 // "Record my play": the match is saved as a dataset file for imitation learning (game/recorder.py), remembered in this browser
@@ -25,7 +25,7 @@ export async function api(path, body) {
   return d;
 }
 export async function catalog() {
-  if (!G.cat) { G.cat = await api("/api/game/catalog"); for (const t of G.cat.teams) G.byId[t.id] = t; }
+  if (!G.cat) { G.cat = await api("/api/game/catalog"); for (const t of G.cat.teams) G.byId[t.id] = t; for (const p of G.cat.players) G.playerById[p.id] = p; }
   return G.cat;
 }
 export const loadT = () => { try { return JSON.parse(localStorage.getItem(SAVE) || "null"); } catch (e) { return null; } };
@@ -53,5 +53,6 @@ export const KEYS_HTML = (keys) => keys.map(([k, d]) => `<span><kbd>${k}</kbd> $
 export const shell = (body, keys = [], cls = "") => `<div class="gp ${cls}"><div class="ks-top"><nav class="ks-links"><a href="#/game">‹ Menu</a></nav><div class="ks-keys">${KEYS_HTML(keys)}</div></div>${body}</div>`;
 export const eloText = (t) => (t.elo != null ? `Elo ${t.elo}` : "Elo not rated yet");
 export const playsText = (t) => t.plays || "Play style not measured yet (python3 game/profiles.py).";
-export const whoDrives = (t) => (t.id.startsWith("net_") ? "Driven by a trained net (reinforcement learning), with RL Team 5's squad."
-  : t.net ? "Every player, the keeper included, is driven by a trained net (reinforcement learning)." : "Driven by the handmade AI.");
+export const whoDrives = (t) => (t.net ? "Every player is the same trained net (reinforcement learning); it plays 5v5 only."
+  : t.kinds.length > 1 ? "A mixed line-up: " + t.kinds.map((k) => ({ rules: "rule-based", opus: "Opus", net: "net" })[k]).join(", ") + " players."
+  : t.kinds[0] === "opus" ? "Every player is the Opus planner." : "Driven by the handmade AI.");

@@ -1,0 +1,13 @@
+{
+ "id": "leo_schneider",
+ "name": "Leo Schneider",
+ "kind": "net",
+ "model": "data/models/rl_5v5_arena_v5.json",
+ "description": "Neural net. RL Team 5: cooperation rewards with a cap against farming, a reward for the keeper staying home and 60% random starts. Elo 1722 (1st of 98) in the old 5v5 ladder of 2026-11-26 (team ratings, before players existed); scored 1.63 and conceded 0.57 per match against the average team.",
+ "origin": {
+  "made": "2026-11-27",
+  "legacy_elo": 1722,
+  "line": "legacy 54",
+  "team": "rl_team_5"
+ }
+}

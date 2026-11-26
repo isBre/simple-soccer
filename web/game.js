@@ -1,4 +1,4 @@
-// The Game area: Simple Soccer in the browser. The pages are those of the Godot game (main menu, quick match, teams & squads,
+// The Game area: Simple Soccer in the browser. The pages are those of the Godot game (main menu, quick match, teams and players,
 // tournaments, match report) and the match itself is played by the Python match core on the server: game/session.py streams
 // every tick over a WebSocket, this page draws it and sends the keyboard (or a controller, game/pad.js) back.
 // Routes: #/game · #/game/quick · #/game/puzzle · #/game/teams[/<id>] · #/game/tournament/new · #/game/tournament · #/game/match · #/game/report

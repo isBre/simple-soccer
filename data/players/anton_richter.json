@@ -1,0 +1,13 @@
+{
+ "id": "anton_richter",
+ "name": "Anton Richter",
+ "kind": "net",
+ "model": "models/x_anchor_wall_strong_best.json",
+ "description": "Neural net. anchor_wall_strong: the anchor recipe (PPO with a KL pull towards jit8) plus a penalty for hugging the wall. Elo 1667 (8th of 98) in the old 5v5 ladder of 2026-11-26 (team ratings, before players existed); scored 1.37 and conceded 0.57 per match against the average team.",
+ "origin": {
+  "made": "2026-11-27",
+  "legacy_elo": 1667,
+  "line": "team 46",
+  "run": "anchor_wall_strong"
+ }
+}

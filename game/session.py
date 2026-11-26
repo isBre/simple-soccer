@@ -43,9 +43,9 @@ def meta(m):
         teams.append({"id": tm.id, "name": tm.name, "short": str(tm.raw.get("short", tm.name[:3].upper())), "kit": kits[t],
                       "pattern": str(tm.raw.get("kit", "solid")), "logo": tm.raw.get("logo", {}), "style": m.styles[t].name})
     return {"k": "m", "teams": teams, "control": cfg.control, "human_team": cfg.human_team, "duration": cfg.duration,
-            "overtime": cfg.overtime, "ball_r": m.ball.radius,
-            "players": [{"uid": q.uid, "team": q.team, "slot": q.slot, "role": q.role, "number": q.pdef.number, "name": q.pdef.name,
-                         "r": q.radius} for t in (0, 1) for q in m.team_lists[t]],
+            "ball_r": m.ball.radius,
+            "players": [{"uid": q.uid, "team": q.team, "slot": q.slot, "number": q.slot + 1, "name": q.pdef.name, "player": q.pdef.id,
+                         "kind": q.pdef.kind, "r": q.radius} for t in (0, 1) for q in m.team_lists[t]],
             "pitch": {**{k: getattr(p, k) for k in ("half_w", "half_h", "goal_half", "net_depth", "out_x", "out_y", "center_r",
                                                     "box_depth", "box_half", "post_r")},
                       "stripes": int(raw.get("stripes", 0)), "pitch": str(colors.get("pitch", "718c5a")).lstrip("#"),
@@ -64,9 +64,9 @@ def frame(m, intro, events, clock=0):
         for q in m.team_lists[t]:
             pos += [round(q.pos.real, 2), round(q.pos.imag, 2)]
             flags.append((1 if q.is_human else 0) | (2 if q.input_kick else 0) | (4 if q.kick_used else 0))
-    return {"k": "f", "t": m.tick, "st": m.state, "sc": list(m.scores), "tl": m.time_left, "ot": bool(m.overtime), "otl": m.ot_left,
+    return {"k": "f", "t": m.tick, "st": m.state, "sc": list(m.scores), "tl": m.time_left, "ot": bool(m.overtime), "ots": round(m.ot_time, 2),
             "ko": bool(m.kickoff_active), "kt": m.kickoff_team, "gt": m.goal_team, "gs": _uid(m.goal_scorer), "gp": m.goal_pause,
-            "gtm": m.goal_timer, "w": m.winner, "so": list(m.shootout) if len(m.shootout) == 2 else None, "cu": _uid(m.controlled),
+            "gtm": m.goal_timer, "w": m.winner, "cu": _uid(m.controlled),
             "nx": _uid(m.next_switch(clock)), "nw": m.in_switch_window(clock),
             "in": intro, "b": [round(m.ball.pos.real, 2), round(m.ball.pos.imag, 2)], "p": pos, "h": flags, "ev": events}
 

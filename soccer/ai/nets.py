@@ -190,7 +190,11 @@ def features_group(m, players, n_in):
 
 
 def fits(n_in, team_size):
-    return n_in in (8 * team_size + 9, 8 * team_size + 14, 8 * team_size + 6, 10 * team_size + 6)
+    """A net can play this team size: the ego layouts (8n+9, 8n+14) at any size; the team (46) and rank (56) observations exist
+    only for 5v5 (features_for picks them by input size, so a 46-input net is never read as the rank layout of 4v4)."""
+    if n_in in (TEAM_OBS, RANK_OBS):
+        return team_size == 5
+    return n_in in (8 * team_size + 9, 8 * team_size + 14)
 
 
 # ---------------------------------------------------------------- nets

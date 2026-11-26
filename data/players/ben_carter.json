@@ -1,0 +1,12 @@
+{
+ "id": "ben_carter",
+ "name": "Ben Carter",
+ "kind": "rules",
+ "style": "balanced",
+ "skill": 58,
+ "description": "A solid all-rounder at a modest level: no weakness stands out, and no strength. Plays Balanced: solid all-round play, no big weaknesses.",
+ "origin": {
+  "made": "2026-11-27",
+  "from": "a variation of the balanced style"
+ }
+}

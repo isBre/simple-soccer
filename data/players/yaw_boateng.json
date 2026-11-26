@@ -1,0 +1,12 @@
+{
+ "id": "yaw_boateng",
+ "name": "Yaw Boateng",
+ "kind": "rules",
+ "style": "dribblers",
+ "skill": 82,
+ "description": "A gifted dribbler who beats his man far more often than the average ball carrier. Plays Dribblers: carries the ball and takes opponents on instead of passing.",
+ "origin": {
+  "made": "2026-11-27",
+  "from": "a variation of the dribblers style"
+ }
+}

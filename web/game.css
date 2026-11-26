@@ -81,6 +81,7 @@ body[data-area="game"] .snd { display: flex; gap: 4px; }
 .g-table th:first-child { border-top-left-radius: 8px; padding-left: 14px; }
 .g-table th:last-child { border-top-right-radius: 8px; padding-right: 14px; }
 .g-table td { height: 38px; padding: 0 8px; background: var(--g-panel); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 340px; }
+.g-table td .gt-about { white-space: normal; max-width: 520px; padding: 2px 0 6px; line-height: 1.35; }   /* a player's description under its name */
 .g-table tr:nth-child(even) td { background: var(--g-alt); }
 .g-table td:first-child { padding-left: 11px; border-left: 3px solid transparent; }
 .g-table td:last-child { padding-right: 14px; }

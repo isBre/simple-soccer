@@ -256,7 +256,7 @@ export function drawScorebug(ctx, M, m, f) {
   const cw = codes.map((c) => ctx.measureText(c).width);
   ctx.font = FONT(20, 800);
   const score = `${f.sc[0]} – ${f.sc[1]}`, sw = ctx.measureText(score).width;
-  const clock = f.ot ? "OT " + clockText(f.otl) : clockText(f.tl);
+  const clock = f.ot ? "OT " + clockText(f.ots) : clockText(f.tl);
   ctx.font = FONT(15, 700);
   const kw = ctx.measureText(clock).width;
   const segT = (i) => pad + crest * 2 + 8 + cw[i] + pad;

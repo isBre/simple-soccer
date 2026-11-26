@@ -1,0 +1,12 @@
+{
+ "id": "omar_haddad",
+ "name": "Omar Haddad",
+ "kind": "rules",
+ "style": "park_the_bus",
+ "skill": 57,
+ "description": "Sand Scorpions' rule player. Plays Park the Bus: deep block, tight marking, lets the opponent come.",
+ "origin": {
+  "made": "2026-11-27",
+  "from": "the squad of the team scorpions"
+ }
+}

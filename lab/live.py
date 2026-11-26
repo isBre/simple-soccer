@@ -98,7 +98,7 @@ def meta(m, tag, playing, opp_label, mode):
                       "pattern": str(t.raw.get("kit", "solid")), "net": "remote" if cfg.nets[i] else ""})
     return {"k": "m", "id": cfg.match_seed, "tag": tag, "playing": playing, "opponent": opp_label, "mode": mode, "upd": last_update(tag),
             "best_move": False, "best_ckpt": False, "duration": cfg.duration, "ball_r": m.ball.radius, "teams": teams,
-            "players": [{"team": p.team, "n": p.pdef.number, "r": p.radius, "role": p.role} for t in (0, 1) for p in m.team_lists[t]],
+            "players": [{"team": p.team, "n": p.slot + 1, "r": p.radius, "name": p.pdef.name} for t in (0, 1) for p in m.team_lists[t]],
             "pitch": {**{k: getattr(m.pitch, k) for k in ("half_w", "half_h", "goal_half", "net_depth", "out_x", "out_y", "center_r",
                                                           "box_depth", "box_half", "post_r")},
                       "stripes": int(raw.get("stripes", 0)), "pitch": _hex(colors.get("pitch"), "718c5a"),

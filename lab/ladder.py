@@ -3,10 +3,10 @@
 Why: points against the rule bots saturate at 3, so they cannot rank good teams (docs/imitation_plan.md, Evaluation level 3).
 
 Who is ranked (roster(), rebuilt every time from the files):
-  rules:<team>   every handmade team of data/teams (its own squad)
-  team:<team>    every team of data/teams with a net (`ml_model`: RL Team 1-5, later the ML / DL league teams), its own squad
+  rules:<team>   every team of data/teams that is not one net in every slot (its own line-up: rule-based, Opus, mixed)
+  team:<team>    every team of data/teams whose line-up is one net player in every slot (RL Team 1-5, Net Lab is mixed)
   net:<stem>     every net in models/*.json (best checkpoint of each run, jit8, t48_u100, the distilled starts) and the best checkpoint
-                 of every finished run still only in out_5v5/ckpt/ (x_<run>_best.json); played with RL Team 5's squad, as the Live page does
+                 of every finished run still only in out_5v5/ckpt/ (x_<run>_best.json); played as RL Team 5 (the net drives every slot), as the Live page does
 Each entry carries the sha1 of its file: when a file changes (a re-exported net, an edited team), its old results are no longer used.
 
 How matches are chosen (choose_pairs()): a round picks pairs that tell the most: an entry with fewer than PLACEMENT games is placed

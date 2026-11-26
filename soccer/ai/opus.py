@@ -185,6 +185,8 @@ def _clone(m, opp):
     memo = {id(m.cfg): m.cfg, id(m.ev_log): [], id(m.brains[opp]): None}
     for s_ in m.styles:
         memo[id(s_)] = s_
+    for b in m.team_brains[opp]:
+        memo[id(b)] = None
     for p in m.team_lists[opp]:
         memo[id(p.bot_ai)] = None
         memo[id(p.pdef)] = p.pdef
@@ -196,8 +198,10 @@ def _clone(m, opp):
     c._rollout = True
     c.log_events = False
     c.brains[opp] = TeamBrain(opp, st)
+    c.team_brains[opp] = [c.brains[opp]]
     for p in c.team_lists[opp]:
         p.bot_ai = StyleBot(st)
+        p.brain = c.brains[opp]
     c.brains[opp].update(c)
     return c
 
@@ -366,7 +370,7 @@ class OpusBrain:
         ax = m.attack_dir(self.team)
         pd = m.pitch
         hw = pd.half_w
-        mates = m.team_lists[self.team]
+        mates = [p for p in m.team_lists[self.team] if p.brain is self]     # the players this brain commands
         opps = m.team_lists[1 - self.team]
         lt = m.last_touch
         if self.has_possession and lt is not None and lt.team != self.team:
@@ -379,12 +383,12 @@ class OpusBrain:
         elapsed_frac = 1.0 - m.time_left / max(m.duration, 1.0)
         self.urgency = clamp(behind * 0.5, -1.0, 1.0) * clamp((elapsed_frac - 0.55) / 0.35, 0.0, 1.0)
 
-        # the goalkeeper: the nominal GK (a fixed keeper, as in real football); any bot if there is none
+        # who guards the goal: the player on the formation's goal spot (a fixed guard, the team's tactic); any bot if there is none
         if self.keeper is None or self.keeper.is_human:
             self.keeper = None
             if len(mates) > 1:
                 for sp in mates:
-                    if sp.role == "GK" and not sp.is_human:
+                    if sp.line == "GK" and not sp.is_human:
                         self.keeper = sp
                 if self.keeper is None:
                     for sp in mates:
@@ -475,7 +479,7 @@ class OpusBrain:
         # rest defence: the deepest free player stays behind the ball against the counter
         self.rest = None
         if len(free) >= 2:
-            rest = min(free, key=lambda sp: (sp.pos.real * ax + (0.0 if sp is self.rest else 30.0) - (60.0 if sp.role == "DEF" else 0.0)))
+            rest = min(free, key=lambda sp: (sp.pos.real * ax + (0.0 if sp is self.rest else 30.0) - (60.0 if sp.line == "DEF" else 0.0)))
             self.rest = rest
             rx = clamp(bx - REST_BACK, -hw * 0.78, hw * 0.05)
             ry = clamp(ball.imag * 0.35, -hh * 0.4, hh * 0.4)
@@ -673,7 +677,7 @@ class OpusBot(StyleBot):
         p.input_kick = False
         p.kick_intent = ""
         p.input_dir = 0j
-        brain = m.brains[p.team]
+        brain = p.brain
         bpos = m.ball_at(p.reaction_delay)
         bold = m.ball_at(p.reaction_delay + 4)
         bvel = (bpos - bold) / 4.0
@@ -730,7 +734,7 @@ class OpusBot(StyleBot):
         p.input_kick = True
         p.kick_intent = kind_of[0]
         if kind_of[0] == "pass" and recv_of[0] is not None:
-            brain = m.brains[p.team]
+            brain = p.brain
             brain.pass_target = recv_of[0]
             brain.pass_kicker = p
             brain.pass_tick = m.tick
@@ -972,7 +976,7 @@ class OpusBot(StyleBot):
         do = _deficit(_Snap(opps), xs, ys, tt, 24.0) if opps else far        # (opps, paths, T)
         if not mates:
             mates = [p]
-        keeper = m.brains[team].keeper
+        keeper = p.brain.keeper
         for k, q in enumerate(mates):
             if q is keeper and keeper is not p:
                 # the keeper only receives inside his own box (he does not leave his goal for a back-pass)

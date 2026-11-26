@@ -1,0 +1,12 @@
+{
+ "id": "callum_reid",
+ "name": "Callum Reid",
+ "kind": "rules",
+ "style": "long_ball",
+ "skill": 58,
+ "description": "Ember City's rule player. Plays Long Ball: direct, long passes and early shots.",
+ "origin": {
+  "made": "2026-11-27",
+  "from": "the squad of the team ember"
+ }
+}

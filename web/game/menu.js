@@ -27,7 +27,7 @@ export function menu() {
   const items = (save ? [["resume", "Continue tournament", "#/game/tournament", save.title || "Your saved tournament"]] : [])
     .concat([["puzzle", "Puzzle", "#/game/puzzle", "One-minute rounds from random positions"],
       ["trophy", "New tournament", "#/game/tournament/new", "One league or all of them"],
-      ["shield", "Teams and squads", "#/game/teams", `${C.teams.length} teams in ${C.leagues.length} leagues`]]);
+      ["shield", "Teams and players", "#/game/teams", `${C.teams.length} teams in ${C.leagues.length} leagues`]]);
   const ranked = C.teams.slice().sort((a, b) => (b.elo || 0) - (a.elo || 0));
   const crests = ranked.map((t) => `<a href="#/game/teams/${encodeURIComponent(t.id)}" title="${esc(t.name)}${t.elo ? " · Elo " + t.elo : ""}" tabindex="-1">${Draw.logoTag(t.id, 34)}</a>`).join("");
   const bug = (t) => `${Draw.logoTag(t.id, 20)}<b>${esc(t.short || t.name.slice(0, 3).toUpperCase())}</b>`;
@@ -51,7 +51,7 @@ export function menu() {
   let shown = "";
   showcase($(".gm-pitch", v), pair, (f) => {
     if (!f) { bugEl.hidden = true; return; }
-    const s = `${f.sc[0]} – ${f.sc[1]}|${f.st === 2 ? "FT" : f.ot ? "OT " + clockText(f.otl) : clockText(f.tl)}`;
+    const s = `${f.sc[0]} – ${f.sc[1]}|${f.st === 2 ? "FT" : f.ot ? "OT " + clockText(f.ots) : clockText(f.tl)}`;
     if (s === shown) return;
     shown = s; bugEl.hidden = false; [scoreEl.textContent, clockEl.textContent] = s.split("|");
   }, () => { bugEl.classList.remove("goal"); void bugEl.offsetWidth; bugEl.classList.add("goal"); });

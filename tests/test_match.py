@@ -1,9 +1,9 @@
 """The match core (soccer/) against stored matches (tests/golden/match_<name>.json).
 
-Plays every match of tests/scenarios.json (all sizes, every pitch plus one with extra walls, net teams, a scripted human in
-single and team control, overtime, shootouts, score limit) with the real AI and compares: the score, ball position and
-ball speed every second (so a FAIL says when the match started to differ) and the complete result (events, team and
-player statistics, grades).
+Plays every match of tests/scenarios.json (all sizes, every pitch plus one with extra walls, net teams, mixed line-ups of
+rule, Opus and net players, a net that does not fit the size, a scripted human in single and team control, golden-goal
+overtime, score limit) with the real AI and compares: the score, ball position and ball speed every second (so a FAIL says
+when the match started to differ) and the complete result (events, team and player statistics).
 
   python3 tests/test_match.py [--update] [scenario names...]"""
 import cmath
@@ -30,9 +30,10 @@ def build(sc_def, pitches):
     cfg.human_team = int(sc_def.get("human_team", 0))
     cfg.auto_switch = bool(sc_def.get("auto_switch", False))
     cfg.allow_draw = bool(sc_def.get("allow_draw", True))
-    cfg.overtime = float(sc_def.get("overtime", 60.0))
     cfg.score_limit = int(sc_def.get("score_limit", 0))
     cfg.net_temperature = float(sc_def.get("temperature", 1.0))
+    if sc_def.get("net"):                                        # one net for the home team instead of its line-up
+        cfg.nets[0] = {"model": os.path.join(ROOT, sc_def["net"])}
     return Match(cfg)
 
 

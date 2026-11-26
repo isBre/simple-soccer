@@ -1,0 +1,12 @@
+{
+ "id": "sam_taylor",
+ "name": "Sam Taylor",
+ "kind": "rules",
+ "style": "balanced",
+ "skill": 71,
+ "description": "Mint Owls' rule player. Plays Balanced: solid all-round play, no big weaknesses.",
+ "origin": {
+  "made": "2026-11-27",
+  "from": "the squad of the team owls"
+ }
+}

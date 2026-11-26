@@ -1,0 +1,12 @@
+{
+ "id": "diego_ramos",
+ "name": "Diego Ramos",
+ "kind": "rules",
+ "style": "all_out_attack",
+ "skill": 68,
+ "description": "Harbor Sharks' rule player. Plays All-Out Attack: everyone pushes forward, high risk, shoots on sight.",
+ "origin": {
+  "made": "2026-11-27",
+  "from": "the squad of the team harbor"
+ }
+}

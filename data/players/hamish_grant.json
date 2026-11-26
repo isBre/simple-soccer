@@ -1,0 +1,12 @@
+{
+ "id": "hamish_grant",
+ "name": "Hamish Grant",
+ "kind": "rules",
+ "style": "long_ball",
+ "skill": 77,
+ "description": "Plays the long ball with real accuracy: fewer wasted punts, more chances. Plays Long Ball: direct, long passes and early shots.",
+ "origin": {
+  "made": "2026-11-27",
+  "from": "a variation of the long_ball style"
+ }
+}

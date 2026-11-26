@@ -1,0 +1,12 @@
+{
+ "id": "kofi_mensah",
+ "name": "Kofi Mensah",
+ "kind": "rules",
+ "style": "dribblers",
+ "skill": 59,
+ "description": "Maroon Bulls' rule player. Plays Dribblers: carries the ball and takes opponents on instead of passing.",
+ "origin": {
+  "made": "2026-11-27",
+  "from": "the squad of the team bulls"
+ }
+}

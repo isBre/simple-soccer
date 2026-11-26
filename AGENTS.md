@@ -7,6 +7,8 @@ on the experiments, start here. People: the same applies; the dashboard (the Lab
 - `docs/rewards.md`: every reward term sorted into beneficial / unsure / not good, with the evidence (update it after each review).
 - `docs/experiment_log.md`: history, **standing decisions** (do not violate them without asking the user), conclusions, reviews.
 - `exp/schema.json`: what every metric means, its unit and direction, the evaluation protocols and the comparison rules.
+- Players and teams: a player (`data/players`) is a brain with a name (rule-based style + skill, Opus, or a net); a team (`data/teams`)
+  is a line-up of 5 players (mixed allowed). No keeper role, golden-goal overtime, no shootouts (README "Players, teams and kickoff").
 - The match itself (physics, rules, stats, AI) is the Python core `soccer/`; training (`rl/env.py`) and evaluations
   (`rl/evaluate.py`) and the Live demo match (`lab/live.py`) run on it. The web app (`web/app.py`, port 8080) has two areas: Game (the
   playable game, back end `game/`) and Lab (this pipeline's dashboard). There is no Godot any more; `python3 tests/run_all.py` runs

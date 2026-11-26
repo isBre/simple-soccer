@@ -1,9 +1,9 @@
-"""What the browser game needs from the match core: the catalog (leagues, teams, pitches, formations), match setup from the
-page's choices, and whole matches simulated in parallel (tournament rounds).
+"""What the browser game needs from the match core: the catalog (leagues, players, teams, pitches, formations), match setup
+from the page's choices, and whole matches simulated in parallel (tournament rounds).
 
 A "setup" is the page's description of one match: {"home", "away", "pitch", "size", "duration", "seed", "control"
-("none" | "single" | "team"), "human_team", "player" (single control: "GK" | "DEF" | "MID" | "FWD" | "" = auto), "formations":
-[home, away], "allow_draw", "record" (save the human's play, game/recorder.py)}."""
+("none" | "single" | "team"), "human_team", "player" (single control: the line-up slot 0..size-1 to play, "" = auto),
+"formations": [home, away], "allow_draw" (False: golden-goal overtime), "record" (save the human's play, game/recorder.py)}."""
 import json
 import math
 import os
@@ -17,14 +17,14 @@ if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
 from soccer import match as sm                                       # noqa: E402
-from soccer.data import Team, database, formation_slots, formations, resolve_kits, team_colors   # noqa: E402
-from soccer.match import res_path                                     # noqa: E402
+from soccer.data import database, formation_slots, formations, resolve_kits, team_colors   # noqa: E402
 
-LEAGUES = [{"id": "rules", "name": "Rule Based League"}, {"id": "rl", "name": "Reinforcement Learning League"}]
+LEAGUES = [{"id": "rules", "name": "Rule Based League"}, {"id": "rl", "name": "Reinforcement Learning League"},
+           {"id": "mixed", "name": "Mixed League"}]
 CONTROL = {"none": sm.NONE, "single": sm.SINGLE, "team": sm.TEAM}
 STYLE_PARAMS = ("line_height", "press", "marking", "directness", "pass_bias", "width")
-NET_DESCRIPTION = ("All players, goalkeeper included, are controlled by a neural net trained with reinforcement learning. It chooses its own "
-                   "formation and roles (5v5; other sizes fall back to the rule-based style).")
+KIND_LABEL = {"rules": "Rule-based", "opus": "Opus planner", "net": "Neural net (RL)"}
+NET_DESCRIPTION = "Every player is the same neural net, trained with reinforcement learning. It finds its own shape (5v5 only)."
 
 
 def league_index(league_id):
@@ -46,76 +46,34 @@ def stars(strength):
     return math.floor(min(1.0, max(0.0, (strength - 50.0) / 39.0)) * 10.0 + 0.5) / 2.0
 
 
-# ---------- the teams of the game: every team of data/teams, plus every ranked net (lab/ladder.py roster) as an RL team ----------
-NET_PREFIX = "net_"
-_NET_COLORS = ("e74c3c", "e67e22", "f1c40f", "2ecc71", "1abc9c", "3498db", "9b59b6", "e84393", "00cec9", "fd79a8", "a3cb38",
-               "6c5ce7", "fab1a0", "74b9ff", "ff7675", "55efc4", "ffeaa7", "b2bec3", "d35400", "16a085")
-_LOGO = {"shape": ("shield", "circle", "hex", "diamond"), "pattern": ("solid", "stripes", "halves", "chevron", "band", "quarters"),
-         "symbol": ("star", "bolt", "crown", "ring", "cross", "none")}
-_teams = None
-
-
+# ---------- the teams of the game: every team of data/teams (line-ups of data/players) ----------
 def _sha(path):
     import hashlib
     with open(path, "rb") as f:
         return hashlib.sha1(f.read()).hexdigest()[:10]
 
 
-def _net_name(stem):
-    """x_kickstart_persist_best -> Kickstart Persist; t48_u100 -> T48 U100."""
-    core = stem[2:-5] if stem.startswith("x_") and stem.endswith("_best") else stem[:-5] if stem.endswith("_best") else stem
-    return " ".join(w[:1].upper() + w[1:] for w in core.split("_"))
-
-
-def _net_team(entry, squad):
-    """An RL team for one ranked net: RL Team 5's squad (as the ladder plays it), its own name, colours and crest."""
-    import hashlib
-    stem = entry["id"][4:]
-    h = hashlib.sha1(stem.encode()).digest()
-    c1 = _NET_COLORS[h[0] % len(_NET_COLORS)]
-    c2 = "1d1d1f" if int(c1[2:4], 16) > 120 else "f2f2f2"
-    name = _net_name(stem)
-    raw = {**squad.raw, "id": NET_PREFIX + stem, "name": name, "short": "".join(w[0] for w in name.split())[:3].upper() or "NET",
-           "colors": {"primary": c1, "secondary": c2}, "kit": _LOGO["pattern"][h[1] % 6],
-           "logo": {"shape": _LOGO["shape"][h[2] % 4], "pattern": _LOGO["pattern"][h[3] % 6], "symbol": _LOGO["symbol"][h[4] % 5],
-                    "c1": c1, "c2": c2, "c3": "ffffff"},
-           "ml_model": "res://" + entry["model"], "league": "rl", "_ladder": entry["id"], "_sha": entry["sha"]}
-    raw["players"] = [{**p, "id": "%s_%d" % (raw["id"], i)} for i, p in enumerate(squad.raw.get("players", []))]
-    return Team(raw)
-
-
 def teams():
-    """{id: Team}: the teams of data/teams and one RL team per ranked net (built once per process)."""
-    global _teams
-    if _teams is None:
-        out = dict(database().teams)
-        try:
-            from lab import ladder
-            squad = out.get(ladder.NET_SQUAD)
-            if squad is not None:
-                for e in ladder.roster():
-                    if e["kind"] == "net":
-                        t = _net_team(e, squad)
-                        out[t.id] = t
-        except Exception as e:                  # never lose the handmade teams because of a broken net file
-            print("game: the ranked nets could not be added (%s: %s)" % (type(e).__name__, e), flush=True)
-        _teams = out
-    return _teams
+    """{id: Team}: the teams of data/teams."""
+    return database().teams
+
+
+def players():
+    """{id: PlayerDef}: the players of data/players."""
+    return database().players
 
 
 def ladder_id(t):
     """The team's id in the Elo ranking (lab/ladder.py)."""
-    return t.raw.get("_ladder") or (("team:" if t.ml_model else "rules:") + t.id)
+    return ("team:" if t.ml_model else "rules:") + t.id
 
 
 def team_sha(t):
     """The files a team's play depends on (team file, net), as a short hash."""
-    if t.raw.get("_sha"):
-        return t.raw["_sha"]
     path = os.path.join(ROOT, "data", "teams", t.id + ".json")
     sha = _sha(path) if os.path.exists(path) else ""
     if t.ml_model:
-        model = res_path(t.ml_model)
+        model = os.path.join(ROOT, t.ml_model)
         if os.path.exists(model):
             sha += _sha(model)
     return sha
@@ -230,6 +188,16 @@ def formation_options(size):
     return [k for k in formations()["formations"] if len(formation_slots(k)) == size]
 
 
+def player_info(p):
+    """A player for the page: who it is, what drives it, how it was made, the sizes it can play."""
+    db = database()
+    style = db.styles.get(p.style_id) if p.kind != "net" else None
+    return {"id": p.id, "name": p.name, "kind": p.kind, "kind_label": KIND_LABEL.get(p.kind, p.kind), "skill": p.skill if p.kind != "net" else None,
+            "style": style.id if style else "", "style_label": style.name if style else "", "description": p.description,
+            "origin": p.origin, "sizes": p.sizes(),
+            "teams": sorted(t.id for t in teams().values() if p.id in t.lineup_ids)}
+
+
 def team_info(t, elo=None):
     db = database()
     style = db.style_of(t)
@@ -237,17 +205,17 @@ def team_info(t, elo=None):
     s = t.strength()
     elo = elo_table() if elo is None else elo
     e = elo.get(ladder_id(t))
-    return {"id": t.id, "name": t.name, "short": str(t.raw.get("short", t.name[:3].upper())), "league": t.league,
+    return {"id": t.id, "name": t.name, "short": t.short, "league": t.league,
             "league_name": league_name(t.league), "colors": team_colors(t), "kit": str(t.raw.get("kit", "solid")),
-            "logo": t.raw.get("logo", {}), "net": net, "style": style.id,
+            "logo": t.raw.get("logo", {}), "net": net, "style": style.id, "kinds": t.kinds(),
             "style_label": "Neural net (RL)" if net else style.name,
             "style_description": NET_DESCRIPTION if net else style.description,
             "plays": describe(t.id), "elo": None if e is None else round(e),
             "style_params": {} if net else {k: getattr(style, k) for k in STYLE_PARAMS},
             "strength": s, "stars": stars(s), "formation_for": {str(n): t.formation_for(n) for n in range(1, 6)},
-            "players": [{"id": p.id, "number": p.number, "name": p.name, "pos": p.pos, "overall": p.overall(), "finishing": p.finishing,
-                         "passing": p.passing, "defending": p.defending, "positioning": p.positioning, "reaction": p.reaction}
-                        for p in t.players]}
+            "sizes": [n for n in range(1, 6) if t.can_play(n)],
+            "lineup": [p.id for p in t.players],
+            "lineup_for": {str(n): [p.id for p, _, _, _ in t.lineup(n)] for n in range(1, 6) if t.can_play(n)}}
 
 
 def team_list():
@@ -262,6 +230,7 @@ def catalog():
     elo = elo_table()
     return {"leagues": [{**lg, "count": sum(1 for t in teams().values() if t.league == lg["id"])} for lg in LEAGUES],
             "teams": [team_info(t, elo) for t in team_list()],
+            "players": [player_info(p) for p in sorted(players().values(), key=lambda p: (p.kind, p.name)) if not p.hidden],
             "pitches": [{"id": p.id, "name": p.name, "sizes": p.sizes, "recommended": int(p.sizes[-1]) if p.sizes else 3,
                          "half_w": p.half_w, "half_h": p.half_h, "goal_half": p.goal_half,
                          "colors": {k: str(p.raw.get("colors", {}).get(k, d)).lstrip("#")
@@ -270,22 +239,21 @@ def catalog():
 
 
 def config(setup):
-    """A MatchConfig from a setup (see the module docstring); unknown teams or pitches raise KeyError."""
-    db = database()
+    """A MatchConfig from a setup (see the module docstring); unknown teams or pitches raise KeyError, a team that cannot play
+    the size (only 5v5 nets in its line-up) raises ValueError."""
     all_teams = teams()
+    size = int(setup.get("size", 3))
     for k in ("home", "away"):
         if setup[k] not in all_teams:
             raise KeyError("unknown team %r" % setup[k])
-
-    class _Db:                                          # make_config's lookups, with the ranked nets as teams
-        pitches = db.pitches
-    _Db.teams = all_teams
-    c = sm.make_config(setup["home"], setup["away"], setup.get("pitch", "arena"), int(setup.get("size", 3)),
-                       float(setup.get("duration", 180.0)), int(setup.get("seed", random.getrandbits(31))), db=_Db)
+        if not all_teams[setup[k]].can_play(size):
+            raise ValueError("%s cannot play %dv%d" % (all_teams[setup[k]].name, size, size))
+    c = sm.make_config(setup["home"], setup["away"], setup.get("pitch", "arena"), size,
+                       float(setup.get("duration", 180.0)), int(setup.get("seed", random.getrandbits(31))))
     c.control = CONTROL.get(str(setup.get("control", "none")), sm.NONE)
     c.human_team = 1 if int(setup.get("human_team", 0)) == 1 else 0
-    role = str(setup.get("player", "")).upper()
-    c.human_role = role if role in ("GK", "DEF", "MID", "FWD") else ""
+    slot = str(setup.get("player", "")).strip()
+    c.human_slot = int(slot) if slot.isdigit() and int(slot) < size else -1
     c.allow_draw = bool(setup.get("allow_draw", True))
     fs = list(setup.get("formations") or ["", ""])[:2]
     c.formations = [str(f) if f and len(formation_slots(str(f))) == c.team_size else "" for f in fs] + [""] * (2 - len(fs))

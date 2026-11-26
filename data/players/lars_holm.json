@@ -1,0 +1,12 @@
+{
+ "id": "lars_holm",
+ "name": "Lars Holm",
+ "kind": "rules",
+ "style": "high_press",
+ "skill": 90,
+ "description": "The most relentless presser in the game: sharp, fast to react and hard to escape. Plays High Press: wins the ball high up the pitch with several chasers.",
+ "origin": {
+  "made": "2026-11-27",
+  "from": "a variation of the high_press style"
+ }
+}

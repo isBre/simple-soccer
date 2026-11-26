@@ -1,0 +1,12 @@
+{
+ "id": "ivan_petrov",
+ "name": "Ivan Petrov",
+ "kind": "rules",
+ "style": "sharpshooters",
+ "skill": 62,
+ "description": "Rose Falcons' rule player. Plays Sharpshooters: shoots from distance as soon as a lane opens up.",
+ "origin": {
+  "made": "2026-11-27",
+  "from": "the squad of the team rose"
+ }
+}

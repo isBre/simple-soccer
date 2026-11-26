@@ -1,0 +1,12 @@
+{
+ "id": "marco_bellini",
+ "name": "Marco Bellini",
+ "kind": "rules",
+ "style": "catenaccio",
+ "skill": 88,
+ "description": "A master of the deep block: disciplined, patient and deadly on the break. Plays Catenaccio: fixed keeper, deep disciplined block, man-marking and sudden long strikes.",
+ "origin": {
+  "made": "2026-11-27",
+  "from": "a variation of the catenaccio style"
+ }
+}

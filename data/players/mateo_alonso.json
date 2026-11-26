@@ -1,0 +1,12 @@
+{
+ "id": "mateo_alonso",
+ "name": "Mateo Alonso",
+ "kind": "rules",
+ "style": "tiki_taka",
+ "skill": 84,
+ "description": "Aurora FC's rule player. Plays Tiki-Taka: short passes, high possession, patient build-up.",
+ "origin": {
+  "made": "2026-11-27",
+  "from": "the squad of the team aurora"
+ }
+}

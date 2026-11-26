@@ -1,0 +1,29 @@
+{
+  "id": "net_lab",
+  "name": "Net Lab",
+  "short": "LAB",
+  "colors": {
+    "primary": "00b894",
+    "secondary": "2d3436"
+  },
+  "kit": "chevron",
+  "logo": {
+    "shape": "circle",
+    "pattern": "chevron",
+    "symbol": "ring",
+    "c1": "00b894",
+    "c2": "2d3436",
+    "c3": "ffffff"
+  },
+  "style": "balanced",
+  "formations": {},
+  "lineup": [
+    "finn_dahl",
+    "leon_sommer",
+    "max_winter",
+    "anton_richter",
+    "jasper_klein"
+  ],
+  "league": "rl",
+  "rl_eval": false
+}

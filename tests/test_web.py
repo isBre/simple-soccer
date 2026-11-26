@@ -1,11 +1,12 @@
 """Smoke test of the web app (web/app.py): starts it on a free port and checks
   pages      the shell, styles and scripts are served; the Lab API answers (/api/v1/runs, /api/docs)
-  catalog    leagues, teams, pitches, formations
+  catalog    leagues, players, teams (line-ups of known players), pitches, formations
+  team select a mixed team fields the players who can play the size; a team of 5v5 nets is refused at 3v3
   live       a match played over the WebSocket (/ws/match, at 8x speed) ends with the same result as the same setup simulated
              in one go (game/api.py play): the live path and the simulation are the same match
   input      the human's keys move the controlled player
   dataset    the Lab's Dataset page API analyses that file (/api/dataset) and serves it for the replay (/api/dataset/match/<id>)
-  record     a match with "record" saves the human's play (game/recorder.py): the picked keeper is the one recorded, the keys become
+  record     a match with "record" saves the human's play (game/recorder.py): the picked slot is the one recorded, the keys become
              the right net moves, the observation can be rebuilt from the stored state (il/human_data.py), a match without it saves nothing
   ranking    the Elo ranking (/api/ranking, lab/ladder.py) lists every team, sorted, each rating inside its interval
   tournament new -> simulate a round -> fixture -> record a result -> view, through /api/game/tournament
@@ -101,18 +102,24 @@ def main():
         results.append(check("pages", all(c == 200 and len(b) > 100 for c, b in pages) and "data" in runs, "%d files, %d runs" % (len(pages), len(runs["data"]))))
 
         cat = json.loads(get(port, "/api/game/catalog")[1])
-        results.append(check("catalog", len(cat["leagues"]) == 2 and len(cat["teams"]) >= 16 and cat["pitches"] and cat["formations"]["5"],
-                             "%d teams, %d pitches" % (len(cat["teams"]), len(cat["pitches"]))))
-        # the team select: every ranked net is an RL team (lab/ladder.py roster), each team has its Elo and a one-line description
-        nets = [t for t in cat["teams"] if t["id"].startswith(api.NET_PREFIX)]
+        players = {p["id"]: p for p in cat["players"]}
+        results.append(check("catalog", len(cat["leagues"]) == 3 and len(cat["teams"]) >= 16 and cat["pitches"] and cat["formations"]["5"]
+                             and len(players) >= 30 and all(i in players for t in cat["teams"] for i in t["lineup"]),
+                             "%d teams, %d players, %d pitches" % (len(cat["teams"]), len(players), len(cat["pitches"]))))
+        # teams are line-ups of players: a mixed team plays every size its players can, a team of 5v5 nets only 5v5
         rated = [t for t in cat["teams"] if t["elo"] is not None]
-        described = [t for t in cat["teams"] if t["plays"]]
-        net_ok = True
-        if nets:
-            r = api.play({"home": nets[0]["id"], "away": "cobalt", "pitch": "arena", "size": 5, "duration": 20.0, "seed": 5, "control": "none"})
-            net_ok = r["teams"][0] == nets[0]["id"]
-        results.append(check("team select", all(t["league"] == "rl" for t in nets) and net_ok and all("plays" in t and "elo" in t for t in cat["teams"]),
-                             "%d nets as teams, %d rated, %d described" % (len(nets), len(rated), len(described))))
+        described = [p for p in players.values() if p["description"]]
+        mixed = api.play({"home": "all_stars", "away": "opus_friends", "pitch": "arena", "size": 3, "duration": 20.0, "seed": 5, "control": "none"})
+        names = {p["name"] for p in mixed["players"] if p["team"] == 0}
+        try:
+            api.config({"home": "rl_team_5", "away": "cobalt", "size": 3})
+            refused = False
+        except ValueError:
+            refused = True
+        nets_only = [t for t in cat["teams"] if t["net"]]
+        results.append(check("team select", refused and names == {"Opus", "Viktor Lund", "Mateo Alonso"} and all(t["sizes"] == [5] for t in nets_only)
+                             and len(described) == len(players) and all("plays" in t and "elo" in t for t in cat["teams"]),
+                             "%d players described, %d teams rated, 3v3 all_stars fields %s" % (len(described), len(rated), ", ".join(sorted(names)))))
 
         setup = {"home": "cobalt", "away": "rl_team_4", "pitch": "arena", "size": 5, "duration": 40.0, "seed": 21, "control": "none",
                  "allow_draw": False}
@@ -131,7 +138,7 @@ def main():
         sim = api.play(setup)
         results.append(check("live", meta["k"] == "m" and live is not None and live == json.loads(json.dumps(sim)),
                              "%d frames in %.1f s, score %s (%s) = simulated %s" % (frames, time.time() - t0, live and live["scores"],
-                                                                                   "pens %s" % live["shootout"] if live and live["shootout"] else "no shootout", sim["scores"])))
+                                                                                   "golden goal" if live and live["overtime"] else "no overtime", sim["scores"])))
 
         ws = WS(port)
         ws.send({"setup": {**setup, "control": "single", "human_team": 0, "duration": 30.0}})
@@ -156,7 +163,7 @@ def main():
         from il import human_data
         unrecorded = len(human_data.files(rec_dir))          # the matches above did not ask for recording
         ws = WS(port)
-        ws.send({"setup": {**setup, "home": "rl_team_4", "away": "cobalt", "control": "single", "human_team": 1, "player": "GK",
+        ws.send({"setup": {**setup, "home": "rl_team_4", "away": "cobalt", "control": "single", "human_team": 1, "player": "0",
                            "duration": 20.0, "record": True}})
         meta = ws.recv()
         ws.send({"speed": 8})
@@ -168,12 +175,12 @@ def main():
         detail = "%d files" % len(fs)
         if len(fs) == 1:
             d = human_data.load(fs[0])
-            gk = next(p for p in d["meta"]["players"] if p["team"] == 1 and p["role"] == "GK")
+            gk = next(p for p in d["meta"]["players"] if p["team"] == 1 and p["slot"] == 0)
             worst = max(float(abs(human_data.observation(d, i) - d["obs"][i]).max()) for i in range(0, len(d["tick"]), 7))
             fwd = float((d["move"] == 3).mean())
             ok = ok and d["meta"]["complete"] and set(d["ctrl"].tolist()) == {gk["uid"]} and d["obs"].shape[1] == 46 and fwd > 0.9 \
                 and worst < 1e-5 and len(d["tick"]) > 400
-            detail = "%d rows, keeper uid %d, forward moves %.0f%%, obs rebuilt within %.1g" % (len(d["tick"]), gk["uid"], 100 * fwd, worst)
+            detail = "%d rows, slot-0 uid %d, forward moves %.0f%%, obs rebuilt within %.1g" % (len(d["tick"]), gk["uid"], 100 * fwd, worst)
         results.append(check("record", ok, detail))
 
         ds = json.loads(get(port, "/api/dataset")[1])

@@ -1,6 +1,6 @@
 """Rule-based AI: TeamBrain coordinates one team (who chases the ball, who is the carrier, who keeps goal, who marks whom,
 who runs onto an opponent's pass), StyleBot plays one player from the team's style and the player's attributes.
-Roles of a StyleBot: goalkeeper / chaser (plays the ball: shoot, pass, dribble, clear) / off-ball (shape, support, marking)."""
+Jobs of a StyleBot (given by the team brain each tick, never fixed): goal guard / chaser (plays the ball: shoot, pass, dribble, clear) / off-ball (shape, support, marking)."""
 import math
 
 from ..match import KICK_RANGE, KICK_STRENGTH
@@ -87,9 +87,9 @@ class TeamBrain:
         self.keeper = None                 # whoever is guarding the goal right now (any player can)
 
     def _pick_keeper(self, m, mates, ax):
-        """The keeper is the rearmost non-chasing player. The nominal GK slot gets a head start that shrinks with
-        style.fluidity (0 = fixed goalkeeper, 1 = anyone can keep goal); the current keeper keeps the job unless someone
-        else is clearly deeper (no flicker)."""
+        """Who guards the goal: the rearmost non-chasing player. The player on the formation's goal spot (line "GK", a spot of
+        the team's tactic, not a player's role) gets a head start that shrinks with style.fluidity (0 = the goal spot always
+        guards, 1 = whoever is deepest); the current guard keeps the job unless someone else is clearly deeper (no flicker)."""
         if len(mates) <= 1:
             self.keeper = None
             return
@@ -97,7 +97,7 @@ class TeamBrain:
             self.keeper = None             # the human decides for himself where to stand
         if self.keeper is None:
             for sp in mates:
-                if sp.role == "GK" and not sp.is_human:
+                if sp.line == "GK" and not sp.is_human:
                     self.keeper = sp
             if self.keeper is None:
                 for sp in mates:
@@ -110,9 +110,9 @@ class TeamBrain:
             if sp.is_human or (sp in self.chasers and sp is not self.keeper):
                 continue
             s = (sp.pos.real - own_x) * ax
-            if sp.role == "GK":
+            if sp.line == "GK":
                 s -= 260.0 * (1.0 - self.style.fluidity)
-            elif sp.role == "FWD":
+            elif sp.line == "FWD":
                 s += 40.0
             if sp is self.keeper:
                 s -= 50.0
@@ -125,7 +125,8 @@ class TeamBrain:
         st = self.style
         ball = m.ball_pos
         ax = m.attack_dir(self.team)
-        mates = m.team_lists[self.team]
+        team = m.team_lists[self.team]
+        mates = [p for p in team if p.brain is self]          # the players this brain commands (a mixed team has several)
         opps = m.team_lists[1 - self.team]
         lt = m.last_touch
         hw = m.pitch.half_w
@@ -152,7 +153,7 @@ class TeamBrain:
         # a human-controlled player is not ours to command: when he is the one at the ball the bots leave it to him
         # (no second chaser running into him) and just support
         human = None
-        for sp in mates:
+        for sp in team:
             if sp.is_human:
                 human = sp
         if self.pass_target is not None and not self.pass_target.is_human:
@@ -253,7 +254,7 @@ class TeamBrain:
         for sp in mates:
             if sp is self.keeper or sp in self.chasers or sp.is_human:
                 continue
-            if sp.role == "FWD" and self.style.forward_stay > 0.5:
+            if sp.line == "FWD" and self.style.forward_stay > 0.5:
                 continue
             free.append(sp)
         if not free:
@@ -339,7 +340,7 @@ def _pass_margin(m, team, a, b):
 
 
 class StyleBot:
-    """Rule-based bot driven by the team's style (tactics) and the player's attributes."""
+    """Rule-based bot driven by its player's style and skill (soccer/ai/skill.py), coordinated by its team brain."""
 
     def __init__(self, style):
         self.style = style
@@ -358,7 +359,7 @@ class StyleBot:
         p.input_kick = False
         p.kick_intent = ""
         p.input_dir = 0j
-        brain = m.brains[p.team]
+        brain = p.brain
         bpos = m.ball_at(p.reaction_delay)
         bold = m.ball_at(p.reaction_delay + 4)
         bvel = (bpos - bold) / 4.0
@@ -613,10 +614,10 @@ class StyleBot:
         pd = m.pitch
         hw, hh = pd.half_w, pd.half_h
         bx = bpos.real * ax / hw
-        role = p.role
+        role = p.line                         # the line of this player's formation spot (team tactic)
         fx = p.home.real
         if role == "GK":
-            # the nominal goalkeeper plays as a defender while someone else keeps goal
+            # the player on the goal spot plays as a defender while someone else guards the goal
             role = "DEF"
             fx = max(fx, -0.62)
         shift = {"MID": 0.45, "FWD": 0.5}.get(role, 0.3)

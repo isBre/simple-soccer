@@ -11,6 +11,13 @@ dashboard: `http://<pi-address>:8080`. Newest entries at the bottom; the agent a
   placed in the ladder and its rating settles as the ladder plays. During training every check also gives an estimated Elo (24 matches
   against mixed ladder entries, about ±140). Points against the rule bots saturate near 3 and are kept only as a health check.
 - **No fixed roles.** One net drives all 5 players; the observation has no player slot or ID, so roles must come from the situation (decided 2026-11-14).
+- **Players and teams** (user, 2026-11-27; branch `game-players`, phase A): a **player** is a brain with a name (`data/players`: rule-based
+  style + skill, Opus, or a net), every player has the same body; a **team** is an identity, a tactic and a line-up of 5 players, mixed
+  line-ups allowed (`soccer/teams.py`, `soccer/ai/lineup.py`). **No keeper role** in the match (any player takes the kickoff, no saves,
+  the rule AI picks a goal guard by situation from the formation's spots); **no shootouts**: a knockout draw is golden-goal overtime
+  without a time limit. The old nets are players that only play 5v5 (46 / 54 inputs); the ladder's old team ratings no longer apply
+  to the rule teams (their files changed). Next: phase B (game UI), C (local rating database, player and team Elo per size), D (55-number
+  observation with on/off flags and whose kickoff, curriculum 1v0 -> 5v5 from scratch).
 - **Observation `team` (46 numbers):** me, my 4 teammates nearest first, the 5 opponents nearest first, the ball (positions and velocities,
   normalised), a kickoff flag and a goal-celebration flag. No goal positions, no "ball relative to me", no score, no time.
 - **Reward terms come back one at a time** on top of the minimal set, each as its own experiment judged by a full evaluation (2026-11-16).

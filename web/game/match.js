@@ -99,7 +99,7 @@ export function syncOverlay(M, f) {
   const k = (x) => `<kbd>${x}</kbd>`;
   if (kind === "error") ov.innerHTML = `<div class="mo-card"><div class="mo-k">The match stopped</div><p class="mo-msg">${esc(M.error)}</p>
     <div class="mo-btns"><button type="button" class="ks-go" data-act="quit">Back ${k("Enter")}</button></div></div>`;
-  else if (kind === "pause") ov.innerHTML = `<div class="mo-card"><div class="mo-k">Paused · ${f.ot ? "overtime " + clockText(f.otl) : clockText(f.tl) + " left"}</div>
+  else if (kind === "pause") ov.innerHTML = `<div class="mo-card"><div class="mo-k">Paused · ${f.ot ? "overtime " + clockText(f.ots) : clockText(f.tl) + " left"}</div>
     <div class="mo-sc small">${esc(m.teams[0].name)} <b>${f.sc[0]} – ${f.sc[1]}</b> ${esc(m.teams[1].name)}</div>
     <div class="mo-btns col"><button type="button" class="ks-go" data-act="pause">Resume ${k("Esc")}</button>
       ${M.p.session ? "" : `<button type="button" class="ks-btn2" data-act="restart">Restart ${k("R")}</button>`}<button type="button" class="ks-btn2" data-act="quit">Quit the match ${k("M")}</button></div>
@@ -108,7 +108,7 @@ export function syncOverlay(M, f) {
     <div class="mo-keys"><span>Paused:</span><span>${k("A")} resume</span>${M.p.session ? "" : `<span>${k("Y")} restart</span>`}<span>${k("⧉")} quit</span></div>` : ""}</div>`;
   else {
     const res = M.result, w = f.w, ev = res ? res.events : [];
-    const verdict = w === -1 ? "Draw" : `${esc(m.teams[w].name)} win${f.so ? ` on penalties ${f.so[0]}–${f.so[1]}` : res?.overtime ? " with a golden goal" : ""}`;
+    const verdict = w === -1 ? "Draw" : `${esc(m.teams[w].name)} win${res?.overtime ? " with a golden goal" : ""}`;
     const goals = (t) => ev.filter((e) => e.team === t).map((e) => `<div>${Math.floor(e.clock / 60) + 1}' ${esc(e.scorer_name)}${e.own ? " (OG)" : ""}</div>`).join("");
     ov.innerHTML = `<div class="mo-card end" style="--c0:#${m.teams[0].kit[0]};--c1:#${m.teams[1].kit[0]}"><div class="mo-k">Full time</div>
       <div class="mo-final"><span class="mo-crest"></span><span class="mo-name r">${esc(m.teams[0].name)}</span><span class="mo-big">${f.sc[0]} – ${f.sc[1]}</span><span class="mo-name">${esc(m.teams[1].name)}</span><span class="mo-crest"></span></div>

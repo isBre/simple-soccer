@@ -1,0 +1,12 @@
+{
+ "id": "felix_wagner",
+ "name": "Felix Wagner",
+ "kind": "rules",
+ "style": "gegenpress",
+ "skill": 79,
+ "description": "Teal Tide's rule player. Plays Gegenpress: wins the ball back within seconds of losing it with extra chasers, then strikes.",
+ "origin": {
+  "made": "2026-11-27",
+  "from": "the squad of the team tide"
+ }
+}

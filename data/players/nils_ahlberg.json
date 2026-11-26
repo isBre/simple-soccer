@@ -1,0 +1,13 @@
+{
+ "id": "nils_ahlberg",
+ "name": "Nils Ahlberg",
+ "kind": "net",
+ "model": "models/team46_long.json",
+ "description": "Neural net. A 46-number role-free copy of jit8 by imitation (1400 steps, 8 DAgger rounds), no reinforcement learning. Elo 1580 (61st of 98) in the old 5v5 ladder of 2026-11-26 (team ratings, before players existed); scored 1.18 and conceded 0.76 per match against the average team.",
+ "origin": {
+  "made": "2026-11-27",
+  "legacy_elo": 1580,
+  "line": "team 46",
+  "run": "distill team46_long"
+ }
+}

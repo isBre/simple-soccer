@@ -1,0 +1,12 @@
+{
+ "id": "emil_novak",
+ "name": "Emil Novak",
+ "kind": "rules",
+ "style": "switch_play",
+ "skill": 70,
+ "description": "Lime Comets' rule player. Plays Switch Play: wide and patient: moves the ball to the far side to find space.",
+ "origin": {
+  "made": "2026-11-27",
+  "from": "the squad of the team lime"
+ }
+}
