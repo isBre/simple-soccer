@@ -19,7 +19,7 @@ export function stopMatch() {
 export const KEYS = { ArrowLeft: [-1, 0], KeyA: [-1, 0], ArrowRight: [1, 0], KeyD: [1, 0], ArrowUp: [0, -1], KeyW: [0, -1], ArrowDown: [0, 1], KeyS: [0, 1] };
 export function match(p) {
   document.body.classList.add("g-playing");
-  Sound.unlock();
+  Music.stop(1.2); Sound.unlock();
   const v = mount('<div class="g-match"><canvas></canvas></div>');
   const cv = $("canvas", v);
   const M = G.match = { p, cv, ws: null, meta: null, frames: [], held: new Set(), sentIn: "", paused: false, speed: 1, result: null, error: "", stopped: false,

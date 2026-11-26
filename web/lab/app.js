@@ -72,7 +72,7 @@ function render() {
     if (lastHTML !== key) { lastHTML = key; document.title = "Simple Soccer"; Game.show(r.parts); }
     return;
   }
-  Game.stopMatch();
+  Game.stopMatch(); Music.stop(0.6);                       // the Lab makes no sound
   if (!state.ov && !state.firstFail && !pending._ov) { pending._ov = true; poll().finally(() => { delete pending._ov; }); }
   for (const a of document.querySelectorAll("[data-v]")) a.classList.toggle("on", a.dataset.v === (r.view === "run" ? "runs" : r.view));
   document.body.dataset.view = r.view;

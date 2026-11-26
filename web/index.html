@@ -27,6 +27,10 @@
       <a href="#/docs" data-v="docs">Docs</a>
     </nav>
     <span class="nav-fill game-only"></span>
+    <span class="snd game-only" role="group" aria-label="Sound">
+      <button type="button" id="snd-music" class="snd-btn" title="Music on / off (M)" aria-label="Music" aria-pressed="true"></button>
+      <button type="button" id="snd-all" class="snd-btn" title="All sound on / off (N)" aria-label="Sound" aria-pressed="true"></button>
+    </span>
     <input id="picker" class="picker lab-only" list="runlist" placeholder="Jump to run…  /" aria-label="Jump to a run"><datalist id="runlist"></datalist>
     <a id="machinechip" class="machinechip lab-only" href="#/machine" data-v="machine" title="Machine health">Health</a>
     <button id="theme" class="theme-btn lab-only" title="Light / dark" aria-label="Switch light or dark theme">☀</button>
@@ -48,6 +52,7 @@
 <footer class="lab-only">Read-only · refreshes every 10 s · <a href="/api/v1">API</a> · <a href="/results.md">results.md</a> · agents: <span class="mono">python3 lab/lab.py -h</span></footer>
 <script src="draw.js"></script>
 <script src="sound.js"></script>
+<script src="music.js"></script>
 <script src="lab/core.js"></script>
 <script src="lab/now.js"></script>
 <script src="lab/runs.js"></script>
