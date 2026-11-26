@@ -37,26 +37,64 @@ export function onGoal(M, ev) {
 export function sfx(M, d) {
   const m = M.meta, fr = M.frames, a = fr[fr.length - 1], z = fr[fr.length - 2];
   if (!m || !a || d.t < a.t) return;                                                  // (the tick stands still during the kickoff intro)
-  const P = m.pitch, pan = d.b[0] / (P.out_x || P.half_w) * 0.7;
-  if (a.in > 0 && !d.in && d.st === 0) Sound.whistle(Sound.WHISTLE.kickoff);          // the kickoff intro is over: play
+  const P = m.pitch, pan = d.b[0] / (P.out_x || P.half_w) * 0.7, now = performance.now(), mine = (t) => m.control === 0 || t === m.human_team;
+  if (a.in > 0 && !d.in && d.st === 0) Sound.whistle(Sound.WHISTLE.kickoff);          // every kickoff's intro is over: play
   if (!a.ot && d.ot) Sound.whistle(Sound.WHISTLE.overtime);
-  if (a.st !== 1 && d.st === 1) Sound.roar(d.gt === m.human_team ? 1 : 0.6);
-  if (a.st !== 2 && d.st === 2) { Sound.whistle(Sound.WHISTLE.fulltime); setTimeout(() => G.match === M && Sound.roar(0.4), 1300); }
+  if (a.st !== 1 && d.st === 1) { Sound.goal(mine(d.gt)); Sound.bounce("net", 0.8, pan); M.shot = null; M.bounceAt = now; }
+  if (a.st !== 2 && d.st === 2) { Sound.whistle(Sound.WHISTLE.fulltime); setTimeout(() => G.match === M && Sound.fulltime(), 1300); }
+  if (d.st === 2 || d.in) return;
+  // the crowd: louder as the ball nears either goal, more so in front of it and when it moves fast
+  if (d.st === 0 && !(d.t % 6)) {
+    const near = Math.max(0, (Math.abs(d.b[0]) / P.half_w - 0.4) / 0.6), central = Math.abs(d.b[1]) < P.goal_half * 2.5 ? 1 : 0.6;
+    const speed = Math.min(1, Math.hypot(d.b[0] - a.b[0], d.b[1] - a.b[1]) / (M.speed || 1) / 8);
+    Sound.hype(Math.pow(near, 1.4) * central * (0.75 + 0.25 * speed));
+  }
   // a kick: a player's "kick used" flag (it is set only when the kick reached the ball) goes on
   let kicked = false;
   for (let i = 0; i < d.h.length && !kicked; i++) if ((d.h[i] & 4) && !(a.h[i] & 4)) {
-    const v = Math.hypot(d.b[0] - a.b[0], d.b[1] - a.b[1]) / (M.speed || 1);
-    Sound.kick(Math.min(1, Math.max(0.45, v / 7)) * (d.h[i] & 1 ? 1 : 0.75), pan); kicked = true;
+    const v = Math.hypot(d.b[0] - a.b[0], d.b[1] - a.b[1]) / (M.speed || 1), s = Math.min(1, Math.max(0.3, v / 7));
+    Sound.kick(s * (d.h[i] & 1 ? 1 : 0.8), pan); kicked = true;
+    // a shot: fast, towards the goal the player attacks, from the half nearer it (for an "ooh" if it misses)
+    const goalX = Math.sign(d.b[0] - a.b[0]) * P.half_w;
+    if (v > 5 && Math.abs(d.b[0]) > P.half_w * 0.3 && Math.sign(d.b[0]) === Math.sign(goalX)) M.shot = { at: now, x: goalX };
   }
-  // the ball changed direction without a kick: off a post, the boards / net, or a player
-  if (kicked || !z || M.speed !== 1 || d.st === 2 || performance.now() - (M.bounceAt || 0) < 90) return;
+  if (M.shot && now - M.shot.at > 2500) M.shot = null;
+  if (M.speed !== 1) return;
+  // two players of different teams run into each other fighting for the ball (hard enough to hear; at most one in 0.6 s)
+  if (now - (M.tackleAt || 0) > 600 && d.p.length === a.p.length) {
+    const n = d.p.length / 2, pl = m.players;
+    pairs: for (let i = 0; i < n; i++) for (let j = i + 1; j < n; j++) {
+      if (pl[i].team === pl[j].team) continue;
+      const r = pl[i].r + pl[j].r + 1.5;
+      const dd = Math.hypot(d.p[2 * i] - d.p[2 * j], d.p[2 * i + 1] - d.p[2 * j + 1]), da = Math.hypot(a.p[2 * i] - a.p[2 * j], a.p[2 * i + 1] - a.p[2 * j + 1]);
+      if (dd < r && da >= r && da - dd > 1.5 && Math.min(Math.hypot(d.p[2 * i] - d.b[0], d.p[2 * i + 1] - d.b[1]), Math.hypot(d.p[2 * j] - d.b[0], d.p[2 * j + 1] - d.b[1])) < 1.6 * r) {
+        M.tackleAt = now; Sound.tackle(Math.min(1, (da - dd) / 3), d.p[2 * i] / (P.out_x || P.half_w) * 0.7);
+        break pairs;
+      }
+    }
+  }
+  // the ball changed direction without a kick: off a post, the boards, the net or a player
+  if (kicked || !z || now - (M.bounceAt || 0) < 90) return;
   const v1 = [a.b[0] - z.b[0], a.b[1] - z.b[1]], v2 = [d.b[0] - a.b[0], d.b[1] - a.b[1]], s1 = Math.hypot(...v1);
   if (s1 < 1.2 || Math.hypot(...v2) > 40 || !((v1[0] * v2[0] < 0 && Math.abs(v1[0]) > 0.8) || (v1[1] * v2[1] < 0 && Math.abs(v1[1]) > 0.8))) return;
   const br = m.ball_r, [bx, by] = a.b;
   const post = P.statics.some(([sx, sy, sr]) => Math.hypot(bx - sx, by - sy) < sr + br + 6);
+  const net = !post && Math.abs(bx) > P.half_w && Math.abs(by) < P.goal_half + br;
   const wall = Math.abs(by) > P.half_h - br - 6 || Math.abs(bx) > P.half_w - br - 6;
-  M.bounceAt = performance.now();
-  Sound.bounce(post ? "post" : wall ? "wall" : "body", Math.min(1, s1 / 6), pan);
+  M.bounceAt = now;
+  Sound.bounce(post ? "post" : net ? "net" : wall ? "wall" : "body", Math.min(1, s1 / 6), pan);
+  // a near miss or a save: an "ooh" (a moment later, and not if it went in after all)
+  const nearGoal = Math.abs(bx) > P.half_w * 0.7 && Math.abs(by) < P.goal_half * 2.5;
+  if (!net && nearGoal && (post || (M.shot && s1 > 3.5 && Math.sign(bx) === Math.sign(M.shot.x)))) {
+    const save = !post && !wall;
+    M.shot = null;
+    setTimeout(() => {
+      const f = M.frames[M.frames.length - 1];
+      if (G.match !== M || !f || f.st !== 0) return;
+      Sound.ooh(post ? 1 : 0.75);
+      if (save) Sound.applause(2, 0.45, 0.5);
+    }, 160);
+  }
 }
 export function stepParticles(M, f) {
   const P = M.parts;
@@ -159,14 +197,18 @@ export function drawNets(ctx, m) {                                   // nets in 
     ctx.beginPath(); ctx.arc(x, y, r, 0, 2 * Math.PI); ctx.fillStyle = "#f2f2f2"; ctx.fill(); ctx.lineWidth = 2; ctx.strokeStyle = "#000"; ctx.stroke();
   }
 }
+const ME = "rgba(222,226,232,0.6)", ME_SOLID = "#dee2e8";        // the controlled player's ring and off-screen badge
 export function drawPlayers(ctx, M, m, a, b, L, f) {
   M.me = null;
   m.players.forEach((pl, i) => {
     if (2 * i + 1 >= b.p.length) return;
     const x = L(a.p[2 * i], b.p[2 * i]), y = L(a.p[2 * i + 1], b.p[2 * i + 1]), r = pl.r, fl = b.h[i] || 0, kit = m.teams[pl.team];
-    if (fl & 1) {                                             // you: a translucent yellow ring around the player (off screen: drawOffscreen)
+    if (fl & 1) {                                             // you: a translucent light grey ring around the player (off screen: drawOffscreen)
       M.me = { x, y, pl };
-      ctx.beginPath(); ctx.arc(x, y, r + 6, 0, 2 * Math.PI); ctx.lineWidth = 3; ctx.strokeStyle = "rgba(255,213,74,0.5)"; ctx.stroke();
+      ctx.beginPath(); ctx.arc(x, y, r + 6, 0, 2 * Math.PI); ctx.lineWidth = 3; ctx.strokeStyle = ME; ctx.stroke();
+    } else if (pl.uid === f.nx && f.st !== 2) {               // who the next Q picks: a thin dashed ring, a bit brighter inside the 1 s window
+      ctx.save(); ctx.setLineDash([4, 4]); ctx.beginPath(); ctx.arc(x, y, r + 5, 0, 2 * Math.PI);
+      ctx.lineWidth = 1; ctx.strokeStyle = f.nw ? "rgba(255,255,255,0.7)" : "rgba(255,255,255,0.45)"; ctx.stroke(); ctx.restore();
     }
     Draw.kit(ctx, x, y, r, "#" + kit.kit[0], "#" + kit.kit[1], kit.pattern);
     ctx.beginPath(); ctx.arc(x, y, r - 1, 0, 2 * Math.PI); ctx.lineWidth = 2.5; ctx.strokeStyle = fl & 2 && !(fl & 4) ? "#fff" : "#000"; ctx.stroke();
@@ -199,11 +241,11 @@ export function drawOffscreen(ctx, M, m, sp, W, H) {
   const k = Math.min(Math.abs((W / 2 - pad) / (dx || 1e-6)), Math.abs((H / 2 - pad) / (dy || 1e-6)));
   const x = cx + dx * k, y = Math.max(c && x > c.x - 30 ? c.y + c.h + 27 : top, cy + dy * k), ang = Math.atan2(dy, dx);
   ctx.save(); ctx.translate(x, y);
-  ctx.beginPath(); ctx.arc(0, 0, 17, 0, 2 * Math.PI); ctx.fillStyle = "rgba(11,14,19,0.85)"; ctx.fill(); ctx.lineWidth = 2.5; ctx.strokeStyle = "#ffd54a"; ctx.stroke();
+  ctx.beginPath(); ctx.arc(0, 0, 17, 0, 2 * Math.PI); ctx.fillStyle = "rgba(11,14,19,0.85)"; ctx.fill(); ctx.lineWidth = 2.5; ctx.strokeStyle = ME_SOLID; ctx.stroke();
   ctx.rotate(ang);
-  ctx.beginPath(); ctx.moveTo(27, 0); ctx.lineTo(18, -8); ctx.lineTo(18, 8); ctx.closePath(); ctx.fillStyle = "#ffd54a"; ctx.fill();
+  ctx.beginPath(); ctx.moveTo(27, 0); ctx.lineTo(18, -8); ctx.lineTo(18, 8); ctx.closePath(); ctx.fillStyle = ME_SOLID; ctx.fill();
   ctx.restore();
-  text(ctx, String(M.me.pl.number), x - 17, y + 5.5, "c", 34, 15, "#ffd54a", 0, "", 700);
+  text(ctx, String(M.me.pl.number), x - 17, y + 5.5, "c", 34, 15, ME_SOLID, 0, "", 700);
 }
 export function roundRect(ctx, x, y, w, h, r, fill) { ctx.beginPath(); ctx.roundRect(x, y, w, h, r); ctx.fillStyle = fill; ctx.fill(); }
 // the TV scorebug, top left: crest CODE | score | CODE crest | clock
@@ -262,8 +304,8 @@ export function drawHud(ctx, M, m, f, W, H, intro) {
   const ta = M.toast ? 1 - (performance.now() - M.toast.at) / 1400 : 0;                  // "Sound on / off" after N
   if (ta > 0) {
     ctx.save(); ctx.globalAlpha = Math.min(1, ta * 4);
-    roundRect(ctx, W / 2 - 80, H - 64, 160, 36, 18, "rgba(11,14,19,0.85)");
-    text(ctx, M.toast.text, W / 2 - 80, H - 40, "c", 160, 16, "#fff", 0, "", 700);
+    roundRect(ctx, W / 2 - 120, H - 64, 240, 36, 18, "rgba(11,14,19,0.85)");
+    text(ctx, M.toast.text, W / 2 - 120, H - 40, "c", 240, 16, "#fff", 0, "", 700);
     ctx.restore();
   }
 }

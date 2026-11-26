@@ -24,6 +24,20 @@ body[data-area="game"] .areas a.on { background: var(--g-panel2); color: var(--g
 body[data-area="game"] main { max-width: 1280px; padding: 0; }
 body[data-area="game"] main:has(> .ks), body[data-area="game"] main:has(> .gm) { max-width: none; }   /* the team select and the menu use the whole window */
 body.g-playing .bar { display: none; }
+/* the sound buttons in the top bar (music, all sound): web/game.js */
+body[data-area="game"] .snd { display: flex; gap: 4px; }
+.snd-btn { display: grid; place-items: center; width: 34px; height: 34px; border: 0; border-radius: 8px; background: transparent; color: var(--g-text); cursor: pointer; }
+.snd-btn:hover { background: var(--g-panel2); }
+.snd-btn:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--g-accent); }
+.snd-btn.off { color: var(--g-muted); }
+.snd-btn:disabled { opacity: 0.45; cursor: default; }
+/* #/game/sounds: web/game/sounds.js */
+.snd-page { display: flex; flex-direction: column; gap: 16px; }
+.snd-row { display: flex; flex-wrap: wrap; gap: 8px; }
+.snd-hype { display: flex; align-items: center; gap: 10px; color: var(--g-muted); font-size: 14px; flex-wrap: wrap; }
+.snd-hype input { width: min(280px, 100%); accent-color: var(--g-accent); }
+.snd-now { margin: 0; color: var(--g-muted); }
+.snd-now b { color: var(--g-text); }
 
 /* page layout */
 .g-page { padding: 32px; display: flex; flex-direction: column; gap: 16px; min-height: calc(100vh - 55px); }

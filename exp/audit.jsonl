@@ -59,3 +59,12 @@
 {"t": "2026-11-25T15:22:18", "action": "queue_add", "name": "wide_b256_s23", "position": null}
 {"t": "2026-11-25T15:22:18", "action": "queue_add", "name": "gen2_s23", "position": null}
 {"t": "2026-11-25T15:54:53", "action": "queue_add", "name": "anchor_marathon", "position": null}
+{"t": "2026-11-25T23:32:06", "action": "queue_add", "name": "b256_tackle", "position": null}
+{"t": "2026-11-25T23:32:06", "action": "queue_add", "name": "b256_xg", "position": null}
+{"t": "2026-11-25T23:32:06", "action": "queue_add", "name": "b256_win", "position": null}
+{"t": "2026-11-25T23:32:06", "action": "queue_add", "name": "b256_tackle_s11", "position": null}
+{"t": "2026-11-25T23:32:06", "action": "queue_add", "name": "b256_xg_s11", "position": null}
+{"t": "2026-11-25T23:32:06", "action": "queue_add", "name": "b256_win_s11", "position": null}
+{"t": "2026-11-25T23:32:06", "action": "queue_add", "name": "b256_tackle_s23", "position": null}
+{"t": "2026-11-25T23:32:06", "action": "queue_add", "name": "b256_xg_s23", "position": null}
+{"t": "2026-11-25T23:32:06", "action": "queue_add", "name": "b256_win_s23", "position": null}

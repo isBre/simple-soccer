@@ -1,0 +1,108 @@
+{
+ "state": "done",
+ "spec": {
+  "name": "b256_tackle",
+  "start": "out_5v5/ckpt/x_kickstart_best.pt",
+  "updates": 300,
+  "lr": 5e-05,
+  "rewards": {
+   "w_wall": 0.02,
+   "w_tackle": 0.05,
+   "def_cap": 1.0
+  },
+  "args": {
+   "teacher": "out_5v5/ckpt/jit8_best.pt",
+   "kl_coef": 0.3,
+   "kl_decay": 300,
+   "seed": 7
+  },
+  "control": "anchor_bigbatch",
+  "notes": "Tackles and interceptions rewarded (w_tackle 0.05, capped at 1.0 per match). Only ever tested inside the full mix (section 2 of docs/rewards.md). Does a direct reward for winning the ball lower goals conceded or lift Elo? One term on the anchor recipe with rollout 256 (the default), seed 7; compared with anchor_bigbatch (same recipe and seed, without the term). Seed noise about 65 Elo, so judged over seeds 7/11/23 together. Queued 2026-11-25 night on the MacBook Air for the morning check."
+ },
+ "baseline_run": "start:x_kickstart_best",
+ "started": 1795647830,
+ "tag": "x_b256_tackle",
+ "target_updates": 300,
+ "effective_rewards": {
+  "pass_individual": 1,
+  "w_recv": 0.1,
+  "w_open": 0.003,
+  "w_key_pass": 0.25,
+  "w_xa": 2.5,
+  "coop_cap": 8,
+  "random_start": 0.6,
+  "shaping": 0,
+  "w_keeper": 0,
+  "w_jitter": 0,
+  "w_far": 0,
+  "w_xg": 0,
+  "w_xga": 0,
+  "w_win": 0,
+  "w_draw": 0,
+  "w_tackle": 0.05,
+  "w_goalside": 0,
+  "w_opp_half": 0,
+  "w_compact": 0,
+  "w_wall": 0.02,
+  "w_corner": 0,
+  "def_cap": 1.0
+ },
+ "effective_args": {
+  "lr": 5e-05,
+  "updates": 300,
+  "workers_rule": 2,
+  "workers_self": 1,
+  "envs_per_worker": 16,
+  "rollout": 256,
+  "minibatch": 4096,
+  "ckpt_every": 25,
+  "fast_every": 50,
+  "elo_pairs": 12,
+  "fast_rules": 0,
+  "learn_threads": 2,
+  "seed": 7,
+  "teacher": "out_5v5/ckpt/jit8_best.pt",
+  "kl_coef": 0.3,
+  "kl_decay": 300
+ },
+ "seed": 7,
+ "git_commit": "ead51a7",
+ "git_dirty": false,
+ "boot_id": null,
+ "restarts": [],
+ "control": "anchor_bigbatch",
+ "net": {
+  "sizes": [
+   46,
+   128,
+   128,
+   10
+  ],
+  "label": "46-128-128-10",
+  "params": 23818
+ },
+ "name": "b256_tackle",
+ "updated": 1795650067,
+ "update": 300,
+ "train_pts": 2.89,
+ "base_train": 2.89,
+ "bad_checks": 0,
+ "recorded": [],
+ "recorded_est": [
+  50,
+  100,
+  150,
+  200,
+  250,
+  300
+ ],
+ "train_s": 1672,
+ "stop_reason": "budget",
+ "finished": 1795650067,
+ "final_update": 300,
+ "verdict": null,
+ "cost_hours": {
+  "train": 0.46,
+  "eval": 0.09
+ }
+}

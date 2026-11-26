@@ -372,3 +372,43 @@ only differences inside this table are comparable.
   lost. The thermal guard logged no pause.
 - Next, for the user: a bigger lever than recipe tuning (net size or the distillation of the teacher on the current default, the
   observation within the standing decisions), or stop the recipe search here.
+
+### Review 2026-11-26: wide net, second generation, a 3000-update marathon and three reward terms, over seeds (MacBook Air, judged by Elo and goals)
+Sixteen runs on the rollout-256 default (anchor recipe: rule bots + self-play, teacher jit8 KL 0.3 -> 0 by u300, w_wall 0.02, lr 5e-5),
+2026-11-25 11:30 - 2026-11-26 06:00, then 120 ladder rounds and more until 07:45 (89 entries). New entries about 480-500 games (±31),
+the controls 480-640. The scale moved down again (jit8 1764 -> 1733): only differences inside this table are comparable. Opus 5.5 High
+v6 was merged in the evening (origin/main) and given 480 extra ladder games here.
+
+| recipe | Elo of seeds 7 / 11 / 23 (best checkpoint) | mean | sd | agf | aga | vs control (Welch z; z with rating error) |
+|---|---|---|---|---|---|---|
+| control `anchor_bigbatch*` (start `x_kickstart_best`, 300 upd) | 1651 / 1641 / 1654 | **1649** | 7 | 1.40 | 0.66 | |
+| `b256_tackle*`: + `w_tackle` 0.05 (`def_cap` 1.0) | 1628 / 1634 / 1626 (u50 / u100 / u250) | 1629 | 4 | 1.27 | 0.66 | -19 (-4.3; -1.5) |
+| `b256_xg*`: + `w_xg` 0.5 (`xg_cap` 1.0) | 1610 / 1651 / 1638 (u100 / u150 / u150) | 1633 | 21 | 1.28 | 0.65 | -16 (-1.2; -1.1) |
+| `b256_win*`: + `w_win` 0.5 | 1662 / 1625 / 1620 (u250 / u150 / u300) | 1636 | 23 | 1.43 | **0.78** | -13 (-0.9; -0.8) |
+| `wide_b256*`: net 46-256-256-10 from `x_wide_kickstart_best` (1599) | 1638 / 1588 / 1603 (u300 / u150 / u200) | **1610** | 26 | 1.34 | 0.76 | **-39 (-2.5; -2.2)** |
+| `gen2*`: same recipe from `x_b256_lr1e4_s23_best` (1711) | 1638 / 1646 / 1605 (u100 / u300 / u250) | 1630 | 22 | 1.43 | 0.76 | -18 (-1.4; -1.2) |
+| `anchor_marathon`: 3000 upd, KL 0.3 -> 0 by u3000, seed 7 | 1664 (u2500) | | | 1.40 | 0.61 | +13 vs seed 7 (1651) |
+| reference: `b256_long*` (600 upd), `b256_lr1e4*` | 1660, 1669 (means) | | | 1.37 / 1.58 | 0.62 / 0.67 | +11, +20 |
+| Opus 5.5 High v6 (rules, 710 games) | 1668 ± 28, 8th of 89 | | | 1.37 | 0.56 | |
+| jit8_best / RL Team 5 / RL Team 4 | 1733 / 1734 / 1710 | | | 1.58 / 1.70 / 1.72 | 0.46 / 0.56 / 0.67 | |
+
+- **The three reward terms give nothing.** All three land 13-19 Elo below the control, inside the noise once the rating error of each
+  entry (±31) is counted (the Welch z of `w_tackle`, -4.3, comes from three seeds that happen to agree within 4 Elo). None does what it was
+  meant to: tackles leave goals conceded unchanged (0.66) and cost goals scored (1.27 vs 1.40); shot quality lowers goals scored (1.28);
+  the win bonus raises goals conceded (0.78 vs 0.66). To "not good" (no gain); `w_draw` alone remains untested.
+- **The wider net is worse:** -39 (z -2.2 to -2.5), more goals conceded (0.76). From its own start (1599) it gains about 10. Width does not
+  break the plateau with this recipe.
+- **A second generation loses ground:** all three seeds end below their start (`x_b256_lr1e4_s23_best`, 1711 in this ladder), at the level
+  of the first generation (1630 vs 1649). Restarting the recipe from a better net does not stack.
+- **3000 updates are worth 300.** The estimated Elo rose 1582 -> 1729 by u300 and then moved between 1600 and 1760 (±150) to the end; the
+  kept checkpoint u2500 was chosen on one high estimate (1880) and rates 1664, level with the 300-update control of the same seed. No
+  collapse after the KL faded either.
+- **Opus 5.5 High v6** is the strongest rule team by far (next ones about 1280) and level with the best nets of this line (1660-1710),
+  about 65 below jit8 / RL Team 5. Its defence matches the nets (0.56 conceded), it scores less (1.37).
+- **Overall, four days on the Mac:** the larger batch (+35) is still the only change that helped. Rewards (`w_xga`, `w_corner`,
+  `w_tackle`, `w_xg`, `w_win`), KL schedules, opponents, lr, length (600 and 3000 updates), width and a second generation are noise or
+  worse. The 46-number line sits at 1630-1670, about 65 below jit8 (54 numbers), the net it was distilled from: recipe tuning is exhausted.
+- Setup: the Mac stayed on AC all night; no thermal pause, no restart. A short focused ladder script (`logs/opus_ladder.out`) gave Opus its
+  extra games alongside the marathon; `logs/morning_ladder.sh` added ladder rounds until 07:45.
+- Next, for the user: a different lever than the PPO recipe, e.g. continuing jit8's own 54-number line with today's recipe (rollout 256,
+  `w_wall`, KL to itself), or a new distillation of jit8 (longer DAgger) to close the gap at the start; or stop the search here.
