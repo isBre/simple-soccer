@@ -394,20 +394,8 @@ class Match:
         if self.cfg.control != TEAM:
             return
         now = self.tick if now is None else now
-        lst = self.team_lists[self.cfg.human_team]
         own_kickoff = self._human_kickoff_wait()
-        order, idx = self._switch_order, self._switch_idx
-        chain = now - self._switch_last <= SWITCH_WINDOW and 0 <= idx < len(order) and order[idx] is self.controlled
-        if not chain:
-            keeper_last = len(lst) > 1
-            others = sorted((p for p in lst if p is not self.controlled),
-                            key=lambda p: (keeper_last and p.role == "GK", abs(p.pos - self.ball.pos)))
-            order = others + ([self.controlled] if self.controlled is not None else [])
-            idx = -1
-        for _ in range(len(order)):
-            idx = (idx + 1) % len(order)
-            if not (own_kickoff and order[idx].role == "GK" and len(lst) > 1):
-                break
+        order, idx = self._switch_plan(now, own_kickoff)
         self._switch_order, self._switch_idx, self._switch_last = order, idx, now
         p = order[idx] if order else None
         if p is None or p is self.controlled:
@@ -420,6 +408,38 @@ class Match:
             old.pos, p.pos = old.spawn, -self.kickoff_dir * (p.radius + self.ball.radius + 2.0)
             old.vel = p.vel = 0j
             self.kickoff_taker = p
+
+    def next_switch(self, now=None):
+        """The player a Q at `now` would hand control to (None outside TEAM control or when it would change nothing): what the
+        page marks with a dashed ring. Reads the same ranking as switch_controlled without changing it."""
+        if self.cfg.control != TEAM or self.state == ENDED:
+            return None
+        order, idx = self._switch_plan(self.tick if now is None else now, self._human_kickoff_wait())
+        p = order[idx] if order else None
+        return p if p is not self.controlled else None
+
+    def in_switch_window(self, now) -> bool:
+        """A Q at `now` would continue the current ranking (2nd nearest, 3rd, ...) instead of starting a new one."""
+        idx, order = self._switch_idx, self._switch_order
+        return now - self._switch_last <= SWITCH_WINDOW and 0 <= idx < len(order) and order[idx] is self.controlled
+
+    def _switch_plan(self, now, own_kickoff):
+        """(ranking, index of the player a Q at `now` takes): the current ranking moved one on inside SWITCH_WINDOW, else a
+        new one (teammates by distance to the ball, keeper last, the controlled player at the end). On the human team's
+        kickoff the keeper is skipped."""
+        lst = self.team_lists[self.cfg.human_team]
+        order, idx = self._switch_order, self._switch_idx
+        if not self.in_switch_window(now):
+            keeper_last = len(lst) > 1
+            others = sorted((p for p in lst if p is not self.controlled),
+                            key=lambda p: (keeper_last and p.role == "GK", abs(p.pos - self.ball.pos)))
+            order = others + ([self.controlled] if self.controlled is not None else [])
+            idx = -1
+        for _ in range(len(order)):
+            idx = (idx + 1) % len(order)
+            if not (own_kickoff and order[idx].role == "GK" and len(lst) > 1):
+                break
+        return order, idx
 
     def _human_kickoff_wait(self) -> bool:
         """The human team's kickoff, not taken yet, with the controlled player as the taker."""

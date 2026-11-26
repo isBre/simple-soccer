@@ -58,7 +58,7 @@ def _uid(p):
     return p.uid if p is not None else -1
 
 
-def frame(m, intro, events):
+def frame(m, intro, events, clock=0):
     pos, flags = [], []
     for t in (0, 1):
         for q in m.team_lists[t]:
@@ -67,6 +67,7 @@ def frame(m, intro, events):
     return {"k": "f", "t": m.tick, "st": m.state, "sc": list(m.scores), "tl": m.time_left, "ot": bool(m.overtime), "otl": m.ot_left,
             "ko": bool(m.kickoff_active), "kt": m.kickoff_team, "gt": m.goal_team, "gs": _uid(m.goal_scorer), "gp": m.goal_pause,
             "gtm": m.goal_timer, "w": m.winner, "so": list(m.shootout) if len(m.shootout) == 2 else None, "cu": _uid(m.controlled),
+            "nx": _uid(m.next_switch(clock)), "nw": m.in_switch_window(clock),
             "in": intro, "b": [round(m.ball.pos.real, 2), round(m.ball.pos.imag, 2)], "p": pos, "h": flags, "ev": events}
 
 
@@ -162,7 +163,7 @@ def _run(ws, rec):
                 if puzzle and goal_end is None and m.state == GOAL:
                     goal_end = m.tick + PUZZLE_GOAL_TICKS
             events = m.events[n_ev:]
-        ws.send(frame(m, intro, events))
+        ws.send(frame(m, intro, events, clock))
         if (m.state == ENDED or goal_end is not None and m.tick >= goal_end) and not result_sent:
             result = m.make_result()
             if puzzle:

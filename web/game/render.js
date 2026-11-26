@@ -159,14 +159,18 @@ export function drawNets(ctx, m) {                                   // nets in 
     ctx.beginPath(); ctx.arc(x, y, r, 0, 2 * Math.PI); ctx.fillStyle = "#f2f2f2"; ctx.fill(); ctx.lineWidth = 2; ctx.strokeStyle = "#000"; ctx.stroke();
   }
 }
+const ME = "rgba(222,226,232,0.6)", ME_SOLID = "#dee2e8";        // the controlled player's ring and off-screen badge
 export function drawPlayers(ctx, M, m, a, b, L, f) {
   M.me = null;
   m.players.forEach((pl, i) => {
     if (2 * i + 1 >= b.p.length) return;
     const x = L(a.p[2 * i], b.p[2 * i]), y = L(a.p[2 * i + 1], b.p[2 * i + 1]), r = pl.r, fl = b.h[i] || 0, kit = m.teams[pl.team];
-    if (fl & 1) {                                             // you: a translucent yellow ring around the player (off screen: drawOffscreen)
+    if (fl & 1) {                                             // you: a translucent light grey ring around the player (off screen: drawOffscreen)
       M.me = { x, y, pl };
-      ctx.beginPath(); ctx.arc(x, y, r + 6, 0, 2 * Math.PI); ctx.lineWidth = 3; ctx.strokeStyle = "rgba(255,213,74,0.5)"; ctx.stroke();
+      ctx.beginPath(); ctx.arc(x, y, r + 6, 0, 2 * Math.PI); ctx.lineWidth = 3; ctx.strokeStyle = ME; ctx.stroke();
+    } else if (pl.uid === f.nx && f.st !== 2) {               // who the next Q picks: a thin dashed ring, a bit brighter inside the 1 s window
+      ctx.save(); ctx.setLineDash([4, 4]); ctx.beginPath(); ctx.arc(x, y, r + 5, 0, 2 * Math.PI);
+      ctx.lineWidth = 1; ctx.strokeStyle = f.nw ? "rgba(255,255,255,0.7)" : "rgba(255,255,255,0.45)"; ctx.stroke(); ctx.restore();
     }
     Draw.kit(ctx, x, y, r, "#" + kit.kit[0], "#" + kit.kit[1], kit.pattern);
     ctx.beginPath(); ctx.arc(x, y, r - 1, 0, 2 * Math.PI); ctx.lineWidth = 2.5; ctx.strokeStyle = fl & 2 && !(fl & 4) ? "#fff" : "#000"; ctx.stroke();
@@ -199,11 +203,11 @@ export function drawOffscreen(ctx, M, m, sp, W, H) {
   const k = Math.min(Math.abs((W / 2 - pad) / (dx || 1e-6)), Math.abs((H / 2 - pad) / (dy || 1e-6)));
   const x = cx + dx * k, y = Math.max(c && x > c.x - 30 ? c.y + c.h + 27 : top, cy + dy * k), ang = Math.atan2(dy, dx);
   ctx.save(); ctx.translate(x, y);
-  ctx.beginPath(); ctx.arc(0, 0, 17, 0, 2 * Math.PI); ctx.fillStyle = "rgba(11,14,19,0.85)"; ctx.fill(); ctx.lineWidth = 2.5; ctx.strokeStyle = "#ffd54a"; ctx.stroke();
+  ctx.beginPath(); ctx.arc(0, 0, 17, 0, 2 * Math.PI); ctx.fillStyle = "rgba(11,14,19,0.85)"; ctx.fill(); ctx.lineWidth = 2.5; ctx.strokeStyle = ME_SOLID; ctx.stroke();
   ctx.rotate(ang);
-  ctx.beginPath(); ctx.moveTo(27, 0); ctx.lineTo(18, -8); ctx.lineTo(18, 8); ctx.closePath(); ctx.fillStyle = "#ffd54a"; ctx.fill();
+  ctx.beginPath(); ctx.moveTo(27, 0); ctx.lineTo(18, -8); ctx.lineTo(18, 8); ctx.closePath(); ctx.fillStyle = ME_SOLID; ctx.fill();
   ctx.restore();
-  text(ctx, String(M.me.pl.number), x - 17, y + 5.5, "c", 34, 15, "#ffd54a", 0, "", 700);
+  text(ctx, String(M.me.pl.number), x - 17, y + 5.5, "c", 34, 15, ME_SOLID, 0, "", 700);
 }
 export function roundRect(ctx, x, y, w, h, r, fill) { ctx.beginPath(); ctx.roundRect(x, y, w, h, r); ctx.fillStyle = fill; ctx.fill(); }
 // the TV scorebug, top left: crest CODE | score | CODE crest | clock
