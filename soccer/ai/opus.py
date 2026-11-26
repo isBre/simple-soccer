@@ -35,41 +35,43 @@ QS = (1.0 - DAMP ** TS) / (1.0 - DAMP)             # distance travelled per unit
 DECAY = DAMP ** TS
 N_DIRS = 40                                        # kick directions scanned (9 degrees apart)
 # Tuned with tools/tune_opus.py (CMA-ES against 10 trained nets: first run 2026-11-20, second run with the territory / outlet
-# terms 2026-11-21; see docs/opus_5_5_high.md, sections 8 and 9).
+# terms 2026-11-21; see docs/opus_5_5_high.md, sections 8 and 9). v7 (2026-11-26): all of them tuned again against the 10
+# strongest nets of the ladder of that day, with the finisher's rollouts off while tuning (section 14).
 # position value (pos_value): roughly the chance a possession at that point ends in a goal
-VAL0, VALXG, VALPROG = 0.01, 0.405, 0.0615
-HOLD_K = 0.316          # carrying the ball on is discounted: most dribbles in the final third end in a loss
-WALL_PEN = 0.022        # carrying the ball into the touchline or a corner
+VAL0, VALXG, VALPROG = 0.01, 0.478, 0.072
+HOLD_K = 0.23           # carrying the ball on is discounted: most dribbles in the final third end in a loss
+WALL_PEN = 0.013        # carrying the ball into the touchline or a corner
 RECV_SHOT = 1.5         # a free team-mate near goal is worth this share of his shot's xG
-SHOT_READ = 41.6        # px of reach a defender (keeper included) loses reading where a shot goes
-KICK_REL = 0.513        # take the kick on offer when it is worth this share of the plan (no waiting for the perfect angle)
-PRESSED = 63.5          # px: an opponent this close to the ball = take any kick better than keeping it
-FINAL_FROM = 0.149      # share of the half beyond halfway from which the carrier drives at goal and shoots (StyleBot)
-BOX_FROM = 0.192        # from here on the most advanced supporter attacks the goal ...
-BOX_DEPTH, BOX_Y = 80.5, 0.0    # ... this far from the goal line and from the middle (0 = in front of goal)
-ATTACK_NEED_OWN = 29.1  # extra ticks of head start needed before switching to attack deep in our own half
-REST_BACK = 319.0       # px the rest defender stays behind the ball
-SUPPORT_MIN, SUPPORT_MAX = 94.1, 281.0   # px: support spots not closer to / further from the ball than this
-SPACING = 118.0         # px: support spots push each other apart within this distance
+SHOT_READ = 34.9        # px of reach a defender (keeper included) loses reading where a shot goes
+KICK_REL = 0.739        # take the kick on offer when it is worth this share of the plan (no waiting for the perfect angle)
+PRESSED = 62.2          # px: an opponent this close to the ball = take any kick better than keeping it
+FINAL_FROM = -0.272     # share of the half beyond halfway from which the carrier drives at goal and shoots (StyleBot, with the
+                        # rollouts; v7: from just inside our own half, which is what gets the team out of a press)
+BOX_FROM = 0.308        # from here on the most advanced supporter attacks the goal ...
+BOX_DEPTH, BOX_Y = 106.7, 0.0   # ... this far from the goal line and from the middle (0 = in front of goal)
+ATTACK_NEED_OWN = 29.6  # extra ticks of head start needed before switching to attack deep in our own half
+REST_BACK = 298.5       # px the rest defender stays behind the ball
+SUPPORT_MIN, SUPPORT_MAX = 102.8, 270.2  # px: support spots not closer to / further from the ball than this
+SPACING = 130.0         # px: support spots push each other apart within this distance
 COVER_FROM = 1.0        # a cover player drops goal-side when the ball is below this share of the half beyond halfway (1 = always)
-COVER_DIST = 126.0      # px the cover stands behind the ball, towards our goal
-COVER_OWN = 166.0       # ... and when the ball is in our own third
-MARK_GAP_FAR, MARK_GAP_NEAR = 77.7, 31.1  # px a marker stays from a harmless / a dangerous receiver
-GUARD_TRIGGER = 141.0   # px: a marker whose spot is this close to the ball near our goal guards the goal mouth instead
-POKE_RADIUS = 500.0     # px from our goal within which the presser pokes the ball away when he cannot play it
-OUTLET_FROM = -0.639    # ball below this share of the half (negative = our half): the most advanced free player stays up as an outlet (-1 = off)
-OUTLET_X = -0.142       # where the outlet waits (share of the half, 0 = halfway line)
+COVER_DIST = 146.1      # px the cover stands behind the ball, towards our goal
+COVER_OWN = 141.6       # ... and when the ball is in our own third
+MARK_GAP_FAR, MARK_GAP_NEAR = 64.3, 31.9  # px a marker stays from a harmless / a dangerous receiver
+GUARD_TRIGGER = 159.6   # px: a marker whose spot is this close to the ball near our goal guards the goal mouth instead
+POKE_RADIUS = 257.3     # px from our goal within which the presser pokes the ball away when he cannot play it
+OUTLET_FROM = -0.818    # ball below this share of the half (negative = our half): the most advanced free player stays up as an outlet (-1 = off)
+OUTLET_X = 0.016        # where the outlet waits (share of the half, 0 = halfway line)
 TERR = 0.135            # territory: a kick deep in our half that we may lose is worth this x depth x the ground it gains
-FIRST_FWD = 0.2         # first time: a ball at an outfield player's feet is hit at once if it would go at least this forward (cos)
+FIRST_FWD = 0.066       # first time: a ball at an outfield player's feet is hit at once if it would go at least this forward (cos)
 FIRST_UPTO = 1.0        # ... up to this share of the half beyond halfway (1 = the whole pitch; -1 = never)
 # v5 (2026-11-23, measured against every ladder entry; docs section 11)
-FIRST_CLEAR_UPTO = 0.33 # ... but beyond this share of the half only when it is a pass or a shot (2 = always)
-CP_FROM = 0.0           # counter-press: ball lost beyond this share of the half (2 = off) ...
-CP_TICKS = 120          # ... for this many ticks a second player presses the ball too
-SHOT_VETO = 0.35        # finisher: a shot whose clean chance (simulated) is below this is not taken (0 = off) ...
+FIRST_CLEAR_UPTO = 1.034 # ... but beyond this share of the half only when it is a pass or a shot (2 = always)
+CP_FROM = 0.278         # counter-press: ball lost beyond this share of the half (2 = off) ...
+CP_TICKS = 153          # ... for this many ticks a second player presses the ball too
+SHOT_VETO = 0.366       # finisher: a shot whose clean chance (simulated) is below this is not taken (0 = off) ...
 SHOT_VETO_FROM = 150.0  # ... from further than this from goal
 BOX2_FROM = 2.0         # deep attack: beyond this share of the half a second runner attacks the far post (2 = off; no gain measured)
-BOX2_DEPTH = 60.0       # px from the goal line where the second runner waits
+BOX2_DEPTH = 46.0       # px from the goal line where the second runner waits
 # v6: expected threat measured from play (Opus vs every ladder entry, 492 matches, 443k possession samples, 2026-11-24): the
 # chance the team on the ball scores within 10 s, by a logistic model of the shot angle, progress, how many of their outfield
 # players are goal-side of the ball and the nearest opponent. Replaces the hand formula in pos_value when XT = 1.

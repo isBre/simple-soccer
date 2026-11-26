@@ -112,8 +112,9 @@ Silver Arrows, the strongest handmade team), so the difference is only how it pl
   it; shots: chance nobody reaches it before the line, with a reading delay for defenders and a rebound value). The kick that is
   actually taken is the one the contact gives right now, evaluated fresh, so a pass never goes off by the line-up tolerance.
   Pass predictions are calibrated: passes rated over 95 % safe are kept about 90 % of the time.
-- **Opponents' half**: the carrier drives at goal and shoots like the handmade bots (`StyleBot._decide_action` with the Opus
-  style), with the Opus shape around him.
+- **From just inside our own half on** (v7; the opponents' half before): the carrier drives at goal and shoots like the
+  handmade bots (`StyleBot._decide_action` with the Opus style), checked by the rollout planner (v6), with the Opus shape
+  around him.
 - **Tuned**: its constants (distances, margins, value weights, four style values) were tuned with CMA-ES against 10 trained nets
   (`tools/tune_opus.py`), twice. The second run (31 numbers) added a territory term (deep in our half, a kick that gains ground
   is worth more even if it may be lost) and an outlet player who stays up when we defend deep. Fresh seeds, second run vs first:
@@ -132,10 +133,13 @@ Silver Arrows, the strongest handmade team), so the difference is only how it pl
   else moves differently, so it stays a team. 12 fresh seeds against every other ladder entry: 1.87 -> 2.17 points per match,
   goal difference +0.72 -> +1.34 (z 7.3 / 10.7). In the browser game the rollouts run on worker processes
   (`SOCCER_OPUS_WORKERS`); short stutters during its attacks remain.
-- Elo (the Lab's ranking, `lab/ladder.py`, as `rules:opus_high`): **1776 (95 % 1707–1844) after 164 games** of v6: 5th of 42,
-  the top rule team by ~500 points, behind only jit8 (1883), RL Team 5 (1874), RL Team 4 (1856) and anchor_wall_strong (1837)
-  (v5 was 1679, v4 1623). The
-  one-off round robin before tuning is in [docs/elo_ranking.md](docs/elo_ranking.md).
+- v7, re-tuned against the strongest nets of 2026-11-26 (which pin the ball in our corners for half a match): the finishing
+  play with the planner now starts just inside our own half, so the team plays its way out of a press. Two sets of fresh seeds
+  against the 20 strongest nets: +0.23 and +0.25 points, +0.22 and +0.29 goal difference per match over v6.
+- Elo (the Lab's ranking, `lab/ladder.py`, as `rules:opus_high`): **1851 (95 % 1778–1925) after 164 games** of v7: 4th of 42,
+  the top rule team by ~570 points, behind only jit8 (1881), RL Team 5 (1874) and RL Team 4 (1854), all within its interval
+  (v6 was 1776, v5 1679, v4 1623). It costs ~20 s of CPU per 90 s match. The one-off round robin before tuning is in
+  [docs/elo_ranking.md](docs/elo_ranking.md).
 - Measured (v5) with `python3 tools/team_bench.py opus_high --rl` (5v5 arena, 3 min, both sides, 2 seeds): 2.52 points per match
   against the 16 rule teams and RL Team 4/5 (2.48 goals for, 0.35 against). It plays as a team: 3+ of its outfield players are
   within 120 px of the ball ~6 % of the time (Silver Arrows ~5 %, RL Team 5 ~28 %), ~18 passes per match at ~80 % completion
