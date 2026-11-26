@@ -1,7 +1,7 @@
 """Copies an old net into a net with a different observation (imitation, "distillation"), so a new run does not start from nothing.
 
 The teacher (54-number ego observation with a player slot) plays full matches against the rule-based teams; the environment returns
-BOTH observations of every state ("obs": "both"). The student (46-number role-free team observation) is trained to reproduce the
+BOTH observations of every state ("obs": "both"). The student (46-number role-free team observation, or with --obs rank the 56-number one with role-free ranks) is trained to reproduce the
 teacher's move distribution, kick probability and value estimate on those states. It is a warm start, not a perfect copy: the
 teacher knew which player it controlled, the student has to tell from the situation. The agreement it reaches is printed.
 
@@ -27,13 +27,15 @@ if ROOT not in sys.path:                     # run as a script: the project root
 from rl.client import VecEnv                                         # noqa: E402
 from rl.agent import Agent, load_padded, save_model, team_pools, OUT   # noqa: E402
 
-N_TEAM, N_LEGACY = 46, 54
+N_TEAM, N_RANK, N_LEGACY = 46, 56, 54
+N_STUDENT = {"team": N_TEAM, "rank": N_RANK}       # student observation -> its size
 
 
 def new_env(args):
     P = team_pools()
     cfg = {"pitch": "arena", "size": 5, "own_team": "owls", "n_active": 5, "with_keeper": True, "match_mode": True, "duration": 90.0,
-           "max_steps": 3200, "opp": ",".join(P["weak"] + P["average"] + P["strong"] + P["elite"]), "random_start": 0.6, "obs": "both"}
+           "max_steps": 3200, "opp": ",".join(P["weak"] + P["average"] + P["strong"] + P["elite"]), "random_start": 0.6,
+           "obs": "both" if args.obs == "team" else "both_rank"}
     env = VecEnv(workers=args.workers, envs_per_worker=args.envs_per_worker, base_port=7800, log_path="logs/rl_workers_distill.log")
     env.configure(cfg, seed=args.seed)
     return env
@@ -46,7 +48,7 @@ def sample(net_actor, x):
     return move, kick
 
 
-def collect(env, teacher, student, student_share, steps):
+def collect(env, teacher, student, student_share, steps, n_s=N_TEAM):
     """Plays `steps` environment steps; a fraction `student_share` of the matches is played by the student, the rest by the teacher.
     Returns the student's observation, the teacher's logits and the teacher's value for every state reached."""
     E = env.E
@@ -55,7 +57,7 @@ def collect(env, teacher, student, student_share, steps):
     s_obs, t_logits, t_val = [], [], []
     t0 = time.time()
     for step in range(steps):
-        t_in, s_in = obs[..., N_TEAM:], obs[..., :N_TEAM]
+        t_in, s_in = obs[..., n_s:], obs[..., :n_s]
         with torch.no_grad():
             z = teacher.actor(t_in)
             v = teacher.value(t_in)
@@ -66,7 +68,7 @@ def collect(env, teacher, student, student_share, steps):
                 kick = torch.where(acts_student[:, None], sk, tk)
             else:
                 move, kick = tm, tk
-        s_obs.append(s_in.reshape(-1, N_TEAM))
+        s_obs.append(s_in.reshape(-1, n_s))
         t_logits.append(z.reshape(-1, 10))
         t_val.append(v.reshape(-1))
         obs = torch.from_numpy(env.step(torch.stack([move, kick.long()], -1).numpy().astype(np.int8))[0].copy())
@@ -120,18 +122,21 @@ def main():
     ap.add_argument("--lr", type=float, default=1e-3)
     ap.add_argument("--seed", type=int, default=11)
     ap.add_argument("--hidden", type=int, default=128, help="width of the student's two hidden layers")
+    ap.add_argument("--obs", choices=sorted(N_STUDENT), default="team",
+                    help="student observation: team (46 numbers) or rank (56 = team + role-free ranks, user OK 2026-11-21)")
     args = ap.parse_args()
     torch.manual_seed(args.seed)
     teacher = Agent(N_LEGACY)
     load_padded(teacher, args.teacher)
-    student = Agent(N_TEAM, args.hidden)
+    n_s = N_STUDENT[args.obs]
+    student = Agent(n_s, args.hidden)
     opt = torch.optim.Adam(student.parameters(), lr=args.lr)
     env = new_env(args)
     try:
-        X, Z, V = collect(env, teacher, None, 0.0, args.steps)
+        X, Z, V = collect(env, teacher, None, 0.0, args.steps, n_s)
         fit(student, opt, X, Z, V, args.epochs, "round 0 (teacher plays)")
         for r in range(1, args.rounds + 1):
-            x, z, v = collect(env, teacher, student, args.student_share, args.steps)
+            x, z, v = collect(env, teacher, student, args.student_share, args.steps, n_s)
             X, Z, V = torch.cat([X, x]), torch.cat([Z, z]), torch.cat([V, v])
             fit(student, opt, X, Z, V, args.epochs // 2, "round %d (student plays, teacher labels)" % r)
     finally:
