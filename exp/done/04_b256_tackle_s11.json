@@ -1,0 +1,19 @@
+{
+ "name": "b256_tackle_s11",
+ "start": "out_5v5/ckpt/x_kickstart_best.pt",
+ "updates": 300,
+ "lr": 5e-05,
+ "rewards": {
+  "w_wall": 0.02,
+  "w_tackle": 0.05,
+  "def_cap": 1.0
+ },
+ "args": {
+  "teacher": "out_5v5/ckpt/jit8_best.pt",
+  "kl_coef": 0.3,
+  "kl_decay": 300,
+  "seed": 11
+ },
+ "control": "anchor_bigbatch_s11",
+ "notes": "Tackles and interceptions rewarded (w_tackle 0.05, capped at 1.0 per match). Only ever tested inside the full mix (section 2 of docs/rewards.md). Does a direct reward for winning the ball lower goals conceded or lift Elo? One term on the anchor recipe with rollout 256 (the default), seed 11; compared with anchor_bigbatch_s11 (same recipe and seed, without the term). Seed noise about 65 Elo, so judged over seeds 7/11/23 together. Queued 2026-11-25 night on the MacBook Air for the morning check."
+}

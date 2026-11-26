@@ -1,0 +1,19 @@
+{
+ "name": "b256_xg_s23",
+ "start": "out_5v5/ckpt/x_kickstart_best.pt",
+ "updates": 300,
+ "lr": 5e-05,
+ "rewards": {
+  "w_wall": 0.02,
+  "w_xg": 0.5,
+  "xg_cap": 1.0
+ },
+ "args": {
+  "teacher": "out_5v5/ckpt/jit8_best.pt",
+  "kl_coef": 0.3,
+  "kl_decay": 300,
+  "seed": 23
+ },
+ "control": "anchor_bigbatch_s23",
+ "notes": "Quality of own shots rewarded (w_xg 0.5 per xG, capped at 1.0 per match). Only ever tested inside the full mix. Does it lift goals scored (agf) without costing defence? One term on the anchor recipe with rollout 256 (the default), seed 23; compared with anchor_bigbatch_s23 (same recipe and seed, without the term). Seed noise about 65 Elo, so judged over seeds 7/11/23 together. Queued 2026-11-25 night on the MacBook Air for the morning check."
+}

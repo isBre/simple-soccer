@@ -1,0 +1,18 @@
+{
+ "name": "b256_win",
+ "start": "out_5v5/ckpt/x_kickstart_best.pt",
+ "updates": 300,
+ "lr": 5e-05,
+ "rewards": {
+  "w_wall": 0.02,
+  "w_win": 0.5
+ },
+ "args": {
+  "teacher": "out_5v5/ckpt/jit8_best.pt",
+  "kl_coef": 0.3,
+  "kl_decay": 300,
+  "seed": 7
+ },
+ "control": "anchor_bigbatch",
+ "notes": "Bonus 0.5 for winning the match on top of the goal rewards. Only ever tested inside the full mix. Does valuing the result (not only goals) change Elo? One term on the anchor recipe with rollout 256 (the default), seed 7; compared with anchor_bigbatch (same recipe and seed, without the term). Seed noise about 65 Elo, so judged over seeds 7/11/23 together. Queued 2026-11-25 night on the MacBook Air for the morning check."
+}

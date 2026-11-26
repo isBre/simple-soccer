@@ -1,0 +1,18 @@
+{
+ "name": "anchor_marathon",
+ "start": "out_5v5/ckpt/x_kickstart_best.pt",
+ "updates": 3000,
+ "lr": 5e-05,
+ "rewards": {
+  "w_wall": 0.02
+ },
+ "args": {
+  "teacher": "out_5v5/ckpt/jit8_best.pt",
+  "kl_coef": 0.3,
+  "kl_decay": 3000,
+  "seed": 7,
+  "fast_every": 100
+ },
+ "control": "anchor_bigbatch",
+ "notes": "Much longer training (the user's call, 2026-11-25): 3000 updates (184M player decisions, ten times a normal run, about 5 h on the Mac) of the default anchor recipe (rollout 256, w_wall 0.02, lr 5e-5, start x_kickstart_best), with the teacher KL 0.3 fading slowly over the whole run (kl_decay 3000: still 0.15 at u1500) so it is never left unanchored (anchor_long on rollout 128 collapsed once its KL reached 0; b256_long at 600 updates did not). Estimated Elo every 100 updates for the trend. Compare with anchor_bigbatch (same seed, 300 updates, 1675) and b256_long (600 updates). Trained on the MacBook Air. Judge by Elo and agf / aga after the ladder has settled."
+}
