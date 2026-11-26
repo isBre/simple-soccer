@@ -2,6 +2,7 @@
 import { $, G, card, esc, go, mount } from "./core.js";
 import { clockText, drawMatch, onGoal, sfx, text } from "./render.js";
 import { report } from "./report.js";
+import { padConnected } from "./pad.js";
 import { teams } from "./teams.js";
 
 // ---------- the live match ----------
@@ -40,7 +41,7 @@ export function match(p) {
     else if (d.k === "e") M.error = d.error;
   };
   M.ws.onclose = () => { if (!M.result && !M.stopped && !M.error) M.error = "the connection to the game server closed"; };
-  M.onBlur = () => { M.held.clear(); sendInput(M); };
+  M.onBlur = () => { M.held.clear(); M.stick = null; M.padKick = false; sendInput(M); };
   window.addEventListener("blur", M.onBlur);
   G.keyHandler = (e, down) => onKey(M, e, down);
   const loop = (ts) => { if (M.stopped) return; M.raf = requestAnimationFrame(loop); drawMatch(M, ts); };
@@ -50,9 +51,11 @@ export function wsSend(M, obj) { try { if (M.ws.readyState === 1) M.ws.send(JSON
 export function sendInput(M) {
   let dx = 0, dy = 0;
   for (const k of M.held) if (KEYS[k]) { dx += KEYS[k][0]; dy += KEYS[k][1]; }
-  const kick = M.held.has("KeyX") || M.held.has("Space") ? 1 : 0;
-  const s = `${Math.sign(dx)},${Math.sign(dy)},${kick}`;
-  if (s !== M.sentIn) { M.sentIn = s; wsSend(M, { in: [Math.sign(dx), Math.sign(dy), kick] }); }
+  dx = Math.sign(dx); dy = Math.sign(dy);
+  if (!dx && !dy && M.stick) [dx, dy] = M.stick;   // the controller's stick (web/game/pad.js) when no key is held
+  const kick = M.held.has("KeyX") || M.held.has("Space") || M.padKick ? 1 : 0;
+  const s = `${dx},${dy},${kick}`;
+  if (s !== M.sentIn) { M.sentIn = s; wsSend(M, { in: [dx, dy, kick] }); }
 }
 export function onKey(M, e, down) {
   const c = e.code;
@@ -100,7 +103,9 @@ export function syncOverlay(M, f) {
     <div class="mo-sc small">${esc(m.teams[0].name)} <b>${f.sc[0]} – ${f.sc[1]}</b> ${esc(m.teams[1].name)}</div>
     <div class="mo-btns col"><button type="button" class="ks-go" data-act="pause">Resume ${k("Esc")}</button>
       ${M.p.session ? "" : `<button type="button" class="ks-btn2" data-act="restart">Restart ${k("R")}</button>`}<button type="button" class="ks-btn2" data-act="quit">Quit the match ${k("M")}</button></div>
-    <div class="mo-keys"><span>${k("WASD")} ${k("↑↓←→")} move</span><span>${k("Space")} ${k("X")} kick</span>${m.control === 2 ? `<span>${k("Q")} switch player</span>` : ""}<span>${k("T")} speed</span><span>${k("N")} sound ${Sound.on ? "on" : "off"}</span></div></div>`;
+    <div class="mo-keys"><span>${k("WASD")} ${k("↑↓←→")} move</span><span>${k("Space")} ${k("X")} kick</span>${m.control === 2 ? `<span>${k("Q")} switch player</span>` : ""}<span>${k("T")} speed</span><span>${k("N")} sound ${Sound.on ? "on" : "off"}</span></div>
+    ${padConnected() ? `<div class="mo-keys"><span>Controller:</span><span>${k("L")} move</span><span>${k("A")} ${k("X")} ${k("RT")} kick</span>${m.control === 2 ? `<span>${k("LB")} ${k("RB")} switch</span>` : ""}<span>${k("☰")} pause</span><span>${k("⧉")} speed</span></div>
+    <div class="mo-keys"><span>Paused:</span><span>${k("A")} resume</span>${M.p.session ? "" : `<span>${k("Y")} restart</span>`}<span>${k("⧉")} quit</span></div>` : ""}</div>`;
   else {
     const res = M.result, w = f.w, ev = res ? res.events : [];
     const verdict = w === -1 ? "Draw" : `${esc(m.teams[w].name)} win${f.so ? ` on penalties ${f.so[0]}–${f.so[1]}` : res?.overtime ? " with a golden goal" : ""}`;

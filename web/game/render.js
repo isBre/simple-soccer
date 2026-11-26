@@ -262,8 +262,8 @@ export function drawHud(ctx, M, m, f, W, H, intro) {
   const ta = M.toast ? 1 - (performance.now() - M.toast.at) / 1400 : 0;                  // "Sound on / off" after N
   if (ta > 0) {
     ctx.save(); ctx.globalAlpha = Math.min(1, ta * 4);
-    roundRect(ctx, W / 2 - 80, H - 64, 160, 36, 18, "rgba(11,14,19,0.85)");
-    text(ctx, M.toast.text, W / 2 - 80, H - 40, "c", 160, 16, "#fff", 0, "", 700);
+    roundRect(ctx, W / 2 - 120, H - 64, 240, 36, 18, "rgba(11,14,19,0.85)");
+    text(ctx, M.toast.text, W / 2 - 120, H - 40, "c", 240, 16, "#fff", 0, "", 700);
     ctx.restore();
   }
 }

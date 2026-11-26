@@ -1,6 +1,6 @@
 // The Game area: Simple Soccer in the browser. The pages are those of the Godot game (main menu, quick match, teams & squads,
 // tournaments, match report) and the match itself is played by the Python match core on the server: game/session.py streams
-// every tick over a WebSocket, this page draws it and sends the keyboard back.
+// every tick over a WebSocket, this page draws it and sends the keyboard (or a controller, game/pad.js) back.
 // Routes: #/game · #/game/quick · #/game/puzzle · #/game/teams[/<id>] · #/game/tournament/new · #/game/tournament · #/game/match · #/game/report
 // The Lab's router (web/lab/app.js) calls Game.show(parts) for #/game/... ; the tournament is kept in this browser (localStorage).
 // The screens are ES modules in web/game/ (core.js: state and helpers; one module per screen; render.js: the canvas).
@@ -8,6 +8,7 @@
 import { $, G, catalog, esc, header, mount, overlay } from "./game/core.js";
 import { match, stopMatch } from "./game/match.js";
 import { menu } from "./game/menu.js";
+import { padStep } from "./game/pad.js";   // Xbox / standard controller: polled and turned into the same keys
 import { puzzlePage } from "./game/puzzle.js";
 import { teamSelect } from "./game/quick.js";
 import { drawMatch } from "./game/render.js";
@@ -43,5 +44,5 @@ document.addEventListener("keydown", (e) => {
 });
 document.addEventListener("keyup", (e) => { if (document.body.dataset.area === "game" && G.keyHandler) G.keyHandler(e, false); });
 
-window.Game = { show, stopMatch, state: () => G, redraw: () => G.match && drawMatch(G.match, performance.now()) };   // state, redraw: for tests
+window.Game = { show, stopMatch, state: () => G, redraw: () => G.match && drawMatch(G.match, performance.now()), padStep };   // state, redraw, padStep: for tests
 window.dispatchEvent(new Event("game-ready"));
