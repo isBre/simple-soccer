@@ -118,6 +118,8 @@ document.addEventListener("click", (e) => {
   if (kd) { const p = route().params; p.set("kind", kd.dataset.kind); location.hash = "#/compare?" + p.toString(); return; }
   const lgp = t.closest("[data-league]");
   if (lgp) { rk.league = lgp.dataset.league; rerender(); return; }
+  const rks = t.closest("[data-rksize]");
+  if (rks) { rk.size = +rks.dataset.rksize; loadRanking(true); return; }
   const hrs = t.closest("[data-hours]");
   if (hrs) { state.healthHours = +hrs.dataset.hours; state.health = null; rerender(); return; }
   const rm = t.closest("[data-rmrun]");

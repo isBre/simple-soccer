@@ -75,29 +75,13 @@ _elo_cache = {"t": 0, "rows": {}}
 
 
 def elo_table(ttl=60):
-    """The Elo ladder's ratings by entry id (lab/ladder.py fit()), recomputed at most once a minute: it hashes every model file.
-    A run's best net whose weights are not on this machine (out_5v5/ckpt/ stays on the Pi; models/ holds only the copied ones) is
-    still rated from its stored ladder matches, with the file version of its newest match ("stored": True)."""
+    """The 5v5 ratings of this machine by entry id (lab/ladder.py rows(): elo/), recomputed at most once a minute. A run's best
+    net is rated where its weights are (each machine rates what it has: the ratings are local, docs/ratings.md)."""
     if time.time() - _elo_cache["t"] > ttl:
         try:
             from lab import ladder
-            ros, res = ladder.roster(), ladder.results()
-            have = {e["id"] for e in ros}
-            newest = {}
-            for m in res:
-                if m.get("protocol") == ladder.PROTOCOL:
-                    for side in "ab":
-                        newest[m[side]] = m[side + "_sha"]
-            extra = [{"id": k, "name": k[4:], "league": "rl", "kind": "net", "sha": sha, "stored": True} for k, sha in newest.items()
-                     if k not in have and k.startswith("net:x_") and k.endswith("_best") and os.path.isdir(os.path.join(EXP, "runs", k[6:-5]))]
-            ros = ros + extra
-            rat, goals = ladder.fit(ros, res), ladder.goal_table(ros, res)
-            rows = sorted(({**e, **rat[e["id"]], "placed": rat[e["id"]]["games"] >= ladder.PLACEMENT,
-                            **{"a" + k: goals.get(e["id"], {}).get(k) for k in ("gf", "ga", "gf_se", "ga_se")}} for e in ros), key=lambda r: -r["elo"])
-            for i, r in enumerate(rows):
-                r["rank"] = i + 1
-            _elo_cache["rows"] = {r["id"]: r for r in rows}
-        except Exception:                              # no numpy, unreadable files: the Runs page simply shows no Elo
+            _elo_cache["rows"] = ladder.rows()
+        except Exception:                              # no numpy, no database yet: the Runs page simply shows no Elo
             _elo_cache["rows"] = {}
         _elo_cache["t"] = time.time()
     return _elo_cache["rows"]
@@ -299,7 +283,7 @@ def health_view(hours=12.0):
 DOC_FILES = [("Experiments", "AGENTS.md"), ("Experiments", "docs/experiment_log.md"), ("Experiments", "docs/rewards.md"), ("Experiments", "docs/experiment_pipeline.md"),
              ("Experiments", "exp/results.md"), ("Experiments", "lab/README.md"),
              ("Project", "README.md"), ("Project", "rl/README.md"), ("Project", "docs/design.md"),
-             ("Teams", "docs/opus_5_5_high.md"), ("Teams", "docs/elo_ranking.md")]
+             ("Teams", "docs/opus_5_5_high.md"), ("Teams", "docs/elo_ranking.md"), ("Teams", "docs/ratings.md"), ("Teams", "docs/public_view.md")]
 
 
 def doc_list():
@@ -509,7 +493,10 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send(json.dumps({"v": v}).encode(), "application/json")
             if path == "/api/ranking":
                 from lab import ladder
-                return self.send(json.dumps(ladder.ranking(), default=float).encode(), "application/json")
+                from urllib.parse import parse_qsl
+                q = dict(parse_qsl(self.path.split("?", 1)[1])) if "?" in self.path else {}
+                size = int(q.get("size", 5)) if str(q.get("size", 5)).isdigit() and 1 <= int(q.get("size", 5)) <= 5 else 5
+                return self.send(json.dumps(ladder.ranking(size), default=float).encode(), "application/json")
             if path == "/api/dataset":
                 return self.send(json.dumps(dataset_view(), default=float).encode(), "application/json")
             if path.startswith("/api/dataset/match/"):

@@ -8,7 +8,9 @@
   dataset    the Lab's Dataset page API analyses that file (/api/dataset) and serves it for the replay (/api/dataset/match/<id>)
   record     a match with "record" saves the human's play (game/recorder.py): the picked slot is the one recorded, the keys become
              the right net moves, the observation can be rebuilt from the stored state (il/human_data.py), a match without it saves nothing
-  ranking    the Elo ranking (/api/ranking, lab/ladder.py) lists every team, sorted, each rating inside its interval
+  ranking    after one round of 3v3 ratings (elo/, a temporary database): the Lab's ranking of a size (/api/ranking?size=3) and the
+             game's Rankings page (/api/game/rankings) list players and teams, sorted, each rating inside its interval, and the
+             teams in the catalog carry their Elo per size
   tournament new -> simulate a round -> fixture -> record a result -> view, through /api/game/tournament
   my team    a team built in the game (/api/game/team): saved in My Teams (a temporary folder here), plays 3v3 without its 5v5-only net
              and 5v5 with it, refused when a player is unknown, when it would edit a team of data/teams or from another origin; deleted
@@ -91,6 +93,12 @@ def post_status(port, path, body, headers=None):
         return e.code, json.loads(e.read() or b"{}")
 
 
+def _rated_first(rows):
+    """The game's Rankings rows: rated entries first, sorted by Elo, then the unrated ones."""
+    rated = [r for r in rows if r["games"]]
+    return rows[:len(rated)] == rated and all(rated[i]["elo"] >= rated[i + 1]["elo"] for i in range(len(rated) - 1))
+
+
 def ws_result(port, setup):
     """The result of a whole match played over the WebSocket at 8x speed."""
     ws = WS(port)
@@ -115,6 +123,8 @@ def main():
     rec_dir = tempfile.mkdtemp(prefix="soccer_human_")
     my_dir = tempfile.mkdtemp(prefix="soccer_my_teams_")
     os.environ["SOCCER_MY_TEAMS"] = my_dir                  # the teams built in the game: a temporary folder, here and in the server
+    local_dir = tempfile.mkdtemp(prefix="soccer_local_")
+    os.environ["SOCCER_LOCAL"] = local_dir                  # the ratings database: a temporary one
     srv = subprocess.Popen([sys.executable, os.path.join(ROOT, "web", "app.py"), "--port", str(port), "--host", "127.0.0.1", "--no-helpers"],
                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env={**os.environ, "SOCCER_HUMAN_DIR": rec_dir})
     results = []
@@ -220,12 +230,21 @@ def main():
         results.append(check("dataset", ok, "%d rows, forward moves %.0f%%, replay %d frames" % (
             ds.get("rows", 0), ds["moves"][3] if ds.get("moves") else 0, len(rp.get("p", [])))))
 
-        rk = json.loads(get(port, "/api/ranking")[1])
+        subprocess.run([sys.executable, "-m", "elo", "round", "--size", "3", "--pairs", "6", "--workers", "2"], cwd=ROOT,
+                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
+        rk = json.loads(get(port, "/api/ranking?size=3")[1])
         rows = rk.get("rows", [])
         kinds = {r["kind"] for r in rows}
-        ok = len(rows) >= 21 and {"rules", "team"} <= kinds and all(r["lo"] <= r["elo"] <= r["hi"] for r in rows) \
-            and [r["rank"] for r in rows] == list(range(1, len(rows) + 1)) and all(rows[i]["elo"] >= rows[i + 1]["elo"] for i in range(len(rows) - 1))
-        results.append(check("ranking", ok, "%d teams (%s), %d matches stored" % (len(rows), ", ".join(sorted(kinds)), rk.get("matches", 0))))
+        gr = json.loads(get(port, "/api/game/rankings?size=3")[1])
+        cat3 = json.loads(get(port, "/api/game/catalog")[1])
+        rated = [t for t in cat3["teams"] if t["ratings"].get("3", {}).get("games")]
+        ok = rk.get("size") == 3 and rk.get("matches") == 12 and len(rows) >= 21 and {"rules", "team"} <= kinds \
+            and all(r["lo"] <= r["elo"] <= r["hi"] for r in rows) and [r["rank"] for r in rows] == list(range(1, len(rows) + 1)) \
+            and all(rows[i]["elo"] >= rows[i + 1]["elo"] for i in range(len(rows) - 1)) \
+            and len(gr["players"]) >= 20 and gr["teams"] and _rated_first(gr["players"]) and _rated_first(gr["teams"]) \
+            and rated and os.path.exists(os.path.join(local_dir, "elo.db"))
+        results.append(check("ranking", ok, "3v3: %d entries (%s), %d matches, game page %d players / %d teams, %d teams rated in the catalog" % (
+            len(rows), ", ".join(sorted(kinds)), rk.get("matches", 0), len(gr["players"]), len(gr["teams"]), len(rated))))
 
         d = post(port, "/api/game/tournament", {"action": "new", "league": "rules", "user": "aurora", "count": 4, "format": 1,
                                                 "pitch": "classic", "size": 3, "duration": 60})
@@ -272,6 +291,7 @@ def main():
         srv.terminate()
         shutil.rmtree(rec_dir, ignore_errors=True)
         shutil.rmtree(my_dir, ignore_errors=True)
+        shutil.rmtree(local_dir, ignore_errors=True)
     ok = all(results)
     print("TOTAL ->", "PASS" if ok else "FAIL")
     return 0 if ok else 1

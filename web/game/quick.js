@@ -1,5 +1,5 @@
 // The Game (web/game.js has the overview): the quick match team select.
-import { $, CHEV, CONTROLS, G, btn, esc, go, leagueTeams, loadT, mount, playsText, prefs, savePrefs } from "./core.js";
+import { $, CHEV, CONTROLS, G, btn, eloText, esc, go, leagueTeams, loadT, mount, playsText, prefs, savePrefs } from "./core.js";
 import { match, play } from "./match.js";
 import { menu } from "./menu.js";
 import { showReport } from "./report.js";
@@ -112,7 +112,7 @@ export function teamSelect() {
     $(".ks-mark", el).replaceChildren(Draw.logoCanvas(t.logo, 620));
     $(".ks-split", v).style.setProperty("--c" + i, "#" + t.colors[0]);
     $(".ks-name", el).textContent = t.name;
-    $(".ks-elo", el).textContent = t.elo != null ? `Elo ${t.elo}` : "Elo not rated yet";
+    $(".ks-elo", el).textContent = eloText(t, SIZES[size?.get?.() ?? 4]);
     $(".ks-plays", el).textContent = playsText(t);
     $(".ks-lg-btn span", el).textContent = L[leagueOf(t)].name;
     for (const b of el.querySelectorAll("[data-lg]")) { const on = Number(b.dataset.lg) === leagueOf(t); b.classList.toggle("on", on); b.setAttribute("aria-selected", on); }
@@ -159,7 +159,10 @@ export function teamSelect() {
   v.addEventListener("click", closeMenus);
   // the bar: players, minutes, control (+ recording); More: the pitch
   const opts = $(".ks-opts", v);
-  const size = seg("Players", SIZES.map((n) => `${n}v${n}`), prefIdx("size", Math.max(1, Math.min(5, P[pitchIdx].recommended)) - 1, 5), (i) => { prefs.size = i; savePrefs(); });
+  const size = seg("Players", SIZES.map((n) => `${n}v${n}`), prefIdx("size", Math.max(1, Math.min(5, P[pitchIdx].recommended)) - 1, 5), (i) => {
+    prefs.size = i; savePrefs();
+    sides.forEach((el, k) => { $(".ks-elo", el).textContent = eloText(st.team[k], SIZES[i]); });   // each team's Elo at this size
+  });
   const mins = seg("Minutes", MINUTES.map(String), prefIdx("minutes", 2, MINUTES.length), (i) => { prefs.minutes = i; savePrefs(); });
   const pc = playControls(() => sync());
   opts.append(size.el, mins.el, ...pc.els);

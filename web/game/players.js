@@ -1,6 +1,6 @@
 // The Game (web/game.js has the overview): the players. A player is a brain with a name (rule-based style + skill, Opus, or a
 // trained net); teams are line-ups of players (data/players, data/teams; README "Players, teams and kickoff").
-import { $, G, KIND_SHORT, esc, go, mount, shell, sizesText, table } from "./core.js";
+import { $, G, KIND_SHORT, eloSizes, esc, go, mount, shell, sizesText, table } from "./core.js";
 
 const KINDS = [["", "All"], ["rules", "Rule-based"], ["net", "Nets"]];
 const SIZE_F = [0, 1, 2, 3, 4, 5];
@@ -61,7 +61,8 @@ export function playerPage(id) {
   const v = mount(shell(`<section class="gp-hero row pl-hero" style="--kc:${{ rules: "#4f8fd8", opus: "#d97757", net: "#5fb87a" }[p.kind] || "#888"}">${badge(p, 120)}
       <div class="gt-info"><div class="gp-pill">${esc(p.kind_label)}${p.style_label ? " · " + esc(p.style_label) : ""}</div><h1 class="gt-name">${esc(p.name)}</h1>
         <p class="gt-plays">${esc(p.description)}</p>
-        <div class="gt-who">${p.skill != null ? `Skill ${p.skill} · ` : ""}plays ${esc(sizesText(p.sizes))}${p.kind === "net" && p.sizes.length < 5 ? " (its observation only fits 5 per side)" : ""}</div></div>
+        <div class="gt-who">${p.skill != null ? `Skill ${p.skill} · ` : ""}plays ${esc(sizesText(p.sizes))}${p.kind === "net" && p.sizes.length < 5 ? " (its observation only fits 5 per side)" : ""}</div>
+        <div class="elo-sizes">${eloSizes(p)}</div></div>
       <button type="button" class="ks-go gt-play" id="pl-build">Build a team with ${esc(p.name.split(" ")[0])}</button></section>
     <div class="gh-grid">
       <section class="gp-card"><h2>How it was made</h2>${origin || '<p class="gh-empty">No notes.</p>'}</section>

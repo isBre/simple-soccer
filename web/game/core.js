@@ -60,7 +60,18 @@ export function overlay(html) { const o = document.createElement("div"); o.class
 // ---------- page shell of the other game pages: a slim top row (back to the menu, keys), then the page ----------
 export const KEYS_HTML = (keys) => keys.map(([k, d]) => `<span><kbd>${k}</kbd> ${d}</span>`).join("");
 export const shell = (body, keys = [], cls = "") => `<div class="gp ${cls}"><div class="ks-top"><nav class="ks-links"><a href="#/game">‹ Menu</a></nav><div class="ks-keys">${KEYS_HTML(keys)}</div></div>${body}</div>`;
-export const eloText = (t) => (t.elo != null ? `Elo ${t.elo}` : "Elo not rated yet");
+// a team's or player's Elo at a size (5v5 when no size is given): "Elo 1612 ± 40", "provisional" under 6 games
+export const eloText = (t, size) => {
+  const r = t.ratings && t.ratings[String(size || 5)];
+  if (r && r.games) return `Elo ${r.elo} ± ${r.pm}${size ? ` (${size}v${size})` : ""}${r.placed ? "" : ", provisional"}`;
+  if (!size && t.elo != null) return `Elo ${t.elo}`;
+  return size ? `Not rated at ${size}v${size} yet` : "Elo not rated yet";
+};
+// the Elo of every size in one line: "1v1 1490 · 2v2 – · … · 5v5 1612"
+export const eloSizes = (t) => [1, 2, 3, 4, 5].filter((n) => !t.sizes || t.sizes.includes(n)).map((n) => {
+  const r = t.ratings && t.ratings[String(n)];
+  return `<span class="elo-sz"><small>${n}v${n}</small> ${r && r.games ? `<b>${r.elo}</b><small>±${r.pm}</small>` : "–"}</span>`;
+}).join("");
 export const playsText = (t) => t.plays || "Play style not measured yet (python3 game/profiles.py).";
 export const whoDrives = (t) => (t.net ? "Every player is the same trained net (reinforcement learning); it plays 5v5 only."
   : t.kinds.length > 1 ? "A mixed line-up: " + t.kinds.map((k) => ({ rules: "rule-based", opus: "Opus", net: "net" })[k]).join(", ") + " players."

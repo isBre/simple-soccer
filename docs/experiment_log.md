@@ -18,6 +18,11 @@ dashboard: `http://<pi-address>:8080`. Newest entries at the bottom; the agent a
   without a time limit. The old nets are players that only play 5v5 (46 / 54 inputs); the ladder's old team ratings no longer apply
   to the rule teams (their files changed). Next: phase B (game UI), C (local rating database, player and team Elo per size), D (55-number
   observation with on/off flags and whose kickoff, curriculum 1v0 -> 5v5 from scratch).
+- **Ratings per machine and per size** (user, 2026-11-27; `docs/ratings.md`, `elo/`): every player, team and checkpoint has an Elo
+  per team size from matches played on this machine, stored in `local/elo.db` (never pushed). Team = average of its players on the
+  pitch + a small bonus (prior 50 Elo); the average rule-based player of a size is pinned at 1500. A clone runs `python3 -m elo init`
+  once; the web app refines in the background. The old team ladder (`exp/ladder.jsonl`) is archived, not imported. Runs are judged
+  by their 5v5 rating on the machine that rated them.
 - **Fair information: every player sees the public view only** (user, 2026-11-27; `docs/public_view.md`, `soccer/ai/view.py`,
   enforced by `tests/test_view.py`). A player may use what a spectator could know (the ball and anonymous bodies with their last
   32 ticks, clock, score, overtime, state, kickoff, last touch, pitch, the public physics) and anything it computes from it; never

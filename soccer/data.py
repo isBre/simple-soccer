@@ -9,9 +9,14 @@ DATA = os.path.join(ROOT, "data")
 MY_LEAGUE = "mine"                 # the league of the teams built in the game (data/my_teams)
 
 
+def local_dir():
+    """Everything that belongs to this machine only (git-ignored): local/, or $SOCCER_LOCAL (tests)."""
+    return os.environ.get("SOCCER_LOCAL") or os.path.join(ROOT, "local")
+
+
 def my_teams_dir():
-    """Where the teams built in the game are kept: data/my_teams (local, ignored by git), or $SOCCER_MY_TEAMS (tests)."""
-    return os.environ.get("SOCCER_MY_TEAMS") or os.path.join(DATA, "my_teams")
+    """Where the teams built in the game are kept: local/my_teams, or $SOCCER_MY_TEAMS (tests)."""
+    return os.environ.get("SOCCER_MY_TEAMS") or os.path.join(local_dir(), "my_teams")
 
 STYLE_KEYS = ("line_height", "compactness", "width", "press", "marking", "directness", "shoot_range", "pass_bias", "risk",
               "keeper_sweep", "forward_stay", "support_dist", "fluidity", "attack_commit", "intercept", "counter_press",

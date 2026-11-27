@@ -183,13 +183,13 @@ def keep_best(tag, update):
 
 
 def place_in_ladder(tag, rounds=3):
-    """Plays ladder rounds right after a run until its best checkpoint is placed (PLACEMENT games): otherwise a busy queue would
-    leave it unrated. New entries are paired first (ladder.choose_pairs)."""
+    """Plays 5v5 rounds of the ratings right after a run until its best checkpoint is placed (PLACEMENT games): otherwise a busy
+    queue would leave it unrated. New entries are paired first (elo/schedule.py)."""
     from lab import ladder
     for _ in range(rounds):
         rat = ladder.fit()
         r = rat.get("net:%s_best" % tag)
-        if r is None or r["games"] >= ladder.PLACEMENT or not ladder_round():
+        if r is None or r["games"] >= ladder.PLACEMENT or not ladder_round(size=5):
             return
 
 
@@ -368,13 +368,15 @@ def next_spec():
 LADDER_PAIRS = 6
 
 
-def ladder_round():
-    """One round of the Elo ranking while nothing else runs. True if it played (so the loop looks at the queue right away)."""
+def ladder_round(size=None):
+    """One round of the ratings (elo/: every size, the one that needs it most unless `size`) while nothing else runs. True if it
+    played (so the loop looks at the queue right away)."""
     if os.path.exists(os.path.join(EXP, "ladder_off")):
         return False
     t0 = time.time()
     try:
-        p = subprocess.run([sys.executable, os.path.join(ROOT, "lab", "ladder.py"), "round", "--pairs", str(LADDER_PAIRS), "--workers", "3"],
+        p = subprocess.run([sys.executable, os.path.join(ROOT, "lab", "ladder.py"), "round", "--pairs", str(LADDER_PAIRS), "--workers", "3"]
+                           + (["--size", str(size)] if size else []),
                            cwd=ROOT, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, timeout=3600)
     except subprocess.TimeoutExpired:
         log("ladder round timed out")

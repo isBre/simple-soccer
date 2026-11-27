@@ -6,6 +6,7 @@
        simulate  plays every unplayed match of the current round (all cores), then records them
        fixture   -> {"setup", "index"}: the player's next match, to play live (/ws/match)
        record    {"index", "result"}: stores the result of the player's live match
+  GET  /api/game/rankings?size=N  the Rankings page of one size (elo/: this machine's ratings): players and teams
   POST /api/game/team             {"action": "save", "team": {...}} -> {"team": team_info} | {"action": "delete", "id"}: the teams built in
                                   the game (data/my_teams, local to this machine; the teams of data/teams can only be copied)
 The browser keeps the tournament (localStorage); the server keeps nothing but the built teams."""
@@ -73,11 +74,16 @@ def tournament(b):
     return {"t": t, "view": tn.view(t)}
 
 
-def handle(method, path, body):
+def handle(method, path, body, query=None):
     """(status, JSON-able answer) for /api/game/<...>."""
     try:
         if method == "GET" and path == "/api/game/catalog":
             return 200, api.catalog()
+        if method == "GET" and path.startswith("/api/game/rankings"):
+            size = int((query or {}).get("size", 5))
+            if size not in (1, 2, 3, 4, 5):
+                raise BadRequest("size must be 1 to 5")
+            return 200, api.rankings(size)
         if method == "POST" and path == "/api/game/tournament":
             return 200, tournament(body or {})
         if method == "POST" and path == "/api/game/team":

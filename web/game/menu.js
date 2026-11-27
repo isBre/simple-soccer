@@ -14,6 +14,7 @@ export const ICON = {
   shield: '<path d="M12 3l8 3v6c0 4.8-3.4 8-8 9-4.6-1-8-4.2-8-9V6z"/><path d="M9 12l2 2 4-4"/>',
   people: '<circle cx="9" cy="8" r="3.2"/><path d="M3.5 20c.6-3.4 2.8-5.4 5.5-5.4s4.9 2 5.5 5.4"/><circle cx="17" cy="9" r="2.6"/><path d="M15.6 14.2c2.6-.3 4.4 1.5 4.9 4.8"/>',
   build: '<path d="M4 20h16M6 20V9l6-5 6 5v11"/><path d="M10 20v-5h4v5"/>',
+  chart: '<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>',
   arrow: '<path d="M5 12h14M13 6l6 6-6 6"/>',
 };
 export const icon = (k, px = 22) => `<svg width="${px}" height="${px}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICON[k]}</svg>`;
@@ -26,12 +27,13 @@ export function menu() {
     return [a, rest[Math.floor(Math.random() * rest.length)] || C.teams.find((t) => t.id !== a.id)];
   })();
   const vs = `<span class="gm-vs">${Draw.logoTag(pair[0].id, 18)}<span>${esc(pair[0].name)}</span><i>vs</i><span>${esc(pair[1].name)}</span>${Draw.logoTag(pair[1].id, 18)}</span>`;
-  const items = (save ? [["resume", "Continue", "#/game/tournament", save.title || "Your saved tournament"]] : [])
-    .concat([["puzzle", "Puzzle", "#/game/puzzle", "One-minute rounds"],
-      ["trophy", "Tournament", "#/game/tournament/new", "One league or all"],
+  // a saved tournament takes the Tournament tile (its hub can start a new one): the menu stays at three rows
+  const items = [["puzzle", "Puzzle", "#/game/puzzle", "One-minute rounds"],
+      save ? ["resume", "Continue", "#/game/tournament", save.title || "Your saved tournament"] : ["trophy", "Tournament", "#/game/tournament/new", "One league or all"],
       ["shield", "Teams", "#/game/teams", `${C.teams.length} in ${C.leagues.length} leagues`],
       ["people", "Players", "#/game/players", `${C.players.length} players`],
-      ["build", "Build a team", "#/game/build", "Your own line-up"]]);
+      ["build", "Build a team", "#/game/build", "Your own line-up"],
+      ["chart", "Rankings", "#/game/rankings/5", "Elo for 1v1 to 5v5"]];
   const ranked = C.teams.slice().sort((a, b) => (b.elo || 0) - (a.elo || 0));
   const crests = ranked.map((t) => `<a href="#/game/teams/${encodeURIComponent(t.id)}" title="${esc(t.name)}${t.elo ? " · Elo " + t.elo : ""}" tabindex="-1">${Draw.logoTag(t.id, 34)}</a>`).join("");
   const bug = (t) => `${Draw.logoTag(t.id, 20)}<b>${esc(t.short || t.name.slice(0, 3).toUpperCase())}</b>`;

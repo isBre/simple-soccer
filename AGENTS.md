@@ -10,6 +10,8 @@ on the experiments, start here. People: the same applies; the dashboard (the Lab
 - Players and teams: a player (`data/players`) is a brain with a name (rule-based style + skill, or a net); a team (`data/teams`)
   is a line-up of 5 players (mixed allowed), with no tactic. No keeper role, golden-goal overtime, no shootouts (README "Players,
   teams and kickoff"). Opus 5.5 High is parked.
+- `docs/ratings.md`: **the ratings**: Elo per player and team, per size (1v1 to 5v5), in a local database on every machine
+  (`python3 -m elo init` once after cloning; the web app refines in the background).
 - `docs/public_view.md`: **what a player may know**. Every agent (rule-based, net, anything new) decides from the same public view
   (`soccer/ai/view.py`): anonymous bodies, their recent history, clock, score, kickoff, last touch, the pitch and the physics, plus
   anything it computes from that; never the match engine or another team's inside. A new observation or agent is a function of the
@@ -29,7 +31,8 @@ python3 lab/lab.py best                    # checkpoints ranked by the lower 95%
 python3 lab/lab.py compare A B             # paired difference A - B with se, z, p, MDE and a verdict (same protocol only)
 python3 lab/lab.py ablation                # each finished run vs its reference, Holm-corrected over the batch
 python3 lab/lab.py events --since 2026-11-16T20:00   # what happened (starts, resumes, stops, evaluations, reboots)
-python3 lab/lab.py ranking [--league rl]   # Elo ranking of every team of every league (lab/ladder.py): Elo ± 95%, adjusted goals agf / aga
+python3 lab/lab.py ranking [--size 5]      # this machine's ratings of one size (elo/, docs/ratings.md): Elo ± 95%, adjusted goals agf / aga
+python3 -m elo status                      # matches and entries per size, what is still unplaced (python3 -m elo init after cloning)
 python3 lab/lab.py estimates --run NAME    # estimated Elo, GF, GA of a run's checkpoints during training (u0 = the start net)
 ```
 Style / tactics: every full evaluation (and `python3 rl/eval_checkpoint.py --model M --out F --mode scout`, ~2 min) stores a `scout`
@@ -48,8 +51,8 @@ python3 lab/lab.py queue move NAME --position 1
 python3 lab/lab.py queue cancel NAME              # running: stops within 30 s ('cancelled'); queued: moved to exp/parked/
 python3 lab/lab.py ladder archive [--label L] [--yes]   # ONLY when the user asks: starts the Elo ranking over
 ```
-`ladder archive` moves every stored ladder match and the rating history to `exp/ladder_archive/<date>[_<label>]/` (kept, no longer
-counted); without `--yes` it only shows what would move. The user decides when the ranking is reset; never do it on your own.
+`ladder archive` moves this machine's ratings database (`local/elo.db`) to `local/elo_archive/<date>[_<label>].db` (kept, no longer
+counted); without `--yes` it only shows what would move. The user decides when the ratings are reset; never do it on your own.
 A spec: `{"name": "xga", "start": "out_5v5/ckpt/t48_u100.pt", "updates": 300, "lr": 5e-5, "rewards": {"w_xga": 2.0},
 "args": {"seed": 11}, "control": "minimal", "notes": "why"}`. `rewards` override the minimal set and `args` the training defaults
 (`lab/tracker.py`: MINIMAL, DEFAULTS); any `rl/selfplay.py` option is allowed. Names are unique forever (a used name is refused).
@@ -58,20 +61,23 @@ The runner (`lab/exp_runner.py`, service `soccer-exp`) trains the queue one spec
 (24 matches against mixed ladder entries, `elo_pairs`; the older rule-bot fast check only with `fast_rules: 1`); it stops early on
 divergence / regression (two estimates in a row clearly below the start net's) / cancel, then
 runs full evaluations (last checkpoint and the one with the highest estimated Elo: behaviour, scouting), keeps the better of the two by
-estimated Elo as `x_<run>_best` and places it in the Elo ladder. There is no better / worse verdict.
+estimated Elo as `x_<run>_best` and places it in the 5v5 ratings (`elo/`). There is no better / worse verdict.
 
 ## Judge correctly
-1. **A run is judged by Elo, goals scored and goals conceded** (decided 2026-11-21): the ladder rating of its best checkpoint and its
-   opponent-adjusted goals (`agf` / `aga`: per 90 s match against the average ladder team). Points against the rule bots saturate near 3
-   and cannot rank good nets; there is no better / worse verdict. A new entry is placed after the run and its rating keeps settling as the
-   ladder plays (while the queue is empty): read it again later before concluding.
-2. Two Elo ratings differ when their 95% intervals do not overlap (the intervals are relative to the average rating, about ±25 after
-   800 games). Raw goals per match are not comparable between entries: strong entries meet strong opponents.
-3. The estimated Elo during training (`estimates`, about ±140) shows the trend of one run (is it improving, did it break?), not a ranking.
-4. The full evaluation (`full/g1/d90`, matches against the rule teams) is kept for behaviour and scouting, which the Lab shows next to
-   the strongest rated teams. Its league points (and the older `fast/g2/d60` checks) are not used to judge runs; if you compare them,
-   only within one protocol and paired (`compare`, `ablation`).
-5. Training points (`train_pts_vs_rules`) are a trend signal from sampled play with random starts, not an evaluation.
+1. **A run is judged by Elo, goals scored and goals conceded** (decided 2026-11-21): the 5v5 rating of its best checkpoint in this
+   machine's ratings (`elo/`, `docs/ratings.md`) and its opponent-adjusted goals (`agf` / `aga`: per 90 s match against the average
+   opponent). Points against the rule bots saturate near 3 and cannot rank good nets; there is no better / worse verdict. A new
+   entry is placed after the run and its rating keeps settling as more rounds are played: read it again later before concluding.
+2. The scale is pinned (the average rule-based player of a size is 1500) and the intervals are relative to it. Two ratings differ
+   when their 95% intervals do not overlap. Raw goals per match are not comparable between entries: strong entries meet strong opponents.
+3. Ratings are **per machine**: the database is local (`local/elo.db`, never pushed). Compare runs rated on the same machine; a
+   number from another machine is close but not the same. Results stop counting when a file they depend on changes or `elo.ENGINE`
+   moves on (bumped with every intended behaviour change, together with the golden tests).
+4. The estimated Elo during training (`estimates`, about ±140) shows the trend of one run (is it improving, did it break?), not a
+   ranking. Estimates before 2026-11-27 were made against the old team ladder: another scale.
+5. The full evaluation (`full/g1/d90`, matches against the rule teams) is kept for behaviour and scouting. Its league points (and
+   the older `fast/g2/d60` checks) are not used to judge runs; if you compare them, only within one protocol and paired (`compare`, `ablation`).
+6. Training points (`train_pts_vs_rules`) are a trend signal from sampled play with random starts, not an evaluation.
 
 ## Health
 - `lab.py status` shows `stalled` (no training output for 15 min outside an evaluation) and `last_reboot` (last health sample before it).

@@ -479,3 +479,6 @@ body[data-area="game"] .snd { display: flex; gap: 4px; }
 .gt-actions { display: flex; flex-direction: column; gap: 8px; align-self: flex-end; flex: none; }
 @media (max-width: 860px) { .bd-grid { grid-template-columns: 1fr; } .bd-name { font-size: 28px; } .pl-bar { grid-template-columns: 100px 1fr; } }
 .ks-btn2.gt-edit { display: inline-grid; place-items: center; text-decoration: none; }
+.elo-sizes { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 4px; font-size: 14px; color: var(--g-text); }   /* Elo per team size */
+.elo-sz small { color: var(--g-muted); font-size: 12px; margin: 0 3px; }
+.elo-sz b { font-weight: 650; }

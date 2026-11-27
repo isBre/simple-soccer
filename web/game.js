@@ -2,6 +2,7 @@
 // tournaments, match report) and the match itself is played by the Python match core on the server: game/session.py streams
 // every tick over a WebSocket, this page draws it and sends the keyboard (or a controller, game/pad.js) back.
 // Routes: #/game · #/game/quick · #/game/puzzle · #/game/teams[/<id>] · #/game/players[/<id>] · #/game/build[/<team id>[/copy]]
+//         · #/game/rankings[/<size>]
 //         · #/game/tournament/new · #/game/tournament · #/game/match · #/game/report
 //         · #/game/sounds (every sound and song on its own button; not linked)
 // Sound: the menu music (web/music.js) plays on every page but the match and stops in the Lab; menu clicks, the two sound
@@ -17,6 +18,7 @@ import { puzzlePage } from "./game/puzzle.js";
 import { builder } from "./game/builder.js";
 import { playerPage, playersList } from "./game/players.js";
 import { teamSelect } from "./game/quick.js";
+import { rankingsPage } from "./game/rankings.js";
 import { drawMatch } from "./game/render.js";
 import { report } from "./game/report.js";
 import { soundsPage } from "./game/sounds.js";
@@ -41,6 +43,7 @@ async function show(parts) {
   if (a === "teams") return teams(b ? decodeURIComponent(b) : "");
   if (a === "players") return b ? playerPage(decodeURIComponent(b)) : playersList();
   if (a === "build") return builder(b ? decodeURIComponent(b) : "", parts[2] === "copy");
+  if (a === "rankings") return rankingsPage(Number(b) || 5);
   if (a === "tournament" && b === "new") return tourNew();
   if (a === "tournament") return tourHub();
   if (a === "match" && G.pending) return match(G.pending);

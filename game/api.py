@@ -70,8 +70,8 @@ def players():
 
 
 def ladder_id(t):
-    """The team's id in the Elo ranking (lab/ladder.py)."""
-    return ("team:" if t.ml_model else "rules:") + t.id
+    """The team's id in the ratings (elo/): a team made of one player five times is that player's entry, listed under this id too."""
+    return "team:" + t.id
 
 
 def team_sha(t):
@@ -107,13 +107,28 @@ def _cached_json(path, parse):
 
 
 def elo_table():
-    """{ladder id: Elo} from the latest snapshot of the ranking (exp/ladder_ratings.jsonl: 5v5, arena, 90 s)."""
-    def last(f):
-        line = ""
-        for line in f:
-            pass
-        return json.loads(line).get("elo", {}) if line.strip() else {}
-    return _cached_json(os.path.join(ROOT, "exp", "ladder_ratings.jsonl"), last) or {}
+    """{entry id ("team:<id>", "player:<id>"): {size: {elo, se, games, placed, rank}}} from this machine's ratings (elo/, local/elo.db),
+    cached until a result is added. Empty when the ratings cannot be read (the game still works, just unrated)."""
+    try:
+        from elo import api as elo_api
+        return elo_api.elo_by_team()
+    except Exception as e:                                   # no database yet, a broken file: never stop the game for the ratings
+        print("game: ratings unavailable (%s: %s)" % (type(e).__name__, e), flush=True)
+        return {}
+
+
+def _ratings(entry):
+    """{"1": {elo, pm, games, placed, rank}, ...}: an entry's ratings per size, rounded for the page (pm = the 95% half-width)."""
+    return {str(n): {"elo": round(r["elo"]), "pm": round(1.96 * r["se"]), "games": r["games"], "placed": r["placed"], "rank": r["rank"]}
+            for n, r in (entry or {}).items()}
+
+
+def _headline(rs):
+    """The Elo a list shows for an entry: 5v5 if it has played it, else the largest size it has played (None: unrated)."""
+    for n in ("5", "4", "3", "2", "1"):
+        if n in rs and rs[n]["games"]:
+            return rs[n]["elo"]
+    return None
 
 
 def profiles():
@@ -190,25 +205,25 @@ def describe(tid):
     return s[0].upper() + s[1:]
 
 
-def player_info(p):
+def player_info(p, elo=None):
     """A player for the page: who it is, what drives it, how it was made, the sizes it can play."""
     db = database()
     style = db.styles.get(p.style_id) if p.kind != "net" else None
     return {"id": p.id, "name": p.name, "kind": p.kind, "kind_label": KIND_LABEL.get(p.kind, p.kind), "skill": p.skill if p.kind != "net" else None,
             "style": style.id if style else "", "style_label": style.name if style else "", "description": p.description,
             "origin": p.origin, "sizes": p.sizes(),
-            "teams": sorted(t.id for t in teams().values() if p.id in t.lineup_ids)}
+            "teams": sorted(t.id for t in teams().values() if p.id in t.lineup_ids), "ratings": _ratings((elo or {}).get("player:" + p.id))}
 
 
 def team_info(t, elo=None):
     net = bool(t.ml_model)
     s = t.strength()
     elo = elo_table() if elo is None else elo
-    e = elo.get(ladder_id(t))
+    rs = _ratings(elo.get(ladder_id(t)))
     return {"id": t.id, "name": t.name, "short": t.short, "league": t.league,
             "league_name": league_name(t.league), "colors": team_colors(t), "kit": str(t.raw.get("kit", "solid")),
             "logo": t.raw.get("logo", {}), "net": net, "kinds": t.kinds(),
-            "plays": describe(t.id), "elo": None if e is None else round(e),
+            "plays": describe(t.id), "elo": _headline(rs), "ratings": rs,
             "strength": s, "stars": stars(s),
             "sizes": [n for n in range(1, 6) if t.can_play(n)],
             "lineup": [p.id for p in t.players], "custom": t.custom,
@@ -218,7 +233,31 @@ def team_info(t, elo=None):
 def team_list():
     """Every team, grouped by league (LEAGUES order), strongest first inside a league (Elo; unranked teams last, by name)."""
     elo = elo_table()
-    return sorted(teams().values(), key=lambda t: (league_index(t.league), -elo.get(ladder_id(t), -1e9), t.name))
+    head = {t.id: _headline(_ratings(elo.get(ladder_id(t)))) for t in teams().values()}
+    return sorted(teams().values(), key=lambda t: (league_index(t.league), -(head[t.id] if head[t.id] is not None else -1e9), t.name))
+
+
+def rankings(size):
+    """The Rankings page of one size: players and teams of the game (training checkpoints are the Lab's), rated on this machine."""
+    from elo import api as elo_api
+    rk = elo_api.ranking(size)
+    pl, tm = [], []
+    for x in rk["rows"]:
+        if x["entry"] == "player":
+            pl.append({**_page_row(x), "player": x["id"][7:], "kind": x["sub"]})
+        elif x["entry"] == "team" and x["id"][5:] in teams():
+            tm.append({**_page_row(x), "team": x["id"][5:], "kinds": teams()[x["id"][5:]].kinds()})
+    for rows in (pl, tm):
+        rows.sort(key=lambda r: (r["games"] == 0, -r["elo"], r["name"]))      # rated first, unrated by name at the end
+        for k, r in enumerate(rows):
+            r["rank"] = k + 1
+    return {"size": size, "matches": rk["matches"], "last": rk["last"], "players": pl, "teams": tm}
+
+
+def _page_row(x):
+    return {"name": x["name"], "elo": round(x["elo"]), "pm": round(1.96 * x["se"]), "games": x["games"], "placed": x["placed"],
+            "w": x["w"], "d": x["d"], "l": x["l"], "agf": None if x["agf"] is None else round(x["agf"], 2),
+            "aga": None if x["aga"] is None else round(x["aga"], 2), "bonus": None if x["bonus"] is None else round(x["bonus"])}
 
 
 def catalog():
@@ -227,7 +266,7 @@ def catalog():
     elo = elo_table()
     return {"leagues": [{**lg, "count": sum(1 for t in teams().values() if t.league == lg["id"])} for lg in LEAGUES],
             "teams": [team_info(t, elo) for t in team_list()],
-            "players": [player_info(p) for p in sorted(players().values(), key=lambda p: (p.kind, p.name)) if not p.hidden],
+            "players": [player_info(p, elo) for p in sorted(players().values(), key=lambda p: (p.kind, p.name)) if not p.hidden],
             "pitches": [{"id": p.id, "name": p.name, "sizes": p.sizes, "recommended": int(p.sizes[-1]) if p.sizes else 3,
                          "half_w": p.half_w, "half_h": p.half_h, "goal_half": p.goal_half,
                          "colors": {k: str(p.raw.get("colors", {}).get(k, d)).lstrip("#")

@@ -1,5 +1,5 @@
 // The Game (web/game.js has the overview): teams and their players.
-import { $, G, eloText, esc, go, leagueTeams, mount, playerLink, playsText, prefs, savePrefs, shell, table, whoDrives } from "./core.js";
+import { $, G, eloSizes, eloText, esc, go, leagueTeams, mount, playerLink, playsText, prefs, savePrefs, shell, table, whoDrives } from "./core.js";
 import { badge } from "./players.js";
 import { match, play } from "./match.js";
 import { menu } from "./menu.js";
@@ -43,7 +43,7 @@ export function teams(id) {
         { text: p.sizes.length === 5 ? "all" : p.sizes.map((n) => n + "v" + n).join(" "), color: "var(--g-muted)" }] }));
     const d = $("#t-detail", v);
     d.innerHTML = `<section class="gp-hero row" style="--kc:#${t.colors[0]}"><div class="ks-mark" aria-hidden="true"></div><span class="gt-crest"></span>
-        <div class="gt-info"><div class="gp-pill">${esc(t.league_name)}</div><h1 class="gt-name">${esc(t.name)}</h1><div class="ks-elo">${esc(eloText(t))}</div>
+        <div class="gt-info"><div class="gp-pill">${esc(t.league_name)}</div><h1 class="gt-name">${esc(t.name)}</h1><div class="ks-elo">${esc(eloText(t))}</div><div class="elo-sizes">${eloSizes(t)}</div>
         <p class="gt-plays">${esc(playsText(t))}</p><div class="gt-who">${esc(whoDrives(t))}</div></div>
         <div class="gt-actions"><button type="button" class="ks-go gt-play" id="t-play">Quick match</button>
           <a class="ks-btn2 gt-edit" href="#/game/build/${encodeURIComponent(t.id)}${t.custom ? "" : "/copy"}">${t.custom ? "Edit team" : "Copy and edit"}</a></div></section>
