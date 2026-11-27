@@ -48,8 +48,8 @@ there: **Whole team** (switch with Q / LB / RB), **Any player** (the most advanc
 - **On the same side**: each controls **one player for the whole match**, never the same one, and nobody switches; the AI plays the
   rest of the team. The first person of a side takes its kickoffs.
 - Nobody on a side: watch. One person: every device moves them, as without the picker. The places are remembered in the browser.
-- In the match every device moves only its own person's player, marked with a ring and a **P1** / **P2** / ... label in that person's
-  colour (off screen: an arrow on the window edge). Anyone can pause; the pause card says who plays what. A controller of the
+- In the match every device moves only its own person's player, marked with a translucent ring in that person's colour (P1 red,
+  P2 blue; off screen: an arrow on the window edge with P1 / P2). Anyone can pause; the pause card says who plays what. A controller of the
   match that disconnects pauses it until it is back. Multiplayer matches are not recorded (the datasets have one player).
 - Engine: `soccer/match.py` `Human` (one per person: side, mode, slot, controlled player, keys, Q ranking) and `check_humans` (the
   rules above); the setup's `"humans"` list (`game/api.py`), `"h"` on the inputs (`game/session.py`), `web/game/sides.js` (the

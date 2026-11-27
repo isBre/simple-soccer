@@ -198,7 +198,7 @@ export function drawNets(ctx, m) {                                   // nets in 
   }
 }
 const ME = "rgba(222,226,232,0.6)", ME_SOLID = "#dee2e8";        // the controlled player's ring and off-screen badge
-// local multiplayer (more than one person): every person's player has a ring and a "P1" / "P2" label in that person's colour
+// local multiplayer (more than one person): every person's player has a translucent ring in that person's colour (P1 red, P2 blue)
 const multi = (m) => (m.humans || []).length > 1;
 export function drawPlayers(ctx, M, m, a, b, L, f) {
   M.mes = [];
@@ -207,9 +207,9 @@ export function drawPlayers(ctx, M, m, a, b, L, f) {
     if (2 * i + 1 >= b.p.length) return;
     const x = L(a.p[2 * i], b.p[2 * i]), y = L(a.p[2 * i + 1], b.p[2 * i + 1]), r = pl.r, fl = b.h[i] || 0, kit = m.teams[pl.team];
     const who = many ? hu.findIndex((q) => q[0] === pl.uid) : -1, next = many ? hu.findIndex((q) => q[1] === pl.uid) : -1;
-    if (many && who >= 0) {                                   // a person's player: a ring in their colour, the label above (drawLabels)
+    if (many && who >= 0) {                                   // a person's player: a translucent ring in their colour (off screen: drawOffscreen)
       M.mes.push({ x, y, pl, col: HUMAN_COLORS[who % 4], label: "P" + (who + 1) });
-      ctx.beginPath(); ctx.arc(x, y, r + 6, 0, 2 * Math.PI); ctx.lineWidth = 3.5; ctx.strokeStyle = HUMAN_COLORS[who % 4]; ctx.stroke();
+      ctx.save(); ctx.globalAlpha = 0.6; ctx.beginPath(); ctx.arc(x, y, r + 6, 0, 2 * Math.PI); ctx.lineWidth = 3; ctx.strokeStyle = HUMAN_COLORS[who % 4]; ctx.stroke(); ctx.restore();
     } else if (many && next >= 0 && f.st !== 2) {             // who that person's next Q picks: a dashed ring in their colour
       ctx.save(); ctx.setLineDash([4, 4]); ctx.beginPath(); ctx.arc(x, y, r + 5, 0, 2 * Math.PI);
       ctx.globalAlpha = hu[next][2] ? 0.9 : 0.6; ctx.lineWidth = 1.5; ctx.strokeStyle = HUMAN_COLORS[next % 4]; ctx.stroke(); ctx.restore();
@@ -237,11 +237,6 @@ export function drawPlayers(ctx, M, m, a, b, L, f) {
       ctx.beginPath(); ctx.arc(x + Math.cos(ang) * (sc.r + t * spd), y + Math.sin(ang) * (sc.r + t * spd) + 0.012 * t * t, 3, 0, 2 * Math.PI);
       ctx.fillStyle = Draw.css(pal[j % 3], Math.max(0, Math.min(1, 1 - age / 110))); ctx.fill();
     }
-  }
-  for (const me of M.mes) if (me.label) {                    // "P1" / "P2" over each person's player
-    ctx.font = FONT(11, 800); const w = ctx.measureText(me.label).width + 10, ly = me.y - me.pl.r - 24;
-    roundRect(ctx, me.x - w / 2, ly, w, 15, 7.5, me.col);
-    text(ctx, me.label, me.x - w / 2, ly + 11.5, "c", w, 11, "#12161d", 0, "", 800);
   }
   const bx = L(a.b[0], b.b[0]), by = L(a.b[1], b.b[1]), br = m.ball_r;
   ctx.beginPath(); ctx.arc(bx, by, br, 0, 2 * Math.PI); ctx.fillStyle = "#fff"; ctx.fill();

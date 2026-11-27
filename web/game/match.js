@@ -21,7 +21,7 @@ export function stopMatch() {
 export const humanOf = (M, dev) => (M.p.devices ? M.p.devices.indexOf(dev) : 0);
 export const devOfEvent = (e) => (e && e.padIndex != null ? "pad:" + e.padIndex : "kb");
 export const devName = (dev) => (dev === "kb" ? "Keyboard" : "Controller " + (Number(dev.slice(4)) + 1));
-export const HUMAN_COLORS = ["#4fc3f7", "#ffb74d", "#aed581", "#f48fb1"];   // P1, P2, P3, P4: rings, labels, the side picker
+export const HUMAN_COLORS = ["#ef5350", "#42a5f5", "#aed581", "#ffb74d"];   // P1 red, P2 blue, P3, P4: rings, the side picker
 export const KEYS = { ArrowLeft: [-1, 0], KeyA: [-1, 0], ArrowRight: [1, 0], KeyD: [1, 0], ArrowUp: [0, -1], KeyW: [0, -1], ArrowDown: [0, 1], KeyS: [0, 1] };
 export function match(p) {
   document.body.classList.add("g-playing");
