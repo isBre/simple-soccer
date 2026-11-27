@@ -8,7 +8,8 @@ in "args" (e.g. {"workers_rule": 2}). Per experiment the runner:
   1. estimates the start net's Elo (update 0 of the run); with `fast_rules` 1 also its fixed rule-bot checks (fast + full, cached),
   2. trains; every `fast_every` updates selfplay pauses for a check: an estimated Elo (lab/ladder.py estimate: `elo_pairs` pairs
      of matches against mixed ladder entries, exp/elo_estimates.jsonl), plus the fixed rule-bot matches when `fast_rules` is 1,
-  3. stops early: `diverged` (training points vs the rule bots fall under 70% of their start value) or `regressed`
+  3. stops early: `diverged` (training points vs the rule bots fall under 70% of their start value, for a run that starts at 1
+     point per match or more) or `regressed`
      (two estimated Elos in a row below the start net's by more than 2 standard errors of the difference),
   4. otherwise runs a FULL evaluation (behaviour, scouting) of the last checkpoint and of the one with the highest estimated Elo,
      keeps the better of the two by estimated Elo as the run's best checkpoint (x_<run>_best) and places it in the Elo ladder.
@@ -45,6 +46,7 @@ ROOT, EXP = tracker.ROOT, tracker.EXP
 CKPT = os.path.join(ROOT, "out_5v5", "ckpt")
 MINIMAL, DEFAULTS = tracker.MINIMAL, tracker.DEFAULTS
 DIVERGE_FRACTION = 0.7          # training points vs the rule bots below this share of their starting value: stop
+DIVERGE_MIN = 1.0               # ... only for a run that starts at least this strong (points per match): near 0 the share is noise
 REGRESS_SE = 2.0                # estimated Elo below the start net's by more than this many standard errors, twice in a row: stop
 PLATEAU_GAIN = 25.0             # Elo: an estimate counts as progress only when it beats the best one so far by this much
 
@@ -318,7 +320,7 @@ def run_experiment(spec_path, viewer=False):
                 stop_reason = "plateau"
             elif bad_checks >= 2:
                 stop_reason = "regressed"
-            elif pts is not None and base_train and upd >= start_update + 60 and n >= 96 and pts < DIVERGE_FRACTION * base_train:
+            elif pts is not None and base_train and base_train >= DIVERGE_MIN and upd >= start_update + 60 and n >= 96 and pts < DIVERGE_FRACTION * base_train:
                 stop_reason = "diverged"
             if stop_reason != "budget":
                 log("%s: %s at update %d (training points %.2f, start %.2f) - stopping" % (name, stop_reason, upd, pts or 0, base_train or 0))
