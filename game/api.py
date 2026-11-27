@@ -6,7 +6,7 @@ A "setup" is the page's description of one match: {"home", "away", "pitch", "siz
 "allow_draw" (False: golden-goal overtime), "record" (save the human's play, game/recorder.py), "humans" (local multiplayer: a list
 of {"team": 0 | 1, "control": "single" | "team", "player": slot or ""}, one per person, in the order of their inputs; it replaces
 control / human_team / player; a side with two or more people plays "single" only, each on a player of their own)}. Teams have no tactic or formation:
-every team takes the same kickoff spots for a size and every player plays its own style."""
+every team takes the same kickoff spots for a size and every player decides alone with its own algorithm."""
 import json
 import math
 import os
@@ -31,7 +31,6 @@ CREST = {"shape": ("shield", "circle", "hex", "diamond"), "pattern": ("solid", "
          "symbol": ("star", "bolt", "crown", "ring", "cross", "none")}
 LINEUP = 5
 CONTROL = {"none": sm.NONE, "single": sm.SINGLE, "team": sm.TEAM}
-STYLE_PARAMS = ("line_height", "press", "marking", "directness", "pass_bias", "width")
 KIND_LABEL = {"rules": "Rule-based", "net": "Neural net (RL)"}
 
 
@@ -204,10 +203,11 @@ def describe(tid):
 
 def player_info(p, elo=None):
     """A player for the page: who it is, what drives it, how it was made, the sizes it can play."""
-    db = database()
-    style = db.styles.get(p.style_id) if p.kind != "net" else None
+    from soccer.ai.players import ALGORITHMS
+    alg = ALGORITHMS.get(p.algorithm) if p.kind == "rules" else None
     return {"id": p.id, "name": p.name, "kind": p.kind, "kind_label": KIND_LABEL.get(p.kind, p.kind), "skill": p.skill if p.kind != "net" else None,
-            "style": style.id if style else "", "style_label": style.name if style else "", "description": p.description,
+            "algorithm": p.algorithm if alg else "", "plays": alg.NAME if alg else "",
+            "settings": {k: p.settings.get(k, d) for k, (d, _) in alg.SETTINGS.items()} if alg else {}, "description": p.description,
             "origin": p.origin, "sizes": p.sizes(),
             "teams": sorted(t.id for t in teams().values() if p.id in t.lineup_ids), "ratings": _ratings((elo or {}).get("player:" + p.id))}
 
@@ -257,6 +257,12 @@ def _page_row(x):
             "aga": None if x["aga"] is None else round(x["aga"], 2), "bonus": None if x["bonus"] is None else round(x["bonus"])}
 
 
+def players_algorithms():
+    """The rule-based archetypes (soccer/ai/players): id, name, description and the labels of their settings."""
+    from soccer.ai.players import describe as describe_algorithms
+    return describe_algorithms()
+
+
 def catalog():
     db = database()
     pitches = sorted(db.pitches.values(), key=lambda p: p.half_w)
@@ -269,9 +275,7 @@ def catalog():
                          "colors": {k: str(p.raw.get("colors", {}).get(k, d)).lstrip("#")
                                     for k, d in (("pitch", "718c5a"), ("outer", "5b7347"), ("line", "c7e6bd"))}} for p in pitches],
             "builder": {"kits": list(KITS), "crest": {k: list(v) for k, v in CREST.items()}, "lineup": LINEUP,
-                        "styles": [{"id": s.id, "name": s.name, "description": s.description,
-                                    "params": {k: getattr(s, k) for k in STYLE_PARAMS}}
-                                   for s in sorted(db.styles.values(), key=lambda s: s.name)]}}
+                        "algorithms": players_algorithms()}}
 
 
 # ---------- teams built in the game (local/my_teams, this machine only) ----------

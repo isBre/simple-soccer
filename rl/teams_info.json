@@ -1,114 +1,210 @@
 [
   {
     "held_out": false,
-    "id": "cobalt",
-    "strength": 56.0,
-    "style": "total_football",
+    "id": "scorpions",
+    "plays": [
+      "sweeper",
+      "shadow",
+      "playmaker",
+      "poacher",
+      "target_man"
+    ],
+    "strength": 55.0,
     "tier": "weak"
   },
   {
     "held_out": true,
-    "id": "scorpions",
-    "strength": 57.0,
-    "style": "park_the_bus",
+    "id": "ember",
+    "plays": [
+      "target_man",
+      "sweeper",
+      "presser",
+      "winger",
+      "playmaker"
+    ],
+    "strength": 56.0,
     "tier": "weak"
   },
   {
     "held_out": false,
-    "id": "ember",
-    "strength": 58.0,
-    "style": "long_ball",
+    "id": "cobalt",
+    "plays": [
+      "box_to_box",
+      "ball_winner",
+      "presser",
+      "target_man",
+      "playmaker"
+    ],
+    "strength": 57.6,
     "tier": "weak"
   },
   {
     "held_out": false,
     "id": "bulls",
-    "strength": 59.0,
-    "style": "dribblers",
+    "plays": [
+      "dribbler",
+      "sweeper",
+      "playmaker",
+      "poacher",
+      "ball_winner"
+    ],
+    "strength": 58.4,
     "tier": "weak"
   },
   {
     "held_out": false,
     "id": "rose",
-    "strength": 62.0,
-    "style": "sharpshooters",
+    "plays": [
+      "poacher",
+      "shadow",
+      "presser",
+      "winger",
+      "dribbler"
+    ],
+    "strength": 59.8,
     "tier": "average"
   },
   {
     "held_out": true,
     "id": "fern",
-    "strength": 67.0,
-    "style": "wing_play",
-    "tier": "average"
-  },
-  {
-    "held_out": false,
-    "id": "harbor",
-    "strength": 68.0,
-    "style": "all_out_attack",
+    "plays": [
+      "winger",
+      "shadow",
+      "box_to_box",
+      "poacher",
+      "ball_winner"
+    ],
+    "strength": 66.0,
     "tier": "average"
   },
   {
     "held_out": false,
     "id": "lime",
-    "strength": 70.0,
-    "style": "switch_play",
+    "plays": [
+      "playmaker",
+      "ball_winner",
+      "box_to_box",
+      "poacher",
+      "dribbler"
+    ],
+    "strength": 70.2,
+    "tier": "average"
+  },
+  {
+    "held_out": false,
+    "id": "harbor",
+    "plays": [
+      "poacher",
+      "sweeper",
+      "presser",
+      "dribbler",
+      "winger"
+    ],
+    "strength": 70.4,
     "tier": "average"
   },
   {
     "held_out": false,
     "id": "owls",
-    "strength": 71.0,
-    "style": "balanced",
+    "plays": [
+      "box_to_box",
+      "sweeper",
+      "presser",
+      "target_man",
+      "playmaker"
+    ],
+    "strength": 70.6,
     "tier": "strong"
   },
   {
     "held_out": true,
     "id": "granite",
-    "strength": 72.0,
-    "style": "catenaccio",
+    "plays": [
+      "sweeper",
+      "shadow",
+      "box_to_box",
+      "target_man",
+      "winger"
+    ],
+    "strength": 71.0,
     "tier": "strong"
   },
   {
     "held_out": false,
     "id": "dune",
-    "strength": 73.0,
-    "style": "counter_attack",
+    "plays": [
+      "winger",
+      "shadow",
+      "box_to_box",
+      "poacher",
+      "dribbler"
+    ],
+    "strength": 71.4,
     "tier": "strong"
   },
   {
     "held_out": false,
     "id": "onyx",
-    "strength": 77.0,
-    "style": "man_to_man",
+    "plays": [
+      "shadow",
+      "sweeper",
+      "playmaker",
+      "target_man",
+      "ball_winner"
+    ],
+    "strength": 75.8,
     "tier": "strong"
   },
   {
     "held_out": false,
     "id": "tide",
-    "strength": 79.0,
-    "style": "gegenpress",
+    "plays": [
+      "presser",
+      "sweeper",
+      "box_to_box",
+      "winger",
+      "poacher"
+    ],
+    "strength": 76.2,
     "tier": "elite"
   },
   {
     "held_out": true,
     "id": "borealis",
-    "strength": 80.0,
-    "style": "high_press",
+    "plays": [
+      "ball_winner",
+      "shadow",
+      "playmaker",
+      "target_man",
+      "dribbler"
+    ],
+    "strength": 78.2,
     "tier": "elite"
   },
   {
     "held_out": false,
     "id": "aurora",
-    "strength": 84.0,
-    "style": "tiki_taka",
+    "plays": [
+      "playmaker",
+      "shadow",
+      "presser",
+      "winger",
+      "ball_winner"
+    ],
+    "strength": 82.6,
     "tier": "elite"
   },
   {
     "held_out": false,
     "id": "arrows",
-    "strength": 86.0,
-    "style": "zone_trap",
+    "plays": [
+      "shadow",
+      "ball_winner",
+      "presser",
+      "target_man",
+      "dribbler"
+    ],
+    "strength": 85.8,
     "tier": "elite"
   }
 ]

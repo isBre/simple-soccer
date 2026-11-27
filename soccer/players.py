@@ -1,12 +1,13 @@
 """Players (data/players/*.json): a player is a brain with a name. Every player on the pitch has the same body (speed, kick,
 size); what differs is how it decides. Two kinds:
 
-  rules   the rule-based AI (soccer/ai/rules.py) with a playing style (data/styles) and a skill 0-100
+  rules   a rule-based player: an archetype with its own algorithm (`algorithm`, soccer/ai/players: poacher, playmaker,
+          sweeper, ...), its own `settings` for that archetype and a `skill` 0-100
   net     a trained neural net (`model`, a game-model JSON); it can only play the team sizes its observation fits
 
 `skill` only changes the AI's precision and reaction (soccer/ai/skill.py: aim errors, positioning noise, perception delay,
-thinking time), never the physics. A net ignores it; it is kept so rule-based opponents read every player the same way.
-There are no positions, no keeper and no tactics: a player plays its own style in any team (soccer/teams.py)."""
+thinking time), never the physics. A net ignores it. Every player decides alone, in any team (soccer/teams.py): there are no
+positions, no keeper role and no tactics, and players talk only through their calls (docs/public_view.md)."""
 import json
 import os
 
@@ -23,7 +24,8 @@ class PlayerDef:
         self.kind = str(d.get("kind", "rules"))
         if self.kind not in KINDS:
             raise ValueError("player %s: unknown kind %r (one of %s)" % (self.id, self.kind, ", ".join(KINDS)))
-        self.style_id = str(d.get("style", "balanced"))
+        self.algorithm = str(d.get("algorithm", "box_to_box"))  # rules: the archetype (soccer/ai/players)
+        self.settings = dict(d.get("settings", {}))            # rules: the archetype's own numbers (its SETTINGS)
         self.skill = int(d.get("skill", DEFAULT_SKILL))
         self.model = str(d.get("model", ""))            # net: path from the project root
         self.description = str(d.get("description", ""))
@@ -59,6 +61,6 @@ class PlayerDef:
         return size in self.sizes()
 
     def to_dict(self):
-        return {"id": self.id, "name": self.name, "kind": self.kind, "style": self.style_id, "skill": self.skill,
+        return {"id": self.id, "name": self.name, "kind": self.kind, "algorithm": self.algorithm, "settings": self.settings, "skill": self.skill,
                 "model": self.model, "description": self.description, "origin": self.origin, "sizes": self.sizes(),
                 "hidden": self.hidden}

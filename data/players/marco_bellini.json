@@ -2,11 +2,15 @@
  "id": "marco_bellini",
  "name": "Marco Bellini",
  "kind": "rules",
- "style": "catenaccio",
+ "algorithm": "sweeper",
+ "settings": {
+  "sweep": 0.57,
+  "step_up": 0.13
+ },
  "skill": 88,
- "description": "A master of the deep block: disciplined, patient and deadly on the break. Plays Catenaccio: fixed keeper, deep disciplined block, man-marking and sudden long strikes.",
+ "description": "Sweeper: Guards the goal like a keeper.",
  "origin": {
   "made": "2026-11-27",
-  "from": "a variation of the catenaccio style"
+  "from": "rule-based archetype sweeper"
  }
 }

@@ -53,7 +53,7 @@ Matches: arena, 90 s, draws allowed, every pair twice with the same seed, once f
 
 ## When results stop counting
 
-- **A file changes:** every entry carries a hash of the files its play depends on (a player's file, its style or its net; a
+- **A file changes:** every entry carries a hash of the files its play depends on (a player's file, its archetype's code or its net; a
   team's line-up and its players). A changed file makes the old results of every entry it takes part in stop counting (they
   stay in the database, marked stale on the Ranking page).
 - **The game changes:** `elo.ENGINE` is bumped together with a re-recording of the golden tests (`tests/golden/`) for an

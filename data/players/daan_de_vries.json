@@ -2,11 +2,15 @@
  "id": "daan_de_vries",
  "name": "Daan de Vries",
  "kind": "rules",
- "style": "total_football",
+ "algorithm": "box_to_box",
+ "settings": {
+  "engine": 0.5,
+  "shoot": 0.41
+ },
  "skill": 56,
- "description": "Cobalt Rangers' rule player. Plays Total Football: fluid roles: anyone keeps goal, anyone attacks. High line, constant pressing.",
+ "description": "Box-to-box: Arrives late in the box.",
  "origin": {
   "made": "2026-11-27",
-  "from": "the squad of the team cobalt"
+  "from": "rule-based archetype box_to_box"
  }
 }

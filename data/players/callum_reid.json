@@ -2,11 +2,15 @@
  "id": "callum_reid",
  "name": "Callum Reid",
  "kind": "rules",
- "style": "long_ball",
+ "algorithm": "target_man",
+ "settings": {
+  "height": 0.6,
+  "turn": 0.5
+ },
  "skill": 58,
- "description": "Ember City's rule player. Plays Long Ball: direct, long passes and early shots.",
+ "description": "Target man: Lays it off and spins in behind.",
  "origin": {
   "made": "2026-11-27",
-  "from": "the squad of the team ember"
+  "from": "rule-based archetype target_man"
  }
 }

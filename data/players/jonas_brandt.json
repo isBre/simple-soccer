@@ -2,11 +2,15 @@
  "id": "jonas_brandt",
  "name": "Jonas Brandt",
  "kind": "rules",
- "style": "high_press",
+ "algorithm": "ball_winner",
+ "settings": {
+  "range": 0.38,
+  "bite": 0.88
+ },
  "skill": 80,
- "description": "Borealis Wolves' rule player. Plays High Press: wins the ball high up the pitch with several chasers.",
+ "description": "Ball winner: Hunts the ball all over the pitch.",
  "origin": {
   "made": "2026-11-27",
-  "from": "the squad of the team borealis"
+  "from": "rule-based archetype ball_winner"
  }
 }

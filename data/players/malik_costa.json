@@ -1,0 +1,17 @@
+{
+ "id": "malik_costa",
+ "name": "Malik Costa",
+ "kind": "rules",
+ "algorithm": "poacher",
+ "settings": {
+  "greed": 0.48,
+  "depth": 0.85,
+  "drop": 0.26
+ },
+ "skill": 73,
+ "description": "Poacher: Always on the last defender's shoulder.",
+ "origin": {
+  "made": "2026-11-27",
+  "from": "rule-based archetype poacher"
+ }
+}

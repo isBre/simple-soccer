@@ -1,0 +1,17 @@
+{
+ "id": "femi_mortensen",
+ "name": "Femi Mortensen",
+ "kind": "rules",
+ "algorithm": "poacher",
+ "settings": {
+  "greed": 0.51,
+  "depth": 0.6,
+  "drop": 0.1
+ },
+ "skill": 68,
+ "description": "Poacher: Always on the last defender's shoulder.",
+ "origin": {
+  "made": "2026-11-27",
+  "from": "rule-based archetype poacher"
+ }
+}

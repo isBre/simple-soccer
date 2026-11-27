@@ -2,11 +2,15 @@
  "id": "omar_haddad",
  "name": "Omar Haddad",
  "kind": "rules",
- "style": "park_the_bus",
+ "algorithm": "sweeper",
+ "settings": {
+  "sweep": 0.36,
+  "step_up": 0.49
+ },
  "skill": 57,
- "description": "Sand Scorpions' rule player. Plays Park the Bus: deep block, tight marking, lets the opponent come.",
+ "description": "Sweeper: The last man: reads every ball behind the line.",
  "origin": {
   "made": "2026-11-27",
-  "from": "the squad of the team scorpions"
+  "from": "rule-based archetype sweeper"
  }
 }

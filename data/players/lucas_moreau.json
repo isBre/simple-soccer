@@ -2,11 +2,16 @@
  "id": "lucas_moreau",
  "name": "Lucas Moreau",
  "kind": "rules",
- "style": "wing_play",
+ "algorithm": "winger",
+ "settings": {
+  "width": 0.94,
+  "cut_in": 0.24,
+  "track": 0.44
+ },
  "skill": 67,
- "description": "Fern Valley's rule player. Plays Wing Play: stretches the pitch and attacks down the flanks.",
+ "description": "Winger: Pure pace down the flank.",
  "origin": {
   "made": "2026-11-27",
-  "from": "the squad of the team fern"
+  "from": "rule-based archetype winger"
  }
 }

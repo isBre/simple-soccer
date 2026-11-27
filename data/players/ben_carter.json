@@ -2,11 +2,15 @@
  "id": "ben_carter",
  "name": "Ben Carter",
  "kind": "rules",
- "style": "balanced",
+ "algorithm": "box_to_box",
+ "settings": {
+  "engine": 0.93,
+  "shoot": 0.64
+ },
  "skill": 58,
- "description": "A solid all-rounder at a modest level: no weakness stands out, and no strength. Plays Balanced: solid all-round play, no big weaknesses.",
+ "description": "Box-to-box: Arrives late in the box.",
  "origin": {
   "made": "2026-11-27",
-  "from": "a variation of the balanced style"
+  "from": "rule-based archetype box_to_box"
  }
 }

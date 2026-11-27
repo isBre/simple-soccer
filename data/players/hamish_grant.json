@@ -2,11 +2,15 @@
  "id": "hamish_grant",
  "name": "Hamish Grant",
  "kind": "rules",
- "style": "long_ball",
+ "algorithm": "target_man",
+ "settings": {
+  "height": 0.64,
+  "turn": 0.29
+ },
  "skill": 77,
- "description": "Plays the long ball with real accuracy: fewer wasted punts, more chances. Plays Long Ball: direct, long passes and early shots.",
+ "description": "Target man: Lays it off and spins in behind.",
  "origin": {
   "made": "2026-11-27",
-  "from": "a variation of the long_ball style"
+  "from": "rule-based archetype target_man"
  }
 }

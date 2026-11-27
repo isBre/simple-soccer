@@ -2,11 +2,16 @@
  "id": "nikolai_orlov",
  "name": "Nikolai Orlov",
  "kind": "rules",
- "style": "sharpshooters",
+ "algorithm": "poacher",
+ "settings": {
+  "greed": 0.82,
+  "depth": 0.52,
+  "drop": 0.45
+ },
  "skill": 84,
- "description": "A true long-range shooter: when a lane opens he rarely misses the target. Plays Sharpshooters: shoots from distance as soon as a lane opens up.",
+ "description": "Poacher: Lives in the box and needs half a chance.",
  "origin": {
   "made": "2026-11-27",
-  "from": "a variation of the sharpshooters style"
+  "from": "rule-based archetype poacher"
  }
 }

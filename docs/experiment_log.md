@@ -27,8 +27,16 @@ dashboard: `http://<pi-address>:8080`. Newest entries at the bottom; the agent a
   enforced by `tests/test_view.py`). A player may use what a spectator could know (the ball and anonymous bodies with their last
   32 ticks, clock, score, overtime, state, kickoff, last touch, pitch, the public physics) and anything it computes from it; never
   the match engine or another team's inside (brain, plan, memory, random numbers, buttons). Players are anonymous: only your own
-  skill is known (others are judged with the generic skill 70). No team tactics: a team's rule players share one brain whose
-  settings come from them. Every net observation is a function of the view. Opus 5.5 High is parked until it plans from the view.
+  skill is known (others are judged with the generic skill 70). No team tactics and no team brain (next decision). Every net
+  observation is a function of the view. Opus 5.5 High was removed (it planned on a clone of the match).
+- **Every player decides alone; teammates talk only through calls** (user, 2026-11-27; `soccer/ai/players/`, `soccer/ai/kit.py`,
+  `docs/public_view.md`). No team brain: every agent (rule-based or net) decides from its team's view, and the only thing that
+  passes between teammates is a call (`none`, `ball`, `open`, `run`, `cover`), which the opponents never hear (the nets of the
+  next generation will make calls too, phase D). Rule-based players are ten archetypes with their own algorithms on a shared
+  base and toolkit, not styles; the Rule Based League teams are line-ups of five different archetypes (88 rule players).
+  **New baseline**: every evaluation against rule teams before this date (league points, `full/g1/d90`, the tiers of
+  `rl/teams_info.json`) was played against the old team-brain bots and is not comparable; `elo.ENGINE` = 2 (ratings start over:
+  `python3 -m elo init` on every machine).
 - **Observation `team` (46 numbers):** me, my 4 teammates nearest first, the 5 opponents nearest first, the ball (positions and velocities,
   normalised), a kickoff flag and a goal-celebration flag. No goal positions, no "ball relative to me", no score, no time.
 - **Reward terms come back one at a time** on top of the minimal set, each as its own experiment judged by a full evaluation (2026-11-16).

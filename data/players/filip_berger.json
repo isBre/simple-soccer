@@ -1,0 +1,16 @@
+{
+ "id": "filip_berger",
+ "name": "Filip Berger",
+ "kind": "rules",
+ "algorithm": "target_man",
+ "settings": {
+  "height": 0.84,
+  "turn": 0.59
+ },
+ "skill": 54,
+ "description": "Target man: Holds the ball up, back to goal.",
+ "origin": {
+  "made": "2026-11-27",
+  "from": "rule-based archetype target_man"
+ }
+}

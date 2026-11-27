@@ -1,0 +1,16 @@
+{
+ "id": "enzo_svensson",
+ "name": "Enzo Svensson",
+ "kind": "rules",
+ "algorithm": "box_to_box",
+ "settings": {
+  "engine": 0.75,
+  "shoot": 0.67
+ },
+ "skill": 63,
+ "description": "Box-to-box: Defends and attacks in the same minute.",
+ "origin": {
+  "made": "2026-11-27",
+  "from": "rule-based archetype box_to_box"
+ }
+}

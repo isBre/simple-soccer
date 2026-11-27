@@ -2,11 +2,15 @@
  "id": "tomasz_kowal",
  "name": "Tomasz Kowal",
  "kind": "rules",
- "style": "man_to_man",
+ "algorithm": "shadow",
+ "settings": {
+  "tight": 0.47,
+  "read": 0.37
+ },
  "skill": 77,
- "description": "Onyx Titans' rule player. Plays Man-to-Man: every outfield player sticks to an opponent and denies the pass.",
+ "description": "Shadow: Wins it goal-side, every time.",
  "origin": {
   "made": "2026-11-27",
-  "from": "the squad of the team onyx"
+  "from": "rule-based archetype shadow"
  }
 }

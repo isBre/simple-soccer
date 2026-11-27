@@ -1,0 +1,16 @@
+{
+ "id": "henrik_toure",
+ "name": "Henrik Toure",
+ "kind": "rules",
+ "algorithm": "sweeper",
+ "settings": {
+  "sweep": 0.49,
+  "step_up": 0.16
+ },
+ "skill": 73,
+ "description": "Sweeper: Calm at the back, clears it long.",
+ "origin": {
+  "made": "2026-11-27",
+  "from": "rule-based archetype sweeper"
+ }
+}

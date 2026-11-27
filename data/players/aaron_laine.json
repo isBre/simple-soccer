@@ -1,0 +1,16 @@
+{
+ "id": "aaron_laine",
+ "name": "Aaron Laine",
+ "kind": "rules",
+ "algorithm": "target_man",
+ "settings": {
+  "height": 0.72,
+  "turn": 0.24
+ },
+ "skill": 73,
+ "description": "Target man: The reference point up front.",
+ "origin": {
+  "made": "2026-11-27",
+  "from": "rule-based archetype target_man"
+ }
+}

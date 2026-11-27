@@ -2,11 +2,16 @@
  "id": "tiago_lima",
  "name": "Tiago Lima",
  "kind": "rules",
- "style": "counter_attack",
+ "algorithm": "winger",
+ "settings": {
+  "width": 0.82,
+  "cut_in": 0.13,
+  "track": 0.16
+ },
  "skill": 60,
- "description": "Waits for the counter like the best of them, but his finishing lets him down. Plays Counter-Attack: sits back, then breaks fast with forwards held high.",
+ "description": "Winger: Pure pace down the flank.",
  "origin": {
   "made": "2026-11-27",
-  "from": "a variation of the counter_attack style"
+  "from": "rule-based archetype winger"
  }
 }

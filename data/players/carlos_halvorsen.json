@@ -1,0 +1,16 @@
+{
+ "id": "carlos_halvorsen",
+ "name": "Carlos Halvorsen",
+ "kind": "rules",
+ "algorithm": "shadow",
+ "settings": {
+  "tight": 0.76,
+  "read": 0.61
+ },
+ "skill": 69,
+ "description": "Shadow: Reads the pass before it is made.",
+ "origin": {
+  "made": "2026-11-27",
+  "from": "rule-based archetype shadow"
+ }
+}

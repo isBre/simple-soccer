@@ -1,4 +1,4 @@
-"""Strength and style of one team against the field: every other team of the Rule Based League (and optionally the RL
+"""Strength and way of playing of one team against the field: every other team of the Rule Based League (and optionally the RL
 teams), both sides, several seeds, played by the match core in parallel. Also measures whether the team plays as a team
 (spacing, players around the ball, passes, assisted goals) instead of swarming the ball.
 

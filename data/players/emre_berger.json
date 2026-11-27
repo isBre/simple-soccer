@@ -1,0 +1,16 @@
+{
+ "id": "emre_berger",
+ "name": "Emre Berger",
+ "kind": "rules",
+ "algorithm": "shadow",
+ "settings": {
+  "tight": 0.71,
+  "read": 0.75
+ },
+ "skill": 85,
+ "description": "Shadow: Sticks to the best attacker like a shadow.",
+ "origin": {
+  "made": "2026-11-27",
+  "from": "rule-based archetype shadow"
+ }
+}

@@ -13,6 +13,8 @@ import threading
 
 import numpy as np
 
+from .agent import Act
+
 TEAM_OBS = 46                     # role-free team observation (features_team)
 RANK_OBS = 56                     # features_team + 10 rank numbers (features_rank)
 DIRS = [0j, -1j, 1 - 1j, 1 + 0j, 1 + 1j, 1j, -1 + 1j, -1 + 0j, -1 - 1j]
@@ -254,7 +256,7 @@ class NetBot:
         self.rng = random.Random(seed)          # its own random numbers (lineup.build seeds it from the match)
 
     def act(self, m, p, out):
-        """out: this player's 10 net outputs. Sets p.input_dir / p.input_kick."""
+        """out: this player's 10 net outputs -> its Act (a net of this generation calls nothing)."""
         best = 0
         for k in range(1, 9):
             if out[k] > out[best]:
@@ -273,6 +275,4 @@ class NetBot:
         d = DIRS[best]
         d = complex(d.real * m.attack_dir(p.team), d.imag)
         l = abs(d)
-        p.input_dir = d / l if l > 0.0 else 0j
-        p.input_kick = kick
-        p.kick_intent = ""
+        return Act(d / l if l > 0.0 else 0j, kick, "none", "")

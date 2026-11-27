@@ -1,0 +1,16 @@
+{
+ "id": "kasper_sorensen",
+ "name": "Kasper Sorensen",
+ "kind": "rules",
+ "algorithm": "presser",
+ "settings": {
+  "intensity": 0.72,
+  "cut": 0.47
+ },
+ "skill": 59,
+ "description": "Presser: Never lets a defender settle.",
+ "origin": {
+  "made": "2026-11-27",
+  "from": "rule-based archetype presser"
+ }
+}

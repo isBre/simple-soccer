@@ -74,7 +74,7 @@ export async function builder(teamId, copy) {
     $("#bd-slots", v).innerHTML = d.lineup.map((id, i) => {
       const p = G.playerById[id];
       return `<div class="bd-slot${i === slot ? " on" : ""}" data-i="${i}"><span class="k">${i + 1}</span>${p ? badge(p, 30) : '<span class="pl-badge empty" style="width:30px;height:30px"></span>'}
-        <span class="n">${p ? esc(p.name) + `<small>${esc(KIND_SHORT[p.kind])}${p.style_label ? " · " + esc(p.style_label) : ""} · ${esc(sizesText(p.sizes))}</small>` : '<em>empty: pick a player</em>'}</span>
+        <span class="n">${p ? esc(p.name) + `<small>${esc(KIND_SHORT[p.kind])}${p.plays ? " · " + esc(p.plays) : ""} · ${esc(sizesText(p.sizes))}</small>` : '<em>empty: pick a player</em>'}</span>
         <button type="button" class="bd-mini" data-up="${i}" title="Move up" ${i === 0 ? "disabled" : ""}>↑</button><button type="button" class="bd-mini" data-down="${i}" title="Move down" ${i === 4 ? "disabled" : ""}>↓</button>
         <button type="button" class="bd-mini" data-clear="${i}" title="Empty the slot" ${p ? "" : "disabled"}>×</button></div>`;
     }).join("");
@@ -90,9 +90,9 @@ export async function builder(teamId, copy) {
   function paintPool() {
     for (const b of v.querySelectorAll("#bd-kind button")) b.classList.toggle("on", b.dataset.k === filt.kind);
     const q = filt.q.trim().toLowerCase();
-    const list = G.cat.players.filter((p) => (!filt.kind || p.kind === filt.kind) && (!q || (p.name + " " + p.style_label).toLowerCase().includes(q)));
+    const list = G.cat.players.filter((p) => (!filt.kind || p.kind === filt.kind) && (!q || (p.name + " " + p.plays).toLowerCase().includes(q)));
     $("#bd-pool", v).innerHTML = list.map((p) => `<button type="button" class="bd-pick${d.lineup[slot] === p.id ? " on" : ""}" data-p="${esc(p.id)}" title="${esc(p.description)}">${badge(p, 28)}
-      <span class="n">${esc(p.name)}<small>${esc(KIND_SHORT[p.kind])}${p.skill != null ? " " + p.skill : ""}${p.style_label ? " · " + esc(p.style_label) : ""}${p.sizes.length < 5 ? " · 5v5 only" : ""}</small></span>
+      <span class="n">${esc(p.name)}<small>${esc(KIND_SHORT[p.kind])}${p.skill != null ? " " + p.skill : ""}${p.plays ? " · " + esc(p.plays) : ""}${p.sizes.length < 5 ? " · 5v5 only" : ""}</small></span>
       <a class="bd-info" href="#/game/players/${encodeURIComponent(p.id)}" title="About ${esc(p.name)}" tabindex="-1">i</a></button>`).join("") || '<p class="gh-empty">No player matches.</p>';
   }
   const err = (msg) => { const e = $("#bd-err", v); e.hidden = !msg; e.textContent = msg || ""; };

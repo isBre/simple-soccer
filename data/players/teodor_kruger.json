@@ -1,0 +1,17 @@
+{
+ "id": "teodor_kruger",
+ "name": "Teodor Kruger",
+ "kind": "rules",
+ "algorithm": "playmaker",
+ "settings": {
+  "vision_bias": 0.62,
+  "patience": 0.66,
+  "shoot": 0.45
+ },
+ "skill": 74,
+ "description": "Playmaker: Drops deep and dictates the tempo.",
+ "origin": {
+  "made": "2026-11-27",
+  "from": "rule-based archetype playmaker"
+ }
+}

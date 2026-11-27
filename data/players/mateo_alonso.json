@@ -2,11 +2,16 @@
  "id": "mateo_alonso",
  "name": "Mateo Alonso",
  "kind": "rules",
- "style": "tiki_taka",
+ "algorithm": "playmaker",
+ "settings": {
+  "vision_bias": 0.85,
+  "patience": 0.48,
+  "shoot": 0.48
+ },
  "skill": 84,
- "description": "Aurora FC's rule player. Plays Tiki-Taka: short passes, high possession, patient build-up.",
+ "description": "Playmaker: Sees the pass nobody else sees.",
  "origin": {
   "made": "2026-11-27",
-  "from": "the squad of the team aurora"
+  "from": "rule-based archetype playmaker"
  }
 }

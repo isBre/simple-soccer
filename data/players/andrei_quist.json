@@ -1,0 +1,16 @@
+{
+ "id": "andrei_quist",
+ "name": "Andrei Quist",
+ "kind": "rules",
+ "algorithm": "sweeper",
+ "settings": {
+  "sweep": 0.52,
+  "step_up": 0.09
+ },
+ "skill": 70,
+ "description": "Sweeper: Calm at the back, clears it long.",
+ "origin": {
+  "made": "2026-11-27",
+  "from": "rule-based archetype sweeper"
+ }
+}

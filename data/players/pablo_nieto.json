@@ -2,11 +2,15 @@
  "id": "pablo_nieto",
  "name": "Pablo Nieto",
  "kind": "rules",
- "style": "tiki_taka",
+ "algorithm": "box_to_box",
+ "settings": {
+  "engine": 0.46,
+  "shoot": 0.59
+ },
  "skill": 64,
- "description": "A young playmaker who already thinks in short passes but still misplaces many of them. Plays Tiki-Taka: short passes, high possession, patient build-up.",
+ "description": "Box-to-box: Covers every blade of grass.",
  "origin": {
   "made": "2026-11-27",
-  "from": "a variation of the tiki_taka style"
+  "from": "rule-based archetype box_to_box"
  }
 }

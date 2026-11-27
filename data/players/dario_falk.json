@@ -1,0 +1,17 @@
+{
+ "id": "dario_falk",
+ "name": "Dario Falk",
+ "kind": "rules",
+ "algorithm": "poacher",
+ "settings": {
+  "greed": 0.76,
+  "depth": 0.52,
+  "drop": 0.43
+ },
+ "skill": 66,
+ "description": "Poacher: Shoots at the first sight of goal.",
+ "origin": {
+  "made": "2026-11-27",
+  "from": "rule-based archetype poacher"
+ }
+}

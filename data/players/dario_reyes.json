@@ -1,0 +1,17 @@
+{
+ "id": "dario_reyes",
+ "name": "Dario Reyes",
+ "kind": "rules",
+ "algorithm": "playmaker",
+ "settings": {
+  "vision_bias": 0.88,
+  "patience": 0.58,
+  "shoot": 0.28
+ },
+ "skill": 54,
+ "description": "Playmaker: Sees the pass nobody else sees.",
+ "origin": {
+  "made": "2026-11-27",
+  "from": "rule-based archetype playmaker"
+ }
+}

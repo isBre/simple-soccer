@@ -1,0 +1,16 @@
+{
+ "id": "quentin_mortensen",
+ "name": "Quentin Mortensen",
+ "kind": "rules",
+ "algorithm": "presser",
+ "settings": {
+  "intensity": 0.48,
+  "cut": 0.7
+ },
+ "skill": 80,
+ "description": "Presser: Cuts the passing lanes before you see them.",
+ "origin": {
+  "made": "2026-11-27",
+  "from": "rule-based archetype presser"
+ }
+}

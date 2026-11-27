@@ -2,11 +2,16 @@
  "id": "diego_ramos",
  "name": "Diego Ramos",
  "kind": "rules",
- "style": "all_out_attack",
+ "algorithm": "poacher",
+ "settings": {
+  "greed": 0.89,
+  "depth": 0.63,
+  "drop": 0.38
+ },
  "skill": 68,
- "description": "Harbor Sharks' rule player. Plays All-Out Attack: everyone pushes forward, high risk, shoots on sight.",
+ "description": "Poacher: Shoots at the first sight of goal.",
  "origin": {
   "made": "2026-11-27",
-  "from": "the squad of the team harbor"
+  "from": "rule-based archetype poacher"
  }
 }

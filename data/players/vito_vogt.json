@@ -1,0 +1,16 @@
+{
+ "id": "vito_vogt",
+ "name": "Vito Vogt",
+ "kind": "rules",
+ "algorithm": "ball_winner",
+ "settings": {
+  "range": 0.83,
+  "bite": 0.75
+ },
+ "skill": 67,
+ "description": "Ball winner: Wins it back and gives it simply.",
+ "origin": {
+  "made": "2026-11-27",
+  "from": "rule-based archetype ball_winner"
+ }
+}

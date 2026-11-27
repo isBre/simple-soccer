@@ -2,11 +2,16 @@
  "id": "emil_novak",
  "name": "Emil Novak",
  "kind": "rules",
- "style": "switch_play",
+ "algorithm": "playmaker",
+ "settings": {
+  "vision_bias": 0.84,
+  "patience": 0.5,
+  "shoot": 0.05
+ },
  "skill": 70,
- "description": "Lime Comets' rule player. Plays Switch Play: wide and patient: moves the ball to the far side to find space.",
+ "description": "Playmaker: Drops deep and dictates the tempo.",
  "origin": {
   "made": "2026-11-27",
-  "from": "the squad of the team lime"
+  "from": "rule-based archetype playmaker"
  }
 }

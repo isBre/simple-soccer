@@ -2,11 +2,15 @@
  "id": "viktor_lund",
  "name": "Viktor Lund",
  "kind": "rules",
- "style": "zone_trap",
+ "algorithm": "shadow",
+ "settings": {
+  "tight": 0.57,
+  "read": 0.82
+ },
  "skill": 86,
- "description": "Silver Arrows' rule player. Plays Zone Trap: compact deep block that reads the ball path, cuts out passes and breaks quickly.",
+ "description": "Shadow: Reads the pass before it is made.",
  "origin": {
   "made": "2026-11-27",
-  "from": "the squad of the team arrows"
+  "from": "rule-based archetype shadow"
  }
 }

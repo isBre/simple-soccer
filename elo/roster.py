@@ -8,8 +8,8 @@
                 out_5v5/ckpt/): a net, 5v5 only, for the Lab's experiments
 
 Every entry knows the sizes it can play, who takes the pitch at each size (`compose`, weights that sum to 1 over the units) and
-the version of the files its results depend on (`sha`): when a player's file, its style or its net changes, the results of
-every entry it takes part in stop counting. A *unit* is an entry that has a strength of its own (a player or a checkpoint)."""
+the version of the files its results depend on (`sha`): when a player's file, its archetype's code (soccer/ai/players/<it>.py,
+the shared base and toolkit) or its net changes, the results of every entry it takes part in stop counting. A *unit* is an entry that has a strength of its own (a player or a checkpoint)."""
 import glob
 import hashlib
 import json
@@ -25,6 +25,9 @@ from . import ROOT, SIZES
 
 _lock = threading.Lock()
 _cache = {"sig": None, "roster": None}
+
+
+_RULES_CODE = [os.path.join(ROOT, "soccer", "ai", f) for f in ("kit.py", "skill.py", os.path.join("players", "base.py"))]
 
 
 def _sha(*paths):
@@ -99,7 +102,7 @@ class Roster:
 
 def _signature():
     sig = []
-    for pat in ("data/players/*.json", "data/teams/*.json", "data/styles/*.json", "models/*.json", "data/models/*.json",
+    for pat in ("data/players/*.json", "data/teams/*.json", "soccer/ai/kit.py", "soccer/ai/players/*.py", "models/*.json", "data/models/*.json",
                 "out_5v5/ckpt/x_*_best.json", "exp/runs/*/status.json"):
         for f in sorted(glob.glob(os.path.join(ROOT, pat))):
             st = os.stat(f)
@@ -136,7 +139,7 @@ def _build():
             continue
         eid = "player:" + p.id
         files = [os.path.join(ROOT, "data", "players", p.id + ".json")]
-        files += [p.model_path] if p.kind == "net" else [os.path.join(ROOT, "data", "styles", p.style_id + ".json")]
+        files += [p.model_path] if p.kind == "net" else [os.path.join(ROOT, "soccer", "ai", "players", p.algorithm + ".py"), *_RULES_CODE]
         if p.kind == "net":
             owned.add(os.path.normpath(p.model))
         e = Entry(eid, "player", p.name, "rl" if p.kind == "net" else "rules", None, _sha(*files), p.kind, p.model or None)

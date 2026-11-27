@@ -2,11 +2,15 @@
  "id": "sam_taylor",
  "name": "Sam Taylor",
  "kind": "rules",
- "style": "balanced",
+ "algorithm": "box_to_box",
+ "settings": {
+  "engine": 0.68,
+  "shoot": 0.7
+ },
  "skill": 71,
- "description": "Mint Owls' rule player. Plays Balanced: solid all-round play, no big weaknesses.",
+ "description": "Box-to-box: Covers every blade of grass.",
  "origin": {
   "made": "2026-11-27",
-  "from": "the squad of the team owls"
+  "from": "rule-based archetype box_to_box"
  }
 }

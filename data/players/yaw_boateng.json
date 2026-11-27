@@ -2,11 +2,15 @@
  "id": "yaw_boateng",
  "name": "Yaw Boateng",
  "kind": "rules",
- "style": "dribblers",
+ "algorithm": "dribbler",
+ "settings": {
+  "daring": 0.7,
+  "shoot": 0.61
+ },
  "skill": 82,
- "description": "A gifted dribbler who beats his man far more often than the average ball carrier. Plays Dribblers: carries the ball and takes opponents on instead of passing.",
+ "description": "Dribbler: Curls past defenders on the run.",
  "origin": {
   "made": "2026-11-27",
-  "from": "a variation of the dribblers style"
+  "from": "rule-based archetype dribbler"
  }
 }

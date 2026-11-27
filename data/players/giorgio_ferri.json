@@ -2,11 +2,15 @@
  "id": "giorgio_ferri",
  "name": "Giorgio Ferri",
  "kind": "rules",
- "style": "catenaccio",
+ "algorithm": "sweeper",
+ "settings": {
+  "sweep": 0.29,
+  "step_up": 0.25
+ },
  "skill": 72,
- "description": "Granite Athletic's rule player. Plays Catenaccio: fixed keeper, deep disciplined block, man-marking and sudden long strikes.",
+ "description": "Sweeper: The last man: reads every ball behind the line.",
  "origin": {
   "made": "2026-11-27",
-  "from": "the squad of the team granite"
+  "from": "rule-based archetype sweeper"
  }
 }

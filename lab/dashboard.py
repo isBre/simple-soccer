@@ -334,7 +334,7 @@ def live_opponents():
         info = []
     for t in sorted(info, key=lambda t: t.get("strength", 0)):
         out.append({"id": "rule:" + t["id"], "kind": "rule", "team": t["id"], "label": t["id"].replace("_", " ").title(),
-                    "group": "Handmade teams", "tier": t.get("tier"), "strength": t.get("strength"), "style": t.get("style")})
+                    "group": "Handmade teams", "tier": t.get("tier"), "strength": t.get("strength"), "plays": t.get("plays")})
     for name, label in NET_LABELS.items():
         out.append({"id": "net:" + name, "kind": "net", "model": "data/models/%s.json" % name, "label": label, "group": "Earlier RL teams"})
     nets = [("out_5v5/ckpt/t48_u100.json", "Start net t48_u100"), ("out_5v5/ckpt/jit8_best.json", "jit8 (54-number, 2.94)")]

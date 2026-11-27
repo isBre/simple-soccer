@@ -1,0 +1,17 @@
+{
+ "id": "isak_nilsson",
+ "name": "Isak Nilsson",
+ "kind": "rules",
+ "algorithm": "winger",
+ "settings": {
+  "width": 0.67,
+  "cut_in": 0.31,
+  "track": 0.36
+ },
+ "skill": 72,
+ "description": "Winger: Hugs the touchline and crosses low.",
+ "origin": {
+  "made": "2026-11-27",
+  "from": "rule-based archetype winger"
+ }
+}

@@ -22,6 +22,8 @@ SWITCH_WINDOW = 60      # ticks (1 s): a Q within this time of the previous one 
 PLAYING, GOAL, ENDED = 0, 1, 2
 KIND_BALL, KIND_PLAYER, KIND_STATIC = 1, 2, 4
 NONE, SINGLE, TEAM = 0, 1, 2                  # MatchConfig.ControlMode
+# What a player can call to its teammates (the only way players talk; the opponents do not hear it): docs/public_view.md
+INTENTS = ("none", "ball", "open", "run", "cover")
 # discrete actions of the RL trainer: move index -> direction in the player's own frame (+x towards the opponent goal)
 DIRS = [0j, -1j, 1 - 1j, 1 + 0j, 1 + 1j, 1j, -1 + 1j, -1 + 0j, -1 - 1j]
 
@@ -93,6 +95,8 @@ class Player(Disc):
         self.input_kick = False
         self.kick_used = False
         self.kick_intent = ""        # set by the bots: pass / shoot / clear / long (used for the stats)
+        self.intent = "none"         # what this player calls to its teammates (INTENTS), and since which tick
+        self.intent_tick = 0
         self.in_contact = False
         self.rec_tick = -999
         self.accel = 0.1
@@ -343,6 +347,7 @@ class Match:
             p.input_kick = False
             p.kick_used = False
             p.in_contact = False
+            p.intent, p.intent_tick = "none", self.tick
         self.ball.pos = 0j
         self.ball.vel = 0j
         self.kickoff_active = True
@@ -421,6 +426,7 @@ class Match:
         h.controlled = p
         if p is not None:
             p.is_human = True
+            p.intent, p.intent_tick = "none", self.tick      # a person calls nothing (yet)
             p.human = h
             if p.uid not in h.played:
                 h.played.append(p.uid)
@@ -1065,6 +1071,13 @@ class Match:
             placed.append(pos)
 
     # ------------------------------------------------------------ RL interface
+
+    def set_intent(self, p, intent: str):
+        """What player p calls to its teammates (INTENTS; anything else is "none"); intent_tick is when it last changed."""
+        if intent not in INTENTS:
+            intent = "none"
+        if intent != p.intent:
+            p.intent, p.intent_tick = intent, self.tick
 
     def set_action(self, p, move_idx: int, kick: bool):
         """Discrete action of the trainer: move_idx 0..8 (DIRS, in the player's own frame) plus kick."""

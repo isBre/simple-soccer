@@ -2,11 +2,16 @@
  "id": "rafael_costa",
  "name": "Rafael Costa",
  "kind": "rules",
- "style": "counter_attack",
+ "algorithm": "winger",
+ "settings": {
+  "width": 0.95,
+  "cut_in": 0.08,
+  "track": 0.62
+ },
  "skill": 73,
- "description": "Dune Hawks' rule player. Plays Counter-Attack: sits back, then breaks fast with forwards held high.",
+ "description": "Winger: Hugs the touchline and crosses low.",
  "origin": {
   "made": "2026-11-27",
-  "from": "the squad of the team dune"
+  "from": "rule-based archetype winger"
  }
 }

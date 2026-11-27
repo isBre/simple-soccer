@@ -1,0 +1,16 @@
+{
+ "id": "ilias_brodersen",
+ "name": "Ilias Brodersen",
+ "kind": "rules",
+ "algorithm": "target_man",
+ "settings": {
+  "height": 0.76,
+  "turn": 0.37
+ },
+ "skill": 71,
+ "description": "Target man: Lays it off and spins in behind.",
+ "origin": {
+  "made": "2026-11-27",
+  "from": "rule-based archetype target_man"
+ }
+}

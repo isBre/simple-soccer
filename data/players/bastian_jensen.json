@@ -1,0 +1,16 @@
+{
+ "id": "bastian_jensen",
+ "name": "Bastian Jensen",
+ "kind": "rules",
+ "algorithm": "sweeper",
+ "settings": {
+  "sweep": 0.56,
+  "step_up": 0.27
+ },
+ "skill": 74,
+ "description": "Sweeper: Calm at the back, clears it long.",
+ "origin": {
+  "made": "2026-11-27",
+  "from": "rule-based archetype sweeper"
+ }
+}

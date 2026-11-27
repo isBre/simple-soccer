@@ -36,10 +36,10 @@ export function teams(id) {
     // the line-up: each player once, with how many slots it fills
     const counts = {};
     t.lineup.forEach((id) => { counts[id] = (counts[id] || 0) + 1; });
-    const cols = [{ t: "", w: 46 }, { t: "Player" }, { t: "Type", w: 130 }, { t: "Style", w: 130 }, { t: "Skill", w: 60, a: "r" }, { t: "Slots", w: 60, a: "r" }, { t: "Sizes", w: 90, a: "r" }];
+    const cols = [{ t: "", w: 46 }, { t: "Player" }, { t: "Type", w: 130 }, { t: "Plays as", w: 130 }, { t: "Skill", w: 60, a: "r" }, { t: "Slots", w: 60, a: "r" }, { t: "Sizes", w: 90, a: "r" }];
     const prow = Object.keys(counts).map((id) => G.playerById[id]).filter(Boolean).map((p) => ({
       cells: [badge(p, 30), playerLink(p.id, p.name), { text: p.kind_label, color: "var(--g-muted)" },
-        { text: p.style_label || "–", color: "var(--g-muted)" }, p.skill ?? "–", "×" + counts[p.id],
+        { text: p.plays || "–", color: "var(--g-muted)" }, p.skill ?? "–", "×" + counts[p.id],
         { text: p.sizes.length === 5 ? "all" : p.sizes.map((n) => n + "v" + n).join(" "), color: "var(--g-muted)" }] }));
     const d = $("#t-detail", v);
     d.innerHTML = `<section class="gp-hero row" style="--kc:#${t.colors[0]}"><div class="ks-mark" aria-hidden="true"></div><span class="gt-crest"></span>

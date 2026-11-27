@@ -321,7 +321,7 @@ def main():
 
         # a team built in the game: a net first (it sits out 3v3), then rule-based players
         team = {"name": "Test Builders", "colors": {"primary": "ff8800", "secondary": "202020"}, "kit": "band",
-                "logo": {"shape": "hex", "pattern": "halves", "symbol": "star", "c3": "ffffff"}, "style": "high_press",
+                "logo": {"shape": "hex", "pattern": "halves", "symbol": "star", "c3": "ffffff"},
                 "lineup": ["finn_dahl", "lars_holm", "felix_wagner", "marco_bellini", "nikolai_orlov"]}
         code, saved = post_status(port, "/api/game/team", {"action": "save", "team": team})
         tid = saved.get("team", {}).get("id", "")

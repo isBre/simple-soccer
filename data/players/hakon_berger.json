@@ -1,0 +1,17 @@
+{
+ "id": "hakon_berger",
+ "name": "Hakon Berger",
+ "kind": "rules",
+ "algorithm": "playmaker",
+ "settings": {
+  "vision_bias": 0.62,
+  "patience": 0.72,
+  "shoot": 0.05
+ },
+ "skill": 66,
+ "description": "Playmaker: Plays the through ball into the run.",
+ "origin": {
+  "made": "2026-11-27",
+  "from": "rule-based archetype playmaker"
+ }
+}

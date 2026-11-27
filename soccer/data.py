@@ -1,5 +1,5 @@
-"""Game data for the match core: pitches, styles, formations, players (soccer/players.py) and teams (soccer/teams.py), read
-from the JSON files under data/ (pitches, styles, players, teams, formations.json); the web game (game/api.py) shows the same data."""
+"""Game data for the match core: pitches, kickoff spots (formations.json), players (soccer/players.py) and teams
+(soccer/teams.py), read from the JSON files under data/; the web game (game/api.py) shows the same data."""
 import glob
 import json
 import os
@@ -18,14 +18,6 @@ def my_teams_dir():
     """Where the teams built in the game are kept: local/my_teams, or $SOCCER_MY_TEAMS (tests)."""
     return os.environ.get("SOCCER_MY_TEAMS") or os.path.join(local_dir(), "my_teams")
 
-STYLE_KEYS = ("line_height", "compactness", "width", "press", "marking", "directness", "shoot_range", "pass_bias", "risk",
-              "keeper_sweep", "forward_stay", "support_dist", "fluidity", "attack_commit", "intercept", "counter_press",
-              "long_shot", "switch_play")
-STYLE_DEFAULTS = dict(line_height=0.5, compactness=0.5, width=1.0, press=0.5, marking=0.4, directness=0.5, shoot_range=0.55,
-                      pass_bias=0.6, risk=0.4, keeper_sweep=0.3, forward_stay=0.3, support_dist=150.0, fluidity=0.6,
-                      attack_commit=0.4, intercept=0.5, counter_press=0.0, long_shot=0.0, switch_play=0.0)
-
-
 class Pitch:
     """A pitch (PitchDef): goal line x = half_w, touch line y = half_h, posts, outer walls for players, obstacles, extra walls."""
     NUM = ("half_w", "half_h", "goal_half", "net_depth", "out_x", "out_y", "center_r", "post_r", "box_depth", "box_half")
@@ -43,35 +35,6 @@ class Pitch:
         self.walls = [{"a": complex(w["a"][0], w["a"][1]), "b": complex(w["b"][0], w["b"][1]),
                        "ball": bool(w.get("ball", True)), "player": bool(w.get("player", False)), "bc": float(w.get("bc", 1.0))}
                       for w in d.get("walls", [])]
-
-
-class Style:
-    """A rule-based player's playing style (StyleDef). All 0..1 unless noted. Teams have no style of their own: the brain that
-    coordinates a team's rule-based players uses theirs (Style.blend)."""
-
-    def __init__(self, d):
-        self.id = str(d.get("id", "balanced"))
-        self.name = str(d.get("name", self.id))
-        self.description = str(d.get("description", ""))
-        for k in STYLE_KEYS:
-            setattr(self, k, float(d.get(k, STYLE_DEFAULTS[k])))
-
-    @staticmethod
-    def blend(styles):
-        """The style of a team brain from the styles of the players it commands: the style itself when they all share it (five
-        copies of one player play exactly as that player), else every setting averaged over the players."""
-        styles = list(styles)
-        if len({s.id for s in styles}) <= 1:
-            return styles[0] if styles else Style({})
-        out = Style({"id": "+".join(sorted({s.id for s in styles})), "name": " + ".join(sorted({s.name for s in styles}))})
-        for k in STYLE_KEYS:
-            setattr(out, k, sum(getattr(s, k) for s in styles) / len(styles))
-        return out
-
-    def to_dict(self):
-        d = {"id": self.id, "name": self.name, "description": self.description}
-        d.update({k: getattr(self, k) for k in STYLE_KEYS})
-        return d
 
 
 _FORMATIONS = None
@@ -111,20 +74,20 @@ def _load_dir(path, skip_broken=False):
 
 
 class Database:
-    """Everything under data/: pitches, styles, players and teams (line-ups of players). Loading checks that every team's
-    line-up names known players and every player's style exists, so a broken file fails at once with its name."""
+    """Everything under data/: pitches, players and teams (line-ups of players). Loading checks that every team's line-up names
+    known players and every rule-based player's archetype exists, so a broken file fails at once with its name."""
 
     def __init__(self, root=ROOT, my_teams=True):
+        from .ai.players import ALGORITHMS
         from .players import PlayerDef
         from .teams import Team
         data = os.path.join(root, "data")
         self.pitches = {p.id: p for p in (Pitch(d) for d in _load_dir(os.path.join(data, "pitches")))}
-        self.styles = {s.id: s for s in (Style(d) for d in _load_dir(os.path.join(data, "styles")))}
         self.players = {}
         for d in _load_dir(os.path.join(data, "players")):
             p = PlayerDef(d, root)
-            if p.kind != "net" and p.style_id not in self.styles:
-                raise ValueError("player %s: unknown style %r" % (p.id, p.style_id))
+            if p.kind == "rules" and p.algorithm not in ALGORITHMS:
+                raise ValueError("player %s: unknown algorithm %r (one of %s)" % (p.id, p.algorithm, ", ".join(ALGORITHMS)))
             self.players[p.id] = p
         self.teams = {}
         mine = my_teams_dir() if my_teams else None
@@ -141,9 +104,6 @@ class Database:
                     t.custom, t.league, t.rl_eval = True, MY_LEAGUE, False
                 t.players = [self.players[i] for i in t.lineup_ids]
                 self.teams[t.id] = t
-
-    def style_of_player(self, player):
-        return self.styles.get(player.style_id, self.styles.get("balanced", Style({})))
 
 
 def _hex(c, default):

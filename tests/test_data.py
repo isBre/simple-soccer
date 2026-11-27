@@ -24,7 +24,7 @@ def main():
     mine = os.path.join(tmp, "my_teams")
     os.environ["SOCCER_MY_TEAMS"] = mine
     try:
-        for d in ("pitches", "styles", "players", "teams"):
+        for d in ("pitches", "players", "teams"):
             shutil.copytree(os.path.join(ROOT, "data", d), os.path.join(tmp, "data", d))
         os.makedirs(mine)
         results = []

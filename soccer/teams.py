@@ -1,6 +1,5 @@
 """Teams (data/teams/*.json): an identity (name, colours, kit, logo) and a line-up of players (soccer/players.py). A team has
-no tactic: every player plays the same in any team (the brain that coordinates a team's rule-based players takes its settings
-from those players, data.Style.blend).
+no tactic and no brain: every player decides alone and plays the same in any team.
 
   lineup     five player ids in order of preference; a match of size N fields the first N who can play that size (the same
              player may appear several times: a team of five copies of one player is the usual case)

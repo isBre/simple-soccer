@@ -24,7 +24,7 @@ PLACEMENT = 6                     # games before an entry counts as placed
 
 # Bump when the behaviour of the game changes on purpose (the same moment the golden tests in tests/golden/ are re-recorded):
 # results played with another ENGINE no longer count (they stay in the database).
-ENGINE = 1
+ENGINE = 2
 
 BASE = 1500.0                     # the average rule-based player of a size is pinned here
 PRIOR_SD = 400.0                  # Elo: prior of a player's strength (keeps a player with few games finite)

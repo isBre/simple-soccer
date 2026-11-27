@@ -1,0 +1,16 @@
+{
+ "id": "teodor_lemaire",
+ "name": "Teodor Lemaire",
+ "kind": "rules",
+ "algorithm": "box_to_box",
+ "settings": {
+  "engine": 0.88,
+  "shoot": 0.28
+ },
+ "skill": 69,
+ "description": "Box-to-box: Covers every blade of grass.",
+ "origin": {
+  "made": "2026-11-27",
+  "from": "rule-based archetype box_to_box"
+ }
+}

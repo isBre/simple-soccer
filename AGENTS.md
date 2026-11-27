@@ -7,7 +7,7 @@ on the experiments, start here. People: the same applies; the dashboard (the Lab
 - `docs/rewards.md`: every reward term sorted into beneficial / unsure / not good, with the evidence (update it after each review).
 - `docs/experiment_log.md`: history, **standing decisions** (do not violate them without asking the user), conclusions, reviews.
 - `exp/schema.json`: what every metric means, its unit and direction, the evaluation protocols and the comparison rules.
-- Players and teams: a player (`data/players`) is a brain with a name (rule-based style + skill, or a net); a team (`data/teams`)
+- Players and teams: a player (`data/players`) is a brain with a name (a rule-based archetype with its own algorithm + skill, or a net) that decides alone, talking to teammates only through calls (`ball`, `open`, `run`, `cover`); a team (`data/teams`)
   is a line-up of 5 players (mixed allowed), with no tactic. No keeper role, golden-goal overtime, no shootouts (README "Players,
   teams and kickoff"). Opus 5.5 High was removed (it planned on a clone of the match; docs/opus_5_5_high.md).
 - `docs/ratings.md`: **the ratings**: Elo per player and team, per size (1v1 to 5v5), in a local database on every machine

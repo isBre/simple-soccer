@@ -4,7 +4,7 @@
 
 # Simple Soccer
 
-A Haxball-style football game in the browser, built for AI experiments: custom 60 Hz Haxball physics, data-driven pitches/teams/styles, rule-based and reinforcement-learning AI, per-player stats and grades, and tournaments.
+A Haxball-style football game in the browser, built for AI experiments: custom 60 Hz Haxball physics, data-driven pitches/teams/players, rule-based and reinforcement-learning AI, per-player stats and grades, and tournaments.
 
 ```bash
 python3 web/app.py
@@ -20,7 +20,7 @@ torch for training); nothing needs installing, every script runs from the checko
 |---|---|
 | ![Main menu](docs/screenshots/menu.png)<br>**Main menu** | ![Quick match](docs/screenshots/quick_match.png)<br>**Quick match setup**: pitch, size, teams, control |
 | ![Kickoff](docs/screenshots/match_kickoff.png)<br>**Kickoff**: the camera zooms in before the whistle | ![Live match](docs/screenshots/match_play.png)<br>**Live match**: RL Team vs Aurora FC, 5v5 on the arena pitch |
-| ![Teams browser](docs/screenshots/teams.png)<br>**Teams and players**: logos, kits, line-ups, styles | ![Tournament setup](docs/screenshots/tournament_setup.png)<br>**Tournament setup**: league, knockout or groups + knockout |
+| ![Teams browser](docs/screenshots/teams.png)<br>**Teams and players**: logos, kits, line-ups, archetypes | ![Tournament setup](docs/screenshots/tournament_setup.png)<br>**Tournament setup**: league, knockout or groups + knockout |
 
 ![Match report](docs/screenshots/report.png)
 *Match report: score, scorers, team stats and a 3.0-10.0 grade for every player.*
@@ -56,14 +56,34 @@ there: **Whole team** (switch with Q / LB / RB), **Any player** (the most advanc
   picker), `web/game/pad.js` / `match.js` (one input per device). Tournaments and the Puzzle are one person.
 
 ## Players, teams and kickoff
-A **player** (`data/players/<id>.json`, `soccer/players.py`) is a brain with a name: a rule-based style with a skill (0-100), or a
-trained net. Every player has the same body (speed, kick, size); the skill only sets a rule-based player's own precision and
-reaction (`soccer/ai/skill.py`: perception delay, aim error, position noise, decision speed). There are no positions, no keeper role and no tactics: every team takes the same kickoff spots for a size, any player can stand
-on any spot, and the rule-based AI decides by situation who guards the goal.
+A **player** (`data/players/<id>.json`, `soccer/players.py`) is a brain with a name: a rule-based **archetype** with its own
+algorithm, settings and skill (0-100), or a trained net. Every player has the same body (speed, kick, size); the skill only sets
+a rule-based player's own precision and reaction (`soccer/ai/skill.py`: perception delay, aim error, position noise, decision
+speed). Every player **decides alone**: there is no team brain, and teammates talk only through their **calls** (`ball`,
+`open`, `run`, `cover`; [docs/public_view.md](docs/public_view.md)). There are no positions, no keeper role and no tactics:
+every team takes the same kickoff spots for a size, any player can stand on any spot, and whoever is deepest steps in to guard
+the goal when nobody calls cover.
+
+The ten archetypes (`soccer/ai/players/`, one file each, on the shared base `base.py` and toolkit `soccer/ai/kit.py`):
+
+| Archetype | How it plays |
+|---|---|
+| Poacher | lives on the last defender's shoulder, calls `run`, shoots first time, barely defends |
+| Playmaker | drops deep to receive (`open`), through balls to runners, rarely shoots; screens the defence |
+| Dribbler | carries the ball past defenders on curving runs, shoots after beating a man |
+| Ball winner | hunts the carrier (two on the ball if need be), lays it off at once to whoever calls `open` |
+| Sweeper | the last man: calls `cover`, guards the goal, sweeps up behind the defence, clears long |
+| Winger | owns a touchline, sprints forward (`run`), runs down the line and crosses low |
+| Target man | holds the ball up front, lays it off to runners, turns and shoots when free |
+| Presser | presses the carrier or stands in the lane to the next receiver |
+| Box-to-box | supports and makes late runs into the box, sprints back when the ball is lost |
+| Shadow | marks the most dangerous opponent goal-side and cuts out passes meant for that player |
+
+`tests/test_players.py` checks that each one plays as it says (the sweeper is the deepest, the winger the widest, ...).
 A **team** (`data/teams/<id>.json`, `soccer/teams.py`) is an identity (name, colours, kit, crest) and a
 **line-up** of 5 players in order. A match of N per side fields the first N who can play that size; the same player may appear
-several times (five copies of one player is the usual team) and line-ups may be **mixed** (rule-based and net players together:
-the rule players share one team brain whose settings come from them, `soccer/ai/lineup.py`). The current nets understand
+several times and line-ups may be **mixed** (rule-based and net players together, `soccer/ai/lineup.py`). The Rule Based League
+teams field five different rule-based players each. The current nets understand
 only 5v5, so a team of nets only plays 5v5. Kickoffs use a random taker (any player), direction and short delay (seeded by the
 match seed). A knockout draw goes to **golden-goal overtime** (no time limit, no penalties).
 
@@ -74,14 +94,15 @@ anonymous: nobody knows who another player is or how good it is, only its own sk
 
 | In the view | Never in the view |
 |---|---|
-| the ball and every player as an anonymous body (team, slot, kickoff spot, position, velocity, size) | who a player is: name, kind, style, skill (except your own) |
+| the ball and every player as an anonymous body (team, slot, kickoff spot, position, velocity, size) | who a player is: name, kind, archetype, skill (except your own) |
 | the last 32 ticks of all of it | the match engine and its objects |
-| match clock, score, time left, overtime, state, the kickoff (whose, who takes it), the last touch | another team's inside: brain, plan, memory, random numbers, buttons, kickoff timer |
+| match clock, score, time left, overtime, state, the kickoff (whose, who takes it), the last touch | any other agent's inside, teammates included: plan, memory, random numbers, buttons |
+| your teammates' calls (`ball`, `open`, `run`, `cover`) and which of them a person controls | the opponents' calls, the other team's kickoff timer |
 | the pitch and the physics (public constants: anyone may simulate forward) | |
 
-A team knows its own: its brain's plan, its human player, its own buttons. `tests/test_view.py` enforces the rule (imports,
-names, nothing of the match or the other team reachable from a team's agents, anonymous opponents). An agent is any object with
-`decide(view, me)`; the spec shows a minimal one. (Opus 5.5 High, which planned on a clone of the whole match, was
+`tests/test_view.py` enforces the rule (imports, names, no agent reaches the match, a view or another agent, teammates
+included; calls heard only by teammates; anonymous opponents). An agent is any object with `decide(view, me)` returning an
+`Act` (buttons and a call, `soccer/ai/agent.py`); the spec shows a minimal one. (Opus 5.5 High, which planned on a clone of the whole match, was
 removed for this reason: "Opus 5.5 High: removed".)
 
 ## Modes
@@ -93,8 +114,8 @@ removed for this reason: "Opus 5.5 High: removed".)
   whole team / watch), recording; More: the pitch.
 - **Dataset** ("Record my play", on by default, remembered in the browser): every match you play is saved as a training file for
   imitation learning (`data/human/`, see "Recording your play" below). A red REC mark shows in the corner while it records.
-- Four leagues: **My Teams** (the teams you built, see below), the **Rule Based League** (16 fictional teams, each fielding its own rule-based player), the **Reinforcement Learning League** (RL Team 1-5 and Net Lab, teams of net players) and the **Mixed League** (line-ups that mix rule-based and net players: All Stars, Academy XI, Iron Wall, High Flyers). Each side picks a league (a list, so more leagues fit), then a team from it; teams are ordered by Elo. A team that cannot play the chosen size (only 5v5 nets) is played at the largest size both teams can play.
-- Teams: one league at a time (the league list at the top, or Left / Right), strongest first; the picked team in its colours with its Elo, how it plays and its line-up (each player's type, style, skill and the sizes it can play; a click opens the player). Enter starts a quick match with it; **Copy and edit** opens the builder with a copy (the teams of `data/teams` are never edited from the game), **Edit team** on your own teams.
+- Four leagues: **My Teams** (the teams you built, see below), the **Rule Based League** (16 fictional teams, each a line-up of five different rule-based archetypes), the **Reinforcement Learning League** (RL Team 1-5 and Net Lab, teams of net players) and the **Mixed League** (line-ups that mix rule-based and net players: All Stars, Academy XI, Iron Wall, High Flyers). Each side picks a league (a list, so more leagues fit), then a team from it; teams are ordered by Elo. A team that cannot play the chosen size (only 5v5 nets) is played at the largest size both teams can play.
+- Teams: one league at a time (the league list at the top, or Left / Right), strongest first; the picked team in its colours with its Elo, how it plays and its line-up (each player's type, archetype, skill and the sizes it can play; a click opens the player). Enter starts a quick match with it; **Copy and edit** opens the builder with a copy (the teams of `data/teams` are never edited from the game), **Edit team** on your own teams.
 - **Players** (`#/game/players`): every player, filtered by type (rule-based, net), by the size it can play and by name. A player's page: who it is, how it was made (for nets: run, line, old rating), its style as bars, the teams that field it, and "Build a team with ...".
 - **Build a team** (`#/game/build`): five slots in order (click a slot, then a player; reorder with the arrows; 1-5 pick a slot), name, colours, kit and crest with a live preview. It shows which sizes the team can play and who takes the pitch at each. Saved teams go to the **My Teams** league and are kept on this machine only (`local/my_teams/`, ignored by git, `POST /api/game/team`); they play quick matches and tournaments like any other team, but are not part of the experiment ladder.
 - **Rankings** (`#/game/rankings/<size>`): one page per team size, Players and Teams: Elo ± its 95% range, games, record, goals scored and conceded against the average opponent, a team's bonus over its players. The ratings are this machine's (below).
@@ -122,14 +143,14 @@ game/     the game's back end: catalog, match setup, tournaments, live matches (
 lab/      experiments on the Pi: queue, runner, Lab API, live demo match, agent CLI (the pages are web/lab/)
 rl/       training and evaluation of the net teams (PPO, environment, league / head-to-head / scouting)
 soccer/   the match core (Python): physics, rules, stats, grades, rule-based and net AI
-data/     pitches, styles, players, teams, kickoff spots per size, shipped nets (JSON)
+data/     pitches, players, teams, kickoff spots per size, shipped nets (JSON)
 elo/      the ratings: per-size Elo for players and teams, local database (python3 -m elo)
 local/    this machine only, git-ignored: the ratings database, the teams you built
 ```
 
-- `soccer/` (no UI): `data.py` (pitches, styles, players, teams, kickoff spots, kit colours), `match.py` (the simulation,
-  60 ticks/s), `stats.py`, `rating.py`, `rng.py` (Godot's random generator, bit for bit), `ai/` (`view.py` the public view every player decides from, `lineup.py` who drives each slot, `rules.py` team brain and
-  rule bots, `nets.py` net teams and observations).
+- `soccer/` (no UI): `data.py` (pitches, players, teams, kickoff spots, kit colours), `match.py` (the simulation,
+  60 ticks/s), `stats.py`, `rating.py`, `rng.py` (Godot's random generator, bit for bit), `ai/` (`view.py` the public view every player decides from, `lineup.py` who drives each slot, `agent.py` what an agent answers (buttons and a call), `kit.py`
+  the rule-based players' toolkit, `players/` the ten archetypes, `skill.py`, `nets.py` net players and observations).
 - `game/`: `api.py` (catalog, a match setup -> `MatchConfig`, whole matches simulated on all cores), `tournament.py`
   (fixtures, standings, statistics), `session.py` (a live match over a WebSocket), `routes.py` (the HTTP API).
 - `web/`: `app.py` (the server, standard library only: static files, `/api/game/...`, `/ws/match`, and the Lab's API from
@@ -143,15 +164,24 @@ local/    this machine only, git-ignored: the ratings database, the teams you bu
   `systemd/`. Results and specs live in `exp/`, checkpoints in `out_5v5/`, logs in `logs/`.
 - `tests/` regression tests of the core, training environment, evaluations, tournaments and the web app (see "Tests"); `tools/`
   `bench.py` (core speed), `team_bench.py` (one team against the league / RL teams / trained nets: points, goals, and how
-  much it plays as a team), `generate_data.py` (regenerates `data/`, seeded; style tuning lives there); `docs/` notebook,
+  much it plays as a team), `generate_data.py` (regenerates the pitches); `docs/` notebook,
   rewards, pipeline design, UI design guide, old results.
 
-### Bot quality and team AI (how a team gets strong or weak)
-- Per player (`soccer/ai/__init__.py`): reaction -> perception delay, finishing/passing -> aim error, positioning -> position noise, defending -> marking tightness and lane cover, vision (passing+positioning+reaction) -> decision speed, how clean a pass lane must be, and shot-lane choice.
-- Ball carrier (`soccer/ai/rules.py` `StyleBot._decide_action`): shoots at the goal-mouth point whose line is furthest from every opponent (keeper included), takes longer shots when the lane is open, dribbles by scoring 7 headings against opponents' positions and momentum, and rates passes by receiver space plus whether an opponent can reach the lane before the ball (`_pass_margin`, ball travel time from the real kick speed and damping).
-- Ball physics is fixed (a kick adds exactly 5 px/tick to the ball's current velocity, damping 0.99/tick), so the bots predict the ball: `intercept` (`soccer/ai/rules.py`) finds the earliest point on the ball's path a player can reach (chasers run to it, and an off-ball *interceptor* is sent onto an opponent's pass/shot, `style.intercept`); `_compensated_dir` corrects the kick direction for the ball's velocity so passes/shots on a moving ball go where intended.
-- Game management (`TeamBrain.urgency`): in the last ~45 % of the match a team that is behind pushes up, shoots earlier and presses with one more player; a team that is ahead drops deeper.
-- A rule-based player's strength comes from its skill (`data/players`); the UI shows each team's and player's Elo per size from this machine's ratings (`elo/`, [docs/ratings.md](docs/ratings.md)).
+### Rule-based players: what they share (how a player gets strong or weak)
+- Skill (`soccer/ai/skill.py`): perception delay, aim errors for shots and passes, positioning noise, decision speed, how clean
+  a pass lane must look and how well it picks a shot. The archetype's settings (`data/players`, its `SETTINGS`) tune its own
+  algorithm (a poacher's greed, a winger's width, a presser's intensity, ...).
+- The base (`soccer/ai/players/base.py`): reads the situation from the view (`Sit`: possession, its own time to the ball and its
+  teammates' estimated times, their calls), takes the kickoff, decides whose ball it is (the quickest plays it, unless a
+  teammate about as quick already calls `ball`; a person's player is left alone), steps in to guard the goal when it is the
+  deepest and nobody calls `cover`, and strikes the ball (pick a kind and an aim, then line up and kick).
+- The toolkit (`soccer/ai/kit.py`): the ball physics is public and fixed (a kick adds exactly 5 px/tick to the ball's current
+  velocity, damping 0.99/tick), so players predict the ball (`intercept`: the earliest point of its path they can reach),
+  correct a kick for the ball's motion (`kick_dir`), read shot and pass lanes (`shot_target`, `lane_clearance`,
+  `pass_margin`), pick an open heading to carry the ball (`open_heading`) and guard a goal (`guard`: run onto a shot's path,
+  come out to narrow the angle).
+- A player's strength comes from its skill and its algorithm; the UI shows each team's and player's Elo per size from this
+  machine's ratings (`elo/`, [docs/ratings.md](docs/ratings.md)).
 
 ### Opus 5.5 High: removed
 A team planner that searched by cloning the whole match (engine state and the other agents' memory), which the public view
@@ -160,10 +190,12 @@ and the code is in git history (commit 22d007c and earlier: `soccer/ai/opus.py`,
 
 ## Adding content
 - Pitch: `data/pitches/<id>.json` (copy `classic.json`).
-- Style: `data/styles/<id>.json` (line_height, compactness, width, press, marking, directness, shoot_range, pass_bias, risk, keeper_sweep, forward_stay, support_dist, fluidity, attack_commit). `fluidity` 0 = fixed goalkeeper, 1 = whoever is rearmost keeps goal; `attack_commit` = how many players join the attack. Strategy params: `intercept` (run onto the ball path of opponent passes/shots), `counter_press` (extra chasers right after losing the ball), `long_shot` (shoot from range when the lane is open), `switch_play` (prefer passes to the far side). 16 styles ship: balanced, tiki_taka, high_press, park_the_bus, counter_attack, long_ball, wing_play, total_football, catenaccio, all_out_attack, gegenpress, sharpshooters, man_to_man, zone_trap, dribblers, switch_play.
-- Player: `data/players/<id>.json`: `name`, `kind` (`"rules"` with `style` and `skill`, or `"net"` with `model`, a game-model JSON), `description` (shown in the game), `origin` (how it was made). `python3 rl/export_team.py` turns a training checkpoint into a net player (and, with `--team`, a team of it).
+- Archetype: a new file in `soccer/ai/players/` (a `RuleAgent` subclass with `NAME`, `DESCRIPTION`, `SETTINGS` and its own
+  `choose` / `off_ball` / `wants_ball`), registered in `soccer/ai/players/__init__.py` `ALGORITHMS`, with a check in
+  `tests/test_players.py`. It may use everything of the base and the toolkit, nothing of another player.
+- Player: `data/players/<id>.json`: `name`, `kind` (`"rules"` with `algorithm`, `settings` and `skill`, or `"net"` with `model`, a game-model JSON), `description` (shown in the game), `origin` (how it was made). `python3 rl/export_team.py` turns a training checkpoint into a net player (and, with `--team`, a team of it).
 - Team: `data/teams/<id>.json`: identity (name, short, colours, kit, crest), `lineup` (5 player ids in order), `"league"` (`"rules"`, `"rl"` or `"mixed"`). Loading fails with the file's name when a line-up names an unknown player. The 16 original rule teams set `"rl_eval": true` (the RL evaluation league, `rl/evaluate.py`, `rl/teams_info.json`); every other team leaves it out, so every earlier evaluation stays comparable.
-- Kickoff spots: `data/formations.json` (`defaults`: one layout per size, the same for every team), slots `[line, fx, fy]`. The line (GK / DEF / MID / FWD) is read only by the rule-based AI (it gives the deepest spot a head start as goal guard, by the player's own style); the match itself has no roles and teams have no tactics: the brain that coordinates a team's rule-based players takes its settings from those players (`Style.blend`).
+- Kickoff spots: `data/formations.json` (`defaults`: one layout per size, the same for every team), slots `[line, fx, fy]`. The line (GK / DEF / MID / FWD) only names the spot; the match itself has no roles and teams have no tactics or brain.
 
 ## How the browser plays a match (`game/session.py`)
 The page opens a WebSocket (`/ws/match`) and sends the match setup (teams, pitch, size, length, seed, control, or the people of a
@@ -251,10 +283,10 @@ recoveries, dribbles and blocked shots per player (`soccer/stats.py`).
 
 ## Human control and keeper (AI notes)
 
-- A human-controlled player is never picked as goal guard, chaser or marker by the team brain; bots give every human teammate room
-  (`StyleBot._avoid_human`, the view's `human_mates`) and do not send a second chaser at the ball when one of them is on it.
-- The keeper reads the shot path and runs to the earliest point he can reach (slow acceleration is modelled),
-  comes out to narrow the angle (`KEEP_*` in `soccer/ai/rules.py`), and only charges a loose ball when he wins the race to it.
+- A rule-based player leaves the ball to a person's player who is about as quick to it, and gives every such teammate room
+  (`kit.avoid`, the view's `human_mates`).
+- Whoever guards the goal reads the shot path and runs to the earliest point it can reach (slow acceleration is modelled) and
+  comes out to narrow the angle (`kit.guard`, `KEEP_*`).
 
 ## Goals and kickoffs
 

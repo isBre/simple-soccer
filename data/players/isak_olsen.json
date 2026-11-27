@@ -1,0 +1,16 @@
+{
+ "id": "isak_olsen",
+ "name": "Isak Olsen",
+ "kind": "rules",
+ "algorithm": "box_to_box",
+ "settings": {
+  "engine": 0.8,
+  "shoot": 0.63
+ },
+ "skill": 71,
+ "description": "Box-to-box: Covers every blade of grass.",
+ "origin": {
+  "made": "2026-11-27",
+  "from": "rule-based archetype box_to_box"
+ }
+}

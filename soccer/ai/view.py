@@ -8,15 +8,15 @@ simulating forward, searching). It never sees the match engine or another agent'
                    velocity, size), the last HIST frames of all of them, the match clock (tick, 60 per second), score, time
                    left, overtime, state (playing / goal celebration), the kickoff (on, whose, who takes it), the last touch
                    (who and when), the pitch, and the physics as public constants (soccer.match: KICK_STRENGTH, KICK_RANGE,
-                   damping, AI_PERIOD)
-  not in the view  who a player is (name, kind, skill: only your own, in your own bot), the match object, every other
-                   agent's inside: its brain and plan, its memory, its random numbers, the buttons it is about to press, the
-                   moment the other team's kickoff taker will kick
+                   damping, AI_PERIOD); on your own team's bodies: what each teammate calls (`intent`, soccer.match.INTENTS,
+                   and since when, `intent_tick`) and whether a person controls it (`is_human`)
+  not in the view  who a player is (name, kind, skill: only your own, in your own agent), the match object, every other
+                   agent's inside, teammates included: its plan, its memory, its random numbers, the buttons it is about to
+                   press; the opponents' calls; the moment the other team's kickoff taker will kick
 
-Each team gets its own View with its own Body objects (MatchAI builds them; nobody shares a Body across teams). On a team's own
-bodies the brain that commands the player (`brain`), the human flag and the buttons (`input_dir`, `input_kick`, `kick_intent`)
-are set: a team talks to itself. On the opponents' bodies they stay empty. Bodies are the same objects for the whole match
-(updated in place every tick), so a brain may remember them from tick to tick.
+Every player decides alone (soccer/ai/__init__.py): players talk only through their calls. Each team gets its own View with its
+own Body objects (MatchAI builds them; nobody shares a Body across teams); on the opponents' bodies the calls stay "none" and
+is_human False. Bodies are the same objects for the whole match (updated in place every tick), so an agent may remember them.
 
 `reaction_delay` and `defend_q` on a Body are the GENERIC assumption about an unknown player (skill 70): an agent judges
 others, teammates included, by how they move, never by who they are. A player's own skill is in its own bot (soccer/ai/skill.py).
@@ -31,10 +31,9 @@ GENERIC_Q = _GQ                                        # marking / interception 
 
 
 class Body:
-    """A player as anyone can see it. Public: uid, team, slot, radius, line, home, spawn, pos, vel. Own team only: brain,
-    is_human, input_dir / input_kick / kick_intent (the team's own buttons)."""
-    __slots__ = ("uid", "team", "slot", "radius", "line", "home", "spawn", "pos", "vel", "brain", "is_human",
-                 "input_dir", "input_kick", "kick_intent")
+    """A player as anyone can see it. Public: uid, team, slot, radius, line, home, spawn, pos, vel. Own team only: intent and
+    intent_tick (what the player calls and since when), is_human."""
+    __slots__ = ("uid", "team", "slot", "radius", "line", "home", "spawn", "pos", "vel", "intent", "intent_tick", "is_human")
     reaction_delay = GENERIC_DELAY
     defend_q = GENERIC_Q
 
@@ -42,8 +41,7 @@ class Body:
         self.uid, self.team, self.slot, self.radius = p.uid, p.team, p.slot, p.radius
         self.line, self.home, self.spawn = p.line, p.home, p.spawn
         self.pos, self.vel = p.pos, p.vel
-        self.brain, self.is_human = None, False
-        self.input_dir, self.input_kick, self.kick_intent = 0j, False, ""
+        self.intent, self.intent_tick, self.is_human = "none", 0, False
 
 
 class Ball:
@@ -74,9 +72,8 @@ class View:
         for p in m.players:
             b = self.bodies[p.uid]
             b.pos, b.vel = p.pos, p.vel
-            if p.team == t:                            # a team knows its own: who commands whom, its human, its buttons
-                b.brain, b.is_human = p.brain, p.is_human
-                b.input_dir, b.input_kick, b.kick_intent = p.input_dir, p.input_kick, p.kick_intent
+            if p.team == t:                            # a team hears its own calls and knows which of its players a person controls
+                b.intent, b.intent_tick, b.is_human = p.intent, p.intent_tick, p.is_human
         self.ball.pos, self.ball.vel = m.ball.pos, m.ball.vel
         self.tick = m.tick
         self.state = m.state
@@ -90,7 +87,6 @@ class View:
         self.last_touch = self.bodies[m.last_touch.uid] if m.last_touch is not None else None
         self.last_touch_tick = m.last_touch_tick
         self.human_mates = [self.bodies[h.controlled.uid] for h in m.humans if h.controlled is not None and h.controlled.team == t]
-        self.controlled = self.human_mates[0] if self.human_mates else None      # own team only: the players people control (local multiplayer)
         self._ball_hist, self._pos_hist, self._hist_idx = m.ball_hist, m.pos_hist, m.hist_idx   # the public history (recorded by the match)
         return self
 

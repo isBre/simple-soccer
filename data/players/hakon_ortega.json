@@ -1,0 +1,16 @@
+{
+ "id": "hakon_ortega",
+ "name": "Hakon Ortega",
+ "kind": "rules",
+ "algorithm": "sweeper",
+ "settings": {
+  "sweep": 0.39,
+  "step_up": 0.34
+ },
+ "skill": 56,
+ "description": "Sweeper: The last man: reads every ball behind the line.",
+ "origin": {
+  "made": "2026-11-27",
+  "from": "rule-based archetype sweeper"
+ }
+}

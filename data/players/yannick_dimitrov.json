@@ -1,0 +1,17 @@
+{
+ "id": "yannick_dimitrov",
+ "name": "Yannick Dimitrov",
+ "kind": "rules",
+ "algorithm": "playmaker",
+ "settings": {
+  "vision_bias": 0.49,
+  "patience": 0.75,
+  "shoot": 0.21
+ },
+ "skill": 60,
+ "description": "Playmaker: Plays the through ball into the run.",
+ "origin": {
+  "made": "2026-11-27",
+  "from": "rule-based archetype playmaker"
+ }
+}

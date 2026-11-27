@@ -1,0 +1,17 @@
+{
+ "id": "caio_lemaire",
+ "name": "Caio Lemaire",
+ "kind": "rules",
+ "algorithm": "winger",
+ "settings": {
+  "width": 0.88,
+  "cut_in": 0.18,
+  "track": 0.37
+ },
+ "skill": 53,
+ "description": "Winger: Hugs the touchline and crosses low.",
+ "origin": {
+  "made": "2026-11-27",
+  "from": "rule-based archetype winger"
+ }
+}
