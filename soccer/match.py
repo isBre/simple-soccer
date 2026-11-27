@@ -83,6 +83,7 @@ class Player(Disc):
         self.pdef = None             # players.PlayerDef: who this is (name, kind, style, skill)
         self.brain = None            # the team brain that commands this player (soccer/ai/lineup.py)
         self.is_human = False
+        self.human = None            # the Human controlling this player (None: nobody)
         self.bot = True              # decided by the AI; False = a human or an external controller (RL training)
         self.ai_seed = 0
         self.ps = None
@@ -96,6 +97,48 @@ class Player(Disc):
         self.rec_tick = -999
         self.accel = 0.1
         self.kick_accel = 0.07
+
+
+class Human:
+    """One person at the controls: a side (`team`), a mode (SINGLE: one player for the whole match; TEAM: the whole team,
+    switching with Q), the line-up slot asked for (SINGLE; -1 = auto), auto-switch (TEAM), the player controlled now, the
+    buttons held, the Q ranking and every player this human has controlled (`played`, uids). A team with two or more humans
+    plays SINGLE only, each human on a player of their own (check_humans)."""
+
+    def __init__(self, team=0, mode=SINGLE, slot=-1, auto_switch=False):
+        self.team, self.mode, self.slot, self.auto_switch = team, mode, slot, auto_switch
+        self.controlled = None
+        self.dir, self.kick = 0j, False
+        self.switch_order, self.switch_idx, self.switch_last = [], 0, -10 ** 9
+        self.played = []
+
+
+def config_humans(cfg) -> list:
+    """The Humans of a MatchConfig: cfg.humans, else the one human of control / human_team / human_slot / auto_switch."""
+    if cfg.humans:
+        return [Human(int(h.get("team", 0)), int(h.get("mode", SINGLE)), int(h.get("slot", -1)), bool(h.get("auto_switch", False)))
+                for h in cfg.humans]
+    if cfg.control != NONE:
+        return [Human(cfg.human_team, cfg.control, cfg.human_slot, cfg.auto_switch)]
+    return []
+
+
+def check_humans(humans, size):
+    """The rules of local multiplayer (ValueError if broken): a side is 0 or 1, a mode SINGLE or TEAM; at most `size` humans per
+    side; a side with two or more humans plays SINGLE only (each on one player for the whole match, nobody switches) and the
+    slots asked for there are different."""
+    for t in (0, 1):
+        mine = [h for h in humans if h.team == t]
+        if len(mine) > size:
+            raise ValueError("%d people on one side of a %dv%d match" % (len(mine), size, size))
+        if len(mine) >= 2 and any(h.mode != SINGLE for h in mine):
+            raise ValueError("two or more people on one side control one player each: nobody can control the whole team")
+        slots = [h.slot for h in mine if h.slot >= 0]
+        if len(slots) != len(set(slots)):
+            raise ValueError("two people on one side asked for the same player")
+    for h in humans:
+        if h.team not in (0, 1) or h.mode not in (SINGLE, TEAM) or h.slot >= size:
+            raise ValueError("bad human: side %r, mode %r, slot %r" % (h.team, h.mode, h.slot))
 
 
 class MatchConfig:
@@ -113,6 +156,8 @@ class MatchConfig:
         self.human_team = 0
         self.auto_switch = False
         self.human_slot = -1                # SINGLE control: the line-up slot the human plays (-1 = auto: the most advanced spot)
+        self.humans = []                    # local multiplayer: [{"team", "mode", "slot", "auto_switch"}], one per person; when empty,
+                                            # control / human_team / human_slot / auto_switch describe the one human (or nobody)
         self.nets = [None, None]            # {"model": path} | {"dict": model} | None: one net for the whole team instead of its line-up
         self.net_temperature = 1.0
 
@@ -193,14 +238,12 @@ class Match:
         self.events = []
         self.log_events = False
         self.ev_log = []
-        self.controlled = None
-        self._switch_order, self._switch_idx, self._switch_last = [], 0, -10 ** 9
-        self.human_dir = 0j
-        self.human_kick = False
+        self.humans = config_humans(cfg)
+        check_humans(self.humans, cfg.team_size)
         self._build_stadium()
         self._build_players()
         self._reset_positions()
-        if cfg.control != NONE:
+        if self.humans:
             self._pick_initial_controlled()
             self._setup_kickoff_taker()
         self.ai = None
@@ -325,9 +368,10 @@ class Match:
             m.pos = m.spawn
         ax = self.attack_dir(self.kickoff_team)
         forced = None
-        if self.cfg.control != NONE and self.kickoff_team == self.cfg.human_team \
-                and self.controlled is not None and self.controlled.team == self.kickoff_team:
-            forced = self.controlled
+        for h in self.humans:                      # the first human of the kickoff team takes it
+            if h.team == self.kickoff_team and h.controlled is not None and h.controlled.team == h.team:
+                forced = h.controlled
+                break
         taker = forced if forced is not None else lst[self.rng.randi() % len(lst)]
         ang = 0.0 if forced is not None else clamp(self.rng.randfn(0.0, 0.55), -0.95, 0.95)
         self.kickoff_dir = rotated(complex(ax, 0.0), ang)
@@ -336,89 +380,123 @@ class Match:
         self.kickoff_go = self.tick + self.rng.randi_range(6, 28)
 
     def _pick_initial_controlled(self):
-        """SINGLE: the slot the page picked, else the most advanced formation spot; TEAM: the player nearest the centre."""
-        lst = self.team_lists[self.cfg.human_team]
-        if self.cfg.control == SINGLE:
-            if 0 <= self.cfg.human_slot < len(lst):
-                best = lst[self.cfg.human_slot]
+        """Every human's first player: SINGLE the slot asked for, else the most advanced formation spot still free; TEAM the
+        player nearest the centre. Humans who asked for a slot choose first."""
+        for h in sorted(self.humans, key=lambda h: h.slot < 0):
+            lst = self.team_lists[h.team]
+            free = [p for p in lst if p.human is None]
+            if not free:
+                continue
+            if h.mode == SINGLE:
+                if 0 <= h.slot < len(lst) and lst[h.slot].human is None:
+                    best = lst[h.slot]
+                else:
+                    best = max(free, key=lambda p: (p.home.real, p.slot))
             else:
-                best = max(lst, key=lambda p: (p.home.real, p.slot))
-        else:
-            best = min(lst, key=lambda p: abs(p.pos))
-        self.set_controlled(best)
+                best = min(free, key=lambda p: abs(p.pos))
+            self.set_controlled(best, h)
 
     # ------------------------------------------------------------ human control
 
-    def set_controlled(self, p):
-        if self.controlled is not None:
-            self.controlled.is_human = False
-            self.controlled.input_dir = 0j
-            self.controlled.input_kick = False
-        self.controlled = p
+    def human(self, h=0) -> Human:
+        """A Human by number (0 = the first) or the Human itself."""
+        return h if isinstance(h, Human) else self.humans[h]
+
+    @property
+    def controlled(self):
+        """The first human's player (None without humans): the one-human view the recorder and older callers read."""
+        return self.humans[0].controlled if self.humans else None
+
+    def set_controlled(self, p, h=0):
+        """Hands player `p` to human `h` (not one another human controls)."""
+        h = self.human(h)
+        if p is not None and p.human is not None and p.human is not h:
+            return
+        old = h.controlled
+        if old is not None:
+            old.is_human = False
+            old.human = None
+            old.input_dir = 0j
+            old.input_kick = False
+        h.controlled = p
         if p is not None:
             p.is_human = True
+            p.human = h
+            if p.uid not in h.played:
+                h.played.append(p.uid)
 
-    def set_human_input(self, d: complex, kick: bool):
-        self.human_dir = d
-        self.human_kick = kick
+    def set_human_input(self, d: complex, kick: bool, h=0):
+        if self.humans:
+            h = self.human(h)
+            h.dir = d
+            h.kick = kick
 
-    def switch_controlled(self, now=None):
-        """TEAM control mode, the Q key. The first press takes the teammate nearest to the ball; another press within
+    def switch_controlled(self, now=None, h=0):
+        """TEAM control mode, the Q key of human `h`. The first press takes the teammate nearest to the ball; another press within
         SWITCH_WINDOW of the previous one takes the next player of the same ranking (made at the first press, so it does not
         reshuffle while the players move): 2nd nearest, 3rd, ..., then back to the player you started from.
         `now` is the caller's clock in ticks (the web session counts real frames, so the window also runs during the kickoff
         intro and at fast-forward speeds); default the match tick.
-        While the human team waits to take a kickoff, the new player becomes the taker (placed behind the ball, the old taker goes
+        While the human's team waits to take a kickoff, the new player becomes the taker (placed behind the ball, the old taker goes
         back to his kickoff spot). A kick held through the switch needs a fresh press on the new player."""
-        if self.cfg.control != TEAM:
+        if not self.humans:
+            return
+        h = self.human(h)
+        if h.mode != TEAM:
             return
         now = self.tick if now is None else now
-        own_kickoff = self._human_kickoff_wait()
-        order, idx = self._switch_plan(now, own_kickoff)
-        self._switch_order, self._switch_idx, self._switch_last = order, idx, now
+        own_kickoff = self._human_kickoff_wait(h)
+        order, idx = self._switch_plan(h, now, own_kickoff)
+        h.switch_order, h.switch_idx, h.switch_last = order, idx, now
         p = order[idx] if order else None
-        if p is None or p is self.controlled:
+        if p is None or p is h.controlled:
             return
-        old = self.controlled
-        self.set_controlled(p)
-        if self.human_kick:
+        old = h.controlled
+        self.set_controlled(p, h)
+        if h.kick:
             p.kick_used = True
         if own_kickoff:
             old.pos, p.pos = old.spawn, -self.kickoff_dir * (p.radius + self.ball.radius + 2.0)
             old.vel = p.vel = 0j
             self.kickoff_taker = p
 
-    def next_switch(self, now=None):
-        """The player a Q at `now` would hand control to (None outside TEAM control or when it would change nothing): what the
-        page marks with a dashed ring. Reads the same ranking as switch_controlled without changing it."""
-        if self.cfg.control != TEAM or self.state == ENDED:
+    def next_switch(self, now=None, h=0):
+        """The player a Q of human `h` at `now` would hand control to (None outside TEAM control or when it would change nothing):
+        what the page marks with a dashed ring. Reads the same ranking as switch_controlled without changing it."""
+        if not self.humans or self.state == ENDED:
             return None
-        order, idx = self._switch_plan(self.tick if now is None else now, self._human_kickoff_wait())
+        h = self.human(h)
+        if h.mode != TEAM:
+            return None
+        order, idx = self._switch_plan(h, self.tick if now is None else now, self._human_kickoff_wait(h))
         p = order[idx] if order else None
-        return p if p is not self.controlled else None
+        return p if p is not h.controlled else None
 
-    def in_switch_window(self, now) -> bool:
-        """A Q at `now` would continue the current ranking (2nd nearest, 3rd, ...) instead of starting a new one."""
-        idx, order = self._switch_idx, self._switch_order
-        return now - self._switch_last <= SWITCH_WINDOW and 0 <= idx < len(order) and order[idx] is self.controlled
+    def in_switch_window(self, now, h=0) -> bool:
+        """A Q of human `h` at `now` would continue the current ranking (2nd nearest, 3rd, ...) instead of starting a new one."""
+        if not self.humans:
+            return False
+        h = self.human(h)
+        idx, order = h.switch_idx, h.switch_order
+        return now - h.switch_last <= SWITCH_WINDOW and 0 <= idx < len(order) and order[idx] is h.controlled
 
-    def _switch_plan(self, now, own_kickoff):
+    def _switch_plan(self, h, now, own_kickoff):
         """(ranking, index of the player a Q at `now` takes): the current ranking moved one on inside SWITCH_WINDOW, else a
-        new one (teammates by distance to the ball, the controlled player at the end)."""
-        lst = self.team_lists[self.cfg.human_team]
-        order, idx = self._switch_order, self._switch_idx
-        if not self.in_switch_window(now):
-            others = sorted((p for p in lst if p is not self.controlled), key=lambda p: abs(p.pos - self.ball.pos))
-            order = others + ([self.controlled] if self.controlled is not None else [])
+        new one (teammates nobody else controls, by distance to the ball, the controlled player at the end)."""
+        lst = [p for p in self.team_lists[h.team] if p.human is None or p.human is h]
+        order, idx = h.switch_order, h.switch_idx
+        if not self.in_switch_window(now, h):
+            others = sorted((p for p in lst if p is not h.controlled), key=lambda p: abs(p.pos - self.ball.pos))
+            order = others + ([h.controlled] if h.controlled is not None else [])
             idx = -1
         if order:
             idx = (idx + 1) % len(order)
         return order, idx
 
-    def _human_kickoff_wait(self) -> bool:
-        """The human team's kickoff, not taken yet, with the controlled player as the taker."""
-        return self.state == PLAYING and self.kickoff_active and self.kickoff_team == self.cfg.human_team \
-            and self.controlled is not None and self.kickoff_taker is self.controlled
+    def _human_kickoff_wait(self, h) -> bool:
+        """Human h's kickoff, not taken yet, with h's player as the taker."""
+        return self.state == PLAYING and self.kickoff_active and self.kickoff_team == h.team \
+            and h.controlled is not None and self.kickoff_taker is h.controlled
 
     # ------------------------------------------------------------ simulation
 
@@ -437,8 +515,8 @@ class Match:
         due = False
         for p in self.players:
             if p.is_human:
-                p.input_dir = self.human_dir
-                p.input_kick = self.human_kick
+                p.input_dir = p.human.dir
+                p.input_kick = p.human.kick
             elif p.bot and (self.tick + p.slot) % AI_PERIOD == 0:
                 due = True
         if self.ai is not None and (update or due):
@@ -446,8 +524,10 @@ class Match:
 
         if self.state == GOAL:
             self._celebrate()
-        if self.cfg.auto_switch and self.cfg.control == TEAM and self.tick % 20 == 0:
-            self._auto_switch()
+        if self.tick % 20 == 0:
+            for h in self.humans:
+                if h.auto_switch and h.mode == TEAM:
+                    self._auto_switch(h)
 
         for p in self.players:
             self._handle_kick(p)
@@ -526,15 +606,17 @@ class Match:
         if self.state != ENDED:
             self._end_match()
 
-    def _auto_switch(self):
+    def _auto_switch(self, h):
         best, best_d = None, math.inf
-        for p in self.team_lists[self.cfg.human_team]:
+        for p in self.team_lists[h.team]:
+            if p.human is not None and p.human is not h:
+                continue
             d = abs(p.pos - self.ball.pos)
             if d < best_d:
                 best_d, best = d, p
-        if best is not None and best is not self.controlled and self.controlled is not None \
-                and abs(self.controlled.pos - self.ball.pos) > best_d + 40.0:
-            self.set_controlled(best)
+        if best is not None and best is not h.controlled and h.controlled is not None \
+                and abs(h.controlled.pos - self.ball.pos) > best_d + 40.0:
+            self.set_controlled(best, h)
 
     def _handle_kick(self, p):
         if not p.input_kick:

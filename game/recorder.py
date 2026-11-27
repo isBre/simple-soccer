@@ -25,7 +25,7 @@ import secrets
 import numpy as np
 
 from soccer.ai.nets import features_team
-from soccer.match import AI_PERIOD, DIRS, NONE, PLAYING
+from soccer.match import AI_PERIOD, DIRS, PLAYING
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 VERSION = 1
@@ -129,5 +129,6 @@ class Recorder:
 
 
 def wanted(setup, m):
-    """Record this match? Only when the page asked for it and a human plays."""
-    return bool(setup.get("record")) and m.cfg.control != NONE
+    """Record this match? Only when the page asked for it and one human plays (the datasets have one controlled player; local
+    multiplayer matches are not recorded)."""
+    return bool(setup.get("record")) and len(m.humans) == 1

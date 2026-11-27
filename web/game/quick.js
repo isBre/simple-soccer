@@ -1,6 +1,8 @@
 // The Game (web/game.js has the overview): the quick match team select.
 import { $, CHEV, CONTROLS, G, btn, eloText, esc, go, leagueTeams, loadT, mount, playsText, prefs, savePrefs } from "./core.js";
 import { match, play } from "./match.js";
+import { padConnected } from "./pad.js";
+import { pickSides } from "./sides.js";
 import { menu } from "./menu.js";
 import { showReport } from "./report.js";
 import { teams } from "./teams.js";
@@ -191,7 +193,15 @@ export function teamSelect() {
     if (both.length && !both.includes(SIZES[size.get()])) size.set(SIZES.indexOf(both[both.length - 1]));
     const setup = { home: st.team[0].id, away: st.team[1].id, pitch: P[pitchIdx].id, size: SIZES[size.get()], duration: MINUTES[mins.get()] * 60,
       seed: Math.floor(Math.random() * 2147483647), human_team: 0, allow_draw: true, ...pc.human() };
-    play({ setup, rematch: true, done: (res) => showReport(res, "#/game/quick"), quit: () => go("#/game/quick") });
+    const go1 = (s, devices = null) => play({ setup: s, devices, rematch: true, done: (res) => showReport(res, "#/game/quick"), quit: () => go("#/game/quick") });
+    if (!padConnected()) return go1(setup);
+    // a controller is connected: who plays which side (web/game/sides.js, local multiplayer); one person = every device moves them
+    pickSides({ home: st.team[0], away: st.team[1], size: setup.size, control: pc.control(), onBack: () => sides[st.side].focus({ preventScroll: true }),
+      onGo: (humans, devices) => {
+        const s = { ...setup, humans, control: humans.length ? humans[0].control : "none", record: humans.length === 1 && setup.record };
+        if (!humans.length) delete s.humans;
+        go1(s, humans.length > 1 ? devices : null);
+      } });
   }
   $("#ks-go", v).onclick = start;
   $(".ks-swap", v).addEventListener("mousedown", (e) => e.preventDefault());

@@ -5,6 +5,9 @@
   live       a match played over the WebSocket (/ws/match, at 8x speed) ends with the same result as the same setup simulated
              in one go (game/api.py play): the live path and the simulation are the same match
   input      the human's keys move the controlled player
+  multiplayer three people in one live match (two on one side, one player each; one alone on the other side, whole team):
+             each person's keys move only their own player, a Q switches only the one who pressed it, the result says who played
+             whom; a shared side with whole-team control, or two people on one player, is refused
   dataset    the Lab's Dataset page API analyses that file (/api/dataset) and serves it for the replay (/api/dataset/match/<id>)
   record     a match with "record" saves the human's play (game/recorder.py): the picked slot is the one recorded, the keys become
              the right net moves, the observation can be rebuilt from the stored state (il/human_data.py), a match without it saves nothing
@@ -197,6 +200,58 @@ def main():
                 moved = max(moved, pos[1] - start[1])
         ws.send({"quit": 1})
         results.append(check("input", moved > 40, "the controlled player moved %.0f px down" % moved))
+
+        mp_setup = {"home": "cobalt", "away": "aurora", "pitch": "arena", "size": 3, "duration": 20.0, "seed": 31, "allow_draw": True,
+                    "humans": [{"team": 0, "control": "single", "player": "0"}, {"team": 0, "control": "single", "player": "1"},
+                               {"team": 1, "control": "team"}]}
+        refusals = []
+        for bad in ([{"team": 0, "control": "single"}, {"team": 0, "control": "team"}],
+                    [{"team": 1, "control": "single", "player": "2"}, {"team": 1, "control": "single", "player": "2"}]):
+            try:
+                api.config({**mp_setup, "humans": bad})
+                refusals.append(False)
+            except ValueError:
+                refusals.append(True)
+        ws = WS(port)
+        ws.send({"setup": {**mp_setup, "humans": [{"team": 0, "control": "team"}, {"team": 0, "control": "single"}]}})
+        refused_live = ws.recv()
+        ws = WS(port)
+        ws.send({"setup": mp_setup})
+        mp_meta = ws.recv()
+        uid_slot = {q["uid"]: q["slot"] for q in mp_meta["players"]}
+        start, moves, first_hu, switched, mp_res = None, [0.0, 0.0], None, None, None
+        for _ in range(3000):
+            f = ws.recv()
+            if f["k"] == "r":
+                mp_res = f["result"]
+                break
+            if f["k"] != "f":
+                break
+            if f["in"] != 0 or f["st"] != 0:
+                continue
+            first_hu = first_hu or f["hu"]
+            idx = [next(k for k, q in enumerate(mp_meta["players"]) if q["uid"] == f["hu"][h][0]) for h in (0, 1)]
+            pos = [(f["p"][2 * i], f["p"][2 * i + 1]) for i in idx]
+            if start is None:
+                start = pos
+                ws.send({"in": [0, 1, 0], "h": 1})          # person 2 goes down, person 1 only kicks (a human takes the kickoff)
+                ws.send({"in": [0, 0, 1], "h": 0})
+                ws.send({"in": [0, 0, 1], "h": 2})
+                ws.send({"switch": 1, "h": 2})              # person 3 switches
+            else:
+                moves = [max(moves[k], abs(pos[k][1] - start[k][1])) for k in (0, 1)]
+                if switched is None and f["hu"][2][0] != first_hu[2][0]:
+                    switched = (f["hu"][0][0], f["hu"][1][0])
+                if moves[1] > 40 and switched:
+                    ws.send({"speed": 8})
+        ws.send({"quit": 1})
+        ok = (all(refusals) and refused_live.get("k") == "e" and len(mp_meta.get("humans", [])) == 3
+              and [uid_slot[first_hu[h][0]] for h in (0, 1)] == [0, 1] and uid_slot[first_hu[2][0]] >= 0 and first_hu[2][0] >= 16
+              and moves[1] > 40 and moves[0] < 15 and switched == (first_hu[0][0], first_hu[1][0])
+              and mp_res is not None and [h["played"] for h in mp_res["humans"][:2]] == [[first_hu[0][0]], [first_hu[1][0]]]
+              and len(mp_res["humans"][2]["played"]) >= 2)
+        results.append(check("multiplayer", ok, "P2 moved %.0f px, P1 %.0f px, P3 switched %s, played %s, refused %d + live" % (
+            moves[1], moves[0], "yes" if switched else "no", mp_res and [h["played"] for h in mp_res["humans"]], sum(refusals))))
 
         from il import human_data
         unrecorded = len(human_data.files(rec_dir))          # the matches above did not ask for recording

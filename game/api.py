@@ -3,7 +3,9 @@ from the page's choices, and whole matches simulated in parallel (tournament rou
 
 A "setup" is the page's description of one match: {"home", "away", "pitch", "size", "duration", "seed", "control"
 ("none" | "single" | "team"), "human_team", "player" (single control: the line-up slot 0..size-1 to play, "" = auto),
-"allow_draw" (False: golden-goal overtime), "record" (save the human's play, game/recorder.py)}. Teams have no tactic or formation:
+"allow_draw" (False: golden-goal overtime), "record" (save the human's play, game/recorder.py), "humans" (local multiplayer: a list
+of {"team": 0 | 1, "control": "single" | "team", "player": slot or ""}, one per person, in the order of their inputs; it replaces
+control / human_team / player; a side with two or more people plays "single" only, each on a player of their own)}. Teams have no tactic or formation:
 every team takes the same kickoff spots for a size and every player plays its own style."""
 import json
 import math
@@ -372,8 +374,26 @@ def config(setup):
     c.human_team = 1 if int(setup.get("human_team", 0)) == 1 else 0
     slot = str(setup.get("player", "")).strip()
     c.human_slot = int(slot) if slot.isdigit() and int(slot) < size else -1
+    c.humans = humans(setup.get("humans"), size)
+    if c.humans:                                     # the first person also fills the one-human fields (recorder, older pages)
+        c.control, c.human_team, c.human_slot = c.humans[0]["mode"], c.humans[0]["team"], c.humans[0]["slot"]
     c.allow_draw = bool(setup.get("allow_draw", True))
     return c
+
+
+def humans(lst, size):
+    """The "humans" of a setup as MatchConfig.humans; ValueError if they break the rules of local multiplayer (soccer/match.py
+    check_humans: a side with two or more people plays one player each, never the same one)."""
+    out = []
+    for h in lst or []:
+        mode = CONTROL.get(str(h.get("control", "single")), sm.SINGLE)
+        if mode == sm.NONE:
+            raise ValueError("a person in the match controls one player or the whole team")
+        slot = str(h.get("player", "")).strip()
+        out.append({"team": 1 if int(h.get("team", 0)) == 1 else 0, "mode": mode,
+                    "slot": int(slot) if slot.isdigit() and int(slot) < size else -1, "auto_switch": False})
+    sm.check_humans([sm.Human(h["team"], h["mode"], h["slot"]) for h in out], size)
+    return out
 
 
 def play(setup):

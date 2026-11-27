@@ -1,6 +1,6 @@
 // The Game (web/game.js has the overview): drawing the match on the canvas (camera, pitch, players, scorebug, goal banner, sounds).
 import { $, G } from "./core.js";
-import { match, play, syncOverlay } from "./match.js";
+import { HUMAN_COLORS, match, play, syncOverlay } from "./match.js";
 import { drawPuzzleHud } from "./puzzle.js";
 
 // the camera uses the whole window (no HUD strip); TOP = just below the scorebug (the off-screen marker stays under it)
@@ -157,7 +157,7 @@ export function drawMatch(M, ts) {
   drawPlayers(ctx, M, m, a, b, L, f);
   drawNets(ctx, m);
   ctx.restore();
-  if (M.me) drawOffscreen(ctx, M, m, [centre[0] + (M.me.x - cam[0]) * zoom, centre[1] + (M.me.y - cam[1]) * zoom], W, H);
+  for (const me of M.mes) drawOffscreen(ctx, M, m, [centre[0] + (me.x - cam[0]) * zoom, centre[1] + (me.y - cam[1]) * zoom], W, H, me);
   drawHud(ctx, M, m, f, W, H, intro);
   syncOverlay(M, f);
 }
@@ -198,15 +198,25 @@ export function drawNets(ctx, m) {                                   // nets in 
   }
 }
 const ME = "rgba(222,226,232,0.6)", ME_SOLID = "#dee2e8";        // the controlled player's ring and off-screen badge
+// local multiplayer (more than one person): every person's player has a ring and a "P1" / "P2" label in that person's colour
+const multi = (m) => (m.humans || []).length > 1;
 export function drawPlayers(ctx, M, m, a, b, L, f) {
-  M.me = null;
+  M.mes = [];
+  const many = multi(m), hu = f.hu || [];
   m.players.forEach((pl, i) => {
     if (2 * i + 1 >= b.p.length) return;
     const x = L(a.p[2 * i], b.p[2 * i]), y = L(a.p[2 * i + 1], b.p[2 * i + 1]), r = pl.r, fl = b.h[i] || 0, kit = m.teams[pl.team];
-    if (fl & 1) {                                             // you: a translucent light grey ring around the player (off screen: drawOffscreen)
-      M.me = { x, y, pl };
+    const who = many ? hu.findIndex((q) => q[0] === pl.uid) : -1, next = many ? hu.findIndex((q) => q[1] === pl.uid) : -1;
+    if (many && who >= 0) {                                   // a person's player: a ring in their colour, the label above (drawLabels)
+      M.mes.push({ x, y, pl, col: HUMAN_COLORS[who % 4], label: "P" + (who + 1) });
+      ctx.beginPath(); ctx.arc(x, y, r + 6, 0, 2 * Math.PI); ctx.lineWidth = 3.5; ctx.strokeStyle = HUMAN_COLORS[who % 4]; ctx.stroke();
+    } else if (many && next >= 0 && f.st !== 2) {             // who that person's next Q picks: a dashed ring in their colour
+      ctx.save(); ctx.setLineDash([4, 4]); ctx.beginPath(); ctx.arc(x, y, r + 5, 0, 2 * Math.PI);
+      ctx.globalAlpha = hu[next][2] ? 0.9 : 0.6; ctx.lineWidth = 1.5; ctx.strokeStyle = HUMAN_COLORS[next % 4]; ctx.stroke(); ctx.restore();
+    } else if (!many && fl & 1) {                             // you: a translucent light grey ring around the player (off screen: drawOffscreen)
+      M.mes.push({ x, y, pl, col: ME_SOLID });
       ctx.beginPath(); ctx.arc(x, y, r + 6, 0, 2 * Math.PI); ctx.lineWidth = 3; ctx.strokeStyle = ME; ctx.stroke();
-    } else if (pl.uid === f.nx && f.st !== 2) {               // who the next Q picks: a thin dashed ring, a bit brighter inside the 1 s window
+    } else if (!many && pl.uid === f.nx && f.st !== 2) {      // who the next Q picks: a thin dashed ring, a bit brighter inside the 1 s window
       ctx.save(); ctx.setLineDash([4, 4]); ctx.beginPath(); ctx.arc(x, y, r + 5, 0, 2 * Math.PI);
       ctx.lineWidth = 1; ctx.strokeStyle = f.nw ? "rgba(255,255,255,0.7)" : "rgba(255,255,255,0.45)"; ctx.stroke(); ctx.restore();
     }
@@ -228,12 +238,18 @@ export function drawPlayers(ctx, M, m, a, b, L, f) {
       ctx.fillStyle = Draw.css(pal[j % 3], Math.max(0, Math.min(1, 1 - age / 110))); ctx.fill();
     }
   }
+  for (const me of M.mes) if (me.label) {                    // "P1" / "P2" over each person's player
+    ctx.font = FONT(11, 800); const w = ctx.measureText(me.label).width + 10, ly = me.y - me.pl.r - 24;
+    roundRect(ctx, me.x - w / 2, ly, w, 15, 7.5, me.col);
+    text(ctx, me.label, me.x - w / 2, ly + 11.5, "c", w, 11, "#12161d", 0, "", 800);
+  }
   const bx = L(a.b[0], b.b[0]), by = L(a.b[1], b.b[1]), br = m.ball_r;
   ctx.beginPath(); ctx.arc(bx, by, br, 0, 2 * Math.PI); ctx.fillStyle = "#fff"; ctx.fill();
   ctx.beginPath(); ctx.arc(bx, by, br - 1, 0, 2 * Math.PI); ctx.lineWidth = 2; ctx.strokeStyle = "#000"; ctx.stroke();
 }
 // you cannot be seen (off screen, on its very edge, or under the scorebug): an arrow on the window edge pointing at you, with your number
-export function drawOffscreen(ctx, M, m, sp, W, H) {
+export function drawOffscreen(ctx, M, m, sp, W, H, me) {
+  const col = me.col;
   const pad = 30, top = TOP + 10, e = 12, b = M.bug, c = M.pzCard;
   const under = (q) => q && sp[0] > q.x - 14 && sp[0] < q.x + q.w + 14 && sp[1] < q.y + q.h + 14;
   if (sp[0] >= e && sp[0] <= W - e && sp[1] >= e && sp[1] <= H - e && !under(b) && !under(c)) return;
@@ -241,11 +257,11 @@ export function drawOffscreen(ctx, M, m, sp, W, H) {
   const k = Math.min(Math.abs((W / 2 - pad) / (dx || 1e-6)), Math.abs((H / 2 - pad) / (dy || 1e-6)));
   const x = cx + dx * k, y = Math.max(c && x > c.x - 30 ? c.y + c.h + 27 : top, cy + dy * k), ang = Math.atan2(dy, dx);
   ctx.save(); ctx.translate(x, y);
-  ctx.beginPath(); ctx.arc(0, 0, 17, 0, 2 * Math.PI); ctx.fillStyle = "rgba(11,14,19,0.85)"; ctx.fill(); ctx.lineWidth = 2.5; ctx.strokeStyle = ME_SOLID; ctx.stroke();
+  ctx.beginPath(); ctx.arc(0, 0, 17, 0, 2 * Math.PI); ctx.fillStyle = "rgba(11,14,19,0.85)"; ctx.fill(); ctx.lineWidth = 2.5; ctx.strokeStyle = col; ctx.stroke();
   ctx.rotate(ang);
-  ctx.beginPath(); ctx.moveTo(27, 0); ctx.lineTo(18, -8); ctx.lineTo(18, 8); ctx.closePath(); ctx.fillStyle = ME_SOLID; ctx.fill();
+  ctx.beginPath(); ctx.moveTo(27, 0); ctx.lineTo(18, -8); ctx.lineTo(18, 8); ctx.closePath(); ctx.fillStyle = col; ctx.fill();
   ctx.restore();
-  text(ctx, String(M.me.pl.number), x - 17, y + 5.5, "c", 34, 15, ME_SOLID, 0, "", 700);
+  text(ctx, me.label || String(me.pl.number), x - 17, y + 5.5, "c", 34, me.label ? 13 : 15, col, 0, "", 700);
 }
 export function roundRect(ctx, x, y, w, h, r, fill) { ctx.beginPath(); ctx.roundRect(x, y, w, h, r); ctx.fillStyle = fill; ctx.fill(); }
 // the TV scorebug, top left: crest CODE | score | CODE crest | clock

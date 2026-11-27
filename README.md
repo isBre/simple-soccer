@@ -37,7 +37,23 @@ Goals from different pitches, sizes and teams (all AI vs AI):
 | ![Big 4v4](docs/screenshots/big_4v4.gif)<br>**Big pitch 4v4**: Arrows vs Bulls | ![Pillars 5v5](docs/screenshots/pillars_5v5.gif)<br>**Big with pillars 5v5**: Rose vs Tide |
 
 ## Controls
-Arrows/WASD move, X/Space kick, Q switch player (Team mode), T sim speed (x1 / x2 / x4 / x8), Esc/P pause, M (while paused) quit the match, Enter continue after the final whistle. Main menu: Up / Down and Enter. On the team select (Quick match): Tab or a click picks the side, Left / Right its team, Up / Down its league, S swaps the teams, R random teams, Enter kicks off, Esc back to the menu. In the other menus: Left / Right change a focused picker, Enter starts, Esc goes back.
+Arrows/WASD move, X/Space kick, Q switch player (Team mode; a controller: left stick, A / X / RT kick, LB / RB switch, Start pause; more people: "Local multiplayer"), T sim speed (x1 / x2 / x4 / x8), Esc/P pause, M (while paused) quit the match, Enter continue after the final whistle. Main menu: Up / Down and Enter. On the team select (Quick match): Tab or a click picks the side, Left / Right its team, Up / Down its league, S swaps the teams, R random teams, Enter kicks off, Esc back to the menu. In the other menus: Left / Right change a focused picker, Enter starts, Esc goes back.
+
+## Local multiplayer
+Several people on one computer, each with their own device: the keyboard and every connected controller (Xbox or any "standard"
+controller). With a controller connected, **Kick off** on the Quick match opens **Who plays where**: every device is a card that
+moves to the home side, the middle (not playing) or the away side with its own Left / Right, and Up / Down picks what it controls
+there: **Whole team** (switch with Q / LB / RB), **Any player** (the most advanced spot still free) or one player of the line-up.
+- **Against each other** (one person per side): each may control the whole team or one player.
+- **On the same side**: each controls **one player for the whole match**, never the same one, and nobody switches; the AI plays the
+  rest of the team. The first person of a side takes its kickoffs.
+- Nobody on a side: watch. One person: every device moves them, as without the picker. The places are remembered in the browser.
+- In the match every device moves only its own person's player, marked with a ring and a **P1** / **P2** / ... label in that person's
+  colour (off screen: an arrow on the window edge). Anyone can pause; the pause card says who plays what. A controller of the
+  match that disconnects pauses it until it is back. Multiplayer matches are not recorded (the datasets have one player).
+- Engine: `soccer/match.py` `Human` (one per person: side, mode, slot, controlled player, keys, Q ranking) and `check_humans` (the
+  rules above); the setup's `"humans"` list (`game/api.py`), `"h"` on the inputs (`game/session.py`), `web/game/sides.js` (the
+  picker), `web/game/pad.js` / `match.js` (one input per device). Tournaments and the Puzzle are one person.
 
 ## Players, teams and kickoff
 A **player** (`data/players/<id>.json`, `soccer/players.py`) is a brain with a name: a rule-based style with a skill (0-100), or a
@@ -200,7 +216,8 @@ Physics is identical for every player. Skill and style only change AI behaviour.
 - Kickoff spots: `data/formations.json` (`defaults`: one layout per size, the same for every team), slots `[line, fx, fy]`. The line (GK / DEF / MID / FWD) is read only by the rule-based AI (it gives the deepest spot a head start as goal guard, by the player's own style); the match itself has no roles and teams have no tactics: the brain that coordinates a team's rule-based players takes its settings from those players (`Style.blend`).
 
 ## How the browser plays a match (`game/session.py`)
-The page opens a WebSocket (`/ws/match`) and sends the match setup (teams, pitch, size, length, seed, control).
+The page opens a WebSocket (`/ws/match`) and sends the match setup (teams, pitch, size, length, seed, control, or the people of a
+local multiplayer match).
 The server builds the match on the core and plays it in real time: 60 ticks a second, each one sent to the page (positions,
 score, clock, goal and kickoff state, goal events); the page sends the keys back when they change. At every kickoff the
 match is held for 130 ticks while the camera zooms in, as in the Godot game. After the final whistle the server sends the
@@ -269,7 +286,7 @@ history before the move of the AI to Python.
 **Raspberry Pi notes:** `rl/README.md` (setup, `--w_jitter` anti-twitch reward); the Lab's Live page plays the newest checkpoint of the running experiment (`lab/live.py`).
 
 ## Team control mode
-`MatchConfig.ControlMode.TEAM`: Q switches to the teammate nearest the ball; `auto_switch` does it automatically (`soccer/match.py` `set_controlled` / `switch_controlled`).
+`MatchConfig.ControlMode.TEAM`: Q switches to the teammate nearest the ball; `auto_switch` does it automatically (`soccer/match.py` `set_controlled` / `switch_controlled`, per person: see "Local multiplayer").
 
 ## Not included (by design)
 Fatigue, fouls, offside, substitutions.
@@ -284,8 +301,8 @@ recoveries, dribbles and blocked shots per player (`soccer/stats.py`).
 
 ## Human control and keeper (AI notes)
 
-- A human-controlled player is never picked as goal guard, chaser or marker by the team brain; bots give him room
-  (`StyleBot._avoid_human`) and do not send a second chaser at the ball when he is on it.
+- A human-controlled player is never picked as goal guard, chaser or marker by the team brain; bots give every human teammate room
+  (`StyleBot._avoid_human`, the view's `human_mates`) and do not send a second chaser at the ball when one of them is on it.
 - The keeper reads the shot path and runs to the earliest point he can reach (slow acceleration is modelled),
   comes out to narrow the angle (`KEEP_*` in `soccer/ai/rules.py`), and only charges a loose ball when he wins the race to it.
 

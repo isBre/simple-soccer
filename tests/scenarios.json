@@ -220,6 +220,72 @@
    "auto_switch": true
   },
   {
+   "name": "humans_coop",
+   "home": "tide",
+   "away": "granite",
+   "pitch": "arena",
+   "size": 3,
+   "duration": 60,
+   "seed": 25,
+   "humans": [
+    {
+     "team": 0,
+     "mode": 1,
+     "slot": -1
+    },
+    {
+     "team": 0,
+     "mode": 1,
+     "slot": -1
+    }
+   ]
+  },
+  {
+   "name": "humans_versus",
+   "home": "lime",
+   "away": "aurora",
+   "pitch": "arena",
+   "size": 5,
+   "duration": 60,
+   "seed": 26,
+   "humans": [
+    {
+     "team": 0,
+     "mode": 2
+    },
+    {
+     "team": 1,
+     "mode": 2
+    }
+   ]
+  },
+  {
+   "name": "humans_2v1",
+   "home": "rose",
+   "away": "fern",
+   "pitch": "arena",
+   "size": 4,
+   "duration": 50,
+   "seed": 27,
+   "humans": [
+    {
+     "team": 0,
+     "mode": 1,
+     "slot": 2
+    },
+    {
+     "team": 0,
+     "mode": 1,
+     "slot": -1
+    },
+    {
+     "team": 1,
+     "mode": 2,
+     "auto_switch": true
+    }
+   ]
+  },
+  {
    "name": "golden_goal",
    "home": "granite",
    "away": "scorpions",

@@ -482,3 +482,32 @@ body[data-area="game"] .snd { display: flex; gap: 4px; }
 .elo-sizes { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 4px; font-size: 14px; color: var(--g-text); }   /* Elo per team size */
 .elo-sz small { color: var(--g-muted); font-size: 12px; margin: 0 3px; }
 .elo-sz b { font-weight: 650; }
+
+/* local multiplayer: who plays where (web/game/sides.js) */
+.sd { font-size: 15px; padding: 16px; }
+.sd-box { width: min(980px, 100%); max-height: 100%; overflow: auto; background: var(--g-bg); border-radius: 16px; padding: 22px 24px;
+  display: flex; flex-direction: column; gap: 16px; text-align: left; box-shadow: 0 20px 60px rgba(0, 0, 0, .5); }
+.sd-title { font-size: 22px; font-weight: 800; }
+.sd-cols { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
+.sd-col { background: var(--g-panel); border-radius: 12px; padding: 12px; display: flex; flex-direction: column; gap: 10px; min-height: 220px; }
+.sd-col.mid { background: var(--g-alt); }
+.sd-team { display: flex; align-items: center; gap: 10px; min-height: 48px; }
+.sd-crest { width: 44px; height: 44px; flex: none; }
+.sd-name { font-weight: 800; font-size: 16px; }
+.sd-role { color: var(--g-muted); font-size: 12.5px; }
+.sd-card { background: var(--g-panel2); border-radius: 10px; padding: 10px 10px 10px 14px; border-left: 4px solid var(--hc); display: flex; flex-direction: column; gap: 8px; }
+.sd-card.no { animation: sd-no .35s; }
+@keyframes sd-no { 25% { transform: translateX(-6px); } 75% { transform: translateX(6px); } }
+.sd-dev { display: flex; align-items: center; gap: 8px; }
+.sd-dev b { color: var(--hc); font-weight: 800; min-width: 22px; }
+.sd-pick { display: flex; align-items: center; gap: 6px; }
+.sd-pick button { background: var(--g-panel3); color: var(--g-text); border: 0; border-radius: 7px; height: 30px; font: inherit; cursor: pointer; }
+.sd-pick button:disabled { opacity: .35; cursor: default; }
+.sd-a { width: 30px; font-size: 18px !important; line-height: 1; }
+.sd-what { flex: 1; min-width: 0; padding: 0 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 600; }
+.sd-keys { display: flex; flex-wrap: wrap; gap: 6px 16px; color: var(--g-muted); font-size: 13px; }
+.sd-note { flex-basis: 100%; }
+.sd-btns { display: flex; justify-content: flex-end; gap: 10px; }
+.mo-who b { margin-right: 4px; }
+@media (max-width: 640px) { .sd-cols { grid-template-columns: 1fr; } .sd-col { min-height: 0; } }
+.sd-keys kbd { font: inherit; font-size: 11px; font-weight: 600; padding: 1px 6px; border-radius: 4px; background: var(--g-panel2); border: 1px solid var(--g-line); color: var(--g-text); }

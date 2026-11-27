@@ -1,7 +1,8 @@
 """The match core (soccer/) against stored matches (tests/golden/match_<name>.json).
 
 Plays every match of tests/scenarios.json (all sizes, every pitch plus one with extra walls, net teams, mixed line-ups of
-rule, Opus and net players, a net that does not fit the size, a scripted human in single and team control, golden-goal
+rule, Opus and net players, a net that does not fit the size, a scripted human in single and team control, several humans
+(co-op, versus, 2v1), golden-goal
 overtime, score limit) with the real AI and compares: the score, ball position and ball speed every second (so a FAIL says
 when the match started to differ) and the complete result (events, team and player statistics).
 
@@ -29,6 +30,7 @@ def build(sc_def, pitches):
     cfg.control = int(sc_def.get("control", 0))
     cfg.human_team = int(sc_def.get("human_team", 0))
     cfg.auto_switch = bool(sc_def.get("auto_switch", False))
+    cfg.humans = list(sc_def.get("humans", []))                  # local multiplayer: several humans
     cfg.allow_draw = bool(sc_def.get("allow_draw", True))
     cfg.score_limit = int(sc_def.get("score_limit", 0))
     cfg.net_temperature = float(sc_def.get("temperature", 1.0))
@@ -38,17 +40,25 @@ def build(sc_def, pitches):
 
 
 def scripted_human(m):
-    """The human's keys, a fixed function of the tick: a new direction every 40 ticks, a short kick every 37."""
-    m.set_human_input(cmath.exp(1j * ((m.tick // 40) * 2.399963)), m.tick % 37 < 3)
-    if m.cfg.control == 2 and not m.cfg.auto_switch and m.tick % 240 == 0:
-        m.switch_controlled()
+    """The human's keys, a fixed function of the tick: a new direction every 40 ticks, a short kick every 37 (Q every 240 in team
+    control). Several humans (local multiplayer): human k is the same script shifted by k * 13 ticks."""
+    if not m.cfg.humans:
+        m.set_human_input(cmath.exp(1j * ((m.tick // 40) * 2.399963)), m.tick % 37 < 3)
+        if m.cfg.control == 2 and not m.cfg.auto_switch and m.tick % 240 == 0:
+            m.switch_controlled()
+        return
+    for k, h in enumerate(m.humans):
+        t = m.tick + 13 * k
+        m.set_human_input(cmath.exp(1j * ((t // 40) * 2.399963 + k)), t % 37 < 3, k)
+        if h.mode == 2 and not h.auto_switch and t % 240 == 0:
+            m.switch_controlled(None, k)
 
 
 def play(sc_def, pitches):
     m = build(sc_def, pitches)
     trace = []
     while m.state != ENDED and m.tick < MAX_TICKS:
-        if m.cfg.control:
+        if m.humans:
             scripted_human(m)
         m.step()
         if m.tick % 60 == 0:

@@ -89,8 +89,8 @@ class View:
         self.kickoff_go = m.kickoff_go if m.kickoff_team == t else None     # only the taker's own team knows when it kicks
         self.last_touch = self.bodies[m.last_touch.uid] if m.last_touch is not None else None
         self.last_touch_tick = m.last_touch_tick
-        h = m.controlled
-        self.controlled = self.bodies[h.uid] if h is not None and h.team == t else None
+        self.human_mates = [self.bodies[h.controlled.uid] for h in m.humans if h.controlled is not None and h.controlled.team == t]
+        self.controlled = self.human_mates[0] if self.human_mates else None      # own team only: the players people control (local multiplayer)
         self._ball_hist, self._pos_hist, self._hist_idx = m.ball_hist, m.pos_hist, m.hist_idx   # the public history (recorded by the match)
         return self
 

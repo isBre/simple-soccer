@@ -16,14 +16,20 @@ export function stopMatch() {
   try { M.ws.close(); } catch (e) {}
   G.match = null;
 }
+// Who plays with what. p.devices (local multiplayer, web/game/sides.js): one device per person of setup.humans, in order, "kb" or
+// "pad:<index>" (the Gamepad API index); each device moves only its own person. Without it every device moves the one human.
+export const humanOf = (M, dev) => (M.p.devices ? M.p.devices.indexOf(dev) : 0);
+export const devOfEvent = (e) => (e && e.padIndex != null ? "pad:" + e.padIndex : "kb");
+export const devName = (dev) => (dev === "kb" ? "Keyboard" : "Controller " + (Number(dev.slice(4)) + 1));
+export const HUMAN_COLORS = ["#4fc3f7", "#ffb74d", "#aed581", "#f48fb1"];   // P1, P2, P3, P4: rings, labels, the side picker
 export const KEYS = { ArrowLeft: [-1, 0], KeyA: [-1, 0], ArrowRight: [1, 0], KeyD: [1, 0], ArrowUp: [0, -1], KeyW: [0, -1], ArrowDown: [0, 1], KeyS: [0, 1] };
 export function match(p) {
   document.body.classList.add("g-playing");
   Music.stop(1.2); Sound.unlock();
   const v = mount('<div class="g-match"><canvas></canvas></div>');
   const cv = $("canvas", v);
-  const M = G.match = { p, cv, ws: null, meta: null, frames: [], held: new Set(), sentIn: "", paused: false, speed: 1, result: null, error: "", stopped: false,
-    cam: null, parts: [], goal: null, lastStep: 0, partAcc: 0, raf: 0, ended: false };
+  const M = G.match = { p, cv, ws: null, meta: null, frames: [], held: new Set(), pads: {}, sentIn: [], paused: false, speed: 1, result: null, error: "", stopped: false,
+    cam: null, parts: [], mes: [], goal: null, lastStep: 0, partAcc: 0, raf: 0, ended: false };
   M.ws = new WebSocket((location.protocol === "https:" ? "wss://" : "ws://") + location.host + "/ws/match");
   M.ws.onopen = () => M.ws.send(JSON.stringify({ setup: p.setup, puzzle: p.puzzle ?? null }));
   M.ws.onmessage = (e) => {
@@ -41,28 +47,39 @@ export function match(p) {
     else if (d.k === "e") M.error = d.error;
   };
   M.ws.onclose = () => { if (!M.result && !M.stopped && !M.error) M.error = "the connection to the game server closed"; };
-  M.onBlur = () => { M.held.clear(); M.stick = null; M.padKick = false; sendInput(M); };
+  M.onBlur = () => { M.held.clear(); M.pads = {}; sendAll(M); };
   window.addEventListener("blur", M.onBlur);
   G.keyHandler = (e, down) => onKey(M, e, down);
   const loop = (ts) => { if (M.stopped) return; M.raf = requestAnimationFrame(loop); drawMatch(M, ts); };
   M.raf = requestAnimationFrame(loop);
 }
 export function wsSend(M, obj) { try { if (M.ws.readyState === 1) M.ws.send(JSON.stringify(obj)); } catch (e) {} }
-export function sendInput(M) {
-  let dx = 0, dy = 0;
-  for (const k of M.held) if (KEYS[k]) { dx += KEYS[k][0]; dy += KEYS[k][1]; }
-  dx = Math.sign(dx); dy = Math.sign(dy);
-  if (!dx && !dy && M.stick) [dx, dy] = M.stick;   // the controller's stick (web/game/pad.js) when no key is held
-  const kick = M.held.has("KeyX") || M.held.has("Space") || M.padKick ? 1 : 0;
+// the keys of person h (default the one human): the keyboard's arrows / WASD first, else a controller's stick (web/game/pad.js sets
+// M.pads[index] = {stick, kick}); sent only when they change
+export function sendInput(M, h = 0) {
+  if (h < 0) return;
+  const mine = (dev) => !M.p.devices || M.p.devices[h] === dev;
+  let dx = 0, dy = 0, kick = 0;
+  if (mine("kb")) {
+    for (const k of M.held) if (KEYS[k]) { dx += KEYS[k][0]; dy += KEYS[k][1]; }
+    dx = Math.sign(dx); dy = Math.sign(dy);
+    if (M.held.has("KeyX") || M.held.has("Space")) kick = 1;
+  }
+  for (const [i, q] of Object.entries(M.pads)) {
+    if (!mine("pad:" + i)) continue;
+    if (!dx && !dy && q.stick) [dx, dy] = q.stick;
+    if (q.kick) kick = 1;
+  }
   const s = `${dx},${dy},${kick}`;
-  if (s !== M.sentIn) { M.sentIn = s; wsSend(M, { in: [dx, dy, kick] }); }
+  if (s !== M.sentIn[h]) { M.sentIn[h] = s; wsSend(M, M.p.devices ? { in: [dx, dy, kick], h } : { in: [dx, dy, kick] }); }
 }
+export function sendAll(M) { for (let h = 0; h < (M.p.devices ? M.p.devices.length : 1); h++) sendInput(M, h); }
 export function onKey(M, e, down) {
   const c = e.code;
   if (KEYS[c] || c === "KeyX" || c === "Space") {
     e.preventDefault();
     if (down) M.held.add(c); else M.held.delete(c);
-    sendInput(M); return;
+    sendInput(M, humanOf(M, "kb")); return;
   }
   if (!down || e.repeat) return;
   const f = M.frames[M.frames.length - 1], ended = f && f.st === 2 && !M.p.session, ok = c === "Enter" || c === "NumpadEnter";
@@ -72,7 +89,7 @@ export function onKey(M, e, down) {
   else if (M.paused && c === "KeyM") act(M, "quit");
   else if (M.paused && c === "KeyR" && !M.p.session) act(M, "restart");
   else if (c === "KeyT") { M.speed = M.speed === 1 ? 2 : M.speed === 2 ? 4 : M.speed === 4 ? 8 : 1; wsSend(M, { speed: M.speed }); }
-  else if (c === "KeyQ") wsSend(M, { switch: 1 });
+  else if (c === "KeyQ") { const h = humanOf(M, devOfEvent(e)); if (h >= 0) wsSend(M, M.p.devices ? { switch: 1, h } : { switch: 1 }); }
   else if (c === "KeyN") { Sound.unlock(); M.toast = { text: Sound.toggle() ? "Sound on" : "Sound off", at: performance.now() }; }
 }
 // what a key or a card button does: pause / resume, restart (same teams, new seed), quit, the report after the final whistle
@@ -97,15 +114,17 @@ export function syncOverlay(M, f) {
   const ov = M.ov, m = M.meta;
   ov.hidden = false;
   const k = (x) => `<kbd>${x}</kbd>`;
+  const sw = m.control === 2 || (m.humans || []).some((h) => h.mode === 2);
+  const who = M.p.devices ? `<div class="mo-keys mo-who">${M.p.devices.map((d, i) => `<span><b style="color:${HUMAN_COLORS[i % 4]}">P${i + 1}</b> ${devName(d)} · ${esc(m.teams[m.humans[i].team].name)} · ${m.humans[i].mode === 2 ? "whole team" : "one player"}</span>`).join("")}</div>` : "";
   if (kind === "error") ov.innerHTML = `<div class="mo-card"><div class="mo-k">The match stopped</div><p class="mo-msg">${esc(M.error)}</p>
     <div class="mo-btns"><button type="button" class="ks-go" data-act="quit">Back ${k("Enter")}</button></div></div>`;
   else if (kind === "pause") ov.innerHTML = `<div class="mo-card"><div class="mo-k">Paused · ${f.ot ? "overtime " + clockText(f.ots) : clockText(f.tl) + " left"}</div>
     <div class="mo-sc small">${esc(m.teams[0].name)} <b>${f.sc[0]} – ${f.sc[1]}</b> ${esc(m.teams[1].name)}</div>
     <div class="mo-btns col"><button type="button" class="ks-go" data-act="pause">Resume ${k("Esc")}</button>
       ${M.p.session ? "" : `<button type="button" class="ks-btn2" data-act="restart">Restart ${k("R")}</button>`}<button type="button" class="ks-btn2" data-act="quit">Quit the match ${k("M")}</button></div>
-    <div class="mo-keys"><span>${k("WASD")} ${k("↑↓←→")} move</span><span>${k("Space")} ${k("X")} kick</span>${m.control === 2 ? `<span>${k("Q")} switch player (tap again: next)</span>` : ""}<span>${k("T")} speed</span><span>${k("N")} sound ${Sound.on ? "on" : "off"}</span></div>
-    ${padConnected() ? `<div class="mo-keys"><span>Controller:</span><span>${k("L")} move</span><span>${k("A")} ${k("X")} ${k("RT")} kick</span>${m.control === 2 ? `<span>${k("LB")} ${k("RB")} switch</span>` : ""}<span>${k("☰")} pause</span><span>${k("⧉")} speed</span></div>
-    <div class="mo-keys"><span>Paused:</span><span>${k("A")} resume</span>${M.p.session ? "" : `<span>${k("Y")} restart</span>`}<span>${k("⧉")} quit</span></div>` : ""}</div>`;
+    <div class="mo-keys"><span>${k("WASD")} ${k("↑↓←→")} move</span><span>${k("Space")} ${k("X")} kick</span>${sw ? `<span>${k("Q")} switch player (tap again: next)</span>` : ""}<span>${k("T")} speed</span><span>${k("N")} sound ${Sound.on ? "on" : "off"}</span></div>
+    ${padConnected() ? `<div class="mo-keys"><span>Controller:</span><span>${k("L")} move</span><span>${k("A")} ${k("X")} ${k("RT")} kick</span>${sw ? `<span>${k("LB")} ${k("RB")} switch</span>` : ""}<span>${k("☰")} pause</span><span>${k("⧉")} speed</span></div>
+    <div class="mo-keys"><span>Paused:</span><span>${k("A")} resume</span>${M.p.session ? "" : `<span>${k("Y")} restart</span>`}<span>${k("⧉")} quit</span></div>` : ""}${who}</div>`;
   else {
     const res = M.result, w = f.w, ev = res ? res.events : [];
     const verdict = w === -1 ? "Draw" : `${esc(m.teams[w].name)} win${res?.overtime ? " with a golden goal" : ""}`;

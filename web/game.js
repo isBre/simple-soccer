@@ -1,6 +1,7 @@
 // The Game area: Simple Soccer in the browser. The pages are those of the Godot game (main menu, quick match, teams and players,
 // tournaments, match report) and the match itself is played by the Python match core on the server: game/session.py streams
-// every tick over a WebSocket, this page draws it and sends the keyboard (or a controller, game/pad.js) back.
+// every tick over a WebSocket, this page draws it and sends the keyboard (or a controller, game/pad.js) back. Local multiplayer:
+// the quick match asks who plays where (game/sides.js) when a controller is connected; each device then moves its own person.
 // Routes: #/game · #/game/quick · #/game/puzzle · #/game/teams[/<id>] · #/game/players[/<id>] · #/game/build[/<team id>[/copy]]
 //         · #/game/rankings[/<size>]
 //         · #/game/tournament/new · #/game/tournament · #/game/match · #/game/report

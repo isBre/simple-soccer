@@ -7,17 +7,20 @@
 //   match:  left stick / D-pad = move, A / X / RT = kick (held), LB / RB = switch player, Start = pause,
 //           View = speed (paused: quit), Y = restart / rematch, right stick click = sound;
 //           on the pause / full-time / error card: A = Enter (or resume), B = Esc.
+// Every connected controller is read. The keys it fires carry its index (e.padIndex), so a page can tell the devices apart
+// (web/game/sides.js, local multiplayer); in a multiplayer match each controller moves only its own person (match.js p.devices),
+// and a controller of the match that disconnects pauses it.
 import { G } from "./core.js";
-import { act, overlayKind, sendInput } from "./match.js";
+import { act, devName, humanOf, overlayKind, sendAll, sendInput } from "./match.js";
 
 const B = { A: 0, B: 1, X: 2, Y: 3, LB: 4, RB: 5, LT: 6, RT: 7, VIEW: 8, START: 9, LS: 10, RS: 11, UP: 12, DOWN: 13, LEFT: 14, RIGHT: 15 };
 const DEAD = 0.3, MENU_DEAD = 0.5, REPEAT_FIRST = 380, REPEAT_EVERY = 110, STEPS = 32;
-const P = { raf: 0, prev: {}, dir: "", dirNext: 0, kickLock: false };
+const P = { raf: 0, prev: {}, dir: {}, dirNext: {}, kickLock: {}, cur: null };   // per controller index; cur: the one being read
 export const padConnected = () => [...(navigator.getGamepads?.() || [])].some((g) => g && g.connected);
 
 const pressed = (g, i) => { const b = g.buttons[i]; return !!b && (b.pressed || b.value > 0.5); };
 function fire(key, code, down, extra = {}) {
-  const e = { key, code, repeat: false, shiftKey: false, metaKey: false, ctrlKey: false, altKey: false, pad: true, defaultPrevented: false,
+  const e = { key, code, repeat: false, shiftKey: false, metaKey: false, ctrlKey: false, altKey: false, pad: true, padIndex: P.cur, defaultPrevented: false,
     preventDefault() { this.defaultPrevented = true; }, ...extra };
   if (document.body.dataset.area !== "game" || !G.keyHandler) return e;
   const tag = document.activeElement?.tagName;
@@ -89,9 +92,9 @@ function arrow(d, repeat) {
   if (!e.defaultPrevented) moveFocus(dx, dy);
 }
 function menus(g, now, edge) {
-  const d = menuDir(g);
-  if (d !== P.dir) { P.dir = d; if (d) { arrow(d, false); P.dirNext = now + REPEAT_FIRST; } }
-  else if (d && now >= P.dirNext) { arrow(d, true); P.dirNext = now + REPEAT_EVERY; }
+  const d = menuDir(g), i = g.index;
+  if (d !== (P.dir[i] || "")) { P.dir[i] = d; if (d) { arrow(d, false); P.dirNext[i] = now + REPEAT_FIRST; } }
+  else if (d && now >= P.dirNext[i]) { arrow(d, true); P.dirNext[i] = now + REPEAT_EVERY; }
   if (edge(B.A)) { const e = tap("Enter", "Enter"); if (!e.defaultPrevented && document.body.dataset.area === "game") activate(); }
   if (edge(B.START)) startPage();
   if (edge(B.B)) tap("Escape", "Escape");
@@ -111,11 +114,11 @@ function inMatch(M, g, edge) {
       x = Math.round(Math.cos(a) * 1000) / 1000; y = Math.round(Math.sin(a) * 1000) / 1000;
     }
   }
-  const kickHeld = pressed(g, B.A) || pressed(g, B.X) || pressed(g, B.RT);
-  if (card) P.kickLock = true; else if (!kickHeld) P.kickLock = false;   // the A that closed a card does not kick
-  const kick = !card && !P.kickLock && kickHeld;
-  const stick = card ? null : (x || y ? [x, y] : null);
-  if (String(stick) !== String(M.stick) || kick !== !!M.padKick) { M.stick = stick; M.padKick = kick; sendInput(M); }
+  const kickHeld = pressed(g, B.A) || pressed(g, B.X) || pressed(g, B.RT), i = g.index;
+  if (card) P.kickLock[i] = true; else if (!kickHeld) P.kickLock[i] = false;   // the A that closed a card does not kick
+  const kick = !card && !P.kickLock[i] && kickHeld;
+  const stick = card ? null : (x || y ? [x, y] : null), was = M.pads[i] || {};
+  if (String(stick) !== String(was.stick) || kick !== !!was.kick) { M.pads[i] = { stick, kick }; sendInput(M, humanOf(M, "pad:" + i)); }
   if (card) {
     if (edge(B.A)) { if (card === "pause") act(M, "pause"); else tap("Enter", "Enter"); }
     if (edge(B.B)) tap("Escape", "Escape");
@@ -137,22 +140,34 @@ function poll(now) {
 export function padStep(now = performance.now()) {
   const pads = [...(navigator.getGamepads?.() || [])].filter((g) => g && g.connected);
   if (!pads.length) return false;
-  const g = pads.find((p) => p.mapping === "standard") || pads[0];
-  const was = P.prev[g.index] || [], cur = g.buttons.map((_, i) => pressed(g, i));
-  P.prev[g.index] = cur;
-  if (document.body.dataset.area !== "game") return true;
-  const edge = (i) => cur[i] && !was[i];
-  if (G.match && !G.match.stopped && G.keyHandler) inMatch(G.match, g, edge);
-  else menus(g, now, edge);
+  for (const g of pads) {
+    const was = P.prev[g.index] || [], cur = g.buttons.map((_, i) => pressed(g, i));
+    P.prev[g.index] = cur;
+    if (document.body.dataset.area !== "game") continue;
+    const edge = (i) => cur[i] && !was[i];
+    P.cur = g.index;
+    if (G.match && !G.match.stopped && G.keyHandler) inMatch(G.match, g, edge);
+    else menus(g, now, edge);
+    P.cur = null;
+  }
   return true;
 }
 function start() { if (!P.raf) P.raf = requestAnimationFrame(poll); }
 window.addEventListener("gamepadconnected", (e) => {
   start();
-  if (G.match) G.match.toast = { text: "Controller connected", at: performance.now() };
+  if (G.match) G.match.toast = { text: devName("pad:" + e.gamepad.index) + " connected", at: performance.now() };
 });
-window.addEventListener("gamepaddisconnected", () => {
-  const M = G.match;
-  if (M && !padConnected()) { M.stick = null; M.padKick = false; sendInput(M); M.toast = { text: "Controller disconnected", at: performance.now() }; }
+window.addEventListener("gamepaddisconnected", (e) => {
+  const M = G.match, i = e.gamepad.index;
+  delete P.prev[i];
+  if (!M) return;
+  delete M.pads[i];
+  sendAll(M);
+  const mine = M.p.devices && M.p.devices.includes("pad:" + i);
+  if (mine) {                                         // a person of this match lost their controller: pause until it is back
+    const f = M.frames[M.frames.length - 1];
+    if (!M.paused && !overlayKind(M, f)) act(M, "pause");
+    M.toast = { text: devName("pad:" + i) + " disconnected: reconnect it and resume", at: performance.now() };
+  } else if (!padConnected()) M.toast = { text: "Controller disconnected", at: performance.now() };
 });
 if (padConnected()) start();

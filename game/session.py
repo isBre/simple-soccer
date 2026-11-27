@@ -8,13 +8,14 @@ Page -> server (JSON):
                                            after the first goal (or at the final whistle); setup "player": "random" = the human
                                            controls a random player of their team (keeper included). The Puzzle page plays rounds of
                                            these back to back.
-  {"in": [dx, dy, kick]}                   the human's keys (direction normalised by the page), sent when they change
-  {"switch": 1}                            TEAM control: the teammate nearest the ball; again within 1 s: the next nearest (Match.switch_controlled)
+  {"in": [dx, dy, kick], "h": n?}         the keys of person n (default 0: local multiplayer has one per device, in the order of the
+                                           setup's "humans"; direction normalised by the page), sent when they change
+  {"switch": 1, "h": n?}                   TEAM control: the teammate nearest the ball; again within 1 s: the next nearest (Match.switch_controlled)
   {"pause": true|false}  {"speed": 1|2|4|8}  {"quit": 1}
 Server -> page:
   {"k": "m", ...}   once: teams (kits, logos), players, pitch, statics
-  {"k": "f", ...}   every tick while playing (see frame())
-  {"k": "r", "result": {...}}   once, after the final whistle
+  {"k": "f", ...}   every tick while playing (see frame(); "hu": [[controlled uid, next-Q uid, in the Q window], ...] per person)
+  {"k": "r", "result": {...}}   once, after the final whistle ("humans": [{team, mode, played: [uids]}, ...] per person)
   {"k": "e", "error": "..."}    the match could not start
 
 Kickoff intro (as the Godot game): at every kickoff the match is held for INTRO_TICKS while the page zooms in."""
@@ -41,6 +42,7 @@ def meta(m):
         teams.append({"id": tm.id, "name": tm.name, "short": str(tm.raw.get("short", tm.name[:3].upper())), "kit": kits[t],
                       "pattern": str(tm.raw.get("kit", "solid")), "logo": tm.raw.get("logo", {}), "kinds": tm.kinds()})
     return {"k": "m", "teams": teams, "control": cfg.control, "human_team": cfg.human_team, "duration": cfg.duration,
+            "humans": [{"team": h.team, "mode": h.mode} for h in m.humans],
             "ball_r": m.ball.radius,
             "players": [{"uid": q.uid, "team": q.team, "slot": q.slot, "number": q.slot + 1, "name": q.pdef.name, "player": q.pdef.id,
                          "kind": q.pdef.kind, "r": q.radius} for t in (0, 1) for q in m.team_lists[t]],
@@ -66,6 +68,7 @@ def frame(m, intro, events, clock=0):
             "ko": bool(m.kickoff_active), "kt": m.kickoff_team, "gt": m.goal_team, "gs": _uid(m.goal_scorer), "gp": m.goal_pause,
             "gtm": m.goal_timer, "w": m.winner, "cu": _uid(m.controlled),
             "nx": _uid(m.next_switch(clock)), "nw": m.in_switch_window(clock),
+            "hu": [[_uid(h.controlled), _uid(m.next_switch(clock, h)), m.in_switch_window(clock, h)] for h in m.humans],
             "in": intro, "b": [round(m.ball.pos.real, 2), round(m.ball.pos.imag, 2)], "p": pos, "h": flags, "ev": events}
 
 
@@ -104,7 +107,9 @@ def _run(ws, rec):
     if recorder.wanted(first["setup"], m):
         rec.append(recorder.Recorder(m, {**first["setup"], "puzzle": first.get("puzzle")}, min_rows=30 if puzzle else recorder.MIN_ROWS))
     ws.send({**meta(m), "rec": bool(rec)})
-    human, switch, paused, speed, clock = (0j, False), False, False, 1, 0      # clock: frames played (the Q window)
+    paused, speed, clock = False, 1, 0                      # clock: frames played (the Q window)
+    keys = [(0j, False) for _ in m.humans]                  # every person's keys (local multiplayer: one per device)
+    switch = set()                                          # who pressed Q since the last frame
     intro, intro_id, result_sent = (PUZZLE_READY if puzzle else 0), -1, False
     goal_end = None
     next_t = time.monotonic()
@@ -116,12 +121,14 @@ def _run(ws, rec):
         for x in msgs:
             if not isinstance(x, dict):
                 continue
-            if "in" in x:
+            who = x.get("h", 0)
+            who = who if isinstance(who, int) and 0 <= who < len(keys) else None
+            if "in" in x and who is not None:
                 dx, dy, k = (list(x["in"]) + [0, 0, 0])[:3]
                 d = complex(float(dx), float(dy))
-                human = (d / abs(d) if abs(d) > 1e-9 else 0j, bool(k))
-            if x.get("switch"):
-                switch = True
+                keys[who] = (d / abs(d) if abs(d) > 1e-9 else 0j, bool(k))
+            if x.get("switch") and who is not None:
+                switch.add(who)
             if "pause" in x:
                 paused = bool(x["pause"])
             if "speed" in x and int(x["speed"]) in (1, 2, 4, 8):
@@ -141,20 +148,21 @@ def _run(ws, rec):
         clock += 1
         if m.state == PLAYING and m.kickoff_active and m.kickoff_start != intro_id:
             intro_id, intro = m.kickoff_start, INTRO_TICKS
-        if switch:                                          # at once, also during the kickoff intro (picks the kickoff taker)
-            m.set_human_input(*human)
-            m.switch_controlled(clock)
-            switch = False
+        for k in sorted(switch):                            # at once, also during the kickoff intro (picks the kickoff taker)
+            m.set_human_input(*keys[k], k)
+            m.switch_controlled(clock, k)
+        switch.clear()
         if intro > 0:
             intro -= 1
         else:
-            m.set_human_input(*human)
+            for k, ks in enumerate(keys):
+                m.set_human_input(*ks, k)
             n_ev = len(m.events)
             for _ in range(speed):
                 if m.state == ENDED:
                     break
                 if rec and rec[0].due():
-                    rec[0].sample(*human, speed)
+                    rec[0].sample(*keys[0], speed)
                 m.step()
                 if puzzle and goal_end is None and m.state == GOAL:
                     goal_end = m.tick + PUZZLE_GOAL_TICKS
@@ -162,6 +170,8 @@ def _run(ws, rec):
         ws.send(frame(m, intro, events, clock))
         if (m.state == ENDED or goal_end is not None and m.tick >= goal_end) and not result_sent:
             result = m.make_result()
+            if m.humans:
+                result["humans"] = [{"team": h.team, "mode": h.mode, "played": list(h.played)} for h in m.humans]
             if puzzle:
                 result["puzzle"] = {"end": "goal" if goal_end is not None else "time", "seconds": round(m.elapsed(), 2)}
             if rec:

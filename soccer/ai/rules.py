@@ -154,9 +154,9 @@ class TeamBrain:
         human_has_ball = False
         # a human-controlled player is not ours to command: when he is the one at the ball the bots leave it to him
         # (no second chaser running into him) and just support
-        human = None
+        human = None                     # the human-controlled teammate nearest the ball (local multiplayer: there can be several)
         for sp in team:
-            if sp.is_human:
+            if sp.is_human and (human is None or abs(sp.pos - ball) < abs(human.pos - ball)):
                 human = sp
         if self.pass_target is not None and not self.pass_target.is_human:
             self.chasers.append(self.pass_target)
@@ -396,18 +396,18 @@ class StyleBot:
 
     @staticmethod
     def _avoid_human(m, p):
-        """Bots give their human-controlled teammate some room instead of bumping into him."""
-        h = m.controlled
-        if h is None or h is p or h.team != p.team or not h.is_human:
-            return
-        off = p.pos - h.pos
-        d = abs(off)
-        if d >= 66.0:
-            return
-        push = off / max(d, 1.0) * (1.0 - d / 66.0) * 1.8
-        z = p.input_dir + push
-        l = abs(z)
-        p.input_dir = z / l if l > 1.0 else z
+        """Bots give their human-controlled teammates some room instead of bumping into them."""
+        for h in m.human_mates:
+            if h is p or h.team != p.team or not h.is_human:
+                continue
+            off = p.pos - h.pos
+            d = abs(off)
+            if d >= 66.0:
+                continue
+            push = off / max(d, 1.0) * (1.0 - d / 66.0) * 1.8
+            z = p.input_dir + push
+            l = abs(z)
+            p.input_dir = z / l if l > 1.0 else z
 
     # ------------------------------------------------------------ ball play
 
