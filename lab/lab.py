@@ -449,7 +449,7 @@ def cmd_ranking(a):
     rows = r["rows"] if not a.league else [x for x in r["rows"] if x["league"] == a.league]
     keep = ("rank", "id", "name", "entry", "league", "kind", "elo", "lo", "hi", "games", "w", "d", "l", "agf", "aga", "agf_se", "aga_se",
             "gf", "ga", "bonus", "via", "placed")
-    return {"protocol": r["protocol"], "size": r["size"], "matches": r["matches"], "stale": r["stale"], "last": r["last"], "ladder_off": r["off"],
+    return {"protocol": r["protocol"], "size": r["size"], "matches": r["matches"], "stale": r["stale"], "last": r["last"], "rounds_off": r["off"],
             "rows": [{k: x.get(k) for k in keep} for x in rows]}
 
 

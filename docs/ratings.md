@@ -64,7 +64,7 @@ Matches: arena, 90 s, draws allowed, every pair twice with the same seed, once f
 ## Background
 
 The web app (`web/app.py`, unless `--no-helpers`) runs `elo.api.refine`: a round of 4 pairs on 2 niced workers whenever the load
-average is low (no training run, no other heavy work), nothing while `local/refine_off` exists, one refiner per machine. The
+average is low (no training run, no other heavy work), nothing while `local/refine_off` exists (it also stops the runner's rounds), one refiner per machine. The
 training runner plays rounds when its queue is empty and places a finished run's best checkpoint at 5v5 right away (`lab/ladder.py`).
 
 ## Storage (`elo/db.py`)

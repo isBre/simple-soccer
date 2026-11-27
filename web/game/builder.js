@@ -1,6 +1,6 @@
-// The Game (web/game.js has the overview): build a team. Five players in order (rule-based, Opus and net players can be mixed),
+// The Game (web/game.js has the overview): build a team. Five players in order (rule-based and net players can be mixed),
 // colours, kit and crest. There is no tactic: every player plays its own style in any team. Saved on this machine only
-// (POST /api/game/team -> data/my_teams/, game/api.py save_team); the teams of data/teams can be copied, never edited.
+// (POST /api/game/team -> local/my_teams/, game/api.py save_team); the teams of data/teams can be copied, never edited.
 import { $, G, KIND_SHORT, api, catalog, esc, go, mount, prefs, savePrefs, shell, sizesText } from "./core.js";
 import { badge } from "./players.js";
 

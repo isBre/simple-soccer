@@ -95,9 +95,9 @@ A new agent can use all of the view or any part of it; a new observation is a ne
   the other team's view, brain or bot (deliberate leaks of each kind are caught);
 - a team's view of the opponents is anonymous and empty inside, and nobody carries a real skill but the player's own bot.
 
-## Parked: Opus
+## Removed: Opus
 
-Opus 5.5 High (`soccer/ai/opus.py`, [docs/opus_5_5_high.md](opus_5_5_high.md)) planned by cloning the whole match and playing
-it forward: a copy of the engine with hidden state (held buttons, the other agents' memory and random numbers). That is not
-allowed by this rule, so Opus is parked: its code is kept, but no player or team uses it. It comes back once its planner starts
-from the public view (a simulation built from the bodies and the ball, with the opponents played by a generic model).
+Opus 5.5 High ([docs/opus_5_5_high.md](opus_5_5_high.md)) planned by cloning the whole match and playing it forward: a copy of
+the engine with hidden state (held buttons, the other agents' memory and random numbers). That is not allowed by this rule, so
+it was removed (its code is in git history). A planner may come back if it starts from the public view (a simulation built from
+the bodies and the ball, with the opponents played by a generic model).

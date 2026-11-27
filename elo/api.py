@@ -5,7 +5,7 @@ import random
 import threading
 import time
 
-from . import DURATION, ENGINE, LOCAL, PLACEMENT, PROTOCOL, SIZES, db, model, play, roster, schedule
+from . import LOCAL, PLACEMENT, PROTOCOL, ROOT, SIZES, db, model, play, roster, schedule
 
 _lock = threading.Lock()
 _cache = {}                                         # (db path, size) -> (db version, roster, Ratings)
@@ -21,10 +21,6 @@ class Ratings:
         self.gm = model.goal_model(ros, size, groups)
         self.goals = model.goal_table(self.gm)
         self.matches = sum(g["n"] for g in groups)
-
-
-def connection(path=None):
-    return db.connect(path)
 
 
 def ratings(size, conn=None, ros=None):
@@ -89,7 +85,7 @@ def ranking(size=5, conn=None):
         cnt = db.counts(conn).get(size, (0, 0))
         names = {x["id"]: x["name"] for x in rows}
         return {"protocol": PROTOCOL, "size": size, "matches": r.matches, "stale": cnt[0] + cnt[1] - r.matches, "entries": len(rows),
-                "rows": rows, "history": db.history(conn, size), "off": os.path.exists(refine_off_path()), "last": db.last_time(conn, size),
+                "rows": rows, "history": db.history(conn, size), "off": rounds_off(), "last": db.last_time(conn, size),
                 "recent": [{"t": m["t"], "a": m["a"], "b": m["b"], "ga": m["ga"], "gb": m["gb"]} for m in db.recent(conn, size)],
                 "names": names}
     finally:
@@ -108,6 +104,22 @@ def elo_by_team(conn=None):
 
 def refine_off_path():
     return os.path.join(LOCAL, "refine_off")
+
+
+_legacy_told = []
+
+
+def rounds_off():
+    """True while background rounds are switched off on this machine: `touch local/refine_off` stops both the web app's refining
+    and the training runner's rounds (a finished run is still placed). The older exp/ladder_off still counts (with a note once)."""
+    if os.path.exists(refine_off_path()):
+        return True
+    if os.path.exists(os.path.join(ROOT, "exp", "ladder_off")):
+        if not _legacy_told:
+            _legacy_told.append(1)
+            print("elo: exp/ladder_off is the old switch, use local/refine_off", flush=True)
+        return True
+    return False
 
 
 # ---------------------------------------------------------------- playing
@@ -197,7 +209,7 @@ def refine(pairs=4, workers=2, max_load=None, log=None):
     conn = db.connect()
     while True:
         try:
-            if os.path.exists(refine_off_path()) or os.getloadavg()[0] > max_load:
+            if rounds_off() or os.getloadavg()[0] > max_load:
                 time.sleep(60)
                 continue
             r = play_round(pairs, workers, conn=conn)

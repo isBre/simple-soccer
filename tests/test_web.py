@@ -319,7 +319,7 @@ def main():
         results.append(check("mixed cup", len(ids) == len(cat["teams"]) and leagues == {lg["id"] for lg in cat["leagues"] if lg["count"]},
                              "%s: %d teams from %s" % (d["t"]["title"], len(ids), ", ".join(sorted(leagues)))))
 
-        # a team built in the game: a net first (it sits out 3v3), then rule-based and Opus players
+        # a team built in the game: a net first (it sits out 3v3), then rule-based players
         team = {"name": "Test Builders", "colors": {"primary": "ff8800", "secondary": "202020"}, "kit": "band",
                 "logo": {"shape": "hex", "pattern": "halves", "symbol": "star", "c3": "ffffff"}, "style": "high_press",
                 "lineup": ["finn_dahl", "lars_holm", "felix_wagner", "marco_bellini", "nikolai_orlov"]}

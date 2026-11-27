@@ -1,8 +1,8 @@
 # Opus 5.5 High: how the team was built, and where it stands
 
-> **Parked since 2026-11-27.** Opus planned on a clone of the whole match (the engine's state and the other agents' memory),
-> which the fair-information rule does not allow ([public_view.md](public_view.md)). The code is kept; no player or team uses it
-> until its planner starts from the public view. Everything below describes it as it was.
+> **Removed on 2026-11-27.** Opus planned on a clone of the whole match (the engine's state and the other agents' memory),
+> which the fair-information rule does not allow ([public_view.md](public_view.md)). Its code (`soccer/ai/opus.py`,
+> `tools/tune_opus.py`, `data/styles/opus_high.json`) is in git history up to commit 22d007c. Everything below describes it as it was.
 
 Opus 5.5 High is a team for the **Rule Based League**: no neural net, no training, a hand-written team brain
 ([`soccer/ai/opus.py`](../soccer/ai/opus.py)). The brief: the strongest bot possible under one rule, **it must look like real

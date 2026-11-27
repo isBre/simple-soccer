@@ -1,9 +1,8 @@
 """Players (data/players/*.json): a player is a brain with a name. Every player on the pitch has the same body (speed, kick,
-size); what differs is how it decides. Three kinds:
+size); what differs is how it decides. Two kinds:
 
   rules   the rule-based AI (soccer/ai/rules.py) with a playing style (data/styles) and a skill 0-100
   net     a trained neural net (`model`, a game-model JSON); it can only play the team sizes its observation fits
-  (opus   the Opus planner, parked until it plans from the public view: soccer/ai/lineup.py, docs/public_view.md)
 
 `skill` only changes the AI's precision and reaction (soccer/ai/skill.py: aim errors, positioning noise, perception delay,
 thinking time), never the physics. A net ignores it; it is kept so rule-based opponents read every player the same way.
@@ -11,7 +10,7 @@ There are no positions, no keeper and no tactics: a player plays its own style i
 import json
 import os
 
-KINDS = ("rules", "opus", "net")              # "opus" loads but is parked: it plays as the balanced rule-based AI
+KINDS = ("rules", "net")
 SIZES = (1, 2, 3, 4, 5)
 DEFAULT_SKILL = 70
 
@@ -24,7 +23,7 @@ class PlayerDef:
         self.kind = str(d.get("kind", "rules"))
         if self.kind not in KINDS:
             raise ValueError("player %s: unknown kind %r (one of %s)" % (self.id, self.kind, ", ".join(KINDS)))
-        self.style_id = str(d.get("style", "opus_high" if self.kind == "opus" else "balanced"))
+        self.style_id = str(d.get("style", "balanced"))
         self.skill = int(d.get("skill", DEFAULT_SKILL))
         self.model = str(d.get("model", ""))            # net: path from the project root
         self.description = str(d.get("description", ""))

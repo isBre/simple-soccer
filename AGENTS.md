@@ -9,7 +9,7 @@ on the experiments, start here. People: the same applies; the dashboard (the Lab
 - `exp/schema.json`: what every metric means, its unit and direction, the evaluation protocols and the comparison rules.
 - Players and teams: a player (`data/players`) is a brain with a name (rule-based style + skill, or a net); a team (`data/teams`)
   is a line-up of 5 players (mixed allowed), with no tactic. No keeper role, golden-goal overtime, no shootouts (README "Players,
-  teams and kickoff"). Opus 5.5 High is parked.
+  teams and kickoff"). Opus 5.5 High was removed (it planned on a clone of the match; docs/opus_5_5_high.md).
 - `docs/ratings.md`: **the ratings**: Elo per player and team, per size (1v1 to 5v5), in a local database on every machine
   (`python3 -m elo init` once after cloning; the web app refines in the background).
 - `docs/public_view.md`: **what a player may know**. Every agent (rule-based, net, anything new) decides from the same public view

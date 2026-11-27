@@ -92,16 +92,9 @@ class Roster:
             if e.model:
                 self.by_model[os.path.splitext(os.path.basename(e.model))[0]] = e.id
 
-    def units(self):
-        return {i: e for i, e in self.entries.items() if e.unit}
-
     def at(self, size):
         """The entries that can play this size."""
         return {i: e for i, e in self.entries.items() if size in e.sizes()}
-
-    def entry_for_team(self, tid):
-        eid = self.alias.get(tid) or "team:" + tid
-        return self.entries.get(eid)
 
 
 def _signature():
@@ -139,8 +132,8 @@ def _build():
     entries, aliases, units_sha = {}, {}, {}
     owned = set()
     for p in sorted(db.players.values(), key=lambda p: p.id):
-        if p.kind not in ("rules", "net") or p.hidden:
-            continue                                                    # the parked Opus kind is not rated
+        if p.hidden:
+            continue
         eid = "player:" + p.id
         files = [os.path.join(ROOT, "data", "players", p.id + ".json")]
         files += [p.model_path] if p.kind == "net" else [os.path.join(ROOT, "data", "styles", p.style_id + ".json")]
@@ -177,7 +170,7 @@ def _build():
     for t in sorted(db.teams.values(), key=lambda t: t.id):
         ids = [p.id for p in t.players]
         if not all("player:" + i in entries for i in ids):
-            continue                                                    # a player that is not rated (parked): the team is not either
+            continue                                                    # a player that is not rated (hidden): the team is not either
         if len(set(ids)) == 1:                                          # five copies of one player: that player's entry
             solo = entries["player:" + ids[0]]
             solo.aliases.append(t.id)

@@ -54,9 +54,9 @@ def play_pair(job):
 
 
 def play(jobs, workers=3):
-    """The results of all jobs (two per job)."""
+    """The results of all jobs (two per job). With workers > 1 on niced worker processes; else in this process, which is never
+    niced (it may be the web server or the training runner)."""
     if workers > 1 and len(jobs) > 1:
         with mp.get_context("spawn").Pool(min(workers, len(jobs)), initializer=_nice) as pool:
             return [r for pair in pool.map(play_pair, jobs) for r in pair]
-    _nice()
     return [r for j in jobs for r in play_pair(j)]

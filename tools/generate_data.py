@@ -108,6 +108,6 @@ for k, v in styles.items():
     v["id"] = k
     dump(os.path.join(ROOT, "styles", k + ".json"), v)
 
-# Teams and players are curated by hand since 2026-11-27 (data/teams: line-ups; data/players: rule-based, Opus and net
+# Teams and players are curated by hand since 2026-11-27 (data/teams: line-ups; data/players: rule-based and net
 # players, see README "Players, teams and kickoff"); this script no longer writes them.
 print("generated", len(pitches), "pitches,", len(styles), "styles (teams and players: edit data/teams and data/players)")

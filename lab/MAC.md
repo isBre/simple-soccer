@@ -21,7 +21,7 @@ Key login to the Pi must work (`ssh isbre@10.0.0.75` without a password; `ssh-co
 caffeinate -i ~/rl-venv/bin/python lab/exp_runner.py --loop          # the runner; caffeinate keeps the Mac awake
 python3 lab/mac_sync.py --pi isbre@10.0.0.75                         # the sync, every 60 s
 ```
-The Pi's Elo ladder rounds then run on the Mac too (`touch exp/ladder_off` there to stop them). The training defaults (`workers_rule 2`,
+The Pi's Elo ladder rounds then run on the Mac too (`touch local/refine_off` there to stop them). The training defaults (`workers_rule 2`,
 `envs_per_worker 16`, `learn_threads 2`) were chosen for the Pi's 4 cores; on a Mac with more cores a spec may set larger values in `args`
 (they change speed, not what is learned).
 

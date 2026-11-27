@@ -18,7 +18,8 @@ Everything is written to exp/ (see lab/tracker.py). After a reboot the runner re
   ~/rl-venv/bin/python lab/exp_runner.py --loop [--viewer]        (installed as the systemd service soccer-exp.service)
 
 While the queue is empty (--loop) it plays rounds of the Elo ranking (lab/ladder.py round: 6 pairs, 2 matches each, 3 niced
-workers, a few minutes on the Pi) and looks at the queue again after each round. `touch exp/ladder_off` stops that.
+workers, a few minutes on the Pi) and looks at the queue again after each round. `touch local/refine_off` stops that (and the web
+app's refining); a finished run is still placed.
 """
 import argparse
 import glob
@@ -187,9 +188,9 @@ def place_in_ladder(tag, rounds=3):
     queue would leave it unrated. New entries are paired first (elo/schedule.py)."""
     from lab import ladder
     for _ in range(rounds):
-        rat = ladder.fit()
+        rat = ladder.rows()
         r = rat.get("net:%s_best" % tag)
-        if r is None or r["games"] >= ladder.PLACEMENT or not ladder_round(size=5):
+        if r is None or r["games"] >= ladder.PLACEMENT or not ladder_round(size=5, force=True):
             return
 
 
@@ -344,7 +345,7 @@ def run_experiment(spec_path, viewer=False):
     if os.path.exists(cancel_flag):
         os.remove(cancel_flag)
     log("%s finished: %s" % (name, state))
-    if state == "done" and not os.path.exists(os.path.join(EXP, "ladder_off")):
+    if state == "done":
         place_in_ladder(tag)
 
 
@@ -368,10 +369,11 @@ def next_spec():
 LADDER_PAIRS = 6
 
 
-def ladder_round(size=None):
+def ladder_round(size=None, force=False):
     """One round of the ratings (elo/: every size, the one that needs it most unless `size`) while nothing else runs. True if it
-    played (so the loop looks at the queue right away)."""
-    if os.path.exists(os.path.join(EXP, "ladder_off")):
+    played (so the loop looks at the queue right away). Nothing while local/refine_off exists, unless `force` (placing a run)."""
+    from elo.api import rounds_off
+    if rounds_off() and not force:
         return False
     t0 = time.time()
     try:

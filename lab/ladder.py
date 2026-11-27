@@ -2,7 +2,7 @@
 themselves (who is rated, the model, the database in local/elo.db, the rounds) live in elo/; this module keeps what the Lab, the
 runner and lab.py ask for:
 
-  fit() / rows()   the 5v5 ratings by entry id (also under "net:<stem>" for a net that is a player's: jit8_best is Jasper Klein)
+  rows()           the 5v5 ratings by entry id (also under "net:<stem>" for a net that is a player's: jit8_best is Jasper Klein)
   ranking()        the Ranking page's table (lab/dashboard.py /api/ranking, lab.py ranking)
   estimate()       the estimated Elo of a checkpoint during training: it plays placed 5v5 entries and only its own rating and goal
                    strengths are fitted, everyone else's held fixed (not stored in the ratings): one line in exp/elo_estimates.jsonl
@@ -33,8 +33,7 @@ SIZE = 5                          # the experiments are 5v5 (the curriculum will
 PROTOCOL = "ladder/5v5/" + ELO_PROTOCOL
 ESTIMATES = os.path.join(EXP, "elo_estimates.jsonl")
 EST_PAIRS = 12                    # pairs per estimate (2 matches each): about ±140 Elo at 95%
-OFF = os.path.join(EXP, "ladder_off")
-__all__ = ["DURATION", "MAX_TICKS", "PLACEMENT", "fit", "rows", "ranking", "estimate", "estimates"]
+__all__ = ["DURATION", "MAX_TICKS", "PLACEMENT", "rows", "ranking", "estimate", "estimates"]
 
 
 def _sha(path):
@@ -52,16 +51,10 @@ def rows(size=SIZE):
     return out
 
 
-def fit(size=SIZE):
-    """{entry id: rating dict (elo, se, lo, hi, games, placed, ...)}: rows() under the name the runner used."""
-    return rows(size)
-
-
 def ranking(size=SIZE):
-    """The Ranking page's table: elo.api.ranking with the Lab's protocol name and its off switch (exp/ladder_off)."""
+    """The Ranking page's table: elo.api.ranking with the Lab's protocol name ("off": local/refine_off, elo.api.rounds_off)."""
     r = elo_api.ranking(size)
-    r["protocol"] = PROTOCOL
-    r["off"] = os.path.exists(OFF)
+    r["protocol"] = "ladder/%dv%d/%s" % (size, size, ELO_PROTOCOL)
     return r
 
 

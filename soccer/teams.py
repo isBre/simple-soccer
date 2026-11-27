@@ -22,7 +22,7 @@ class Team:
         # so the RL protocol and every earlier evaluation stay comparable
         self.rl_eval = bool(d.get("rl_eval", False))
         self.players = []                     # PlayerDef per lineup entry (Database fills it)
-        self.custom = False                   # built in the game (data/my_teams, local)
+        self.custom = False                   # built in the game (local/my_teams, this machine only)
 
     def eligible(self, size):
         """The players of the line-up who can play this size, in line-up order."""

@@ -6,7 +6,7 @@ import os
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA = os.path.join(ROOT, "data")
-MY_LEAGUE = "mine"                 # the league of the teams built in the game (data/my_teams)
+MY_LEAGUE = "mine"                 # the league of the teams built in the game (local/my_teams)
 
 
 def local_dir():
@@ -53,7 +53,6 @@ class Style:
         self.id = str(d.get("id", "balanced"))
         self.name = str(d.get("name", self.id))
         self.description = str(d.get("description", ""))
-        self.brain = str(d.get("brain", "rules"))       # "rules" (TeamBrain + StyleBot) or "opus" (soccer/ai/opus.py)
         for k in STYLE_KEYS:
             setattr(self, k, float(d.get(k, STYLE_DEFAULTS[k])))
 
@@ -64,8 +63,7 @@ class Style:
         styles = list(styles)
         if len({s.id for s in styles}) <= 1:
             return styles[0] if styles else Style({})
-        out = Style({"id": "+".join(sorted({s.id for s in styles})), "name": " + ".join(sorted({s.name for s in styles})),
-                     "brain": styles[0].brain})
+        out = Style({"id": "+".join(sorted({s.id for s in styles})), "name": " + ".join(sorted({s.name for s in styles}))})
         for k in STYLE_KEYS:
             setattr(out, k, sum(getattr(s, k) for s in styles) / len(styles))
         return out
@@ -95,14 +93,19 @@ def default_formation(size):
     return formations()["defaults"].get(str(size), "1-2-1-1")
 
 
-def _load_dir(path):
+def _load_dir(path, skip_broken=False):
+    """Every JSON file of a folder. A file that does not parse raises with its name (data/ is the game's own data), or with
+    skip_broken (the teams built in the game) is left out with a note."""
     out = []
     for f in sorted(glob.glob(os.path.join(path, "*.json"))):
         with open(f) as fh:
             try:
                 d = json.load(fh)
-            except ValueError:
-                continue
+            except ValueError as e:
+                if skip_broken:
+                    print("data: %s skipped (not valid JSON: %s)" % (f, e))
+                    continue
+                raise ValueError("%s: not valid JSON (%s)" % (f, e)) from None
         out.append(d)
     return out
 
@@ -111,7 +114,7 @@ class Database:
     """Everything under data/: pitches, styles, players and teams (line-ups of players). Loading checks that every team's
     line-up names known players and every player's style exists, so a broken file fails at once with its name."""
 
-    def __init__(self, root=ROOT, extra_team_dirs=(), my_teams=True):
+    def __init__(self, root=ROOT, my_teams=True):
         from .players import PlayerDef
         from .teams import Team
         data = os.path.join(root, "data")
@@ -124,10 +127,9 @@ class Database:
                 raise ValueError("player %s: unknown style %r" % (p.id, p.style_id))
             self.players[p.id] = p
         self.teams = {}
-        dirs = [os.path.join(data, "teams")] + list(extra_team_dirs)
         mine = my_teams_dir() if my_teams else None
-        for d in dirs + ([mine] if mine else []):
-            for t in (Team(x) for x in _load_dir(d)):
+        for d in [os.path.join(data, "teams")] + ([mine] if mine else []):
+            for t in (Team(x) for x in _load_dir(d, skip_broken=d == mine)):
                 missing = [i for i in t.lineup_ids if i not in self.players]
                 if missing or not t.lineup_ids:
                     if d == mine:                    # a built team whose player was removed: skipped, never fatal

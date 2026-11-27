@@ -8,7 +8,7 @@
        record    {"index", "result"}: stores the result of the player's live match
   GET  /api/game/rankings?size=N  the Rankings page of one size (elo/: this machine's ratings): players and teams
   POST /api/game/team             {"action": "save", "team": {...}} -> {"team": team_info} | {"action": "delete", "id"}: the teams built in
-                                  the game (data/my_teams, local to this machine; the teams of data/teams can only be copied)
+                                  the game (local/my_teams, this machine only; the teams of data/teams can only be copied)
 The browser keeps the tournament (localStorage); the server keeps nothing but the built teams."""
 import random
 

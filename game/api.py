@@ -32,7 +32,7 @@ CREST = {"shape": ("shield", "circle", "hex", "diamond"), "pattern": ("solid", "
 LINEUP = 5
 CONTROL = {"none": sm.NONE, "single": sm.SINGLE, "team": sm.TEAM}
 STYLE_PARAMS = ("line_height", "press", "marking", "directness", "pass_bias", "width")
-KIND_LABEL = {"rules": "Rule-based", "opus": "Opus planner", "net": "Neural net (RL)"}
+KIND_LABEL = {"rules": "Rule-based", "net": "Neural net (RL)"}
 
 
 def league_index(league_id):
@@ -69,11 +69,6 @@ def teams():
 def players():
     """{id: PlayerDef}: the players of data/players."""
     return database().players
-
-
-def ladder_id(t):
-    """The team's id in the ratings (elo/): a team made of one player five times is that player's entry, listed under this id too."""
-    return "team:" + t.id
 
 
 def team_sha(t):
@@ -221,7 +216,7 @@ def team_info(t, elo=None):
     net = bool(t.ml_model)
     s = t.strength()
     elo = elo_table() if elo is None else elo
-    rs = _ratings(elo.get(ladder_id(t)))
+    rs = _ratings(elo.get("team:" + t.id))
     return {"id": t.id, "name": t.name, "short": t.short, "league": t.league,
             "league_name": league_name(t.league), "colors": team_colors(t), "kit": str(t.raw.get("kit", "solid")),
             "logo": t.raw.get("logo", {}), "net": net, "kinds": t.kinds(),
@@ -235,7 +230,7 @@ def team_info(t, elo=None):
 def team_list():
     """Every team, grouped by league (LEAGUES order), strongest first inside a league (Elo; unranked teams last, by name)."""
     elo = elo_table()
-    head = {t.id: _headline(_ratings(elo.get(ladder_id(t)))) for t in teams().values()}
+    head = {t.id: _headline(_ratings(elo.get("team:" + t.id))) for t in teams().values()}
     return sorted(teams().values(), key=lambda t: (league_index(t.league), -(head[t.id] if head[t.id] is not None else -1e9), t.name))
 
 
@@ -274,12 +269,12 @@ def catalog():
                          "colors": {k: str(p.raw.get("colors", {}).get(k, d)).lstrip("#")
                                     for k, d in (("pitch", "718c5a"), ("outer", "5b7347"), ("line", "c7e6bd"))}} for p in pitches],
             "builder": {"kits": list(KITS), "crest": {k: list(v) for k, v in CREST.items()}, "lineup": LINEUP,
-                        "styles": [{"id": s.id, "name": s.name, "description": s.description, "brain": s.brain,
+                        "styles": [{"id": s.id, "name": s.name, "description": s.description,
                                     "params": {k: getattr(s, k) for k in STYLE_PARAMS}}
                                    for s in sorted(db.styles.values(), key=lambda s: s.name)]}}
 
 
-# ---------- teams built in the game (data/my_teams, local to this machine) ----------
+# ---------- teams built in the game (local/my_teams, this machine only) ----------
 class Invalid(ValueError):
     """A team the builder sent that cannot be saved (the message says why)."""
 
@@ -299,7 +294,7 @@ def _slug(name):
 
 
 def save_team(d):
-    """Checks a team from the builder and writes data/my_teams/<id>.json. A new team gets an id from its name ("my_<name>");
+    """Checks a team from the builder and writes local/my_teams/<id>.json. A new team gets an id from its name ("my_<name>");
     an existing id must be one of the built teams (the teams of data/teams are copied, never edited). Returns its team_info."""
     db = database()
     name = " ".join(str(d.get("name", "")).split())

@@ -2,7 +2,7 @@
 teams), both sides, several seeds, played by the match core in parallel. Also measures whether the team plays as a team
 (spacing, players around the ball, passes, assisted goals) instead of swarming the ball.
 
-  python3 tools/team_bench.py opus_high [--seeds 4] [--duration 180] [--pitch arena] [--size 5] [--rl] [--vs arrows,aurora]
+  python3 tools/team_bench.py arrows [--seeds 4] [--duration 180] [--pitch arena] [--size 5] [--rl] [--vs arrows,aurora]
   Opponents in --vs can be team ids or trained nets: net:models/jit8_best.json (played in RL Team 5's shirts).
 """
 import argparse

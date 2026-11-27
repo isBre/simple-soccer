@@ -35,7 +35,7 @@ export async function catalog(fresh = false) {
 }
 // a player's name as a link to its page (players removed since the page loaded: plain text)
 export const playerLink = (id, name) => (G.playerById[id] ? `<a class="pl-link" href="#/game/players/${encodeURIComponent(id)}">${esc(name ?? G.playerById[id].name)}</a>` : esc(name ?? id));
-export const KIND_SHORT = { rules: "Rule-based", opus: "Opus", net: "Net" };
+export const KIND_SHORT = { rules: "Rule-based", net: "Net" };
 export const sizesText = (sizes) => (sizes.length === 5 ? "all sizes" : sizes.map((n) => n + "v" + n).join(" "));
 export const loadT = () => { try { return JSON.parse(localStorage.getItem(SAVE) || "null"); } catch (e) { return null; } };
 export const saveT = (t) => { try { localStorage.setItem(SAVE, JSON.stringify(t)); } catch (e) {} };
@@ -74,5 +74,5 @@ export const eloSizes = (t) => [1, 2, 3, 4, 5].filter((n) => !t.sizes || t.sizes
 }).join("");
 export const playsText = (t) => t.plays || "Play style not measured yet (python3 game/profiles.py).";
 export const whoDrives = (t) => (t.net ? "Every player is the same trained net (reinforcement learning); it plays 5v5 only."
-  : t.kinds.length > 1 ? "A mixed line-up: " + t.kinds.map((k) => ({ rules: "rule-based", opus: "Opus", net: "net" })[k]).join(", ") + " players."
-  : t.kinds[0] === "opus" ? "Every player is the Opus planner." : "Driven by the handmade AI.");
+  : t.kinds.length > 1 ? "A mixed line-up: " + t.kinds.map((k) => ({ rules: "rule-based", net: "net" })[k]).join(", ") + " players."
+  : "Driven by the handmade AI.");

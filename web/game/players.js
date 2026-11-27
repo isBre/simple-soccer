@@ -1,4 +1,4 @@
-// The Game (web/game.js has the overview): the players. A player is a brain with a name (rule-based style + skill, Opus, or a
+// The Game (web/game.js has the overview): the players. A player is a brain with a name (rule-based style + skill, or a
 // trained net); teams are line-ups of players (data/players, data/teams; README "Players, teams and kickoff").
 import { $, G, KIND_SHORT, eloSizes, esc, go, mount, shell, sizesText, table } from "./core.js";
 
@@ -11,7 +11,7 @@ const styleOf = (id) => (G.cat.builder?.styles || []).find((s) => s.id === id);
 const teamsOf = (p) => p.teams.map((id) => G.byId[id]).filter(Boolean);
 
 // a small round badge with the player's initials, in a colour per kind (players have no crest)
-const KIND_COL = { rules: "#4f8fd8", opus: "#d97757", net: "#5fb87a" };
+const KIND_COL = { rules: "#4f8fd8", net: "#5fb87a" };
 export const badge = (p, px = 40) => `<span class="pl-badge" style="--bc:${KIND_COL[p.kind] || "#888"};width:${px}px;height:${px}px;font-size:${Math.round(px * 0.38)}px">${
   esc(p.name.split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase())}</span>`;
 
@@ -58,7 +58,7 @@ export function playerPage(id) {
   const origin = Object.entries(p.origin || {}).map(([k, val]) => `<div class="pl-kv"><span>${esc(ORIGIN_LABEL[k] || k)}</span><b>${esc(String(val))}</b></div>`).join("");
   const bars = st ? Object.entries(st.params).map(([k, val]) => `<div class="pl-bar"><span>${esc(PARAM_LABEL[k] || k)}</span><i><b style="width:${Math.round(100 * Math.max(0, Math.min(1, val)))}%"></b></i></div>`).join("") : "";
   const teams = teamsOf(p);
-  const v = mount(shell(`<section class="gp-hero row pl-hero" style="--kc:${{ rules: "#4f8fd8", opus: "#d97757", net: "#5fb87a" }[p.kind] || "#888"}">${badge(p, 120)}
+  const v = mount(shell(`<section class="gp-hero row pl-hero" style="--kc:${KIND_COL[p.kind] || "#888"}">${badge(p, 120)}
       <div class="gt-info"><div class="gp-pill">${esc(p.kind_label)}${p.style_label ? " · " + esc(p.style_label) : ""}</div><h1 class="gt-name">${esc(p.name)}</h1>
         <p class="gt-plays">${esc(p.description)}</p>
         <div class="gt-who">${p.skill != null ? `Skill ${p.skill} · ` : ""}plays ${esc(sizesText(p.sizes))}${p.kind === "net" && p.sizes.length < 5 ? " (its observation only fits 5 per side)" : ""}</div>

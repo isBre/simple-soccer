@@ -4,9 +4,6 @@ whom, who guards the goal); a brain only commands the players it owns (`p.brain 
 (data.Style.blend: a team has no tactic). Nets need no brain. Every bot and brain decides from its team's public view only
 (soccer/ai/view.py); its own skill is in the bot (soccer/ai/skill.py).
 
-Opus (soccer/ai/opus.py) is parked: it planned on a clone of the whole match, which the public view does not allow, and comes
-back once it plans from the view (docs/public_view.md).
-
 MatchConfig.nets[t] overrides the line-up: one net drives every slot of that team (training, evaluation, the ladder). A net
 that cannot play the match's size is replaced by the team's own players (see MatchAI.warnings)."""
 from . import nets
@@ -50,7 +47,7 @@ def build(m, warnings):
                 continue
             if pd.kind == "rules":
                 style = db.style_of_player(pd)
-            else:                                       # a net that cannot play this size, or a parked kind: balanced rules
+            else:                                       # a net that cannot play this size: balanced rules
                 warnings.append("team %d: %s cannot play here; the balanced rule-based AI instead" % (t, pd.name))
                 style = db.styles["balanced"]
             p.bot_ai = attach_skill(StyleBot(style), pd.skill, p.ai_seed)

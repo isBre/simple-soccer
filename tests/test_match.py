@@ -1,7 +1,7 @@
 """The match core (soccer/) against stored matches (tests/golden/match_<name>.json).
 
 Plays every match of tests/scenarios.json (all sizes, every pitch plus one with extra walls, net teams, mixed line-ups of
-rule, Opus and net players, a net that does not fit the size, a scripted human in single and team control, several humans
+rule and net players, a net that does not fit the size, a scripted human in single and team control, several humans
 (co-op, versus, 2v1), golden-goal
 overtime, score limit) with the real AI and compares: the score, ball position and ball speed every second (so a FAIL says
 when the match started to differ) and the complete result (events, team and player statistics).
@@ -15,7 +15,7 @@ import sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 from soccer.data import Pitch                                   # noqa: E402
-from soccer.match import ENDED, Match, make_config             # noqa: E402
+from soccer.match import ENDED, SINGLE, TEAM, Human, Match, check_humans, make_config  # noqa: E402
 from tests import golden                                       # noqa: E402
 
 MAX_TICKS = 60 * 60 * 10
@@ -81,12 +81,35 @@ def first_divergence(name, got):
     return None
 
 
+def humans_rules():
+    """check_humans (local multiplayer): which line-ups of people a match accepts. True if every case is decided right."""
+    H = Human
+    cases = [("one person", [H(0, SINGLE)], 3, True), ("versus, whole teams", [H(0, TEAM), H(1, TEAM)], 3, True),
+             ("co-op, one player each", [H(0, SINGLE), H(0, SINGLE, 2)], 3, True),
+             ("2v1", [H(0, SINGLE, 0), H(0, SINGLE), H(1, TEAM)], 3, True),
+             ("shared side, whole team", [H(0, SINGLE), H(0, TEAM)], 3, False),
+             ("two on one player", [H(1, SINGLE, 1), H(1, SINGLE, 1)], 3, False),
+             ("more people than players", [H(0, SINGLE), H(0, SINGLE)], 1, False),
+             ("slot outside the size", [H(0, SINGLE, 3)], 3, False)]
+    bad = []
+    for name, hs, size, want in cases:
+        try:
+            check_humans(hs, size)
+            got = True
+        except ValueError:
+            got = False
+        if got != want:
+            bad.append(name)
+    print("%-24s %s    %s" % ("humans_rules", "OK" if not bad else "FAIL", "%d cases" % len(cases) if not bad else ", ".join(bad)))
+    return not bad
+
+
 def main():
     args = [a for a in sys.argv[1:] if not a.startswith("--")]
     update = "--update" in sys.argv
     spec = json.load(open(os.path.join(ROOT, "tests", "scenarios.json")))
     todo = [s for s in spec["scenarios"] if not args or s["name"] in args]
-    ok_all = True
+    ok_all = humans_rules() if not args else True
     for s in todo:
         got = play(s, spec["pitches"])
         ok = golden.check("match_" + s["name"], got, update, s["name"], show=3)
