@@ -93,7 +93,7 @@ A new agent can use all of the view or any part of it; a new observation is a ne
 
 `tests/test_view.py` (part of `python3 tests/run_all.py`):
 
-- the decision modules (`soccer/ai/`: `agent.py`, `kit.py`, `nets.py`, `skill.py`, `view.py` and every archetype in
+- the decision modules (`soccer/ai/`: `agent.py`, `kit.py`, `nets.py`, `obs.py`, `skill.py`, `view.py` and every archetype in
   `players/`) import nothing from the engine but its public constants, and never name the engine's or another agent's inside;
 - after mixed matches, nothing an agent holds leads to the match, a real player, a card, a view, or any other agent, teammates
   included (a deliberate leak to a teammate or a view is caught);

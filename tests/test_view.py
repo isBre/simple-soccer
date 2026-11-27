@@ -8,8 +8,9 @@
   calls       teammates hear each other's calls (some own-team body carries one during the match); the opponents' calls are
               never in a team's view
   opponents   a team's view of the opponents is anonymous: no calls, no human flag; the generic skill for everyone but yourself
-  slots obs   the every-size net observation (soccer/ai/nets.py features_slots, with the teammates' calls) built from a team's
-              view equals the one built from the match: a net that calls reads nothing the view does not have
+  obs         every net observation (soccer/ai/obs.py: slots76 at 1v1 / 3v3 / 5v5, team46, rank56, ego54 and the batched
+              features_many at 5v5) built from a team's view equals the one built from the match: a net reads nothing the view
+              does not have
 
   python3 tests/test_view.py"""
 import ast
@@ -25,7 +26,7 @@ from soccer.match import Match, MatchConfig, Player, make_config   # noqa: E402
 from soccer.players import PlayerDef                                # noqa: E402
 from soccer.ai.view import GENERIC_DELAY, View                     # noqa: E402
 
-AGENTS = ["soccer/ai/agent.py", "soccer/ai/kit.py", "soccer/ai/nets.py", "soccer/ai/skill.py"] + \
+AGENTS = ["soccer/ai/agent.py", "soccer/ai/kit.py", "soccer/ai/nets.py", "soccer/ai/obs.py", "soccer/ai/skill.py"] + \
     sorted("soccer/ai/players/" + f for f in os.listdir(os.path.join(ROOT, "soccer", "ai", "players")) if f.endswith(".py"))
 DECIDE = AGENTS + ["soccer/ai/view.py"]
 PUBLIC = {"KICK_RANGE", "KICK_STRENGTH", "BALL_DAMPING", "PLAYER_DAMPING", "PLAYER_ACCEL", "PLAYER_KICK_ACCEL", "AI_PERIOD", "DIRS", "GOAL", "HIST", "PLAYING", "ENDED", "TICK", "INTENTS"}
@@ -121,8 +122,13 @@ def main():
             if v.kickoff_team != t and v.kickoff_go is not None:
                 bad.append("team %d knows the other team's kickoff timer" % t)
     ok &= check("opponents", not bad, "; ".join(bad) or "anonymous, no calls, generic skill")
-    from soccer.ai.nets import features_slots
-    diff, n = 0, 0
+    from soccer.ai import obs
+    layouts = {"slots76": lambda m, ps: [x for p in ps for x in obs.features_slots(m, p)],
+               "team46": lambda m, ps: [x for p in ps for x in obs.features_team(m, p)],
+               "rank56": lambda m, ps: [x for p in ps for x in obs.features_rank(m, p)],
+               "ego54": lambda m, ps: [x for p in ps for x in obs.features_ego(m, p)],
+               "many": lambda m, ps: obs.features_many(m, ps, team=True, rank=True, legacy=True)}
+    diff, n = {k: 0 for k in layouts}, {k: 0 for k in layouts}
     for size in (1, 3, 5):
         m4 = Match(make_config("arrows", "aurora", "arena", size, 30.0, 8))
         for k in range(900):
@@ -131,10 +137,14 @@ def main():
                 continue
             for t in (0, 1):
                 v = m4.ai.views[t].refresh(m4)
-                for p in m4.team_lists[t]:
-                    n += 1
-                    diff += features_slots(v, v.bodies[p.uid]) != features_slots(m4, p)
-    ok &= check("slots obs", n > 0 and diff == 0, "%d observations at 1v1, 3v3 and 5v5, %d differ" % (n, diff))
+                mine = m4.team_lists[t]
+                for name, f in layouts.items():
+                    if size < 5 and name != "slots76":
+                        continue                       # team46 / rank56 / ego54 are 5v5 layouts
+                    n[name] += len(mine)
+                    diff[name] += f(v, [v.bodies[p.uid] for p in mine]) != f(m4, mine)
+    ok &= check("obs", all(n.values()) and not any(diff.values()),
+                ", ".join("%s %d (%d differ)" % (k, n[k], diff[k]) for k in layouts) + ": the view gives the match's numbers")
     print("TOTAL ->", "PASS" if ok else "FAIL")
     return 0 if ok else 1
 

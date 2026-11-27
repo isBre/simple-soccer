@@ -1,5 +1,5 @@
 """One RL episode source on top of the match core (soccer.match): the learner controls players of team 0 with ONE shared
-policy (one observation per player, soccer/ai/nets.py). With `with_keeper` the goalkeeper slot is a normal learner player
+policy (one observation per player, soccer/ai/obs.py). With `with_keeper` the goalkeeper slot is a normal learner player
 too: no rule-based keeper, no fixed formation. The rule-based players (opponents, a kept keeper) are played by the match AI.
 Started as a line-by-line port of the Godot environment (rl/rl_env.gd); tests/test_env.py guards it against stored runs.
 
@@ -22,7 +22,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
-from soccer.ai import nets                                           # noqa: E402
+from soccer.ai.obs import features_many, features_slots              # noqa: E402
 from soccer.data import database                                     # noqa: E402
 from soccer.match import ENDED, HIST, INTENTS, PLAYING, Match, MatchConfig   # noqa: E402
 from soccer.rng import RandomNumberGenerator                         # noqa: E402
@@ -418,9 +418,9 @@ class RLEnv:
         """The observations of all agents (learners, then the self-play opponents), concatenated."""
         o = self.obs
         if o == "slots":                                   # players removed from the physics ("ghosts") are empty slots
-            on = {id(p) for p in self.sim.players}
-            return [x for a in self.agents + self.opp_agents for x in nets.features_slots(self.sim, a, on)]
-        return nets.features_many(self.sim, self.agents + self.opp_agents, team=o != "legacy", rank=o in ("rank", "both_rank"),
+            on = {p.uid for p in self.sim.players}
+            return [x for a in self.agents + self.opp_agents for x in features_slots(self.sim, a, on)]
+        return features_many(self.sim, self.agents + self.opp_agents, team=o != "legacy", rank=o in ("rank", "both_rank"),
                                   legacy=o not in ("team", "rank"))
 
     def step(self, actions):

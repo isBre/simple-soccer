@@ -5,7 +5,7 @@ the clock, the score, the kickoff and its teammates' calls, never the match engi
 Act (agent.py): its buttons and its call. MatchAI is what soccer.match.Match calls on every AI tick: it refreshes the two views,
 lets the due agents decide and hands each one's buttons and call back to the match."""
 from ..match import AI_PERIOD
-from . import nets
+from . import nets, obs
 from .lineup import build
 from .view import View
 
@@ -40,7 +40,7 @@ class MatchAI:
             for t in (0, 1):
                 mine = [views[t].bodies[p.uid] for p in group if p.team == t]
                 if mine:
-                    feats += nets.features_group(views[t], mine, net.n_in)
+                    feats += obs.features_group(views[t], mine, net.n_in)
             out = net.forward(feats)
             for p, o in zip(group, out):
                 self._apply(m, p, p.bot_ai.act(views[p.team], views[p.team].bodies[p.uid], o))

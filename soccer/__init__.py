@@ -13,7 +13,7 @@ keyboard) sits on top; training, evaluations (rl/) and the Lab's live demo (lab/
   vec.py      2-D vector helpers on complex numbers (engine and AI)
   ai/         the AI, every player alone: view.py (the public view), agent.py (an agent's answer: buttons and a call),
               lineup.py (who drives each slot), players/ (the rule-based archetypes), kit.py (their toolkit), skill.py
-              (skill -> precision), nets.py (net players, observations)
+              (skill -> precision), nets.py (net players), obs.py (what a net sees)
 
 Quick use:
   from soccer.match import Match, make_config
