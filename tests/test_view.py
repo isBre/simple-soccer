@@ -29,6 +29,7 @@ AGENTS = ["soccer/ai/agent.py", "soccer/ai/kit.py", "soccer/ai/nets.py", "soccer
     sorted("soccer/ai/players/" + f for f in os.listdir(os.path.join(ROOT, "soccer", "ai", "players")) if f.endswith(".py"))
 DECIDE = AGENTS + ["soccer/ai/view.py"]
 PUBLIC = {"KICK_RANGE", "KICK_STRENGTH", "BALL_DAMPING", "PLAYER_DAMPING", "PLAYER_ACCEL", "PLAYER_KICK_ACCEL", "AI_PERIOD", "DIRS", "GOAL", "HIST", "PLAYING", "ENDED", "TICK", "INTENTS"}
+ENGINE = {"match", "physics", "control"}                       # the engine modules: only PUBLIC names may come from them
 FORBIDDEN = {"bot_ai", "pdef", "cfg", "ai", "players_real", "humans", "team_lists_real"}
 
 
@@ -41,10 +42,10 @@ def imports_ok():
     bad = []
     for f in DECIDE:
         for node in ast.walk(ast.parse(open(os.path.join(ROOT, f)).read())):
-            if isinstance(node, ast.ImportFrom) and node.module and node.module.endswith("match"):
+            if isinstance(node, ast.ImportFrom) and node.module and node.module.split(".")[-1] in ENGINE:
                 bad += ["%s: %s" % (f, a.name) for a in node.names if a.name not in PUBLIC]
-            if isinstance(node, ast.Import) and any(a.name.endswith("soccer.match") for a in node.names):
-                bad.append("%s: import soccer.match" % f)
+            if isinstance(node, ast.Import) and any(a.name.split(".")[-1] in ENGINE for a in node.names):
+                bad.append("%s: import of the engine" % f)
     return check("imports", not bad, "; ".join(bad) or "only public constants from the engine")
 
 
