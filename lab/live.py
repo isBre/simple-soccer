@@ -1,6 +1,8 @@
 """The dashboard's live demo match (Live page): the newest checkpoint of the running experiment plays one match after another on
 the match core, in real time, and every frame is streamed to lab/dashboard.py (UDP JSON to 127.0.0.1:7310), which relays it to
 the browser. Started (and restarted if it stops) by lab/exp_runner.py --viewer while an experiment runs.
+The stream is the Game's own (game/session.py meta / frame, with the same kickoff intro), so the Live page draws it with the Game's
+renderer (web/game/render.js); this file adds only who plays (run, checkpoint, opponent, the rating ids of both sides).
 
   python3 lab/live.py --tag x_anchor_corner --start out_5v5/ckpt/t48_u100.json
 
@@ -21,7 +23,8 @@ import time
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
-from soccer.data import database, resolve_kits         # noqa: E402
+from game import session                               # noqa: E402
+from soccer.data import database                       # noqa: E402
 from soccer.match import ENDED, Match, make_config     # noqa: E402
 
 LOGS = os.path.join(ROOT, "logs")
@@ -85,34 +88,19 @@ def opponent(rng):
     return {"team": NET_TEAM, "model": model, "label": sel.get("label", "RL Team 4")}
 
 
-def _hex(c, default):
-    return str(c or default).lstrip("#").lower()[:6]
-
-
-def meta(m, tag, playing, opp_label, mode):
-    cfg, raw = m.cfg, m.pitch.raw
-    colors = raw.get("colors", {})
-    teams = []
-    for i, (t, k) in enumerate(zip(cfg.teams, resolve_kits(*cfg.teams))):
-        teams.append({"name": t.name, "short": str(t.raw.get("short", t.name[:3].upper())), "primary": k[0], "secondary": k[1],
-                      "pattern": str(t.raw.get("kit", "solid")), "net": "remote" if cfg.nets[i] else ""})
-    return {"k": "m", "id": cfg.match_seed, "tag": tag, "playing": playing, "opponent": opp_label, "mode": mode, "upd": last_update(tag),
-            "best_move": False, "best_ckpt": False, "duration": cfg.duration, "ball_r": m.ball.radius, "teams": teams,
-            "players": [{"team": p.team, "n": p.slot + 1, "r": p.radius, "name": p.pdef.name} for t in (0, 1) for p in m.team_lists[t]],
-            "pitch": {**{k: getattr(m.pitch, k) for k in ("half_w", "half_h", "goal_half", "net_depth", "out_x", "out_y", "center_r",
-                                                          "box_depth", "box_half", "post_r")},
-                      "stripes": int(raw.get("stripes", 0)), "pitch": _hex(colors.get("pitch"), "718c5a"),
-                      "outer": _hex(colors.get("outer"), "5b7347"), "line": _hex(colors.get("line"), "c7e6bd")}}
-
-
-def frame(m):
-    pos = []
-    for t in (0, 1):
-        for p in m.team_lists[t]:
-            pos += [round(p.pos.real, 1), round(p.pos.imag, 1)]
-    return {"k": "f", "id": m.cfg.match_seed, "t": m.tick, "st": m.state, "tl": round(m.time_left, 1), "sc": list(m.scores),
-            "b": [round(m.ball.pos.real, 1), round(m.ball.pos.imag, 1)], "p": pos, "ko": bool(m.kickoff_active),
-            "gt": m.goal_team, "paused": False}
+def live_meta(m, tag, playing, opp, mode):
+    """The Game's match meta plus who plays: our side is the run's newest checkpoint, the other side the opponent; `elo` = the rating
+    entries the page looks the two sides up by (an id, else the net file)."""
+    d = session.meta(m)
+    run = tag[2:] if tag.startswith("x_") else tag
+    d["teams"][0].update(name="%s · %s" % (run, playing.rsplit("_", 1)[-1]), short="RUN")
+    if opp["model"]:
+        d["teams"][1].update(name=opp["label"], short="NET")
+    stem = lambda path: os.path.basename(path)[:-5] if path else ""
+    d.update(id=m.cfg.match_seed, tag=tag, playing=playing, opponent=opp["label"], mode=mode, upd=last_update(tag),
+             elo=[{"id": "net:" + playing, "model": ""},
+                  {"id": "net:" + stem(opp["model"]) if opp["model"] else "team:" + opp["team"], "model": opp["model"] or ""}])
+    return d
 
 
 def play(tag, start, rng, sock):
@@ -129,7 +117,7 @@ def play(tag, start, rng, sock):
     m = Match(cfg)
     if mode == "puzzle":
         m.puzzle_layout(rng.randrange(1 << 31))
-    head = json.dumps(meta(m, tag, os.path.basename(ckpt)[:-5], opp["label"], mode)).encode()
+    head = json.dumps(live_meta(m, tag, os.path.basename(ckpt)[:-5], opp, mode)).encode()
 
     def send(d):
         try:
@@ -137,16 +125,18 @@ def play(tag, start, rng, sock):
         except OSError:
             pass                                       # nobody listening: nothing waits
 
+    intro = session.KickoffIntro(session.PUZZLE_READY if mode == "puzzle" else 0)
     n, t_next, ended_at, goal_at = 0, time.monotonic(), None, None
     while True:
-        if m.state != ENDED:
-            m.step()
-            m.step()
+        n_ev = len(m.events)
+        for _ in range(2):                             # 60 ticks/s, 30 frames/s
+            if m.state != ENDED and not intro.hold(m):
+                m.step()
         if n % FPS == 0:
             send(head)
             if read_text("live_mode.json") + read_text("live_opponent.json") != choices:
                 return                                 # the dashboard picked another opponent or mode
-        send(frame(m))
+        send({**session.frame(m, intro.left, m.events[n_ev:]), "id": m.cfg.match_seed})
         n += 1
         now = time.monotonic()
         if mode == "puzzle" and goal_at is None and sum(m.scores) > 0:

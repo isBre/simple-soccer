@@ -138,12 +138,12 @@ export function syncOverlay(M, f) {
   }
   for (const b of ov.querySelectorAll("[data-act]")) { b.addEventListener("mousedown", (e) => e.preventDefault()); b.onclick = () => act(M, b.dataset.act); }
 }
-export function prepareMeta(M, m) {
+export function prepareMeta(M, m, sound = true) {
   M.meta = m;
   m.kits = m.teams.map((t) => [Draw.rgb(t.kit[0]), Draw.rgb(t.kit[1])]);
   const P = m.pitch;
   P.cPitch = Draw.rgb(P.pitch); P.cOuter = Draw.rgb(P.outer); P.cLine = Draw.rgb(P.line);
   m.goalCols = m.kits.map((k) => Draw.goalColour(k, P.cPitch));
   m.byUid = {}; m.players.forEach((pl, i) => { pl.i = i; pl.last = pl.name.split(" ")[1] || ""; m.byUid[pl.uid] = pl; });
-  Sound.crowdOn();
+  if (sound) Sound.crowdOn();
 }

@@ -18,7 +18,8 @@ Server -> page:
   {"k": "r", "result": {...}}   once, after the final whistle ("humans": [{team, mode, played: [uids]}, ...] per person)
   {"k": "e", "error": "..."}    the match could not start
 
-Kickoff intro (as the Godot game): at every kickoff the match is held for INTRO_TICKS while the page zooms in."""
+Kickoff intro (as the Godot game): at every kickoff the match is held for INTRO_TICKS while the page zooms in (KickoffIntro).
+The Lab's live demo match (lab/live.py) streams the same meta / frames with the same intro, drawn by the same renderer."""
 import random
 import time
 
@@ -52,6 +53,22 @@ def meta(m):
                       "outer": str(colors.get("outer", "5b7347")).lstrip("#"), "line": str(colors.get("line", "c7e6bd")).lstrip("#"),
                       "statics": [[s.pos.real, s.pos.imag, s.radius] for s in m.statics]},
             "warnings": list(getattr(m.ai, "warnings", []))}
+
+
+class KickoffIntro:
+    """Holds the match at every kickoff for INTRO_TICKS (the page zooms in meanwhile); `left` = ticks of hold still to come."""
+
+    def __init__(self, ticks=0):
+        self.left, self._kickoff = ticks, -1
+
+    def hold(self, m):
+        """Call once per tick: True = do not step the match this tick."""
+        if m.state == PLAYING and m.kickoff_active and m.kickoff_start != self._kickoff:
+            self._kickoff, self.left = m.kickoff_start, INTRO_TICKS
+        if self.left > 0:
+            self.left -= 1
+            return True
+        return False
 
 
 def _uid(p):
@@ -110,10 +127,10 @@ def _run(ws, rec):
     paused, speed, clock = False, 1, 0                      # clock: frames played (the Q window)
     keys = [(0j, False) for _ in m.humans]                  # every person's keys (local multiplayer: one per device)
     switch = set()                                          # who pressed Q since the last frame
-    intro, intro_id, result_sent = (PUZZLE_READY if puzzle else 0), -1, False
+    intro, result_sent = KickoffIntro(PUZZLE_READY if puzzle else 0), False
     goal_end = None
     next_t = time.monotonic()
-    ws.send(frame(m, intro, []))
+    ws.send(frame(m, intro.left, []))
     while True:
         msgs = ws.poll(next_t - time.monotonic())
         if msgs is None:
@@ -146,15 +163,12 @@ def _run(ws, rec):
             continue
         events = []
         clock += 1
-        if m.state == PLAYING and m.kickoff_active and m.kickoff_start != intro_id:
-            intro_id, intro = m.kickoff_start, INTRO_TICKS
+        held = intro.hold(m)
         for k in sorted(switch):                            # at once, also during the kickoff intro (picks the kickoff taker)
             m.set_human_input(*keys[k], k)
             m.switch_controlled(clock, k)
         switch.clear()
-        if intro > 0:
-            intro -= 1
-        else:
+        if not held:
             for k, ks in enumerate(keys):
                 m.set_human_input(*ks, k)
             n_ev = len(m.events)
@@ -167,7 +181,7 @@ def _run(ws, rec):
                 if puzzle and goal_end is None and m.state == GOAL:
                     goal_end = m.tick + PUZZLE_GOAL_TICKS
             events = m.events[n_ev:]
-        ws.send(frame(m, intro, events, clock))
+        ws.send(frame(m, intro.left, events, clock))
         if (m.state == ENDED or goal_end is not None and m.tick >= goal_end) and not result_sent:
             result = m.make_result()
             if m.humans:

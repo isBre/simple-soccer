@@ -93,13 +93,18 @@ def train_rows(tag):
     return rows if len(rows) >= len(old) else old
 
 
-def selfplay_options():
-    """Option names rl/selfplay.py accepts (rl/selfplay_args.py: the parser without torch)."""
+def selfplay_args():
+    """rl/selfplay_args.py (the training options without torch), loaded from its file."""
     import importlib.util
     spec = importlib.util.spec_from_file_location("selfplay_args", os.path.join(ROOT, "rl", "selfplay_args.py"))
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
-    return {a.dest for a in mod.parser()._actions if a.option_strings and a.dest != "help"}
+    return mod
+
+
+def selfplay_options():
+    """Option names rl/selfplay.py accepts."""
+    return {a.dest for a in selfplay_args().parser()._actions if a.option_strings and a.dest != "help"}
 
 
 def net_info(model):

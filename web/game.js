@@ -12,7 +12,7 @@
 // The screens are ES modules in web/game/ (core.js: state and helpers; one module per screen; render.js: the canvas).
 // This entry module routes #/game/... to them and exposes window.Game for the Lab's router (web/lab/app.js waits for "game-ready").
 import { $, G, catalog, esc, header, mount, overlay } from "./game/core.js";
-import { match, stopMatch } from "./game/match.js";
+import { match, prepareMeta, stopMatch } from "./game/match.js";
 import { menu } from "./game/menu.js";
 import { padStep } from "./game/pad.js";   // Xbox / standard controller: polled and turned into the same keys
 import { puzzlePage } from "./game/puzzle.js";
@@ -20,7 +20,7 @@ import { builder } from "./game/builder.js";
 import { playerPage, playersList } from "./game/players.js";
 import { teamSelect } from "./game/quick.js";
 import { rankingsPage } from "./game/rankings.js";
-import { drawMatch } from "./game/render.js";
+import { drawMatch, onGoal } from "./game/render.js";
 import { report } from "./game/report.js";
 import { soundsPage } from "./game/sounds.js";
 import { teams } from "./game/teams.js";
@@ -123,5 +123,7 @@ window.addEventListener("hashchange", () => {                          // a page
   ui.at = performance.now(); Sound.ui(depth(location.hash) < depth(from) ? "back" : "select");
 });
 
-window.Game = { show, stopMatch, state: () => G, redraw: () => G.match && drawMatch(G.match, performance.now()), padStep };   // state, redraw, padStep: for tests
+// viewer: the Lab's live demo match is the Game's stream (lab/live.py), drawn by the same renderer (web/lab/live.js)
+const viewer = { prepareMeta: (M, m) => prepareMeta(M, m, false), drawMatch, onGoal };
+window.Game = { show, stopMatch, viewer, state: () => G, redraw: () => G.match && drawMatch(G.match, performance.now()), padStep };   // state, redraw, padStep: for tests
 window.dispatchEvent(new Event("game-ready"));

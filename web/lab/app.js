@@ -30,6 +30,7 @@ async function poll() {
     if (r.view === "machine") state.health = null;
     if (r.view === "dataset" && !r.arg) loadDataset(true);
     if (r.view === "ranking") loadRanking(true);
+    if (r.view === "events") loadEvents(true);
     if (r.view === "compare") for (const n of (r.params.get("runs") || "").split(",")) if (state.detail[n]) state.detail[n]._t = 0;
     const run = state.ov.status.runner.running;
     if (run && state.detail[run.run]) state.detail[run.run]._t = 0;
@@ -49,14 +50,15 @@ function setPulse(ok) {
   if (down) off.innerHTML = `<b>The ${esc(machineName(s))} stopped answering</b>${state.lastOk ? " · last data " + new Date(state.lastOk).toLocaleTimeString() + " (" + dur((Date.now() - state.lastOk) / 1000) + " ago)" : ""}${s?.watchdog !== false ? " · if it froze, the watchdog reboots it and the runner resumes" : " · if it slept or rebooted, start the runner again"}`;
 }
 
-// ---------- routing and events ----------
+// ---------- routing ----------
+const VIEWS = { now: () => viewNow(), live: () => viewLive(), runs: () => viewRuns(), run: (r) => viewRun(r.arg, r.tab), compare: (r) => viewCompare(r.params),
+  ranking: () => viewRanking(), events: () => viewEvents(), dataset: (r) => viewDataset(r.arg), machine: () => viewMachine(), docs: (r) => viewDocs(r.arg) };
 function route() {
   const h = location.hash.replace(/^#\/?/, ""), [path, qs] = h.split("?"), parts = path.split("/"), params = new URLSearchParams(qs || "");
   if (parts[0] === "run" && parts[1]) return { view: "run", arg: decodeURIComponent(parts[1]), tab: parts[2], params };
-  if (parts[0] === "dataset") return { view: "dataset", arg: parts[1] ? decodeURIComponent(parts[1]) : "", params };
-  if (parts[0] === "docs") return { view: "docs", arg: parts[1] ? decodeURIComponent(parts[1]) : "", params };
+  if (parts[0] === "dataset" || parts[0] === "docs") return { view: parts[0], arg: parts[1] ? decodeURIComponent(parts[1]) : "", params };
   if (parts[0] === "game") return { view: "game", parts: parts.slice(1), params };
-  return { view: ["runs", "compare", "machine", "live", "ranking"].includes(parts[0]) ? parts[0] : "now", params };
+  return { view: VIEWS[parts[0]] && parts[0] !== "run" ? parts[0] : "now", params };
 }
 let lastHTML = "";
 function render() {
@@ -76,10 +78,9 @@ function render() {
   if (!state.ov && !state.firstFail && !pending._ov) { pending._ov = true; poll().finally(() => { delete pending._ov; }); }
   for (const a of document.querySelectorAll("[data-v]")) a.classList.toggle("on", a.dataset.v === (r.view === "run" ? "runs" : r.view));
   document.body.dataset.view = r.view;
-  if (r.view !== "live") { stopLive(); document.body.classList.remove("live-ctl"); }
   if (!(r.view === "dataset" && r.arg)) stopReplay();
   const before = new Set(Object.keys(chartData));
-  const html = r.view === "live" ? viewLive() : r.view === "runs" ? viewRuns() : r.view === "run" ? viewRun(r.arg, r.tab) : r.view === "compare" ? viewCompare(r.params) : r.view === "machine" ? viewMachine() : r.view === "docs" ? viewDocs(r.arg) : r.view === "dataset" ? viewDataset(r.arg) : r.view === "ranking" ? viewRanking() : viewNow();
+  const html = VIEWS[r.view](r);
   const cleaned = html.replace(/data-chart="c[a-z0-9]+"/g, "");
   const drop = (keep) => { for (const k of Object.keys(chartData)) if (before.has(k) !== keep) delete chartData[k]; };
   if (cleaned === lastHTML) { drop(true); return; }
@@ -88,44 +89,35 @@ function render() {
   const view = $("#view"), active = document.activeElement, focus = active && active.dataset && active.dataset.filter !== undefined, caret = focus ? active.selectionStart : 0;
   view.innerHTML = html;
   attachCharts(view);
-  if (focus) { const i = $("[data-filter]"); if (i) { i.focus(); i.setSelectionRange(caret, caret); } }
+  mountLive(view);
+  if (focus) { const i = $(`[data-filter="${active.dataset.filter}"]`) || $("[data-filter]"); if (i) { i.focus(); i.setSelectionRange(caret, caret); } }
   if (r.view === "dataset" && r.arg) startReplay(r.arg);
-  if (r.view === "live") { loadOpponents(); if (live.raf) cancelAnimationFrame(live.raf); live.raf = 0; startLive(); }
   document.title = (r.view === "run" ? r.arg + " · " : "") + "Soccer Lab · Simple Soccer";
   const dl = $("#runlist");
   if (dl && state.ov) dl.innerHTML = state.ov.runs.map((x) => `<option value="${esc(x.name)}">`).join("");
 }
-// the kiosk's control panel closes by itself 12 s after the last touch inside it
-let ctlTimer = 0;
-function setCtl(on) { document.body.classList.toggle("live-ctl", on); clearTimeout(ctlTimer); if (on) ctlTimer = setTimeout(() => document.body.classList.remove("live-ctl"), 12000); }
 function rerender() { lastHTML = ""; render(); }
+
+// ---------- events ----------
 document.addEventListener("click", (e) => {
   const t = e.target;
   if (t.closest("[data-fs]")) { toggleFullscreen(); return; }
-  if (t.closest("[data-ctl]")) { setCtl(!document.body.classList.contains("live-ctl")); return; }
-  if (document.body.classList.contains("live-ctl")) { if (t.closest(".live-side")) setCtl(true); else { setCtl(false); return; } }   // a tap outside the panel closes it; a tap inside keeps it open
-  const md = t.closest("button[data-mode]");
-  if (md) { live.mode = md.dataset.mode; liveSide(); fetch("/api/live/mode", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mode: live.mode }) }).catch(() => {}); return; }
-  const cam = t.closest("button[data-cam]");
-  if (cam) { live.follow = cam.dataset.cam === "1"; try { localStorage.setItem("liveFollow", live.follow ? "1" : "0"); } catch (err) {} liveSide(); return; }
+  const sg = t.closest("button[data-seg]");
+  if (sg) { onSeg[sg.dataset.seg]?.(sg.dataset.val); return; }
+  const pg = t.closest("button[data-page]");
+  if (pg) { state.page[pg.dataset.page] = +pg.dataset.val; rerender(); return; }
+  const op = t.closest("[data-open]");
+  if (op) { state.open[op.dataset.open] = !state.open[op.dataset.open]; rerender(); return; }
   const lg = t.closest("button.lg");
   if (lg) { const k = lg.dataset.key, s = lg.dataset.series; state.hidden[k] = state.hidden[k] || new Set(); if (state.hidden[k].has(s)) state.hidden[k].delete(s); else state.hidden[k].add(s); rerender(); return; }
   const th = t.closest("th[data-sort]");
   if (th) { const k = th.dataset.sort; state.sort = { key: k, dir: state.sort.key === k ? -state.sort.dir : k === "name" || k === "state" ? 1 : -1 }; rerender(); return; }
   const rfb = t.closest("button[data-rf]");
   if (rfb) { setRunsFilter(rfb.dataset.rf, rfb.dataset.rv); return; }
-  const kd = t.closest("[data-kind]");
-  if (kd) { const p = route().params; p.set("kind", kd.dataset.kind); location.hash = "#/compare?" + p.toString(); return; }
-  const lgp = t.closest("[data-league]");
-  if (lgp) { rk.league = lgp.dataset.league; rerender(); return; }
-  const rkw = t.closest("[data-rkwhat]");
-  if (rkw) { rk.what = rkw.dataset.rkwhat; rk.league = "all"; rerender(); return; }
-  const rks = t.closest("[data-rksize]");
-  if (rks) { rk.size = +rks.dataset.rksize; loadRanking(true); return; }
-  const hrs = t.closest("[data-hours]");
-  if (hrs) { state.healthHours = +hrs.dataset.hours; state.health = null; rerender(); return; }
   const rm = t.closest("[data-rmrun]");
-  if (rm) { const p = route().params; p.set("runs", (p.get("runs") || "").split(",").filter((n) => n && n !== rm.dataset.rmrun).join(",")); location.hash = "#/compare?" + p.toString(); return; }
+  if (rm) { setCompareRuns(compareRuns().filter((n) => n !== rm.dataset.rmrun)); return; }
+  const cmp = t.closest("[data-cmpset]");
+  if (cmp) { setCompareRuns(cmp.dataset.cmpset.split(",")); return; }
   const cp = t.closest("[data-copy]");
   if (cp) { copySummary(cp.dataset.copy, cp); return; }
   if (t.closest("#rp-play") && ds.replay) { const R = ds.replay; if (!R.playing && R.d && R.i >= R.d.tick.length - 1) R.i = 0; R.playing = !R.playing; return; }
@@ -139,14 +131,14 @@ document.addEventListener("change", (e) => {
   const t = e.target;
   if (t.dataset.rf !== undefined && t.tagName !== "BUTTON") { setRunsFilter(t.dataset.rf, t.type === "checkbox" ? t.checked : t.value); return; }
   if (t.dataset.pick !== undefined) { if (t.checked) state.selected.add(t.dataset.pick); else state.selected.delete(t.dataset.pick); rerender(); }
-  if (t.dataset.addrun !== undefined && t.value) { const p = route().params; const runs = (p.get("runs") || "").split(",").filter(Boolean); runs.push(t.value); p.set("runs", runs.join(",")); location.hash = "#/compare?" + p.toString(); }
-  if (t.dataset.evalpick !== undefined) { state.evalPick[t.dataset.evalpick] = t.value; rerender(); }
+  if (t.dataset.addrun !== undefined && t.value) { setCompareRuns(compareRuns().concat(t.value)); t.value = ""; }
   if (t.dataset.estpick !== undefined) { state.estPick[t.dataset.estpick] = +t.value; rerender(); }
+  if (t.dataset.sel !== undefined) { onSeg[t.dataset.sel]?.(t.type === "checkbox" ? t.checked : t.value); return; }
   if (t.id === "picker" && t.value) { location.hash = "#/run/" + encodeURIComponent(t.value); t.value = ""; t.blur(); }
 });
 document.addEventListener("input", (e) => {
   const t = e.target;
-  if (t.dataset.filter !== undefined) { state.filter = t.value; rerender(); }
+  if (t.dataset.filter !== undefined) { if (t.dataset.filter) onSeg[t.dataset.filter]?.(t.value); else { state.filter = t.value; state.page.runs = 0; rerender(); } }
   if (t.dataset.smooth !== undefined) { state.smooth = +t.value; rerender(); }
   if (t.id === "rp-seek" && ds.replay) ds.replay.i = +t.value;
 });
@@ -161,36 +153,18 @@ document.addEventListener("keydown", (e) => {
 });
 async function copySummary(name, btn) {
   try {
-    const d = await getJSON("/api/v1/run/" + encodeURIComponent(name) + "?tail=5"), r = d.data, lf = r.latest_full;
+    const d = await getJSON("/api/v1/run/" + encodeURIComponent(name) + "?tail=5"), r = d.data;
+    const e = r.elo || {}, est = r.elo_estimate || {};
     const md = `**${r.name}** (${r.state}${r.stop_reason ? ", " + r.stop_reason : ""}) · update ${r.update}/${r.target}\nchanges: ${JSON.stringify(r.rewards_changed_vs_minimal)}\n` +
-      (lf ? `full u${lf.update}: ${lf.pts} ± ${lf.se} pts, GD ${lf.gd}, GA ${lf.ga}, vs RL4 ${lf.h2h["RL Team 4"]?.pts}, vs RL5 ${lf.h2h["RL Team 5"]?.pts}\n` : "") +
-      (r.verdict ? `verdict vs ${r.verdict.reference}: ${r.verdict.verdict} (${r.verdict.pts} ± ${r.verdict.pts_se}, z ${r.verdict.z})\n` : "");
+      (e.elo != null ? `Elo ${Math.round(e.elo)} (rated), ` : est.elo != null ? `estimated Elo ${Math.round(est.elo)} at u${est.update}, ` : "") + (est.gf != null ? `GF ${f(est.gf)} GA ${f(est.ga)}\n` : "\n");
     await navigator.clipboard.writeText(md);
     btn.textContent = "copied";
   } catch (err) { btn.textContent = "copy failed"; }
   setTimeout(() => (btn.textContent = "copy summary"), 1500);
 }
 window.addEventListener("hashchange", () => { if (document.body.classList.contains("live-fs") && route().view !== "live") toggleFullscreen(false); lastHTML = ""; window.scrollTo(0, 0); render(); });
-// full screen live match (like a video player): the page shows only the pitch and the score; the browser goes full screen too when it
-// can (on the Pi's kiosk it already is). A tap on the button or Esc leaves it.
-function toggleFullscreen(on) {
-  on = on ?? !document.body.classList.contains("live-fs");
-  document.body.classList.toggle("live-fs", on);
-  try {
-    if (on && !document.fullscreenElement && document.documentElement.requestFullscreen) document.documentElement.requestFullscreen().catch(() => {});
-    if (!on && document.fullscreenElement) document.exitFullscreen().catch(() => {});
-  } catch (e) {}
-  const b = $("[data-fs]"); if (b) { b.innerHTML = FS_ICON[on ? 1 : 0]; b.title = on ? "Exit full screen" : "Full screen"; }
-}
-document.addEventListener("fullscreenchange", () => { if (!document.fullscreenElement && document.body.classList.contains("live-fs") && !document.body.classList.contains("kiosk")) toggleFullscreen(false); });
-document.addEventListener("keydown", (e) => { if (e.key === "Escape" && document.body.classList.contains("live-fs")) toggleFullscreen(false); });
 
-// kiosk: the Pi's 1024x600 touch screen opens on the live match; theme: dark unless the user picked light
-if (new URLSearchParams(location.search).has("kiosk")) {
-  document.body.classList.add("kiosk");
-  document.documentElement.classList.add("kiosk");
-  history.replaceState(null, "", location.pathname + location.search + "#/live");
-}
+// ---------- start-up; theme: dark unless the user picked light ----------
 function setThemeButton() { $("#theme").textContent = document.documentElement.dataset.theme === "light" ? "☾" : "☀"; }
 $("#theme").addEventListener("click", () => {
   const light = document.documentElement.dataset.theme !== "light";
@@ -199,11 +173,6 @@ $("#theme").addEventListener("click", () => {
   setThemeButton(); rerender();
 });
 setThemeButton();
-try { if (!location.hash && !document.body.classList.contains("kiosk") && localStorage.getItem("area") === "game") history.replaceState(null, "", "#/game"); } catch (e) {}
+try { if (!location.hash && localStorage.getItem("area") === "game") history.replaceState(null, "", "#/game"); } catch (e) {}
 function start() { render(); setInterval(poll, POLL_MS); }
 if (window.Game) start(); else window.addEventListener("game-ready", start, { once: true });
-// the kiosk keeps one page open for days: reload it when the dashboard's files changed on the Pi
-let pageVersion = null;
-setInterval(async () => {
-  try { const v = (await (await fetch("/api/version")).json()).v; if (pageVersion === null) pageVersion = v; else if (v !== pageVersion) location.reload(); } catch (e) {}
-}, 30000);

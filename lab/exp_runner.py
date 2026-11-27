@@ -133,8 +133,7 @@ def progress(tag):
 
 
 def start_viewer(tag, model):
-    """--viewer: the live demo match (lab/live.py: the newest checkpoint on the match core, streamed to the dashboard). The Pi's
-    screen shows it through the kiosk, its own service (lab/kiosk.py, soccer-kiosk)."""
+    """--viewer: the live demo match (lab/live.py: the newest checkpoint on the match core, streamed to the dashboard's Live page)."""
     return [viewer_window(tag, model)]
 
 
@@ -336,7 +335,7 @@ def run_experiment(spec_path, viewer=False):
         if proc.returncode not in (0, None) and stop_reason == "budget" and last_checkpoint(tag)[0] < upd_end:
             stop_reason = "error"
             log("%s: trainer exited with code %s before the end" % (name, proc.returncode))
-    for p in procs:                                                    # the live match (the kiosk stays open)
+    for p in procs:                                                    # the live match
         p.terminate()
     stop_stale_workers()
     final_update, final_ckpt = last_checkpoint(tag)
@@ -438,7 +437,7 @@ def ladder_round(size=None, force=False):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--loop", action="store_true", help="keep waiting for new specs (the service); default: run the queue once and exit")
-    ap.add_argument("--viewer", action="store_true", help="play the live match (headless; the Pi's screen shows it through the soccer-kiosk service)")
+    ap.add_argument("--viewer", action="store_true", help="play the live match (headless; the dashboard's Live page shows it)")
     ap.add_argument("--viewer-only", action="store_true", help="no training: only the live demo (experiments run on another computer)")
     a = ap.parse_args()
     if a.viewer_only:

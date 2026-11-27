@@ -12,6 +12,7 @@ on the experiments, start here. People: the same applies; the dashboard (the Lab
   teams and kickoff"). Opus 5.5 High was removed (it planned on a clone of the match; docs/opus_5_5_high.md).
 - `docs/ratings.md`: **the ratings**: Elo per player and team, per size (1v1 to 5v5), in a local database on every machine
   (`python3 -m elo init` once after cloning; the web app refines in the background).
+- `docs/lab_design.md`: the Lab's look (tokens, components, page layouts); read it before changing a Lab page.
 - `docs/public_view.md`: **what a player may know**. Every agent (rule-based, net, anything new) decides from the same public view
   (`soccer/ai/view.py`): anonymous bodies, their recent history, clock, score, kickoff, last touch, the pitch and the physics, plus
   anything it computes from that; never the match engine or another team's inside. A new observation or agent is a function of the

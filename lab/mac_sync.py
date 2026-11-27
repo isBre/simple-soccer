@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Runs on the computer that TRAINS (the Mac). Keeps the Pi's dashboard and kiosk in step with it, over ssh + rsync, every --interval s:
+"""Runs on the computer that TRAINS (the Mac). Keeps the Pi's dashboard in step with it, over ssh + rsync, every --interval s:
 
   1. pushes results, run states, logs and checkpoints to the Pi (exp/, logs/x_*.out and x_*_train.jsonl, logs/sp_eval/, out_5v5/ckpt/*.pt|json; never the
      big *.train_state files, the queue, the audit log or the cancel flags);
