@@ -1,0 +1,18 @@
+{
+ "name": "dist_rank56",
+ "obs": "rank",
+ "start": "out_5v5/ckpt/rank56_long.pt",
+ "updates": 300,
+ "lr": 5e-05,
+ "rewards": {
+  "w_wall": 0.02
+ },
+ "args": {
+  "teacher": "out_5v5/ckpt/jit8_best.pt",
+  "kl_coef": 0.3,
+  "kl_decay": 300,
+  "seed": 7
+ },
+ "control": "anchor_bigbatch",
+ "notes": "Better start for the anchor recipe (user: continue jit8's line, role-free; 2026-11-26). Start = 56-number rank observation (role-free ranks, user OK 2026-11-21), distilled from jit8 directly (rl/distill.py --obs rank --steps 1400 --rounds 8; move agreement 86%, estimated Elo 1552 \u00b1 105). Everything else is anchor_bigbatch (rollout 256, teacher jit8 KL 0.3 -> 0 by u300, w_wall 0.02, lr 5e-5, 300 updates, seed 7), whose start x_kickstart_best rates lower than the net it was trained from. Question: does a stronger distilled start lift the 1630-1670 plateau? Judged over seeds 7/11/23 by Elo and agf / aga."
+}

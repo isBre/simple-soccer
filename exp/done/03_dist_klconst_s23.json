@@ -1,0 +1,18 @@
+{
+ "name": "dist_klconst_s23",
+ "obs": "team",
+ "start": "out_5v5/ckpt/team46_long.pt",
+ "updates": 300,
+ "lr": 5e-05,
+ "rewards": {
+  "w_wall": 0.02
+ },
+ "args": {
+  "teacher": "out_5v5/ckpt/jit8_best.pt",
+  "kl_coef": 0.15,
+  "kl_decay": 1000000000,
+  "seed": 23
+ },
+ "control": "dist_team46_s23",
+ "notes": "Constant teacher KL 0.15 to jit8 (never fades) from the long distillation team46_long (1584, the best start so far). dist_team46* (same start, KL 0.3 -> 0 by u300) collapsed late in five of six runs once the KL reached 0 (goals conceded 0.9-1.1 at u300) and settled at 1649, level with anchor_bigbatch (1637). Single variable vs dist_team46_s23: the KL schedule (same as anchor_bb_klconst, which gave +15 on x_kickstart_best). Seed 23, rollout 256, w_wall 0.02, lr 5e-5, 300 updates. Queued 2026-11-26 evening on the MacBook Air (user yes)."
+}
