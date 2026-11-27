@@ -54,6 +54,7 @@ def intercept(v, b, bpos: complex, bvel: complex, delay: float):
     hw, hh = v.pitch.half_w - 12.0, v.pitch.half_h - 12.0
     bx, by, vx, vy = bpos.real, bpos.imag, bvel.real, bvel.imag
     px, py, pvx, pvy = b.pos.real, b.pos.imag, b.vel.real, b.vel.imag
+    ex = max(math.sqrt(pvx * pvx + pvy * pvy) - TOP, 0.0) * TAU     # the most its current speed can add (along <= speed)
     sqrt = math.sqrt
     for t, q, run, grow in _table(float(delay) + 2.0):
         x = bx + vx * q
@@ -61,7 +62,11 @@ def intercept(v, b, bpos: complex, bvel: complex, delay: float):
         y = by + vy * q
         y = -hh if y < -hh else (hh if y > hh else y)
         dx, dy = x - px, y - py
-        dl = sqrt(dx * dx + dy * dy)
+        d2 = dx * dx + dy * dy
+        lim = run + ex * grow + touch                   # out of reach for sure: skip the exact test (same answer, no sqrt)
+        if lim < 0.0 or d2 > lim * lim:
+            continue
+        dl = sqrt(d2)
         along = (pvx * dx + pvy * dy) / (dl if dl > 1.0 else 1.0)
         if run + (along - TOP) * TAU * grow >= dl - touch:
             return complex(x, y), float(t)
@@ -94,10 +99,15 @@ def reach_times(v, bodies, path, delay=None) -> dict:
             tab = _QTAB[rd] = [(TOP * max(t - rd, 0.0), TAU * (1.0 - math.exp(-max(t - rd, 0.0) / TAU))) for t, _ in _QUICK]
         touch = (b.radius + v.ball_r) * 0.6
         px, py, pvx, pvy = b.pos.real, b.pos.imag, b.vel.real, b.vel.imag
+        ex = max(sqrt(pvx * pvx + pvy * pvy) - TOP, 0.0)
         r = (INF, complex(path[-1][1], path[-1][2]))
         for (t, x, y), (run, grow) in zip(path, tab):
             dx, dy = x - px, y - py
-            dl = sqrt(dx * dx + dy * dy)
+            d2 = dx * dx + dy * dy
+            lim = run + ex * grow + touch               # out of reach for sure: skip the exact test
+            if lim < 0.0 or d2 > lim * lim:
+                continue
+            dl = sqrt(d2)
             if run + ((pvx * dx + pvy * dy) / (dl if dl > 1.0 else 1.0) - TOP) * grow >= dl - touch:
                 r = (float(t), complex(x, y))
                 break
