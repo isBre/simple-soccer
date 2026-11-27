@@ -256,6 +256,7 @@ def run_row(name, rows):
     changed = {k: v for k, v in rewards.items() if mn.get(k) != v}
     return {"name": name, "state": st.get("state", "imported" if name.startswith(("old_", "start:")) else "reference" if name.startswith("team:") else "unknown"),
             "notes": spec.get("notes", ""), "start": spec.get("start"), "control": spec.get("control"),
+            "size": spec.get("size", 5), "stage": spec.get("stage"), "curriculum": spec.get("curriculum"),
             "net": (st.get("net") or tracker.net_info(spec.get("start") or ("out_5v5/ckpt/" + name[6:] if name.startswith("start:") else None)) or {}).get("label"),
             "rewards_changed_vs_minimal": changed if rewards else spec.get("rewards", {}), "seed": st.get("seed"),
             "update": st.get("update"), "target": st.get("target_updates"), "stop_reason": st.get("stop_reason"),
@@ -401,20 +402,27 @@ def cmd_queue(a):
     if a.action in ("validate", "add"):
         if not a.arg:
             raise LabError("give a spec file", "python3 lab/lab.py queue %s spec.json" % a.action)
-        spec = json.load(open(a.arg))
-        errs = tracker.validate_spec(spec)
-        if any(json.load(open(f))["name"] == spec.get("name") for f in queue_files() + glob.glob(os.path.join(EXP, "running", "*.json"))):
-            errs.append("a spec named %r is already queued or running" % spec.get("name"))
+        specs = tracker.expand(json.load(open(a.arg)))         # a curriculum: one spec per stage, in order
+        taken = {json.load(open(f))["name"] for f in queue_files() + glob.glob(os.path.join(EXP, "running", "*.json"))}
+        errs, earlier = [], []
+        for spec in specs:
+            errs += [("%s: %s" % (spec.get("name"), e)) if len(specs) > 1 else e for e in tracker.validate_spec(spec, earlier)]
+            if spec.get("name") in taken:
+                errs.append("a spec named %r is already queued or running" % spec.get("name"))
+            earlier.append(spec.get("name"))
         if a.action == "validate" or errs:
             if errs and a.action == "add":
                 raise LabError("invalid spec: " + "; ".join(errs), "fix the spec, then python3 lab/lab.py queue validate FILE")
-            return {"valid": not errs, "errors": errs, "effective": dict(zip(("rewards", "args"), tracker.effective(spec)))}
+            return {"valid": not errs, "errors": errs, "stages": [s["name"] for s in specs] if len(specs) > 1 else None,
+                    "effective": dict(zip(("rewards", "args"), tracker.effective(specs[0])))}
         files = queue_files()
-        dest = os.path.join(EXP, "queue", "99_%s.json" % spec["name"])
-        json.dump(spec, open(dest, "w"), indent=1)
-        files.insert(min(max((a.position or len(files) + 1) - 1, 0), len(files)), dest)
+        pos = min(max((a.position or len(files) + 1) - 1, 0), len(files))
+        for k, spec in enumerate(specs):
+            dest = os.path.join(EXP, "queue", "99_%s.json" % spec["name"])
+            json.dump(spec, open(dest, "w"), indent=1)
+            files.insert(pos + k, dest)
         renumber(files)
-        audit("queue_add", name=spec["name"], position=a.position)
+        audit("queue_add", name=specs[0].get("curriculum") or specs[0]["name"], stages=[s["name"] for s in specs] if len(specs) > 1 else None, position=a.position)
         return cmd_queue(argparse.Namespace(action="list"))
     if a.action == "cancel":
         running = {json.load(open(f))["name"]: f for f in glob.glob(os.path.join(EXP, "running", "*.json"))}

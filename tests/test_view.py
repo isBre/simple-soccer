@@ -8,6 +8,8 @@
   calls       teammates hear each other's calls (some own-team body carries one during the match); the opponents' calls are
               never in a team's view
   opponents   a team's view of the opponents is anonymous: no calls, no human flag; the generic skill for everyone but yourself
+  slots obs   the every-size net observation (soccer/ai/nets.py features_slots, with the teammates' calls) built from a team's
+              view equals the one built from the match: a net that calls reads nothing the view does not have
 
   python3 tests/test_view.py"""
 import ast
@@ -118,6 +120,20 @@ def main():
             if v.kickoff_team != t and v.kickoff_go is not None:
                 bad.append("team %d knows the other team's kickoff timer" % t)
     ok &= check("opponents", not bad, "; ".join(bad) or "anonymous, no calls, generic skill")
+    from soccer.ai.nets import features_slots
+    diff, n = 0, 0
+    for size in (1, 3, 5):
+        m4 = Match(make_config("arrows", "aurora", "arena", size, 30.0, 8))
+        for k in range(900):
+            m4.step()
+            if k % 97:
+                continue
+            for t in (0, 1):
+                v = m4.ai.views[t].refresh(m4)
+                for p in m4.team_lists[t]:
+                    n += 1
+                    diff += features_slots(v, v.bodies[p.uid]) != features_slots(m4, p)
+    ok &= check("slots obs", n > 0 and diff == 0, "%d observations at 1v1, 3v3 and 5v5, %d differ" % (n, diff))
     print("TOTAL ->", "PASS" if ok else "FAIL")
     return 0 if ok else 1
 

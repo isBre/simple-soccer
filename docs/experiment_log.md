@@ -37,6 +37,11 @@ dashboard: `http://<pi-address>:8080`. Newest entries at the bottom; the agent a
   **New baseline**: every evaluation against rule teams before this date (league points, `full/g1/d90`, the tiers of
   `rl/teams_info.json`) was played against the old team-brain bots and is not comparable; `elo.ENGINE` = 2 (ratings start over:
   `python3 -m elo init` on every machine).
+- **Phase D: one observation for every size, nets that call, a curriculum from scratch** (user, 2026-11-27; rl/README.md
+  "Every team size, with calls"). Observation `slots` (76 numbers: me, 4 teammate slots with an on-the-pitch flag and their call,
+  5 opponent slots with the flag, ball, kickoff on / ours, celebration), a function of the public view; the net has 15 outputs
+  (moves, kick, 5 calls), calls carry no reward. New nets train 1v0 -> 1v1 -> ... -> 5v5 from scratch, each stage from the
+  previous one's best checkpoint, judged by the estimated Elo at the stage's size; a stage stops on its budget or a plateau.
 - **Observation `team` (46 numbers):** me, my 4 teammates nearest first, the 5 opponents nearest first, the ball (positions and velocities,
   normalised), a kickoff flag and a goal-celebration flag. No goal positions, no "ball relative to me", no score, no time.
 - **Reward terms come back one at a time** on top of the minimal set, each as its own experiment judged by a full evaluation (2026-11-16).

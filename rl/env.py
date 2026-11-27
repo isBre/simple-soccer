@@ -24,7 +24,7 @@ if ROOT not in sys.path:
 
 from soccer.ai import nets                                           # noqa: E402
 from soccer.data import database                                     # noqa: E402
-from soccer.match import ENDED, HIST, PLAYING, Match, MatchConfig   # noqa: E402
+from soccer.match import ENDED, HIST, INTENTS, PLAYING, Match, MatchConfig   # noqa: E402
 from soccer.rng import RandomNumberGenerator                         # noqa: E402
 
 REPEAT = 2                 # sim ticks per decision (same as the match's AI_PERIOD)
@@ -32,6 +32,7 @@ OUT_NONE, OUT_GOAL, OUT_OWN, OUT_TIMEOUT, OUT_CONCEDED, OUT_WIN, OUT_DRAW, OUT_L
 OBS_LEGACY = 54            # ego observation with the slot one-hot (the first RL teams)
 OBS_TEAM = 46              # role-free team observation (features_team)
 OBS_RANK = 56              # team observation + 10 role-free ranks (features_rank)
+OBS_SLOTS = 76             # every team size, with the teammates' calls (features_slots); its nets also call (3 numbers per action)
 
 DEFAULTS = dict(pitch="arena", size=5, n_active=5, with_keeper=True, opp="none", own_team="owls", max_steps=750, spread=1.0,
                 ball_speed=0.0, match_mode=False, duration=90.0, selfplay=0.0, shaping=1.0, opp_external=False,
@@ -95,9 +96,13 @@ class RLEnv:
     def obs_dim(self):
         """Observation layout (config "obs"): "legacy" = 54 numbers with slot, "team" = the 46-number role-free one,
         "rank" = team + 10 ranks (56), "both" = team then legacy (100 numbers; distillation, a 54-input teacher / opponent),
-        "both_rank" = rank then legacy (110)."""
+        "both_rank" = rank then legacy (110), "slots" = every size with the teammates' calls (76; empty slots flagged off)."""
         return {"legacy": OBS_LEGACY, "team": OBS_TEAM, "rank": OBS_RANK, "both": OBS_TEAM + OBS_LEGACY,
-                "both_rank": OBS_RANK + OBS_LEGACY}[self.obs]
+                "both_rank": OBS_RANK + OBS_LEGACY, "slots": OBS_SLOTS}[self.obs]
+
+    def act_width(self):
+        """Numbers per agent in an action: move, kick (and the call, with the slots observation)."""
+        return 3 if self.obs == "slots" else 2
 
     def n_agents(self):
         """Learner agents first, then (self-play) the opponent team's players."""
@@ -412,18 +417,24 @@ class RLEnv:
     def observe(self):
         """The observations of all agents (learners, then the self-play opponents), concatenated."""
         o = self.obs
+        if o == "slots":                                   # players removed from the physics ("ghosts") are empty slots
+            on = {id(p) for p in self.sim.players}
+            return [x for a in self.agents + self.opp_agents for x in nets.features_slots(self.sim, a, on)]
         return nets.features_many(self.sim, self.agents + self.opp_agents, team=o != "legacy", rank=o in ("rank", "both_rank"),
                                   legacy=o not in ("team", "rank"))
 
     def step(self, actions):
-        """actions: move idx (0..8) and kick (0/1) per agent, flat [m0, k0, m1, k1, ...].
-        Returns (reward, done, outcome, individual rewards). Does NOT auto-reset."""
+        """actions: move idx (0..8) and kick (0/1) per agent, and with the slots observation the call (index of INTENTS), flat
+        [m0, k0, (c0,) m1, k1, ...]. Returns (reward, done, outcome, individual rewards). Does NOT auto-reset."""
         sim = self.sim
         all_agents = self.agents + self.opp_agents
         if not self.external_actions:
+            w = self.act_width()
             for i, a in enumerate(all_agents):
-                sim.set_action(a, min(max(int(actions[i * 2]), 0), 8), int(actions[i * 2 + 1]) != 0)
+                sim.set_action(a, min(max(int(actions[i * w]), 0), 8), int(actions[i * w + 1]) != 0)
                 a.kick_intent = ""
+                if w == 3:
+                    sim.set_intent(a, INTENTS[min(max(int(actions[i * w + 2]), 0), len(INTENTS) - 1)])
         for _ in range(REPEAT):
             sim.step()
             if not self.match_mode and sim.state != PLAYING:

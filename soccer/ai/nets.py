@@ -13,10 +13,14 @@ import threading
 
 import numpy as np
 
+from ..match import INTENTS
 from .agent import Act
 
 TEAM_OBS = 46                     # role-free team observation (features_team)
 RANK_OBS = 56                     # features_team + 10 rank numbers (features_rank)
+SLOTS_OBS = 76                    # every size, with the teammates' calls (features_slots); the net file says "obs": "slots76"
+SLOTS_NAME = "slots76"
+CALL_OUT = 15                     # outputs of a net that calls: 9 moves, 1 kick, 5 calls (INTENTS order)
 DIRS = [0j, -1j, 1 - 1j, 1 + 0j, 1 + 1j, 1j, -1 + 1j, -1 + 0j, -1 - 1j]
 
 
@@ -42,6 +46,40 @@ def features_team(m, p):
             _push(out, o.pos, o.vel, s, pd)
     _push(out, m.ball_pos, m.ball_vel, s, pd)
     out.append(1.0 if m.kickoff_active else 0.0)
+    out.append(1.0 if m.state == 1 else 0.0)
+    return out
+
+
+def features_slots(m, p, present=None):
+    """The observation of every team size (76 numbers, SLOTS_NAME), from the public view (or the match itself, in training).
+    The pitch is mirrored so the team attacks to the right; positions are scaled by the pitch, speeds by 5.
+      me                    position and speed                                                    4
+      4 teammate slots      nearest first: position and speed, on the pitch (1), its call (5, INTENTS order)    4 x 10
+      5 opponent slots      nearest first: position and speed, on the pitch (1)                    5 x 5
+      ball                  position and speed                                                    4
+      flags                 kickoff on, our kickoff, goal celebration                             3
+    A slot nobody fills (a smaller size, a player removed in training) is zeros with "on the pitch" 0, so one net plays every
+    size. `present`: the set of ids of the players on the pitch (training removes some); default all of m.players."""
+    s = m.attack_dir(p.team)
+    pd = m.pitch
+    on = present if present is not None else {id(o) for o in m.players}
+    out = []
+    _push(out, p.pos, p.vel, s, pd)
+    key = lambda o: (abs(o.pos - p.pos) ** 2, o.uid)
+    mates = sorted((o for o in m.team_lists[p.team] if o is not p and id(o) in on), key=key)[:4]
+    for o in mates:
+        _push(out, o.pos, o.vel, s, pd)
+        out.append(1.0)
+        out += [1.0 if o.intent == c else 0.0 for c in INTENTS]
+    out += [0.0] * (10 * (4 - len(mates)))
+    opps = sorted((o for o in m.team_lists[1 - p.team] if id(o) in on), key=key)[:5]
+    for o in opps:
+        _push(out, o.pos, o.vel, s, pd)
+        out.append(1.0)
+    out += [0.0] * (5 * (5 - len(opps)))
+    _push(out, m.ball_pos, m.ball_vel, s, pd)
+    out.append(1.0 if m.kickoff_active else 0.0)
+    out.append(1.0 if m.kickoff_active and m.kickoff_team == p.team else 0.0)
     out.append(1.0 if m.state == 1 else 0.0)
     return out
 
@@ -94,7 +132,10 @@ def features(m, p, with_slot=False):
 
 
 def features_for(m, p, n_in):
-    """The observation a net of this input size expects (46 = team observation, 56 = team + ranks; 49 / 54 = the older ego layouts)."""
+    """The observation a net of this input size expects (76 = every size with calls, 46 = team observation, 56 = team + ranks;
+    49 / 54 = the older ego layouts)."""
+    if n_in == SLOTS_OBS:
+        return features_slots(m, p)
     if n_in == TEAM_OBS:
         return features_team(m, p)
     if n_in == RANK_OBS:
@@ -188,6 +229,9 @@ def features_many(m, players, team=True, rank=False, legacy=False, frame=None):
 
 def features_group(m, players, n_in):
     """features_for for several players of the same tick: one list per player."""
+    if n_in == SLOTS_OBS:
+        on = {id(o) for o in m.players}
+        return [features_slots(m, p, on) for p in players]
     if n_in in (TEAM_OBS, RANK_OBS):
         f = _Frame(m)
         return [features_many(m, [p], True, n_in == RANK_OBS, False, f) for p in players]
@@ -195,8 +239,11 @@ def features_group(m, players, n_in):
 
 
 def fits(n_in, team_size):
-    """A net can play this team size: the ego layouts (8n+9, 8n+14) at any size; the team (46) and rank (56) observations exist
-    only for 5v5 (features_for picks them by input size, so a 46-input net is never read as the rank layout of 4v4)."""
+    """A net can play this team size: the slots observation (76) and the ego layouts (8n+9, 8n+14) at any size; the team (46)
+    and rank (56) observations exist only for 5v5 (features_for picks them by input size, so a 46-input net is never read as
+    the rank layout of 4v4)."""
+    if n_in == SLOTS_OBS:
+        return 1 <= team_size <= 5
     if n_in in (TEAM_OBS, RANK_OBS):
         return team_size == 5
     return n_in in (8 * team_size + 9, 8 * team_size + 14)
@@ -213,9 +260,13 @@ class Net:
         self.B = [np.asarray(b, np.float32) for b in d["B"]]
         self.kick_bias = float(d.get("kick_bias", 0.0))
         self.n_in = int(s[0])
+        self.n_out = int(s[-1])                 # 10: moves and kick; CALL_OUT (15): and a call
+        self.obs = str(d.get("obs", ""))        # the observation it was trained on ("slots76"; older files leave it out)
+        if self.n_in == SLOTS_OBS and self.obs not in ("", SLOTS_NAME):
+            raise ValueError("a 76-input net with observation %r" % self.obs)
 
     def forward(self, x):
-        """x: (n, n_in) -> (n, 10)."""
+        """x: (n, n_in) -> (n, n_out)."""
         h = np.asarray(x, np.float32)
         last = len(self.W) - 1
         for i, (w, b) in enumerate(zip(self.W, self.B)):
@@ -247,8 +298,9 @@ def load(spec):
 # ---------------------------------------------------------------- the bot
 
 class NetBot:
-    """Plays one player from a net's output: samples the move from softmax(logits / T) and the kick from sigmoid(logit)
-    (temperature 0 = the best move, kick when the logit is positive)."""
+    """Plays one player from a net's output: samples the move from softmax(logits / T), the kick from sigmoid(logit) and, for a
+    net that calls (CALL_OUT outputs), the call from softmax(call logits / T) (temperature 0 = the best move and call, kick when
+    the logit is positive)."""
 
     def __init__(self, net, temperature=1.0, seed=0):
         self.net = net
@@ -256,7 +308,7 @@ class NetBot:
         self.rng = random.Random(seed)          # its own random numbers (lineup.build seeds it from the match)
 
     def act(self, m, p, out):
-        """out: this player's 10 net outputs -> its Act (a net of this generation calls nothing)."""
+        """out: this player's net outputs -> its Act (a net with 10 outputs calls nothing)."""
         best = 0
         for k in range(1, 9):
             if out[k] > out[best]:
@@ -275,4 +327,16 @@ class NetBot:
         d = DIRS[best]
         d = complex(d.real * m.attack_dir(p.team), d.imag)
         l = abs(d)
-        return Act(d / l if l > 0.0 else 0j, kick, "none", "")
+        call = "none"
+        if len(out) >= CALL_OUT:
+            c = max(range(5), key=lambda k: out[10 + k])
+            if t > 0.0:
+                w = [math.exp((float(out[10 + k]) - float(out[10 + c])) / t) for k in range(5)]
+                r = self.rng.random() * sum(w)
+                for k in range(5):
+                    r -= w[k]
+                    if r <= 0.0:
+                        c = k
+                        break
+            call = INTENTS[c]
+        return Act(d / l if l > 0.0 else 0j, kick, call, "")

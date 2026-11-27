@@ -57,6 +57,10 @@ A spec: `{"name": "xga", "start": "out_5v5/ckpt/t48_u100.pt", "updates": 300, "l
 "args": {"seed": 11}, "control": "minimal", "notes": "why"}`. `rewards` override the minimal set and `args` the training defaults
 (`lab/tracker.py`: MINIMAL, DEFAULTS); any `rl/selfplay.py` option is allowed. Names are unique forever (a used name is refused).
 `control` = the run this one is compared with (the dashboard's Experiment filter); without it, the start net.
+**Curricula** (phase D, rl/README.md "Every team size, with calls"): a spec with `"stages": [{"size": 1, "opp": "none"}, {"size": 1},
+..., {"size": 5}]` is queued as one run per stage (`<name>_1v0`, `<name>_1v1`, ...), each from the previous stage's best checkpoint
+(`"start": "best:<run>"`; the first `"scratch"`), on the `slots` observation; `"plateau": K` stops a stage after K estimated Elos
+without progress (after `min_updates`). A stage is rated and estimated at its own size.
 The runner (`lab/exp_runner.py`, service `soccer-exp`) trains the queue one spec at a time; every 50 updates it pauses for an **estimated Elo**
 (24 matches against mixed ladder entries, `elo_pairs`; the older rule-bot fast check only with `fast_rules: 1`); it stops early on
 divergence / regression (two estimates in a row clearly below the start net's) / cancel, then

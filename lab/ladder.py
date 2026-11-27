@@ -4,8 +4,9 @@ runner and lab.py ask for:
 
   rows()           the 5v5 ratings by entry id (also under "net:<stem>" for a net that is a player's: jit8_best is Jasper Klein)
   ranking()        the Ranking page's table (lab/dashboard.py /api/ranking, lab.py ranking)
-  estimate()       the estimated Elo of a checkpoint during training: it plays placed 5v5 entries and only its own rating and goal
-                   strengths are fitted, everyone else's held fixed (not stored in the ratings): one line in exp/elo_estimates.jsonl
+  estimate()       the estimated Elo of a checkpoint during training: it plays placed entries of the size it trains (default 5v5)
+                   and only its own rating and goal strengths are fitted, everyone else's held fixed (not stored in the
+                   ratings): one line in exp/elo_estimates.jsonl (with its size)
   estimates()      the stored estimates
   round            python3 lab/ladder.py round [--size 5] [--pairs 8] [--workers 3]: rounds of the ratings (elo.api.play_round)
 
@@ -13,7 +14,7 @@ Entries: player:<id> (every player, rule-based or net), team:<id> (teams; one pl
 net:<stem> (training checkpoints: models/*.json that is no player's net, the best checkpoint of every finished run).
 Estimates before 2026-11-27 were made against the old team ladder (exp/ladder.jsonl, archived): another scale.
 
-  python3 lab/ladder.py roster | round | ratings | estimate --model M --tag T --update U [--pairs 12]"""
+  python3 lab/ladder.py roster | round | ratings | estimate --model M --tag T --update U [--pairs 12] [--size 5]"""
 import argparse
 import hashlib
 import json
@@ -79,23 +80,23 @@ def checkpoint_spec(model_path, eid, name):
     return {"id": eid, "name": name, "sha": _sha(full), "lineup": [{"id": "ckpt:" + os.path.basename(rel)[:-5], "model": rel}] * 5}
 
 
-def estimate(model_path, tag, update, pairs=EST_PAIRS, workers=3, seed=None, path=ESTIMATES):
-    """Estimated Elo of a checkpoint during training: it plays `pairs` placed 5v5 entries (2 matches each, sides swapped) and only
+def estimate(model_path, tag, update, pairs=EST_PAIRS, workers=3, seed=None, path=ESTIMATES, size=SIZE):
+    """Estimated Elo of a checkpoint during training: it plays `pairs` placed entries of `size` (2 matches each, sides swapped) and only
     its own rating is fitted, everyone else's held at their current ratings (nothing is stored in the ratings). Opponents are mixed:
     the first half spread over the whole ranking (one random entry from each slice), the second half near the rating that first
     half gave (drawn with weight p(1-p): close games tell the most). Goals are adjusted with the ratings' goal model."""
     t0 = time.time()
-    r = elo_api.ratings(SIZE)
+    r = elo_api.ratings(size)
     ros = r.ros
     placed = sorted([i for i, v in r.rat.items() if v["games"] >= PLACEMENT], key=lambda i: r.rat[i]["elo"])
     if not placed:
-        raise SystemExit("the 5v5 ratings have no placed entries yet: python3 -m elo init")
+        raise SystemExit("the %dv%d ratings have no placed entries yet: python3 -m elo init" % (size, size))
     me = checkpoint_spec(model_path, "est:%s_u%d" % (tag, update), "%s u%d" % (tag, update))
     rng = random.Random(seed if seed is not None else hash((tag, update)) & 0xFFFFFFFF)
     pairs = min(pairs, len(placed))
     n1 = max(1, pairs // 2)
     first = list(dict.fromkeys(placed[min(len(placed) - 1, int((k + rng.random()) * len(placed) / n1))] for k in range(n1)))
-    recs = play.play([(me, ros.entries[o].spec(), SIZE, rng.randrange(1, 1 << 31)) for o in first], workers)
+    recs = play.play([(me, ros.entries[o].spec(), size, rng.randrange(1, 1 << 31)) for o in first], workers)
     if pairs > len(first):
         mid = _summarise(recs, r)["elo"]
         left = [o for o in placed if o not in first]
@@ -109,9 +110,9 @@ def estimate(model_path, tag, update, pairs=EST_PAIRS, workers=3, seed=None, pat
                     break
             chosen.append(o)
             left.remove(o)
-        recs += play.play([(me, ros.entries[o].spec(), SIZE, rng.randrange(1, 1 << 31)) for o in chosen], workers)
-    out = {"t": time.strftime("%Y-%m-%dT%H:%M:%S"), "protocol": "estimate/" + PROTOCOL, "tag": tag, "run": tag[2:] if tag.startswith("x_") else tag,
-           "update": update, "model": me["lineup"][0]["model"], "sha": me["sha"], **_summarise(recs, r),
+        recs += play.play([(me, ros.entries[o].spec(), size, rng.randrange(1, 1 << 31)) for o in chosen], workers)
+    out = {"t": time.strftime("%Y-%m-%dT%H:%M:%S"), "protocol": "estimate/ladder/%dv%d/%s" % (size, size, ELO_PROTOCOL), "tag": tag,
+           "run": tag[2:] if tag.startswith("x_") else tag, "update": update, "size": size, "model": me["lineup"][0]["model"], "sha": me["sha"], **_summarise(recs, r),
            "seconds": round(time.time() - t0, 1), "ladder_matches": r.matches,
            "matches": [{"opp": x["b"], "opp_elo": round(r.rat[x["b"]]["elo"]), "gf": x["ga"], "ga": x["gb"], "side": x["a_side"], "seed": x["seed"]} for x in recs]}
     os.makedirs(os.path.dirname(path), exist_ok=True)
@@ -156,6 +157,7 @@ def main():
     p.add_argument("--workers", type=int, default=3)
     p.add_argument("--seed", type=int, default=None)
     p.add_argument("--out", default=ESTIMATES)
+    p.add_argument("--size", type=int, default=SIZE, help="the team size it plays (the size the run trains)")
     a = ap.parse_args()
     if a.cmd == "roster":
         for i, e in sorted(elo_roster.get().entries.items()):
@@ -165,7 +167,7 @@ def main():
             r = elo_api.play_round(a.pairs, a.workers, a.size, None if a.seed is None else a.seed + k)
             print("round %d: %s %d matches in %.0f s" % (k + 1, "%dv%d" % (r["size"], r["size"]) if r["size"] else "-", r["matches"], r["seconds"]), flush=True)
     elif a.cmd == "estimate":
-        r = estimate(a.model, a.tag, a.update, a.pairs, a.workers, a.seed, os.path.abspath(a.out))
+        r = estimate(a.model, a.tag, a.update, a.pairs, a.workers, a.seed, os.path.abspath(a.out), a.size)
         print(json.dumps({k: v for k, v in r.items() if k != "matches"}))
     else:
         print(json.dumps(ranking(), indent=1, default=float))

@@ -43,6 +43,7 @@ async function getJSON(url) { const r = await fetch(url, { cache: "no-store" });
 const runLink = (n) => `<a class="rl" href="#/run/${encodeURIComponent(n)}"><i class="dot" style="background:${runColor(n)}"></i>${esc(n)}</a>`;
 function chips(row) {
   const out = [];
+  if (row.stage) out.push(`<span class="chip net" title="a stage of the curriculum ${esc(row.curriculum || "")}: trains ${esc(row.stage)}">${esc(row.curriculum || "")} · ${esc(row.stage)}</span>`);
   if (row.net) out.push(`<span class="chip net" title="network: inputs-hidden-hidden-outputs">net ${esc(row.net)}</span>`);
   for (const [k, v] of Object.entries(row.rewards_changed_vs_minimal || {})) out.push(`<span class="chip rw">${esc(k)}=${esc(v)}</span>`);
   for (const [k, v] of Object.entries(row.args || {})) {

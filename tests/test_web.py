@@ -13,7 +13,7 @@
              the right net moves, the observation can be rebuilt from the stored state (il/human_data.py), a match without it saves nothing
   ranking    after one round of 3v3 ratings (elo/, a temporary database): the Lab's ranking of a size (/api/ranking?size=3) and the
              game's Rankings page (/api/game/rankings) list players and teams, sorted, each rating inside its interval, and the
-             teams in the catalog carry their Elo per size
+             teams and players in the catalog carry their Elo per size
   tournament new -> simulate a round -> fixture -> record a result -> view, through /api/game/tournament
   my team    a team built in the game (/api/game/team): saved in My Teams (a temporary folder here), plays 3v3 without its 5v5-only net
              and 5v5 with it, refused when a player is unknown, when it would edit a team of data/teams or from another origin; deleted
@@ -292,13 +292,13 @@ def main():
         kinds = {r["kind"] for r in rows}
         gr = json.loads(get(port, "/api/game/rankings?size=3")[1])
         cat3 = json.loads(get(port, "/api/game/catalog")[1])
-        rated = [t for t in cat3["teams"] if t["ratings"].get("3", {}).get("games")]
+        rated = [t for t in cat3["teams"] + cat3["players"] if t["ratings"].get("3", {}).get("games")]   # placement pairs players first
         ok = rk.get("size") == 3 and rk.get("matches") == 12 and len(rows) >= 21 and {"rules", "team"} <= kinds \
             and all(r["lo"] <= r["elo"] <= r["hi"] for r in rows) and [r["rank"] for r in rows] == list(range(1, len(rows) + 1)) \
             and all(rows[i]["elo"] >= rows[i + 1]["elo"] for i in range(len(rows) - 1)) \
             and len(gr["players"]) >= 20 and gr["teams"] and _rated_first(gr["players"]) and _rated_first(gr["teams"]) \
             and rated and os.path.exists(os.path.join(local_dir, "elo.db"))
-        results.append(check("ranking", ok, "3v3: %d entries (%s), %d matches, game page %d players / %d teams, %d teams rated in the catalog" % (
+        results.append(check("ranking", ok, "3v3: %d entries (%s), %d matches, game page %d players / %d teams, %d teams / players rated in the catalog" % (
             len(rows), ", ".join(sorted(kinds)), rk.get("matches", 0), len(gr["players"]), len(gr["teams"]), len(rated))))
 
         d = post(port, "/api/game/tournament", {"action": "new", "league": "rules", "user": "aurora", "count": 4, "format": 1,

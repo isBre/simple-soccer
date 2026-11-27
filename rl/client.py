@@ -31,7 +31,7 @@ def _worker(conn, log_path):
                     e.opp_net = opp_net
                     e.reset()
                     envs.append(e)
-                conn.send({"envs": n_envs, "agents": envs[0].n_agents(), "obs_dim": envs[0].obs_dim()})
+                conn.send({"envs": n_envs, "agents": envs[0].n_agents(), "obs_dim": envs[0].obs_dim(), "act_width": envs[0].act_width()})
             elif cmd == "S":
                 acts = payload
                 obs, rew = [], []
@@ -109,7 +109,7 @@ class VecEnv:
             w.send("C", dict(cfg, envs=self.epw, seed=seed * 101 + i))
         for w in self.workers:
             info = w.recv()
-        self.A, self.D = info["agents"], info["obs_dim"]
+        self.A, self.D, self.W = info["agents"], info["obs_dim"], info.get("act_width", 2)
         return info
 
     def set_opponent(self, mlp_dict):
@@ -132,13 +132,14 @@ class VecEnv:
         return sums, steps
 
     def step_async(self, actions):
-        """Send the actions (int8 [E, A, 2]) to all workers; collect with step_wait()."""
-        acts = np.ascontiguousarray(actions, dtype=np.int8).reshape(self.E, self.A * 2)
+        """Send the actions (int8 [E, A, W]: move, kick and, with the slots observation, the call) to all workers; collect with
+        step_wait()."""
+        acts = np.ascontiguousarray(actions, dtype=np.int8).reshape(self.E, self.A * self.W)
         for i, w in enumerate(self.workers):
             w.send("S", acts[i * self.epw:(i + 1) * self.epw])
 
     def step(self, actions):
-        """actions int8 [E, A, 2] -> obs [E,A,D], reward [E,A], done [E], outcome [E], ep_return [E], gf [E], ga [E]"""
+        """actions int8 [E, A, W] -> obs [E,A,D], reward [E,A], done [E], outcome [E], ep_return [E], gf [E], ga [E]"""
         self.step_async(actions)
         return self.step_wait()
 

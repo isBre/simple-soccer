@@ -71,20 +71,22 @@ def heatmaps(path):
     return out
 
 
-_elo_cache = {"t": 0, "rows": {}}
+_elo_cache = {}                                        # size -> (time, rows)
 
 
-def elo_table(ttl=60):
-    """The 5v5 ratings of this machine by entry id (lab/ladder.py rows(): elo/), recomputed at most once a minute. A run's best
-    net is rated where its weights are (each machine rates what it has: the ratings are local, docs/ratings.md)."""
-    if time.time() - _elo_cache["t"] > ttl:
+def elo_table(size=5, ttl=60):
+    """The ratings of one team size on this machine by entry id (lab/ladder.py rows(): elo/), recomputed at most once a minute.
+    A run is rated at the size it trains (a curriculum stage); a run's best net is rated where its weights are (each machine
+    rates what it has: the ratings are local, docs/ratings.md)."""
+    t, rows = _elo_cache.get(size, (0, {}))
+    if time.time() - t > ttl:
         try:
             from lab import ladder
-            _elo_cache["rows"] = ladder.rows()
+            rows = ladder.rows(size)
         except Exception:                              # no numpy, no database yet: the Runs page simply shows no Elo
-            _elo_cache["rows"] = {}
-        _elo_cache["t"] = time.time()
-    return _elo_cache["rows"]
+            rows = {}
+        _elo_cache[size] = (time.time(), rows)
+    return rows
 
 
 def elo_of(name, rows, st=None):
@@ -180,7 +182,7 @@ def overview():
         if r["name"] in hidden:
             r["hidden"] = hidden[r["name"]]
         r["type"] = "rl"                               # RL Team 4 / 5 (the reference teams) were trained with RL too
-        r["elo"] = elo_of(r["name"], elo, st)
+        r["elo"] = elo_of(r["name"], elo if int(r.get("size") or 5) == 5 else elo_table(int(r["size"])), st)
         r["start_elo"] = start_elo(st, r["name"])
         if st.get("spec"):
             r["changes"], r["vs"] = changes(st, st["spec"])

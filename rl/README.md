@@ -27,6 +27,32 @@ python3 -m venv ~/rl-venv && ~/rl-venv/bin/pip install torch numpy --index-url h
 ~/rl-venv/bin/python rl/evaluate.py league_eval --model res://data/models/rl_5v5_arena_v5.json --games 2
 ```
 
+## Every team size, with calls: the curriculum (phase D)
+
+The **`slots`** observation (76 numbers, `soccer/ai/nets.py` `features_slots`, built from the public view) fits every size from
+1v0 to 5v5: me; 4 teammate slots nearest first (position and speed, *on the pitch*, its **call**: 5 one-hot, `soccer.match.INTENTS`);
+5 opponent slots nearest first (position and speed, *on the pitch*); the ball; kickoff on, *our* kickoff, goal celebration. A slot
+nobody fills is zeros with *on the pitch* 0, so one net plays every size and a stage's weights carry over to the next one.
+A net trained on it has **15 outputs** (9 moves, kick, 5 call logits) and calls to its teammates every decision; its file says
+`"obs": "slots76"`. Calls carry no reward: what they come to mean is up to training. The older 46-input nets stay 5v5 only and
+call nothing.
+
+`selfplay.py --obs slots --size N [--opp_mode none] [--start scratch]` trains at any size: against the rule teams (the first N
+of each line-up) and self-play snapshots, or on an empty pitch (`--opp_mode none`: first-goal episodes from random starts,
+the 1v0 stage). `--start scratch` starts from a fresh net.
+
+The runner trains a whole **curriculum** from one spec (`lab.py queue add`, `lab/tracker.py` `expand`):
+
+```json
+{"name": "cur1", "updates": 600, "plateau": 3, "min_updates": 200, "args": {"elo_pairs": 12, "fast_every": 50, "fast_rules": 0},
+ "stages": [{"size": 1, "opp": "none", "updates": 150, "plateau": 0}, {"size": 1}, {"size": 2}, {"size": 3}, {"size": 4}, {"size": 5}]}
+```
+
+becomes `cur1_1v0`, `cur1_1v1`, ..., `cur1_5v5`, each starting from the previous stage's best checkpoint (`"start":
+"best:<run>"`; the first from scratch). A stage stops at its update budget or on a **plateau** (`plateau` estimated Elos in a row
+without beating the best one by 25, after `min_updates`); its best checkpoint is the one with the highest estimated Elo at its
+size, placed in that size's ratings. Only the 5v5 stage gets the full evaluation (behaviour, scouting).
+
 ## New observation, warm start by imitation (`rl/distill.py`)
 
 A net with another observation cannot continue from an old checkpoint, so `distill.py` copies the old net into the new layout: the teacher plays (observation `both` from `env.py`

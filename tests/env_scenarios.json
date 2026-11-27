@@ -13,6 +13,8 @@
     {"name": "selfplay_net", "steps": 1500, "selfplay_net": "res://data/models/rl_5v5_arena_v4.json", "cfg": {"pitch": "arena", "size": 5, "n_active": 5, "with_keeper": true, "opp": "aurora", "selfplay": 0.7, "match_mode": true, "duration": 20.0, "obs": "legacy", "own_team": "owls"}},
     {"name": "curriculum_empty", "steps": 3000, "cfg": {"pitch": "arena", "size": 5, "n_active": 5, "with_keeper": true, "opp": "none", "max_steps": 200, "spread": 0.6, "ball_speed": 2.0, "obs": "legacy", "w_kick": 0.01}},
     {"name": "curriculum_keeper", "steps": 3000, "cfg": {"pitch": "arena", "size": 5, "n_active": 4, "with_keeper": false, "opp": "keeper", "max_steps": 200, "spread": 0.1, "obs": "legacy"}},
-    {"name": "curriculum_rules", "steps": 3000, "cfg": {"pitch": "arena", "size": 5, "n_active": 3, "with_keeper": false, "opp": "lime,dune", "max_steps": 300, "spread": 1.0, "ball_speed": 1.0, "obs": "team", "shaping": 0.5, "w_space": 0.003}}
+    {"name": "curriculum_rules", "steps": 3000, "cfg": {"pitch": "arena", "size": 5, "n_active": 3, "with_keeper": false, "opp": "lime,dune", "max_steps": 300, "spread": 1.0, "ball_speed": 1.0, "obs": "team", "shaping": 0.5, "w_space": 0.003}},
+    {"name": "slots_1v0", "steps": 2000, "cfg": {"pitch": "arena", "size": 1, "n_active": 1, "with_keeper": true, "opp": "none", "match_mode": false, "max_steps": 400, "obs": "slots", "own_team": "owls"}},
+    {"name": "slots_2v2_calls", "steps": 2500, "cfg": {"pitch": "arena", "size": 2, "n_active": 2, "with_keeper": true, "opp": "aurora,tide", "match_mode": true, "duration": 30.0, "obs": "slots", "own_team": "owls"}}
   ]
 }

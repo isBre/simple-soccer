@@ -117,8 +117,40 @@ def net_info(model):
     return {"sizes": sizes, "label": "-".join(str(x) for x in sizes), "params": params}
 
 
-def validate_spec(spec):
-    """List of problems of an experiment spec (empty = fine)."""
+def start_model(spec):
+    """The checkpoint (.pt, relative to the project) a spec starts from: "scratch" -> None (a fresh net), "best:<run>" -> that
+    run's best checkpoint (out_5v5/ckpt/x_<run>_best.pt: the previous stage of a curriculum), else the path itself."""
+    start = spec.get("start", "")
+    if start == "scratch":
+        return None
+    if start.startswith("best:"):
+        return "out_5v5/ckpt/x_%s_best.pt" % start[5:]
+    return start
+
+
+def expand(spec):
+    """A curriculum spec ({"name", "stages": [{"size", "opp", "updates", ...}, ...], everything else shared}) as one spec per
+    stage, in order: <name>_<N>v<M>, the first from scratch (unless the spec gives a start), each next one from the previous
+    stage's best checkpoint; every stage uses the slots observation (one net for every size). A plain spec: [spec]."""
+    if "stages" not in spec:
+        return [spec]
+    base = {k: v for k, v in spec.items() if k != "stages"}
+    out, prev = [], None
+    for st in spec["stages"]:
+        size, opp = int(st.get("size", 5)), st.get("opp", "rules")
+        label = "%dv%d" % (size, 0 if opp == "none" else size)
+        s = {**base, **{k: v for k, v in st.items() if k not in ("args", "rewards")}, "name": "%s_%s" % (spec["name"], label),
+             "obs": "slots", "size": size, "opp": opp, "curriculum": spec["name"], "stage": label,
+             "args": {**base.get("args", {}), **st.get("args", {})}, "rewards": {**base.get("rewards", {}), **st.get("rewards", {})}}
+        s["start"] = "best:" + prev if prev else base.get("start", "scratch")
+        out.append(s)
+        prev = s["name"]
+    return out
+
+
+def validate_spec(spec, earlier=()):
+    """List of problems of an experiment spec (empty = fine). `earlier`: names of runs queued before it in the same batch (a
+    curriculum stage may start from the best checkpoint of one of them)."""
     errs = []
     name = spec.get("name", "")
     if not re.fullmatch(r"[a-z0-9][a-z0-9_]{1,40}", str(name)):
@@ -126,7 +158,20 @@ def validate_spec(spec):
     elif run_status(name).get("state") in FINISHED or os.path.exists(os.path.join(EXP, "runs", name)) and run_status(name).get("state") != "running":
         errs.append("name %r is already used by a run (pick a new name)" % name)
     start = spec.get("start", "")
-    if not start or not os.path.isfile(os.path.join(ROOT, start)):
+    size = int(spec.get("size", 5))
+    if not 1 <= size <= 5:
+        errs.append("size must be 1..5")
+    if size != 5 and spec.get("obs") != "slots":
+        errs.append("sizes below 5 need \"obs\": \"slots\"")
+    if spec.get("opp", "rules") not in ("rules", "none"):
+        errs.append("opp must be \"rules\" or \"none\"")
+    if start == "scratch":
+        pass
+    elif start.startswith("best:"):
+        prev = start[5:]
+        if prev not in earlier and not os.path.isfile(os.path.join(ROOT, start_model(spec))):
+            errs.append("start %r: no such run before it, nor its best checkpoint" % start)
+    elif not start or not os.path.isfile(os.path.join(ROOT, start)):
         errs.append("start checkpoint %r not found" % start)
     elif not os.path.isfile(os.path.join(ROOT, start[:-3] + ".json" if start.endswith(".pt") else start)):
         errs.append("start needs its game-model JSON next to it")

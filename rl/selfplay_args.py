@@ -5,13 +5,15 @@ import os
 
 OUT = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "out_5v5")   # = rl/agent.py OUT
 
-OBS_DIMS = {"legacy": 54, "team": 46, "rank": 56}            # observation layouts (see soccer/ai/nets.py features_team): ego with player slot / role-free team observation
+OBS_DIMS = {"legacy": 54, "team": 46, "rank": 56, "slots": 76}   # observation layouts (soccer/ai/nets.py): ego with player slot / role-free team / every size with calls
 
 
 def parser():
-    ap = argparse.ArgumentParser(description="Self-play PPO training of the 5v5 net teams (rl/selfplay.py).")
+    ap = argparse.ArgumentParser(description="Self-play PPO training of the net teams (rl/selfplay.py), at any team size.")
     ap.add_argument("--updates", type=int, default=1500, help="final update number (absolute: with --start_update 200 and --updates 3000 it trains updates 201..3000)")
-    ap.add_argument("--obs", choices=list(OBS_DIMS), default="team", help="observation layout: team = 46 numbers, no player ID (default); legacy = 54 numbers with the slot (the first RL teams)")
+    ap.add_argument("--obs", choices=list(OBS_DIMS), default="team", help="observation layout: team = 46 numbers, no player ID (default, 5v5); slots = 76 numbers, every size, with the teammates' calls (the net calls too); legacy = 54 numbers with the slot (the first RL teams)")
+    ap.add_argument("--size", type=int, default=5, help="players per side (1..5; below 5 needs --obs slots)")
+    ap.add_argument("--opp_mode", choices=["rules", "none"], default="rules", help="rules: matches against the rule teams + self-play; none: an empty pitch (first-goal episodes from random starts: the 1v0 stage)")
     ap.add_argument("--start_update", type=int, default=0, help="continue numbering from a restart: the checkpoint --start was saved at this update")
     ap.add_argument("--workers_rule", type=int, default=8)
     ap.add_argument("--workers_self", type=int, default=8)
@@ -24,7 +26,7 @@ def parser():
     ap.add_argument("--lam", type=float, default=0.95)
     ap.add_argument("--ent", type=float, default=0.003)
     ap.add_argument("--seed", type=int, default=7)
-    ap.add_argument("--start", default=os.path.join(OUT, "rl_agent_after_s9_all.pt"))
+    ap.add_argument("--start", default=os.path.join(OUT, "rl_agent_after_s9_all.pt"), help="checkpoint (.pt) to continue from; \"scratch\" = a fresh net")
     ap.add_argument("--baseline", default="", help="frozen benchmark opponent (.pt); default = --start")
     ap.add_argument("--w_pass_prog", type=float, default=0.3)
     ap.add_argument("--w_pass_ok", type=float, default=0.05)

@@ -261,7 +261,9 @@ RL experiments run unattended on the Raspberry Pi through a queue (`exp/queue/`)
 <p align="center"><img src="docs/screenshots/rl_derby.gif" alt="RL Team 2 vs RL Team 4" width="60%"></p>
 
 *Two RL teams playing each other (RL Team 2 vs RL Team 4).*
-The RL teams are trained with PPO in Python (`rl/`, see [rl/README.md](rl/README.md)) on the match core.
+The RL teams are trained with PPO in Python (`rl/`, see [rl/README.md](rl/README.md)) on the match core. The next generation is
+trained from scratch through every team size (1v0, 1v1, 2v2 ... 5v5) with one observation that fits them all and **calls**
+to its teammates like the rule-based players ("Every team size, with calls" in rl/README.md).
 The earlier GDScript experiments (imitation learning, DAgger and evolution strategies against the rule bots) are in the git
 history before the move of the AI to Python.
 

@@ -24,7 +24,7 @@ function viewNow() {
     const est = row.elo_estimate, est0 = state.detail[run.run]?.estimates?.[0];
     const dEst = est && est0 && est0 !== est && est0.update === 0 ? est.elo - est0.elo : null;
     hero = `<section class="hero ${mode}"><div class="hero-top"><div class="min0"><div class="eyebrow">Running experiment${run.started ? " · since " + esc(ago(run.started).replace(" ago", "")) : ""}</div><h1>${runLink(run.run)}</h1>
-        <div class="notes clamp" title="${esc(row.notes || "")}">${esc(row.notes || "")}</div><div class="chips">${chips({ net: row.net, rewards_changed_vs_minimal: row.rewards_changed_vs_minimal, args: (state.detail[run.run]?.status?.spec?.args) || spec.args || {} })}</div></div><div>${lbl}</div></div>
+        <div class="notes clamp" title="${esc(row.notes || "")}">${esc(row.notes || "")}</div><div class="chips">${chips({ net: row.net, stage: row.stage, curriculum: row.curriculum, rewards_changed_vs_minimal: row.rewards_changed_vs_minimal, args: (state.detail[run.run]?.status?.spec?.args) || spec.args || {} })}</div></div><div>${lbl}</div></div>
       <div class="progress"><i style="width:${pct}%"></i></div>
       <div class="hero-stats">${heroStat(`${run.update ?? 0}<small> / ${run.target ?? "?"}</small>`, "updates")}
         ${heroStat(run.eta_hours != null ? dur(run.eta_hours * 3600) : "–", "training left")}

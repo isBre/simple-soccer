@@ -1,5 +1,6 @@
-"""The net the RL teams train: one shared policy for the 5 players of a team (keeper included), and the helpers around it.
-Actor layout = the game-model layout: [n_in, h, h, 10] (9 move logits + 1 kick logit, ReLU), exported as game JSON
+"""The net the RL teams train: one shared policy for all the players of a team, and the helpers around it.
+Actor layout = the game-model layout: [n_in, h, h, 10] (9 move logits + 1 kick logit, ReLU), or [n_in, h, h, 15] for a net that
+calls (+ 5 call logits, soccer.match.INTENTS order; the slots observation), exported as game JSON with its observation's name
 (soccer/ai/nets.py plays it). Used by rl/selfplay.py (training) and rl/distill.py (copying a net into a new observation)."""
 import json
 import os
@@ -35,9 +36,10 @@ def mlp(sizes):
 
 
 class Agent(nn.Module):
-    def __init__(self, obs_dim=OBS_DIM, hidden=128):
+    def __init__(self, obs_dim=OBS_DIM, hidden=128, calls=False, obs_name=""):
         super().__init__()
-        self.sizes = [obs_dim, hidden, hidden, 10]
+        self.calls, self.obs_name = calls, obs_name
+        self.sizes = [obs_dim, hidden, hidden, 15 if calls else 10]
         self.actor = mlp(self.sizes)
         self.critic = mlp([obs_dim, hidden, hidden, 1])
         with torch.no_grad():
@@ -46,13 +48,18 @@ class Agent(nn.Module):
             self.actor[-1].bias[9] = -1.0
 
     def dist(self, obs):
-        z = self.actor(obs)
-        return Categorical(logits=z[..., :9]), Bernoulli(logits=z[..., 9])
+        """(move, kick, call) distributions; call is None for a net that does not call."""
+        return dists(self.actor(obs))
 
     def act(self, obs):
-        dm, dk = self.dist(obs)
+        """(move, kick, call, log-probability); call is zeros (the "none" call) for a net that does not call."""
+        dm, dk, dc = self.dist(obs)
         m, k = dm.sample(), dk.sample()
-        return m, k, dm.log_prob(m) + dk.log_prob(k)
+        lp = dm.log_prob(m) + dk.log_prob(k)
+        if dc is None:
+            return m, k, torch.zeros_like(m), lp
+        c = dc.sample()
+        return m, k, c, lp + dc.log_prob(c)
 
     def value(self, obs):
         return self.critic(obs).squeeze(-1)
@@ -63,7 +70,15 @@ class Agent(nn.Module):
             if isinstance(layer, nn.Linear):
                 ws.append(layer.weight.detach().numpy().astype(np.float32).reshape(-1).tolist())
                 bs.append(layer.bias.detach().numpy().astype(np.float32).tolist())
-        return {"sizes": self.sizes, "W": ws, "B": bs, "kick_bias": 0.0}
+        d = {"sizes": self.sizes, "W": ws, "B": bs, "kick_bias": 0.0}
+        if self.obs_name:
+            d["obs"] = self.obs_name
+        return d
+
+
+def dists(z):
+    """The distributions of an actor's output z: move (9 logits), kick (1), call (5, when z has 15 columns; else None)."""
+    return Categorical(logits=z[..., :9]), Bernoulli(logits=z[..., 9]), (Categorical(logits=z[..., 10:15]) if z.shape[-1] >= 15 else None)
 
 
 def load_padded(agent, path):

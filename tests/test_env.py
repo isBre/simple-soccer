@@ -1,8 +1,9 @@
 """The training environment (rl/env.py) against stored runs (tests/golden/env_<name>.json).
 
 Runs every environment of tests/env_scenarios.json (every reward term, random layouts, curricula, self-play with a net,
-external opponents) for its number of steps with seeded random actions and compares: the reward of every step, every
-episode's end (step, outcome, return), every reward term's total, and the observation after each reset.
+external opponents, the slots observation at 1v0 and 2v2 with calls) for its number of steps with seeded random actions
+(and random calls where the observation has them) and compares: the reward of every step, every episode's end (step,
+outcome, return), every reward term's total, the observation after each reset and how often each call was heard.
 
   python3 tests/test_env.py [--update] [names...]"""
 import json
@@ -26,7 +27,8 @@ def run(sc_def):
     e.reset()
     out = {"rewards": [], "episodes": [], "reset_obs": [e.observe()[:24]]}
     for i in range(int(sc_def["steps"])):
-        actions = [x for _ in range(e.n_agents()) for x in (rnd.randrange(9), int(rnd.random() < 0.15))]
+        w = e.act_width()
+        actions = [x for _ in range(e.n_agents()) for x in ((rnd.randrange(9), int(rnd.random() < 0.15)) + ((rnd.randrange(5),) if w == 3 else ()))]
         r, done, outcome, _ = e.step(actions)
         out["rewards"].append(r)
         if done:
@@ -35,6 +37,8 @@ def run(sc_def):
             out["reset_obs"].append(e.observe()[:24])
     out["terms"] = dict(sorted(e.term_sums.items()))
     out["obs_dim"] = e.obs_dim()
+    if e.act_width() == 3:                                  # the calls reach the teammates' observations
+        out["last_obs"] = e.observe()[:76]
     return out
 
 
