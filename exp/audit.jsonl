@@ -77,3 +77,8 @@
 {"t": "2026-11-26T20:22:08", "action": "queue_add", "name": "dist_klconst", "position": null}
 {"t": "2026-11-26T20:22:08", "action": "queue_add", "name": "dist_klconst_s11", "position": null}
 {"t": "2026-11-26T20:22:08", "action": "queue_add", "name": "dist_klconst_s23", "position": null}
+{"t": "2026-11-27T17:51:26", "action": "queue_add", "name": "cur1", "stages": ["cur1_1v0", "cur1_1v1", "cur1_2v2", "cur1_3v3", "cur1_4v4", "cur1_5v5"], "position": null}
+{"t": "2026-11-27T17:55:41", "action": "park", "name": "cur1 (1v1..5v5)", "why": "no shaping from scratch; replaced by cur2"}
+{"t": "2026-11-27T17:55:41", "action": "queue_add", "name": "cur2", "stages": ["cur2_1v0", "cur2_1v1", "cur2_2v2", "cur2_3v3", "cur2_4v4", "cur2_5v5"], "position": null}
+{"t": "2026-11-27T19:28:23", "action": "queue_add", "name": "cur2_2v2b", "stages": ["cur2_2v2b", "cur2_3v3", "cur2_4v4", "cur2_5v5"], "why": "supervision: 2v2 peaked and slid at lr 3e-4; a second 2v2 stage, lr 1e-4 and plateau 6 after 600 for the rest"}
+{"t": "2026-11-27T20:05:24", "action": "queue_add", "name": "cur2_3v3b", "stages": ["cur2_3v3b", "cur2_4v4", "cur2_5v5"], "why": "supervision: cur2_3v3 stopped by the divergence check meant for strong nets (fixed in beef28d)"}

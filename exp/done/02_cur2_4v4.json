@@ -1,0 +1,23 @@
+{
+ "name": "cur2_4v4",
+ "updates": 2000,
+ "lr": 0.0001,
+ "plateau": 6,
+ "min_updates": 600,
+ "args": {
+  "seed": 7,
+  "elo_pairs": 12,
+  "fast_every": 50,
+  "fast_rules": 0
+ },
+ "notes": "Supervision (2026-11-27 19:30): lr 1e-4 and plateau 6 after 600 updates (cur2_2v2 at lr 3e-4 peaked and slid). Phase D, first curriculum (user: train 1v0 -> 5v5 from scratch, 2026-11-27), replacing cur1 (its 1v0 stage never scored: the minimal reward set has no ball shaping, which a fresh net needs). Slots observation (76 numbers, every size, teammates' calls), the net calls (15 outputs, calls unrewarded), from scratch at lr 3e-4. Ball shaping 1.0 at 1v0 / 1v1, 0.5 at 2v2 / 3v3, 0.25 at 4v4, off at 5v5 (the minimal set). Each stage starts from the previous stage's best checkpoint and stops at its budget or after 4 estimated Elos (every 50 updates, 24 matches at the stage's size) without beating the best by 25, after 400 updates. Opponents: the new rule-based archetypes (engine 2) at the stage's size + self-play. Question: does a net trained up the sizes reach the rule players at each size, and what do its calls come to mean?",
+ "size": 4,
+ "obs": "slots",
+ "opp": "rules",
+ "curriculum": "cur2",
+ "stage": "4v4",
+ "rewards": {
+  "shaping": 0.25
+ },
+ "start": "best:cur2_3v3b"
+}

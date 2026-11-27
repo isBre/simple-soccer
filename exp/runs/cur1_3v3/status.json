@@ -1,0 +1,8 @@
+{
+ "state": "cancelled",
+ "stop_reason": "cancelled",
+ "finished": 1795798541,
+ "error": "replaced by cur2: the minimal reward set has no ball shaping, a fresh net never scored in 1v0",
+ "name": "cur1_3v3",
+ "updated": 1795798541
+}
