@@ -1,50 +1,61 @@
-// The Lab (web/lab/core.js has the overview): the Ranking page.
+// The Lab (web/lab/core.js has the overview): the Ranking page: this machine's ratings of one team size (elo/, local/elo.db;
+// lab/ladder.py ranking; docs/ratings.md). Three separate lists of one fit: players (each as five copies of itself), teams (line-ups;
+// a team of one player five times has that player's numbers) and the Lab's training checkpoints.
 "use strict";
 
-// ---------- RANKING: this machine's ratings of one team size (elo/, local/elo.db; lab/ladder.py ranking) ----------
-const LEAGUES = [["all", "All"], ["rules", "Rule Based"], ["rl", "Reinforcement Learning"], ["mixed", "Mixed"], ["mine", "My Teams"]];
+const LEAGUES = [["all", "All leagues"], ["rules", "Rule based"], ["rl", "Reinforcement learning"], ["mixed", "Mixed"], ["mine", "My teams"]];
 const LEAGUE_COLOR = { rules: "--c5", rl: "--c1", mixed: "--c3", mine: "--c4" };
-const rk = { data: null, t: 0, league: "all", size: 5, what: "player" };
-// three separate lists of one fit: players (each as five copies of itself), teams (line-ups; a team of one player five times
-// has that player's numbers) and the Lab's training checkpoints
+const LEAGUE_SHORT = { rules: "Rules", rl: "RL", mixed: "Mixed", mine: "Mine" };
 const WHAT = [["player", "Players", "Player"], ["team", "Teams", "Team"], ["net", "Checkpoints", "Checkpoint"]];
+const rk = { data: null, t: 0, league: "all", size: 5, what: "player", q: "", placed: false };
 function loadRanking(force) {
   if (pending._rk || (!force && rk.data && rk.data.size === rk.size && Date.now() - rk.t < POLL_MS)) return;
   pending._rk = true;
   getJSON("/api/ranking?size=" + rk.size).then((d) => { rk.data = d; rk.t = Date.now(); render(); })
     .catch(() => { rk.data = { error: true }; rk.t = Date.now(); render(); }).finally(() => { delete pending._rk; });
 }
-const LEAGUE_SHORT = { rules: "Rules", rl: "RL", mixed: "Mixed", mine: "Mine" };
-const leagueChip = (lg) => `<span class="chip" title="${esc((LEAGUES.find((l) => l[0] === lg) || [lg, lg])[1])} League" style="border-color:${css(LEAGUE_COLOR[lg] || "--muted")};color:${css(LEAGUE_COLOR[lg] || "--muted")}">${esc(LEAGUE_SHORT[lg] || lg)}</span>`;
+const leagueChip = (lg) => `<span class="chip" title="${esc((LEAGUES.find((l) => l[0] === lg) || [lg, lg])[1])} league" style="border-color:${css(LEAGUE_COLOR[lg] || "--muted")};color:${css(LEAGUE_COLOR[lg] || "--muted")}">${esc(LEAGUE_SHORT[lg] || lg)}</span>`;
+const rkReset = () => { state.page.rank = 0; rerender(); };
+onSeg.rksize = (v) => { rk.size = +v; state.page.rank = 0; loadRanking(true); };
+onSeg.rkwhat = (v) => { rk.what = v; rk.league = "all"; rkReset(); };
+onSeg.rkleague = (v) => { rk.league = v; rkReset(); };
+onSeg.rkplaced = (v) => { rk.placed = v; rkReset(); };
+onSeg.rksearch = (v) => { rk.q = v; rkReset(); };
 function viewRanking() {
   loadRanking();
   const d = rk.data;
-  if (!d) return '<div class="empty">Loading…</div>';
-  if (d.error) return '<div class="empty">The ranking could not be computed (see the web app\'s log).</div>';
+  const head = (extra = "") => `<div class="head"><div><h1>Ranking · ${rk.size}v${rk.size}</h1><p>This machine's ratings: the average rule-based player is 1500, 400 points more means 10:1 odds, ± is the 95% interval.
+      <a href="#/docs/docs__ratings.md">About the ratings →</a></p></div>${seg("rksize", [1, 2, 3, 4, 5].map((n) => [n, `${n}v${n}`]), rk.size)}</div>${extra}`;
+  if (!d) return head() + '<div class="empty">Loading…</div>';
+  if (d.error) return head() + '<div class="empty">The ratings could not be computed (see the web app\'s log).</div>';
+  if (!d.matches) return head() + '<div class="card"><h2>No matches yet</h2><p class="muted">Run <span class="mono">python3 -m elo init</span> once on this machine; after that the web app and the runner keep playing rounds whenever the machine is idle.</p></div>';
   if (!d.rows.some((r) => r.entry === rk.what)) rk.what = "player";
   const group = d.rows.filter((r) => r.entry === rk.what).map((r, i) => ({ ...r, rank: i + 1 }));     // ranked within its own list
-  const head = `<div class="head"><div><h1>Ranking · ${d.size}v${d.size}</h1><p>This machine's ratings (elo/, docs/ratings.md): every player (as five copies of itself), every team (the average of its players on the pitch plus a small bonus) and every training checkpoint, from matches between them (${d.size}v${d.size} on the arena, 90 s, every pair from both sides with the same seed). The average rule-based player is 1500; 400 points more means 10:1 odds. The bar is the 95% interval (relative to that average). GF / GA: goals scored and conceded per match against the average team, adjusted for who each team played. New teams play ${6} placement games first.</p></div>
-    <div class="pills">${[1, 2, 3, 4, 5].map((n) => `<button class="pill ${rk.size === n ? "on" : ""}" data-rksize="${n}">${n}v${n}</button>`).join("")}</div>
-    <div class="pills">${WHAT.map(([k, l]) => { const n = d.rows.filter((r) => r.entry === k).length; return n || k !== "net" ? `<button class="pill ${rk.what === k ? "on" : ""}" data-rkwhat="${k}">${l} <span class="muted">${n}</span></button>` : ""; }).join("")}</div>
-    <div class="pills">${LEAGUES.map(([k, l]) => { const n = group.filter((r) => k === "all" || r.league === k).length; return n || k === "all" ? `<button class="pill ${rk.league === k ? "on" : ""}" data-league="${k}">${esc(l)} <span class="muted">${n}</span></button>` : ""; }).join("")}</div></div>`;
-  const rows = group.filter((r) => rk.league === "all" || r.league === rk.league);
-  const played = group.filter((r) => r.games), lead = played[0], noun = (WHAT.find((w) => w[0] === rk.what) || WHAT[0]);
-  const kpis = `<div class="kpis">${kpi("Matches", d.matches.toLocaleString(), d.stale ? `${d.stale} no longer count (a file changed)` : "all count")}${kpi(noun[1] + " ranked", `${played.length}<small>/ ${group.length}</small>`, `${group.filter((r) => r.placed).length} placed`)}${kpi("Top", lead ? esc(lead.name) : "–", lead ? `${f(lead.elo, 0)} · ${esc(lead.league)}` : "")}${kpi("Last match", d.last ? ago(d.last) : "–", d.off ? "rounds off (local/refine_off)" : "rounds run while this machine is idle")}</div>`;
-  if (!d.matches) return head + kpis + '<div class="card"><h2>No matches yet</h2><p class="muted">Run <span class="mono">python3 -m elo init</span> once on this machine; after that the web app and the runner keep playing rounds whenever the machine is idle.</p></div>';
-  const lo = Math.min(...rows.map((r) => r.lo)), hi = Math.max(...rows.map((r) => r.hi)), W = 200;
+  const q = rk.q.trim().toLowerCase();
+  const rows = group.filter((r) => (rk.league === "all" || r.league === rk.league) && (!rk.placed || r.placed) && (!q || r.name.toLowerCase().includes(q)));
+  const played = group.filter((r) => r.games), noun = WHAT.find((w) => w[0] === rk.what);
+  const filters = `<div class="fbar">${seg("rkwhat", WHAT.map(([k, l]) => [k, l, d.rows.filter((r) => r.entry === k).length]), rk.what)}
+      ${seg("rkleague", LEAGUES.filter(([k]) => k === "all" || group.some((r) => r.league === k)).map(([k, l]) => [k, l, group.filter((r) => k === "all" || r.league === k).length]), rk.league)}
+      <input class="search" placeholder="Search a name…" value="${esc(rk.q)}" data-filter="rksearch">
+      <label class="fchk ${rk.placed ? "on" : ""}"><input type="checkbox" data-sel="rkplaced" ${rk.placed ? "checked" : ""}> Placed only</label>
+      <span class="fcount">${d.matches.toLocaleString()} matches${d.stale ? ` · ${d.stale} no longer count` : ""} · last ${d.last ? esc(ago(d.last)) : "–"}${d.off ? " · rounds off" : ""}</span></div>`;
+  const pg = pager("rank", rows, 25);
+  const lo = Math.min(...rows.map((r) => r.lo)), hi = Math.max(...rows.map((r) => r.hi)), W = 140;
   const X = (v) => 6 + ((v - lo) / (hi - lo || 1)) * (W - 12);
-  const axis = niceTicks(lo, hi, 5);
-  const bar = (r) => `<svg width="${W}" height="16" viewBox="0 0 ${W} 16" class="rkbar">${axis.map((t) => `<line x1="${X(t)}" x2="${X(t)}" y1="0" y2="16" stroke="var(--grid)"/>`).join("")}<line x1="${X(r.lo)}" x2="${X(r.hi)}" y1="8" y2="8" stroke="${css(LEAGUE_COLOR[r.league] || "--muted")}" stroke-width="3" stroke-linecap="round" opacity="${r.placed ? 0.55 : 0.25}"/><circle cx="${X(r.elo)}" cy="8" r="4.5" fill="${css(LEAGUE_COLOR[r.league] || "--muted")}" opacity="${r.placed ? 1 : 0.5}"><title>${f(r.lo, 0)} – ${f(r.hi, 0)}</title></circle></svg>`;
-  const body = rows.map((r) => `<tr class="${r.placed ? "" : "dim"}"><td class="r muted">${r.rank}</td><td title="${esc(r.kind === "rules" ? "handmade AI" : r.model || "")}"><b>${esc(r.name)}</b>${' <span class="muted small">' + ({ player: r.kind === "net" ? "net" : "rule-based", team: r.via ? "one player ×5" : r.kind === "team" && r.sub === "mixed" ? "mixed" : "", net: "" }[r.entry] || "") + "</span>"}</td><td>${leagueChip(r.league)}</td>
-    <td class="r"><b>${f(r.elo, 0)}</b><span class="pm">±${f(1.96 * r.se, 0)}</span></td><td>${bar(r)}</td><td class="r">${r.games}${r.placed ? "" : ' <span class="small muted">placing</span>'}</td>
-    <td class="r nowrap">${r.w}–${r.d}–${r.l}</td><td class="r">${r.games && r.agf != null ? f(r.agf) : "–"}</td><td class="r">${r.games && r.aga != null ? f(r.aga) : "–"}</td><td class="r ${r.agf - r.aga > 0 ? "pos" : r.agf - r.aga < 0 ? "neg" : ""}">${r.games && r.agf != null ? sgn(r.agf - r.aga) : "–"}</td></tr>`).join("");
-  const table = `<section class="card flush"><div class="tbl-wrap"><table class="rank"><thead><tr><th class="r">#</th><th>${noun[2]}</th><th>League</th><th class="r">Elo</th><th><span class="small muted">${f(lo, 0)} … ${f(hi, 0)}</span></th><th class="r">Games</th><th class="r">W–D–L</th><th class="r" title="goals scored per 90 s match against the average team of the ladder (Poisson attack / defence model of all matches: adjusted for who was played)">GF</th><th class="r" title="goals conceded per 90 s match against the average team of the ladder (adjusted)">GA</th><th class="r">GD</th></tr></thead><tbody>${body}</tbody></table></div></section>`;
-  // history: the rating after each round, for the top teams of the filter
+  const bar = (r) => `<svg width="${W}" height="14" viewBox="0 0 ${W} 14" class="rkbar"><line x1="${X(r.lo)}" x2="${X(r.hi)}" y1="7" y2="7" stroke="${css(LEAGUE_COLOR[r.league] || "--muted")}" stroke-width="3" stroke-linecap="round" opacity="${r.placed ? 0.55 : 0.25}"/><circle cx="${X(r.elo)}" cy="7" r="4" fill="${css(LEAGUE_COLOR[r.league] || "--muted")}" opacity="${r.placed ? 1 : 0.5}"><title>${f(r.lo, 0)} – ${f(r.hi, 0)}</title></circle></svg>`;
+  const sub = (r) => ({ player: r.kind === "net" ? "net" : "rule-based", team: r.via ? "one player ×5" : r.sub === "mixed" ? "mixed" : "", net: "" }[r.entry] || "");
+  const body = pg.rows.map((r) => `<tr class="${r.placed ? "" : "dim"}"><td class="r muted">${r.rank}</td><td title="${esc(r.kind === "rules" ? "handmade AI" : r.model || "")}"><b>${esc(r.name)}</b> <span class="muted small">${sub(r)}</span></td><td>${leagueChip(r.league)}</td>
+    <td class="r">${eloText(r.elo, 1.96 * r.se)}</td><td>${bar(r)}</td><td class="r">${r.games}${r.placed ? "" : ' <span class="small muted">placing</span>'}</td>
+    <td class="r nowrap">${r.w}–${r.d}–${r.l}</td><td class="r">${r.games && r.agf != null ? f(r.agf) : "–"}</td><td class="r">${r.games && r.aga != null ? f(r.aga) : "–"}</td><td class="r ${tone(r.agf - r.aga)}">${r.games && r.agf != null ? sgn(r.agf - r.aga) : "–"}</td></tr>`).join("");
+  const table = `<section class="card flush s12 sticky"><table class="rank"><thead><tr><th class="r">#</th><th>${noun[2]} <span class="muted small">${played.length} rated · ${esc(eloKind(rk.what))}</span></th><th>League</th><th class="r">Elo</th><th><span class="small muted">${rows.length ? `${f(lo, 0)} … ${f(hi, 0)}` : ""}</span></th><th class="r">Games</th><th class="r">W–D–L</th>
+    <th class="r" title="goals scored per 90 s match against the average entry (adjusted for who was played)">GF</th><th class="r" title="goals conceded per 90 s match against the average entry (adjusted)">GA</th><th class="r">GD</th></tr></thead>
+    <tbody>${body || '<tr><td colspan="10" class="muted">nothing matches</td></tr>'}</tbody></table>${pg.html}</section>`;
+  // history: the rating after each round, for the top 8 of the filtered list
   const top = rows.filter((r) => r.games).slice(0, 8);
   const series = top.map((r, i) => ({ name: r.name, color: css(PALETTE[i % PALETTE.length]), points: d.history.filter((h) => h.elo[r.id] != null).map((h) => ({ x: parseT(h.t), y: h.elo[r.id] })) }));
-  const hist = `<section class="card"><div class="card-h"><h2>Rating history</h2><span class="muted small">the top ${top.length} of the list above, after every round</span></div>${lineChart(series, { height: 220, time: true, key: "rkh", fmt: (v) => f(v, 0), emptyText: "the history starts with the next round" })}</section>`;
+  const hist = `<section class="card s7">${cardHead("Rating history", `<span class="muted small">the top ${top.length} of the list, after every round</span>`)}${lineChart(series, { size: "m", time: true, key: "rkh", xTitle: "time", yTitle: "Elo", fmt: (v) => f(v, 0), emptyText: "The history starts with the next round" })}</section>`;
   const name = Object.fromEntries(d.rows.map((r) => [r.id, r.name]));
-  const recent = d.recent.slice(-15).reverse().map((m) => `<tr><td class="muted small nowrap">${esc(ago(m.t))}</td><td class="r">${esc(name[m.a] || m.a)}</td><td class="r"><b>${m.ga}–${m.gb}</b></td><td>${esc(name[m.b] || m.b)}</td></tr>`).join("");
-  const rec = `<section class="card flush"><div class="card-h pad"><h2>Latest matches</h2><span class="muted small">left team's goals first</span></div><div class="tbl-wrap"><table class="mini"><tbody>${recent}</tbody></table></div></section>`;
-  return head + kpis + table + `<div class="grid g2">${hist}${rec}</div>`;
+  const pr = pager("rkrecent", d.recent.slice().reverse(), 8);
+  const rec = `<section class="card flush s5">${cardHead("Latest matches", '<span class="muted small">left side\'s goals first</span>')}<table class="mini"><tbody>${pr.rows.map((m) => `<tr><td class="muted small nowrap">${esc(ago(m.t))}</td><td class="r">${esc(name[m.a] || m.a)}</td><td class="r"><b>${m.ga}–${m.gb}</b></td><td>${esc(name[m.b] || m.b)}</td></tr>`).join("")}</tbody></table>${pr.html}</section>`;
+  return head(filters) + `<div class="grid">${table}${hist}${rec}</div>`;
 }

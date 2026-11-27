@@ -144,6 +144,44 @@ def changes(st, spec):
     return out, ctrl
 
 
+# the Setup tab: how a run was trained. Every option comes with the meaning the training script itself gives it (rl/selfplay_args.py)
+FIXED_REWARDS = [("goals", "+10 for every goal scored, -10 for every goal conceded (the whole team; always on)"),
+                 ("time", "-0.0005 per decision (always on)")]
+REWARD_MODS = ("pass_individual", "coop_cap", "random_start", "xg_cap", "def_cap", "space_radius", "far_radius", "goalside_lane",
+               "compact_len", "compact_wid", "keeper_free")
+TRAINING_KEYS = ("start", "updates", "lr", "rollout", "minibatch", "epochs", "gamma", "lam", "ent", "hidden", "workers_rule",
+                 "workers_self", "opp_models", "pfsp", "snapshot_every", "teacher", "kl_coef", "kl_decay", "fast_every", "elo_pairs", "seed")
+
+
+def training_setup(cfg, st, row):
+    """{obs, actions, rewards, reward_options, training}: the observation layout, the net's outputs, every reward weight (with the
+    minimal set's value) and the main training settings of a run, from its config file (logs/<tag>_config.json) or, before that
+    exists, its status."""
+    mod = tracker.selfplay_args()
+    acts = [a for a in mod.parser()._actions if a.option_strings and a.dest != "help"]
+    helps, defaults = {a.dest: (a.help or "").replace("%%", "%") for a in acts}, {a.dest: a.default for a in acts}
+    spec = st.get("spec") or {}
+    top = {k: spec[k] for k in ("obs", "size") if k in spec}                       # a curriculum stage's spec names them itself
+    if "opp" in spec:
+        top["opp_mode"] = spec["opp"]
+    v = {**defaults, **{k: val for k, (_, val) in settings(st, spec).items()}, **top, **cfg}
+    minimal = tracker.minimal_for(lab_time(st.get("started")))
+    item = lambda k: {"k": k, "v": v.get(k), "default": defaults.get(k), "help": helps.get(k, "")}
+    reward = lambda k: {**item(k), "minimal": minimal.get(k, defaults.get(k))}
+    net = [int(x) for x in str(row.get("net") or "").split("-") if x.isdigit()]
+    by_inputs = {n: name for name, n in mod.OBS_DIMS.items()}
+    obs = cfg.get("obs") or top.get("obs") or (by_inputs.get(net[0]) if net else None) or "team"
+    outputs = net[-1] if net else 10
+    from soccer.match import INTENTS
+    return {"obs": {"name": obs, "inputs": net[0] if net else mod.OBS_DIMS.get(obs), "about": mod.OBS_DESC.get(obs, ""), "size": v.get("size", 5),
+                    "opp_mode": v.get("opp_mode", "rules"), "hidden": net[1:-1]},
+            "actions": {"outputs": outputs, "moves": 9, "kick": True, "calls": list(INTENTS) if outputs >= 15 else []},
+            "rewards": [{"k": k, "v": None, "fixed": True, "help": h} for k, h in FIXED_REWARDS]
+                       + [reward(k) for k in sorted(helps) if k.startswith("w_") or k == "shaping"],
+            "reward_options": [reward(k) for k in REWARD_MODS if k in helps],
+            "training": [item(k) for k in TRAINING_KEYS if k in v]}
+
+
 def lab_time(started):
     """A status time (epoch seconds, or ISO text in older files) as epoch seconds."""
     return started if isinstance(started, (int, float)) else (time.mktime(time.strptime(started[:19], "%Y-%m-%dT%H:%M:%S")) if started else None)
@@ -223,7 +261,7 @@ def run_detail(run):
             "behaviour_refs": behaviour_refs(run, rows, names, k=10),
             "style_me": style_scalars(sc["scout"]) if sc else {},
             "heat": heatmaps(os.path.join(ROOT, last_full["file"])) if last_full and last_full.get("file") else [],
-            "minimal": tracker.MINIMAL, "defaults": tracker.DEFAULTS}
+            "minimal": tracker.MINIMAL, "defaults": tracker.DEFAULTS, "setup": training_setup(rj(os.path.join(LOGS, tag + "_config.json"), {}), st, lab.run_row(run, rows))}
 
 
 def style_scalars(sc):
@@ -284,7 +322,7 @@ def health_view(hours=12.0):
 
 DOC_FILES = [("Experiments", "AGENTS.md"), ("Experiments", "docs/experiment_log.md"), ("Experiments", "docs/rewards.md"), ("Experiments", "docs/experiment_pipeline.md"),
              ("Experiments", "exp/results.md"), ("Experiments", "lab/README.md"),
-             ("Project", "README.md"), ("Project", "rl/README.md"), ("Project", "docs/design.md"),
+             ("Project", "README.md"), ("Project", "rl/README.md"), ("Project", "docs/design.md"), ("Project", "docs/lab_design.md"),
              ("Teams", "docs/opus_5_5_high.md"), ("Teams", "docs/elo_ranking.md"), ("Teams", "docs/ratings.md"), ("Teams", "docs/public_view.md")]
 
 
@@ -490,9 +528,6 @@ class Handler(BaseHTTPRequestHandler):
                 if not ctype or not (full.startswith(os.path.join(ROOT, "docs") + os.sep) or full == os.path.join(ROOT, "icon.svg")) or not os.path.isfile(full):
                     return self.send(b"not found", "text/plain", 404)
                 return self.send(open(full, "rb").read(), ctype)
-            if path == "/api/version":                              # the page reloads itself when the dashboard's files changed (the kiosk has no keyboard)
-                v = max(os.path.getmtime(f) for f in glob.glob(os.path.join(STATIC, "**", "*"), recursive=True))
-                return self.send(json.dumps({"v": v}).encode(), "application/json")
             if path == "/api/ranking":
                 from lab import ladder
                 from urllib.parse import parse_qsl

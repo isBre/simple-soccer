@@ -1,7 +1,7 @@
 # Training on the Mac, showing it on the Pi
 
-The Mac trains (`lab/exp_runner.py --loop`, no `--viewer`); the Pi keeps the dashboard (`http://10.0.0.75:8080`), the live demo match and the
-kiosk, and plays the Mac's newest checkpoints. Agents and people still add, move and cancel specs on the Pi (`python3 lab/lab.py queue ...`);
+The Mac trains (`lab/exp_runner.py --loop`, no `--viewer`); the Pi keeps the dashboard (`http://10.0.0.75:8080`), and the live demo match,
+and plays the Mac's newest checkpoints. Agents and people still add, move and cancel specs on the Pi (`python3 lab/lab.py queue ...`);
 `lab/mac_sync.py` carries everything both ways every minute. Specs, results and the notebook are committed **from the Pi** (the Mac's `exp/`
 is a working copy: do not commit it there).
 
@@ -51,6 +51,6 @@ efficiency cores (6 of them) slow the run down the most: check `ps -Ao pcpu,nice
 sudo cp lab/systemd/soccer-exp-viewer.service /etc/systemd/system/ && sudo systemctl daemon-reload
 sudo systemctl disable --now soccer-exp && sudo systemctl enable --now soccer-exp-viewer
 ```
-`soccer-exp-viewer` runs `exp_runner.py --viewer-only`: only the live demo (the screen shows it through `soccer-kiosk`), following the experiment that is current in the
+`soccer-exp-viewer` runs `exp_runner.py --viewer-only`: only the live demo, following the experiment that is current in the
 synced `exp/runs/*/status.json`. The Lab pages show the Mac's results; the Machine page and the vitals show the computer that serves the dashboard (here the Pi).
 Back to training on the Pi: `sudo systemctl disable --now soccer-exp-viewer && sudo systemctl enable --now soccer-exp`.

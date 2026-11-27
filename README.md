@@ -25,7 +25,7 @@ torch for training); nothing needs installing, every script runs from the checko
 ![Match report](docs/screenshots/report.png)
 *Match report: score, scorers, team stats and a 3.0-10.0 grade for every player.*
 
-**UI work: follow [docs/design.md](docs/design.md)** (tokens, components, screen layouts). The screenshots and GIFs were captured from the earlier Godot version of the game; the browser game draws the same screens.
+**UI work: follow [docs/design.md](docs/design.md)** for the Game (tokens, components, screen layouts) and [docs/lab_design.md](docs/lab_design.md) for the Lab. The screenshots and GIFs were captured from the earlier Godot version of the game; the browser game draws the same screens.
 
 ## Match gallery
 

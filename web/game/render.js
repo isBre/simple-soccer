@@ -119,6 +119,9 @@ export function drawParticles(ctx, M) {
   }
 }
 
+// M.viewer (the Lab's Live page and its card on Now, web/lab/live.js): no one plays, so no overlays; M.zoom "fit" shows the whole
+// pitch, a number zooms the camera that much (instead of CAM_ZOOM), M.delay = how far behind the newest frame to draw (the Lab streams 30 frames/s), M.noHud = no scorebug (a small card),
+// M.waitText = what to say before the first frame
 export function drawMatch(M, ts) {
   const cv = M.cv, dpr = window.devicePixelRatio || 1, cw = cv.clientWidth, ch = cv.clientHeight;
   if (cv.width !== Math.round(cw * dpr) || cv.height !== Math.round(ch * dpr)) { cv.width = Math.round(cw * dpr); cv.height = Math.round(ch * dpr); }
@@ -129,12 +132,12 @@ export function drawMatch(M, ts) {
   ctx.fillStyle = "#0b0e13"; ctx.fillRect(0, 0, W, H);
   const m = M.meta, fr = M.frames;
   if (!m || !fr.length) {
-    if (!M.error) text(ctx, "Starting the match…", 0, H / 2, "c", W, 22, "#8d98ab");
-    syncOverlay(M, null);
+    if (!M.error) text(ctx, M.waitText || "Starting the match…", 0, H / 2, "c", W, 22, "#8d98ab");
+    if (!M.viewer) syncOverlay(M, null);
     return;
   }
   // positions: interpolated between the two frames around (now - one tick), so the 60 Hz stream looks smooth at any refresh rate
-  const rt = performance.now() - 20;
+  const rt = performance.now() - (M.delay || 20);
   let a = fr[fr.length - 1], b = a, k = 0;
   for (let i = fr.length - 1; i > 0; i--) if (fr[i - 1].at <= rt) { a = fr[i - 1]; b = fr[i]; k = Math.min(1, Math.max(0, (rt - a.at) / Math.max(b.at - a.at, 1))); break; }
   if (b.t < a.t || a.p.length !== b.p.length) { a = b; k = 0; }
@@ -144,7 +147,8 @@ export function drawMatch(M, ts) {
   if (!M.paused) { M.partAcc += dt * 60; while (M.partAcc >= 1) { M.partAcc -= 1; stepParticles(M, f); } }
   const intro = f.in || 0;
   const zoomMul = intro > 0 ? (() => { const q = 1 - intro / INTRO; return INTRO_FROM + (1 - INTRO_FROM) * (1 - Math.pow(1 - q, 3)); })() : 1;
-  const zoom = CAM_ZOOM * zoomMul, P = m.pitch;
+  const P = m.pitch, fit = Math.min(W / (2 * P.out_x + 16), H / (2 * P.out_y + 8));
+  const zoom = (M.zoom === "fit" ? fit : M.zoom > 0 ? M.zoom : CAM_ZOOM) * zoomMul;
   const ball = [L(a.b[0], b.b[0]), L(a.b[1], b.b[1])];
   if (!M.cam || intro > 0) M.cam = ball.slice();
   else if (!M.paused) { const s = 1 - Math.pow(1 - CAM_SMOOTH, dt * 60); M.cam[0] += (ball[0] - M.cam[0]) * s; M.cam[1] += (ball[1] - M.cam[1]) * s; }
@@ -158,8 +162,8 @@ export function drawMatch(M, ts) {
   drawNets(ctx, m);
   ctx.restore();
   for (const me of M.mes) drawOffscreen(ctx, M, m, [centre[0] + (me.x - cam[0]) * zoom, centre[1] + (me.y - cam[1]) * zoom], W, H, me);
-  drawHud(ctx, M, m, f, W, H, intro);
-  syncOverlay(M, f);
+  if (!M.noHud) drawHud(ctx, M, m, f, W, H, intro);
+  if (!M.viewer) syncOverlay(M, f);
 }
 export function drawPitch(ctx, m) {
   const P = m.pitch, hw = P.half_w, hh = P.half_h, C = Draw.css;

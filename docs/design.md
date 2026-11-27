@@ -1,6 +1,7 @@
 # Simple Soccer – Design Guide
 
 Single source of truth for the look of every menu, table and report screen of the game (the Game area of the web app).
+The Lab (the experiment dashboard) has its own guide: [docs/lab_design.md](lab_design.md).
 **If a screen needs something that is not described here, add it here first, then build it in `web/game.css` / `web/game/`.**
 No screen should hard-code a colour, font size or spacing: use the tokens below (CSS variables `--g-bg`, `--g-panel`, `--g-accent`, ...
 in `web/game.css`). The guide was written for the Godot version (its `UIKit`); the browser game implements the same tokens and

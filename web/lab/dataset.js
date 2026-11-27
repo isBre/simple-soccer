@@ -76,11 +76,12 @@ function viewDataset(id) {
       <td class="r"><b>${pts} pts</b> <span class="small">${cnt("W")}W ${cnt("D")}D ${cnt("L")}L</span></td><td>${esc(R[0].control)} <span class="muted small">${esc([...new Set(R.flatMap((r) => Object.keys(r.roles)))].join(" "))}</span></td>
       <td class="r">${f(mins, 1)}</td><td class="r">${f(R.reduce((s, r) => s + r.dir_changes_s * r.minutes, 0) / mins, 1)}</td><td class="r">${f(R.reduce((s, r) => s + r.kick_presses_min * r.minutes, 0) / mins, 1)}</td>
       <td class="r">${f(R.reduce((s, r) => s + r.on_ball_pct * r.minutes, 0) / mins, 0)}%</td><td></td></tr>`; };
-  const rows = groups.slice().reverse().map((m) => m.rounds ? sessionRow(m) : m.error ? `<tr><td colspan="9" class="neg">${esc(m.id)}: ${esc(m.error)}</td></tr>` :
+  const pg = pager("dataset", groups.slice().reverse(), 20);
+  const rows = pg.rows.map((m) => m.rounds ? sessionRow(m) : m.error ? `<tr><td colspan="9" class="neg">${esc(m.id)}: ${esc(m.error)}</td></tr>` :
     `<tr><td class="nowrap">${esc(new Date(m.started).toLocaleString([], { dateStyle: "short", timeStyle: "short" }))}</td><td>${esc(m.team.name)} <span class="muted">vs</span> ${esc(m.opponent.name)} <span class="muted small">${esc(m.opponent.league)}</span></td>
      <td class="r"><b class="${oc[m.outcome]}">${m.gf}–${m.ga}${m.shootout?.length ? ` (p ${m.shootout.join("–")})` : ""}</b> <span class="small ${oc[m.outcome]}">${m.outcome === "left" ? "left early" : m.outcome}</span></td>
      <td>${esc(m.control)}${m.picked ? ` · ${esc(m.picked)}` : ""} <span class="muted small">${esc(Object.keys(m.roles).join(" "))}</span></td><td class="r">${f(m.minutes, 1)}</td><td class="r">${f(m.dir_changes_s, 1)}</td><td class="r">${f(m.kick_presses_min, 1)}</td><td class="r">${f(m.on_ball_pct, 0)}%</td><td><a href="#/dataset/${encodeURIComponent(m.id)}">replay ▶</a></td></tr>`).join("");
-  const table = `<section class="card flush"><div class="card-h pad"><h2>Recorded matches</h2><span class="muted small">newest first</span></div><div class="tbl-wrap"><table><thead><tr><th>When</th><th>Match</th><th class="r">Score</th><th>Control · roles played</th><th class="r">min</th><th class="r">changes/s</th><th class="r">kicks/min</th><th class="r">on ball</th><th></th></tr></thead><tbody>${rows}</tbody></table></div></section>`;
+  const table = `<section class="card flush"><div class="card-h pad"><h2>Recorded matches</h2><span class="muted small">newest first</span></div><div class="tbl-wrap"><table><thead><tr><th>When</th><th>Match</th><th class="r">Score</th><th>Control · roles played</th><th class="r">min</th><th class="r">changes/s</th><th class="r">kicks/min</th><th class="r">on ball</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>${pg.html}</section>`;
   return head + kpis + `<div class="grid g2">${behaviour}${where}</div>` + `<div class="grid g2">${coverage}${situations}</div>` + table;
 }
 

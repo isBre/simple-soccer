@@ -6,6 +6,17 @@ import os
 OUT = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "out_5v5")   # = rl/agent.py OUT
 
 OBS_DIMS = {"legacy": 54, "team": 46, "rank": 56, "slots": 76}   # observation layouts (soccer/ai/nets.py): ego with player slot / role-free team / every size with calls
+OBS_DESC = {                       # what each layout holds (soccer/ai/nets.py features_*); the Lab's Setup tab shows it
+    "team": "Me (position, speed), my 4 teammates nearest first, the 5 opponents nearest first (position and speed each), the ball "
+            "(position, speed), kickoff on, goal celebration on. No player ID: sorting by distance keeps a player from knowing a role. 5v5 only.",
+    "rank": "The team layout plus, for me and my 4 teammates, the rank in our team by distance to the ball and by depth (no fixed role: "
+            "ranks change with the situation). 5v5 only.",
+    "slots": "Me; 4 teammate slots nearest first (position, speed, on the pitch, and the teammate's call: none / ball / open / run / cover); "
+             "5 opponent slots nearest first (position, speed, on the pitch); the ball; kickoff on, our kickoff, goal celebration. "
+             "An empty slot is zeros, so one net plays every size from 1v0 to 5v5.",
+    "legacy": "Me, the ball, the 4 teammates and 5 opponents in slot order, the ball and the opponent goal relative to me, and a one-hot "
+              "of my slot (the first RL teams). 5v5 only.",
+}
 
 
 def parser():
@@ -28,21 +39,21 @@ def parser():
     ap.add_argument("--seed", type=int, default=7)
     ap.add_argument("--start", default=os.path.join(OUT, "rl_agent_after_s9_all.pt"), help="checkpoint (.pt) to continue from; \"scratch\" = a fresh net")
     ap.add_argument("--baseline", default="", help="frozen benchmark opponent (.pt); default = --start")
-    ap.add_argument("--w_pass_prog", type=float, default=0.3)
-    ap.add_argument("--w_pass_ok", type=float, default=0.05)
-    ap.add_argument("--w_pass_fail", type=float, default=0.08)
+    ap.add_argument("--w_pass_prog", type=float, default=0.3, help="reward per progressive pass (a completed pass that gains at least a fifth of the half-length towards the opponent goal)")
+    ap.add_argument("--w_pass_ok", type=float, default=0.05, help="reward per completed pass that is not progressive (cooperation: capped by --coop_cap)")
+    ap.add_argument("--w_pass_fail", type=float, default=0.08, help="penalty per failed pass")
     ap.add_argument("--pass_individual", type=int, default=0, help="1: pass rewards go to the passer / receiver, not the whole team")
-    ap.add_argument("--w_recv", type=float, default=0.0)
-    ap.add_argument("--w_open", type=float, default=0.0)
-    ap.add_argument("--w_key_pass", type=float, default=0.0)
-    ap.add_argument("--w_xa", type=float, default=0.0)
-    ap.add_argument("--w_space", type=float, default=0.006)
+    ap.add_argument("--w_recv", type=float, default=0.0, help="reward for receiving a pass (cooperation: capped by --coop_cap)")
+    ap.add_argument("--w_open", type=float, default=0.0, help="reward per decision for a teammate of the ball carrier who is open for a pass (120-450 px away, no opponent in the lane)")
+    ap.add_argument("--w_key_pass", type=float, default=0.0, help="reward per key pass: a pass the receiver shoots from (cooperation: capped by --coop_cap)")
+    ap.add_argument("--w_xa", type=float, default=0.0, help="reward per expected assist: the xG of the shot a pass led to (cooperation: capped by --coop_cap)")
+    ap.add_argument("--w_space", type=float, default=0.006, help="penalty per decision for crowding a teammate (closer than --space_radius px) while our team has the ball")
     ap.add_argument("--space_radius", type=float, default=140.0)
-    ap.add_argument("--w_kick", type=float, default=0.01)
+    ap.add_argument("--w_kick", type=float, default=0.01, help="penalty per decision for pressing kick out of reach of the ball (kick discipline)")
     ap.add_argument("--random_start", type=float, default=0.0, help="fraction of episodes that start from a fully random layout instead of a kickoff")
     ap.add_argument("--coop_cap", type=float, default=0.0, help="max cooperation reward per episode (anti reward-farming)")
-    ap.add_argument("--w_jitter", type=float, default=0.0)
-    ap.add_argument("--w_keeper", type=float, default=0.0)
+    ap.add_argument("--w_jitter", type=float, default=0.0, help="penalty per sharp change of direction (twitching)")
+    ap.add_argument("--w_keeper", type=float, default=0.0, help="penalty for the keeper-line player when further than --keeper_free px from its own goal")
     ap.add_argument("--shaping", type=float, default=1.0, help="weight of the ball shaping (ball towards the goal, teammate towards the ball); 0 = off")
     ap.add_argument("--w_corner", type=float, default=0.0, help="penalty per decision while our team put the ball in a corner (last touch ours)")
     ap.add_argument("--w_wall", type=float, default=0.0, help="penalty per decision for a player pressed against the outer wall for 2+ decisions in a row")

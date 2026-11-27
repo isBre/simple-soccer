@@ -1,23 +1,32 @@
-// The Lab (web/lab/core.js has the overview): one run's page (summary, training, evaluation, behaviour, scouting, config).
+// The Lab (web/lab/core.js has the overview): one run's page (summary, training, evaluation, behaviour, scouting, setup).
 "use strict";
 
 // ---------- RUN ----------
-const TABS = ["summary", "training", "evaluation", "behaviour", "scouting", "config"];
+const TABS = [["summary", "Summary"], ["training", "Training"], ["evaluation", "Evaluation"], ["behaviour", "Behaviour"], ["scouting", "Scouting"], ["setup", "Setup"]];
 function viewRun(name, tab) {
   const d = state.detail[name]; ensureDetail(name);
   if (!d) return '<div class="empty">Loading…</div>';
   if (d.error) return `<div class="empty">${esc(d.error)}</div>`;
-  tab = TABS.includes(tab) ? tab : "summary";
-  const st = d.status || {}, row = d.row || {}, spec = st.spec || {};
-  const head = `<div class="crumbs"><a href="#/runs">Runs</a> / ${esc(name)}</div>
-    <div class="head"><div class="min0"><h1>${runLink(name)} ${badge(row.state)}</h1><p>${esc(row.notes || (row.state === "imported" ? "Imported from an older run (no spec)." : ""))}</p>${row.state === "imported" ? "" : `<div class="chips">${chips({ net: row.net, stage: row.stage, curriculum: row.curriculum, rewards_changed_vs_minimal: row.rewards_changed_vs_minimal, args: spec.args || {} })}</div>`}</div>
-      <div class="meta">${row.update != null ? `update <b>${row.update}</b>${row.target ? " / " + row.target : ""}<br>` : ""}${row.started ? "started " + ago(row.started) + "<br>" : ""}${row.finished ? "finished " + ago(row.finished) + "<br>" : ""}${st.git_commit ? `commit <span class="mono">${esc(st.git_commit)}</span>${st.git_dirty ? " (dirty)" : ""}<br>` : ""}${(st.restarts || []).length ? `${st.restarts.length} restart(s)<br>` : ""}
-      <a href="/api/v1/run/${encodeURIComponent(name)}" target="_blank">JSON</a> · <button class="linkbtn" data-copy="${esc(name)}">copy summary</button></div></div>
-    <nav class="tabs">${TABS.map((t) => `<a class="${t === tab ? "on" : ""}" href="#/run/${encodeURIComponent(name)}/${t}">${t[0].toUpperCase() + t.slice(1)}</a>`).join("")}</nav>`;
-  return head + ({ summary: runSummary, training: runTraining, evaluation: runEvaluation, behaviour: runBehaviour, scouting: runScouting, config: runConfig }[tab])(d);
+  tab = TABS.some((t) => t[0] === tab) ? tab : tab === "config" ? "setup" : "summary";
+  return runHead(d, name) + `<nav class="tabs">${TABS.map(([t, l]) => `<a class="${t === tab ? "on" : ""}" href="#/run/${encodeURIComponent(name)}/${t}">${l}</a>`).join("")}</nav>`
+    + ({ summary: runSummary, training: runTraining, evaluation: runEvaluation, behaviour: runBehaviour, scouting: runScouting, setup: runSetup }[tab])(d);
 }
-const refEval = (d, protocol) => (d.reference?.evals || []).filter((e) => e.protocol === protocol).pop();
-// the run's Elo: the ladder rating of its best checkpoint once placed, the estimates of its checkpoints during training, the start net
+// the header: name, state, what it changes and its notes (2 lines, "more" opens them) on the left; the facts on the right
+function runHead(d, name) {
+  const st = d.status || {}, row = d.row || {}, spec = st.spec || {};
+  const fact = (k, v) => (v ? `<dt>${k}</dt><dd>${v}</dd>` : "");
+  const facts = fact("update", row.update != null ? `<b>${row.update}</b>${row.target ? " / " + row.target : ""}` : "") + fact("started", row.started ? ago(row.started) : "")
+    + fact("finished", row.finished ? ago(row.finished) : "") + fact("from", row.start ? esc(shortVal(row.start)) : "") + fact("control", row.control ? runLink(row.control) : "")
+    + fact("commit", st.git_commit ? `<span class="mono">${esc(st.git_commit)}</span>${st.git_dirty ? " (dirty)" : ""}` : "") + fact("restarts", (st.restarts || []).length || "")
+    + `<dt></dt><dd><a href="/api/v1/run/${encodeURIComponent(name)}" target="_blank">JSON</a> · <button class="linkbtn" data-copy="${esc(name)}">copy summary</button></dd>`;
+  const text = row.notes || (row.state === "imported" ? "Imported from an older run (no spec)." : "");
+  return `<div class="crumbs"><a href="#/runs">Runs</a> / ${esc(name)}</div>
+    <div class="run-head"><div class="min0"><div class="strip-title"><h1>${runLink(name)}</h1>${badge(row.state)}</div>
+        ${row.state === "imported" ? "" : `<div class="chips">${chips({ net: row.net, stage: row.stage, curriculum: row.curriculum, rewards_changed_vs_minimal: row.rewards_changed_vs_minimal, args: spec.args || {} })}</div>`}
+        ${notes("run:" + name, text, 2)}</div>
+      <dl class="facts">${facts}</dl></div>`;
+}
+// the run's Elo: the rating of its best checkpoint once placed, the estimates of its checkpoints during training, the start net
 function runElo(d) {
   const row = (state.ov?.runs || []).find((r) => r.name === d.run) || {}, e = row.elo, es = d.estimates || [], est = es[es.length - 1];
   return { e: e && e.games ? e : null, est, se: d.start_elo, g: ladderGoals(e && e.games ? e : null, est) };
@@ -25,20 +34,22 @@ function runElo(d) {
 function runSummary(d) {
   const { e, est, se, g } = runElo(d);
   const cur = e ? e.elo : est ? est.elo : null, dStart = cur != null && se ? cur - se.elo : null;
+  const goalSub = (v) => `per match vs the average rated team${v != null ? " · ±" + f(1.96 * v) : ""}${g?.est ? " · estimate" : ""}`;
   const kp = `<div class="kpis">
-    ${kpi("Elo", e ? `${f(e.elo, 0)}<small>± ${f((e.hi - e.lo) / 2, 0)}</small>` : "–", e ? (e.placed ? `#${e.rank} · ${e.games} ladder games · ${e.w}–${e.d}–${e.l}` : `placing: ${e.games}/6 games`) : "best checkpoint not in the ladder yet")}
-    ${kpi(`Estimated Elo <span class="muted">${est ? "u" + est.update : ""}</span>`, est ? `~${f(est.elo, 0)}<small>± ${f(1.96 * est.se, 0)}</small>` : "–", est ? `${est.games} games · ${est.w}–${est.d}–${est.l}` : "comes with every check")}
-    ${kpi("vs start net", dStart != null ? sgn(dStart, 0) : "–", se ? `${esc(se.name)} ${se.estimate ? "~" : ""}${f(se.elo, 0)}${se.estimate ? " (estimate u0)" : ""}` : "start net not rated", dStart > 0 ? "pos" : dStart < 0 ? "neg" : "")}
-    ${kpi("Goals scored", g ? f(g.gf) : "–", g ? `per match vs the average ladder team${g.gf_se != null ? " · ±" + f(1.96 * g.gf_se) : ""}${g.est ? " · estimate" : ""}` : "")}
-    ${kpi("Goals conceded", g ? f(g.ga) : "–", g ? `per match vs the average ladder team${g.ga_se != null ? " · ±" + f(1.96 * g.ga_se) : ""}${g.est ? " · estimate" : ""}` : "")}
-    ${kpi("Goal difference", g ? sgn(g.gd) : "–", g ? "scored − conceded" : "", g && g.gd > 0 ? "pos" : g && g.gd < 0 ? "neg" : "")}</div>`;
-  return `${kp}<div class="grid g2"><section class="card"><div class="card-h"><h2>Estimated Elo</h2><span class="muted small">each check · 95% interval</span></div>${estChart(d, 220, "sum")}</section>
-    <section class="card"><div class="card-h"><h2>Goals per match</h2><span class="muted small">estimates · vs the average ladder team</span></div>${estGoalsChart(d, 220, "sum")}</section></div>
-    <section class="card"><div class="card-h"><h2>Training points</h2><span class="muted small">sampled play during training, a trend signal</span>${smoothControl()}</div>${trainingChart(d, 250, "run", 1240)}</section>`;
+    ${kpi("Checkpoint Elo", e ? eloText(e.elo, (e.hi - e.lo) / 2) : "–", e ? (e.placed ? `#${e.rank} · ${e.games} games · ${e.w}–${e.d}–${e.l}` : `placing: ${e.games}/6 games`) : "best checkpoint not rated yet")}
+    ${kpi(`Estimated Elo <span class="muted">${est ? "u" + est.update : ""}</span>`, est ? eloText(est.elo, 1.96 * est.se, true) : "–", est ? `${est.games} games · ${est.w}–${est.d}–${est.l}` : "comes with every check")}
+    ${kpi("vs start net", dStart != null ? sgn(dStart, 0) : "–", se ? `${esc(se.name)} ${se.estimate ? "~" : ""}${f(se.elo, 0)}${se.estimate ? " (estimate u0)" : ""}` : "start net not rated", tone(dStart))}
+    ${kpi("Goals scored", g ? f(g.gf) : "–", g ? goalSub(g.gf_se) : "")}
+    ${kpi("Goals conceded", g ? f(g.ga) : "–", g ? goalSub(g.ga_se) : "")}
+    ${kpi("Goal difference", g ? sgn(g.gd) : "–", g ? "scored − conceded" : "", tone(g?.gd))}</div>`;
+  return `${kp}<div class="grid">
+    <section class="card s6">${cardHead("Estimated Elo", '<span class="muted small">each check · 95% interval</span>')}${estChart(d, "m", "sum")}</section>
+    <section class="card s6">${cardHead("Goals per match", '<span class="muted small">estimates · vs the average rated team</span>')}${estGoalsChart(d, "m", "sum")}</section>
+    <section class="card s12">${cardHead("Training points", `<span class="muted small">sampled play during training, a trend signal</span>${smoothControl()}`)}${trainingChart(d, "m", "run")}</section></div>`;
 }
 function runTraining(d) {
   const p = d.ppo || [], t = d.training || [], a = state.smooth;
-  const small = (title, sub, series, opt = {}) => `<section class="card"><div class="card-h"><h3>${title}</h3></div>${sub ? `<div class="sub">${sub}</div>` : ""}${lineChart(series, { height: 170, width: 420, ...opt })}</section>`;
+  const small = (title, sub, yTitle, series, opt = {}) => `<section class="card s4">${cardHead(title, sub ? `<span class="muted small">${sub}</span>` : "")}${lineChart(series, { size: "s", xTitle: "update", yTitle, ...opt })}</section>`;
   const s = (k, c, name, extra = {}) => ({ name, color: css(c), points: ema(p.map((r) => ({ x: r.upd, y: r[k] })), a), ...extra });
   const hasTeacher = p.some((r) => r.kl_teacher != null);
   const terms = d.terms || [];
@@ -47,34 +58,37 @@ function runTraining(d) {
   const means = keys.map((k) => ({ k, v: recent.reduce((acc, r) => acc + (r[k] || 0), 0) / Math.max(recent.length, 1) })).filter((m) => m.v).sort((x, y) => Math.abs(y.v) - Math.abs(x.v));
   const tot = means.reduce((acc, m) => acc + Math.abs(m.v), 0) || 1;
   const shareSeries = means.slice(0, 8).map((m, i) => ({ name: TERM_LABEL[m.k] || m.k, color: css(PALETTE[i % PALETTE.length]), points: ema(terms.map((r) => { const tt = keys.reduce((acc, kk) => acc + Math.abs(r[kk] || 0), 0) || 1; return { x: r.upd, y: (100 * Math.abs(r[m.k] || 0)) / tt }; }), a) }));
-  const table = means.map((m) => `<tr><td>${esc(TERM_LABEL[m.k] || m.k)}</td><td class="r ${m.v > 0 ? "pos" : "neg"}">${sgn(m.v * DECISIONS_PER_MATCH, 2)}</td><td class="r">${f((100 * Math.abs(m.v)) / tot, 0)}%</td></tr>`).join("");
-  return `<div class="toolbar">${smoothControl()}</div><div class="grid g3">
-    ${small("Approx. KL per update", "healthy band 0.001–0.02", [s("kl", "--c1", "KL")], { bands: [{ y0: 0.001, y1: 0.02, color: "var(--good)" }], fmt: (v) => f(v, 4), key: "kl" })}
-    ${small("Clip fraction", "share of samples clipped by PPO", [s("clipfrac", "--c2", "clip fraction")], { fmt: (v) => f(v, 3), key: "cf" })}
-    ${small("Critic explained variance", "1 = perfect value predictions", [s("ev", "--c3", "explained variance")], { yMax: 1, key: "evr" })}
-    ${small("Move entropy", "randomness of the moves", [s("ent_move", "--c4", "move")], { key: "em" })}
-    ${small("Kick entropy", "", [s("ent_kick", "--c5", "kick")], { fmt: (v) => f(v, 3), key: "ek" })}
-    ${hasTeacher ? small("Teacher KL", "distance to the teacher's moves, and its weight", [s("kl_teacher", "--c6", "KL to teacher"), s("kl_w", "--c7", "weight", { dashed: true })], { key: "klt" })
-      : small("Decisions / s", "simulation speed", [{ name: "dec/s", color: css("--c6"), points: t.map((r) => ({ x: r.upd, y: r.dps })) }], { key: "dps", yMin: 0 })}
-  </div><div class="grid g2"><section class="card"><div class="card-h"><h2>Reward composition</h2><span class="muted small">share of |reward| per term, %</span></div>${lineChart(shareSeries, { height: 240, yMin: 0, key: "terms", fmt: (v) => f(v, 1) + "%" })}</section>
-  <section class="card flush"><div class="card-h pad"><h2>Reward per player and match</h2><span class="muted small">mean of the last 20 updates</span></div><div class="tbl-wrap"><table><thead><tr><th>Term</th><th class="r">per match</th><th class="r">share</th></tr></thead><tbody>${table || '<tr><td colspan="3" class="muted">no data</td></tr>'}</tbody></table></div></section></div>`;
+  const table = means.map((m) => `<tr><td>${esc(TERM_LABEL[m.k] || m.k)}</td><td class="r ${tone(m.v)}">${sgn(m.v * DECISIONS_PER_MATCH, 2)}</td><td class="r">${f((100 * Math.abs(m.v)) / tot, 0)}%</td></tr>`).join("");
+  return `<div class="toolbar">${smoothControl()}</div><div class="grid">
+    ${small("Approx. KL per update", "healthy 0.001–0.02", "KL", [s("kl", "--c1", "KL")], { bands: [{ y0: 0.001, y1: 0.02, color: "var(--good)" }], fmt: (v) => f(v, 4), key: "kl" })}
+    ${small("Clip fraction", "samples clipped by PPO", "share", [s("clipfrac", "--c2", "clip fraction")], { fmt: (v) => f(v, 3), key: "cf" })}
+    ${small("Critic explained variance", "1 = perfect values", "explained var.", [s("ev", "--c3", "explained variance")], { yMax: 1, key: "evr" })}
+    ${small("Move entropy", "randomness of the moves", "entropy", [s("ent_move", "--c4", "move")], { key: "em" })}
+    ${small("Kick entropy", "", "entropy", [s("ent_kick", "--c5", "kick")], { fmt: (v) => f(v, 3), key: "ek" })}
+    ${hasTeacher ? small("Teacher KL", "distance to the teacher, and its weight", "KL", [s("kl_teacher", "--c6", "KL to teacher"), s("kl_w", "--c7", "weight", { dashed: true })], { key: "klt" })
+      : small("Decisions / s", "simulation speed", "decisions / s", [{ name: "dec/s", color: css("--c6"), points: t.map((r) => ({ x: r.upd, y: r.dps })) }], { key: "dps", yMin: 0 })}
+    <section class="card s7">${cardHead("Reward composition", '<span class="muted small">share of |reward| per term</span>')}${lineChart(shareSeries, { size: "m", yMin: 0, key: "terms", xTitle: "update", yTitle: "share %", fmt: (v) => f(v, 1) + "%" })}</section>
+    <section class="card flush s5">${cardHead("Reward per player and match", '<span class="muted small">mean of the last 20 updates</span>')}<table><thead><tr><th>Term</th><th class="r">per match</th><th class="r">share</th></tr></thead><tbody>${table || '<tr><td colspan="3" class="muted">no data</td></tr>'}</tbody></table></section></div>`;
 }
 function runEvaluation(d) {
   loadRanking();
   const { e, se } = runElo(d), es = d.estimates || [];
   const name = Object.fromEntries((rk.data?.rows || []).map((r) => [r.id, r.name]));
   const pick = es.find((x) => x.update === state.estPick[d.run]) || es[es.length - 1];
-  const rowsE = es.slice().reverse().map((x) => `<tr class="${x === pick ? "focus" : ""}"><td>u${x.update}${x.update === 0 ? ' <span class="muted small">start net</span>' : ""}</td><td class="r"><b>${f(x.elo, 0)}</b><span class="pm">±${f(1.96 * x.se, 0)}</span></td>
-    <td class="r">${f(x.gf)}</td><td class="r">${f(x.ga)}</td><td class="r ${x.gf - x.ga > 0 ? "pos" : x.gf - x.ga < 0 ? "neg" : ""}">${sgn(x.gf - x.ga)}</td><td class="r nowrap">${x.w}–${x.d}–${x.l}</td><td class="r muted small">${f(x.raw_gf)} – ${f(x.raw_ga)}</td><td class="r">${x.games}</td></tr>`).join("");
-  const ladderRow = e ? `<tr class="lad"><td><b>ladder</b> <span class="muted small">best checkpoint</span></td><td class="r"><b>${f(e.elo, 0)}</b><span class="pm">±${f((e.hi - e.lo) / 2, 0)}</span></td><td class="r">${f(e.agf)}</td><td class="r">${f(e.aga)}</td><td class="r ${e.agf - e.aga > 0 ? "pos" : "neg"}">${sgn(e.agf - e.aga)}</td><td class="r nowrap">${e.w}–${e.d}–${e.l}</td><td class="r muted small">${f(e.gf / e.games)} – ${f(e.ga / e.games)}</td><td class="r">${e.games}${e.placed ? "" : ' <span class="muted small">placing</span>'}</td></tr>` : "";
-  const startRow = se && se.games && !se.estimate ? `<tr class="dim"><td>start net <span class="muted small">${esc(se.name)}</span></td><td class="r">${f(se.elo, 0)}<span class="pm">±${f((se.hi - se.lo) / 2, 0)}</span></td><td class="r">${f(se.agf)}</td><td class="r">${f(se.aga)}</td><td class="r">${se.agf != null ? sgn(se.agf - se.aga) : "–"}</td><td></td><td></td><td class="r">${se.games}</td></tr>` : "";
-  const table = `<section class="card flush"><div class="card-h pad"><h2>Elo and goals</h2><span class="muted small">goals per 90 s match vs the average ladder team (opponent-adjusted) · raw = as played</span></div><div class="tbl-wrap"><table><thead><tr><th>Checkpoint</th><th class="r">Elo</th><th class="r">GF</th><th class="r">GA</th><th class="r">GD</th><th class="r">W–D–L</th><th class="r">raw GF – GA</th><th class="r">Games</th></tr></thead>
-    <tbody>${ladderRow}${rowsE || (ladderRow ? "" : '<tr><td colspan="8" class="muted">No estimate yet: one comes with every check (every 50 updates).</td></tr>')}${startRow}</tbody></table></div></section>`;
+  const pg = pager("est:" + d.run, es.slice().reverse(), 10);
+  const rowsE = pg.rows.map((x) => `<tr class="${x === pick ? "focus" : ""}"><td>u${x.update}${x.update === 0 ? ' <span class="muted small">start net</span>' : ""}</td><td class="r">${eloText(x.elo, 1.96 * x.se)}</td>
+    <td class="r">${f(x.gf)}</td><td class="r">${f(x.ga)}</td><td class="r ${tone(x.gf - x.ga)}">${sgn(x.gf - x.ga)}</td><td class="r nowrap">${x.w}–${x.d}–${x.l}</td><td class="r muted small">${f(x.raw_gf)} – ${f(x.raw_ga)}</td><td class="r">${x.games}</td></tr>`).join("");
+  const ladderRow = e ? `<tr class="lad"><td><b>rated</b> <span class="muted small">best checkpoint</span></td><td class="r">${eloText(e.elo, (e.hi - e.lo) / 2)}</td><td class="r">${f(e.agf)}</td><td class="r">${f(e.aga)}</td><td class="r ${tone(e.agf - e.aga)}">${sgn(e.agf - e.aga)}</td><td class="r nowrap">${e.w}–${e.d}–${e.l}</td><td class="r muted small">${f(e.gf / e.games)} – ${f(e.ga / e.games)}</td><td class="r">${e.games}${e.placed ? "" : ' <span class="muted small">placing</span>'}</td></tr>` : "";
+  const startRow = se && se.games && !se.estimate ? `<tr class="dim"><td>start net <span class="muted small">${esc(se.name)}</span></td><td class="r">${eloText(se.elo, (se.hi - se.lo) / 2)}</td><td class="r">${f(se.agf)}</td><td class="r">${f(se.aga)}</td><td class="r">${se.agf != null ? sgn(se.agf - se.aga) : "–"}</td><td></td><td></td><td class="r">${se.games}</td></tr>` : "";
+  const table = `<section class="card flush s7">${cardHead("Checkpoint Elo and goals", '<span class="muted small">goals per 90 s match vs the average rated team · raw = as played</span>')}<table><thead><tr><th>Checkpoint</th><th class="r">Elo</th><th class="r">GF</th><th class="r">GA</th><th class="r">GD</th><th class="r">W–D–L</th><th class="r">raw GF – GA</th><th class="r">Games</th></tr></thead>
+    <tbody>${ladderRow}${rowsE || (ladderRow ? "" : '<tr><td colspan="8" class="muted">No estimate yet: one comes with every check (every 50 updates).</td></tr>')}${startRow}</tbody></table>${pg.html}</section>`;
   const sel = es.length ? `<select data-estpick="${esc(d.run)}">${es.map((x) => `<option value="${x.update}" ${x === pick ? "selected" : ""}>u${x.update}</option>`).join("")}</select>` : "";
-  const matches = pick ? `<section class="card flush"><div class="card-h pad"><h2>Matches of the estimate ${sel}</h2><span class="muted small">${pick.games} games · ${pick.seconds ? "took " + dur(pick.seconds) : ""} · opponents mixed: half spread over the ranking, half near its level</span></div><div class="tbl-wrap"><table class="mini"><thead><tr><th>Opponent</th><th class="r">Their Elo</th><th class="r">Score</th><th class="r">Side</th></tr></thead><tbody>${(pick.matches || []).slice().sort((a, b) => b.opp_elo - a.opp_elo || a.side - b.side).map((m) => `<tr><td>${esc(name[m.opp] || m.opp)}</td><td class="r">${m.opp_elo}</td><td class="r ${m.gf > m.ga ? "pos" : m.gf < m.ga ? "neg" : ""}"><b>${m.gf}–${m.ga}</b></td><td class="r muted small">${m.side ? "away" : "home"}</td></tr>`).join("")}</tbody></table></div></section>` : "";
-  return `<div class="grid g2"><section class="card"><div class="card-h"><h2>Estimated Elo</h2><span class="muted small">each check · 95% interval</span></div>${estChart(d, 220, "ev")}</section>
-    <section class="card"><div class="card-h"><h2>Goals per match</h2><span class="muted small">estimates · vs the average ladder team</span></div>${estGoalsChart(d, 220, "ev")}</section></div>
-    ${table}${matches}`;
+  const ms = (pick?.matches || []).slice().sort((a, b) => b.opp_elo - a.opp_elo || a.side - b.side), pm = pager("estm:" + d.run, ms, 12);
+  const matches = pick ? `<section class="card flush s5">${cardHead(`Matches of the estimate ${sel}`, `<span class="muted small">${pick.games} games${pick.seconds ? " · took " + dur(pick.seconds) : ""}</span>`)}<table class="mini"><thead><tr><th>Opponent</th><th class="r">Their Elo</th><th class="r">Score</th><th class="r">Side</th></tr></thead><tbody>${pm.rows.map((m) => `<tr><td>${esc(name[m.opp] || m.opp)}</td><td class="r">${m.opp_elo}</td><td class="r ${tone(m.gf - m.ga)}"><b>${m.gf}–${m.ga}</b></td><td class="r muted small">${m.side ? "away" : "home"}</td></tr>`).join("")}</tbody></table>${pm.html}
+    <p class="muted small pad">Opponents mixed: half spread over the ratings, half near its level.</p></section>` : "";
+  return `<div class="grid"><section class="card s6">${cardHead("Estimated Elo", '<span class="muted small">each check · 95% interval</span>')}${estChart(d, "m", "ev")}</section>
+    <section class="card s6">${cardHead("Goals per match", '<span class="muted small">estimates · vs the average rated team</span>')}${estGoalsChart(d, "m", "ev")}</section>
+    ${table}${matches}</div>`;
 }
 // behaviour of the run's newest full evaluation against the strongest rated teams (dashboard.behaviour_refs: the 10 highest in the
 // Elo ladder with measured behaviour). Per metric a curve of where those teams are (kernel density: it follows the data, no fitted
@@ -148,13 +162,34 @@ function runBehaviour(d) {
     <section class="card"><div class="card-h"><h2>Where the players are</h2><span class="muted small">share of time · attacking right</span></div><div class="heats">${heats || '<div class="empty">no heatmaps</div>'}</div>
     <div class="hlegend"><span>rare</span><i></i><span>often</span></div><p class="muted small">Per player slot: with no fixed roles a slot is not a position. Role-based views come with the scouting page.</p></section>`;
 }
-function runConfig(d) {
-  const c = d.config || {}, m = d.minimal || {}, df = d.defaults || {};
-  const changed = Object.keys(c).filter((k) => (k in m && m[k] != c[k]) || (k in df && df[k] != c[k] && !["updates", "start_update"].includes(k)) || ["teacher", "opp_models", "kl_coef", "hidden"].includes(k) && c[k] && c[k] !== 128);
-  const kv = (keys) => keys.map((k) => `<dt>${esc(k)}</dt><dd class="${changed.includes(k) ? "hl" : ""}">${esc(typeof c[k] === "object" ? JSON.stringify(c[k]) : c[k])}</dd>`).join("");
-  return `<div class="grid g2"><section class="card"><div class="card-h"><h2>Changed vs the defaults</h2></div><dl class="kv">${kv(changed) || '<dt class="muted">nothing: minimal rewards, default settings</dt><dd></dd>'}</dl></section>
-    <section class="card"><div class="card-h"><h2>Spec</h2></div><pre>${esc(JSON.stringify(d.status.spec || {}, null, 1))}</pre></section></div>
-    <details class="card"><summary>All ${Object.keys(c).length} settings</summary><dl class="kv">${kv(Object.keys(c).sort())}</dl></details>`;
+// how the run was trained (dashboard.training_setup): what the net sees, what it can do, what it is rewarded for, how it learns
+const OPP_MODE = { rules: "against the rule teams (the first N players of each line-up) and snapshots of itself", none: "on an empty pitch: first-goal episodes from random starts" };
+function runSetup(d) {
+  const su = d.setup; if (!su) return '<div class="empty">No setup recorded for this run</div>';
+  const o = su.obs, a = su.actions, same = (x, y) => x === y || (x == null && y == null) || String(x) === String(y);
+  const help = (h) => (h ? `<div class="muted small">${esc(h)}</div>` : "");
+  const obs = `<section class="card s6">${cardHead("Observation", `<span class="muted small">${esc(o.name)} · ${o.inputs} numbers per player</span>`)}
+    <p>${esc(o.about)}</p><dl class="kv"><dt>Team size</dt><dd>${o.size}v${o.size}</dd><dt>Opponents</dt><dd>${esc(OPP_MODE[o.opp_mode] || o.opp_mode)}</dd>
+    <dt>Net</dt><dd>${o.inputs} inputs → ${o.hidden.length ? o.hidden.join(" → ") + " hidden → " : ""}${a.outputs} outputs, one net shared by every player</dd></dl></section>`;
+  const actions = `<section class="card s6">${cardHead("Actions", `<span class="muted small">${a.outputs} outputs, every decision (30 per second)</span>`)}
+    <dl class="kv"><dt>Move</dt><dd>one of 9: stand still or one of 8 directions (mirrored so that forward is always towards the opponent goal)</dd>
+    <dt>Kick</dt><dd>on / off</dd>${a.calls.length ? `<dt>Call</dt><dd>one of ${a.calls.map((c) => `<span class="chip">${esc(c)}</span>`).join(" ")} to the teammates (no reward: its meaning is learned)</dd>` : "<dt>Call</dt><dd class=\"muted\">none (a net with 10 outputs does not call)</dd>"}</dl>
+    <p class="muted small">Training samples the move and the call from the net's probabilities and the kick from its own; the Live match and the evaluations sample too.</p></section>`;
+  const on = su.rewards.filter((r) => r.fixed || r.v), off = su.rewards.filter((r) => !r.fixed && !r.v);
+  const rrow = (r) => `<tr><td><b>${esc(TERM_LABEL[r.k.replace(/^w_/, "")] || r.k.replace(/^w_/, "").replace(/_/g, " "))}</b> <span class="mono muted small">${esc(r.fixed ? "" : r.k)}</span>${help(r.help)}</td>
+    <td class="r">${r.fixed ? '<span class="muted">always</span>' : esc(shortVal(r.v))}</td>
+    <td class="r">${r.fixed ? "" : same(r.v, r.minimal) ? '<span class="muted">same</span>' : `<span class="chip rw" title="the minimal set has ${esc(shortVal(r.minimal))}">was ${esc(shortVal(r.minimal))}</span>`}</td></tr>`;
+  const mods = su.reward_options.map((r) => `<dt title="${esc(r.help)}">${esc(r.k)}</dt><dd class="${same(r.v, r.minimal) ? "" : "hl"}">${esc(shortVal(r.v))}</dd>`).join("");
+  const rewards = `<section class="card flush s8">${cardHead("Rewards", '<span class="muted small">per decision, summed over the match · compared with the minimal set</span>')}
+    <table><thead><tr><th>Term</th><th class="r">Weight</th><th class="r">vs minimal</th></tr></thead><tbody>${on.map(rrow).join("")}</tbody></table>
+    <details class="pad"><summary class="muted small">${off.length} terms off: ${off.map((r) => esc(r.k)).join(", ")}</summary><table class="mini"><tbody>${off.map(rrow).join("")}</tbody></table></details>
+    <div class="pad"><div class="eyebrow">Reward options</div><dl class="kv">${mods}</dl></div></section>`;
+  const train = `<section class="card s4">${cardHead("Training", '<span class="muted small">PPO self-play · highlighted = not the default</span>')}
+    <dl class="kv">${su.training.map((r) => `<dt title="${esc(r.help)}">${esc(r.k)}</dt><dd class="${same(r.v, r.default) || r.k === "start" ? "" : "hl"}" title="${esc(r.help)}">${esc(r.v === "" || r.v == null ? "–" : shortVal(r.v))}</dd>`).join("")}</dl></section>`;
+  const c = d.config || {};
+  const raw = `<details class="card s12"><summary>Spec and all ${Object.keys(c).length} settings</summary><div class="grid"><pre class="s5">${esc(JSON.stringify(d.status.spec || {}, null, 1))}</pre>
+    <dl class="kv s7">${Object.keys(c).sort().map((k) => `<dt>${esc(k)}</dt><dd>${esc(typeof c[k] === "object" ? JSON.stringify(c[k]) : c[k])}</dd>`).join("")}</dl></div></details>`;
+  return `<div class="grid">${obs}${actions}${rewards}${train}${raw}</div>`;
 }
 
 // ---------- SCOUTING ----------
