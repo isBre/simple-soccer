@@ -11,6 +11,7 @@ from . import rating
 from .data import ROOT, database
 from .rng import RandomNumberGenerator
 from .stats import MatchStats, snapped
+from .vec import clamp, dot, limit_length, normalized, roundi
 
 TICK = 1.0 / 60.0
 KICK_STRENGTH = 5.0
@@ -26,26 +27,16 @@ NONE, SINGLE, TEAM = 0, 1, 2                  # MatchConfig.ControlMode
 INTENTS = ("none", "ball", "open", "run", "cover")
 # discrete actions of the RL trainer: move index -> direction in the player's own frame (+x towards the opponent goal)
 DIRS = [0j, -1j, 1 - 1j, 1 + 0j, 1 + 1j, 1j, -1 + 1j, -1 + 0j, -1 - 1j]
+# the physics of the bodies (public: anyone may simulate the ball and the players forward, docs/public_view.md)
+BALL_DAMPING = 0.99           # the ball keeps this share of its speed every tick
+PLAYER_DAMPING = 0.96
+PLAYER_ACCEL = 0.1            # px/tick^2 with the stick held (top speed PLAYER_ACCEL * PLAYER_DAMPING / (1 - PLAYER_DAMPING) = 2.4)
+PLAYER_KICK_ACCEL = 0.07      # while holding the kick button
 
 
-def clamp(x, lo, hi):
-    return lo if x < lo else (hi if x > hi else x)
-
-
-def dot(a: complex, b: complex) -> float:
-    return a.real * b.real + a.imag * b.imag
-
-
-def normalized(z: complex) -> complex:
-    l = abs(z)
-    return z / l if l > 0.0 else 0j
-
-
-def limit_length(z: complex, n: float = 1.0) -> complex:
-    l = abs(z)
-    return z / l * n if l > n else z
-
-
+# The engine's own from_angle / rotated (math.cos / math.sin): vec.py's versions (cmath.rect, used by the AI) differ from these in
+# the last bit for ~0.2% of angles, and the kickoff direction, the celebration and the puzzle layout are built with these. Using
+# one form everywhere changes the matches: it needs re-recorded tests/golden/ and an elo.ENGINE bump.
 def from_angle(a: float) -> complex:
     return complex(math.cos(a), math.sin(a))
 
@@ -63,7 +54,7 @@ class Disc:
     """A circle with Haxball-style physical properties."""
     __slots__ = ("pos", "vel", "radius", "inv_mass", "damping", "b_coef", "kind")
 
-    def __init__(self, pos=0j, radius=10.0, inv_mass=1.0, damping=0.99, b_coef=0.5, kind=KIND_BALL):
+    def __init__(self, pos=0j, radius=10.0, inv_mass=1.0, damping=BALL_DAMPING, b_coef=0.5, kind=KIND_BALL):
         self.pos = pos
         self.vel = 0j
         self.radius = radius
@@ -77,7 +68,7 @@ class Player(Disc):
     """A player disc. The AI adds its own fields (soccer.ai) on top."""
 
     def __init__(self):
-        super().__init__(radius=15.0, inv_mass=0.5, damping=0.96, b_coef=0.5, kind=KIND_PLAYER)
+        super().__init__(radius=15.0, inv_mass=0.5, damping=PLAYER_DAMPING, b_coef=0.5, kind=KIND_PLAYER)
         self.team = 0
         self.slot = 0
         self.uid = 0                 # team * 16 + slot
@@ -99,8 +90,8 @@ class Player(Disc):
         self.intent_tick = 0
         self.in_contact = False
         self.rec_tick = -999
-        self.accel = 0.1
-        self.kick_accel = 0.07
+        self.accel = PLAYER_ACCEL
+        self.kick_accel = PLAYER_KICK_ACCEL
 
 
 class Human:
@@ -288,7 +279,7 @@ class Match:
             self.pseg.append((a, b, bc))
 
     def _build_stadium(self):
-        self.ball = Disc(0j, 10.0, 1.0, 0.99, 0.5, KIND_BALL)
+        self.ball = Disc(0j, 10.0, 1.0, BALL_DAMPING, 0.5, KIND_BALL)
         pd = self.pitch
         hw, hh, gh, nd = pd.half_w, pd.half_h, pd.goal_half, pd.net_depth
         for sx in (-1.0, 1.0):
@@ -867,8 +858,7 @@ class Match:
         if not self.log_events:
             return
         ax = self.attack_dir(team)
-        rnd = lambda x: math.floor(x + 0.5) if x >= 0 else -math.floor(-x + 0.5)       # Godot's roundf
-        self.ev_log.append([kind, self.tick, team, uid, rnd(a.real * ax), rnd(a.imag), rnd(b.real * ax), rnd(b.imag),
+        self.ev_log.append([kind, self.tick, team, uid, roundi(a.real * ax), roundi(a.imag), roundi(b.real * ax), roundi(b.imag),
                             snapped(v, 0.001)])
 
     def _classify_kick(self, p):

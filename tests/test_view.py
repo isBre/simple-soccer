@@ -28,7 +28,7 @@ from soccer.ai.view import GENERIC_DELAY, View                     # noqa: E402
 AGENTS = ["soccer/ai/agent.py", "soccer/ai/kit.py", "soccer/ai/nets.py", "soccer/ai/skill.py"] + \
     sorted("soccer/ai/players/" + f for f in os.listdir(os.path.join(ROOT, "soccer", "ai", "players")) if f.endswith(".py"))
 DECIDE = AGENTS + ["soccer/ai/view.py"]
-PUBLIC = {"KICK_RANGE", "KICK_STRENGTH", "AI_PERIOD", "DIRS", "GOAL", "HIST", "PLAYING", "ENDED", "TICK", "INTENTS"}
+PUBLIC = {"KICK_RANGE", "KICK_STRENGTH", "BALL_DAMPING", "PLAYER_DAMPING", "PLAYER_ACCEL", "PLAYER_KICK_ACCEL", "AI_PERIOD", "DIRS", "GOAL", "HIST", "PLAYING", "ENDED", "TICK", "INTENTS"}
 FORBIDDEN = {"bot_ai", "pdef", "cfg", "ai", "players_real", "humans", "team_lists_real"}
 
 

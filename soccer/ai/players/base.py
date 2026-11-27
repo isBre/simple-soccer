@@ -5,7 +5,8 @@ its own algorithm: what to do on the ball (`choose`), where to be without it (`o
 (`wants_ball`) and what it calls.
 
 An agent is alone: it reads its team's view and its own memory, never another agent (soccer/ai/agent.py)."""
-from ...vec import INF, clamp, lerpf
+from ...match import BALL_DAMPING
+from ...vec import INF, clamp, lerp
 from .. import kit
 from ..agent import Act
 from ..skill import attach_skill
@@ -145,7 +146,7 @@ class RuleAgent:
         if abs(d) < 1.0:
             d = complex(s.ax, 0.0)
         d = kit.aim_with_error(d, self._err)
-        run, kick = kit.strike(s.v, s.me, bp, d, self._kind, s.bvel * (0.99 ** min(t, 160.0)))
+        run, kick = kit.strike(s.v, s.me, bp, d, self._kind, s.bvel * (BALL_DAMPING ** min(t, 160.0)))
         return Act(run, kick, "ball", self._kind if kick else "")
 
     def choose(self, s, bp):
@@ -176,10 +177,10 @@ class RuleAgent:
                 lead += complex(s.ax, 0.0) * (40.0 + 90.0 * through)
             aim = kit.on_pitch(s.v, b.pos + lead, 15.0)
             lane = kit.lane_clearance(s.opps, bp, aim)
-            if lane < lerpf(16.0, 34.0, self.vision):
+            if lane < lerp(16.0, 34.0, self.vision):
                 continue
             margin = kit.pass_margin(s.opps, bp, aim)
-            if margin < lerpf(-45.0, -5.0, self.vision):
+            if margin < lerp(-45.0, -5.0, self.vision):
                 continue
             room = min(kit.nearest(s.opps, b.pos)[0], 140.0)
             sc = (aim.real - bp.real) * s.ax * 0.4 + min(lane, 100.0) * 0.5 + room * 0.6 + clamp(margin, -40.0, 40.0) * 0.6

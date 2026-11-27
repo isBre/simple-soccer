@@ -27,7 +27,7 @@ teammates included. Players talk only through their **calls** (below).
 | Kickoff | `kickoff_active`, `kickoff_team`, `kickoff_taker` | a kickoff is on, whose it is, which body takes it |
 | Touches | `last_touch`, `last_touch_tick` | the body that touched the ball last, and when (it could be inferred from the history) |
 | Pitch | `pitch` | its size, goals, walls and obstacles (`soccer.data.Pitch`) |
-| Physics | `soccer.match`: `KICK_STRENGTH`, `KICK_RANGE`, `AI_PERIOD`, damping 0.99 (ball) / 0.96 (players) | the rules of motion are public: anyone may simulate the ball and the players forward from the view |
+| Physics | `soccer.match`: `KICK_STRENGTH`, `KICK_RANGE`, `BALL_DAMPING` (0.99), `PLAYER_DAMPING` (0.96), `PLAYER_ACCEL` (0.1), `PLAYER_KICK_ACCEL` (0.07), `AI_PERIOD` | the rules of motion are public: anyone may simulate the ball and the players forward from the view |
 | Helpers | `attack_dir(team)`, `deepest(team)` | +1 / -1 (the direction a team attacks), the body nearest a team's own goal line (who seems to guard it) |
 
 Direction: team 0 attacks towards +x, team 1 towards -x. Every Body is the same object for the whole match (updated in place
