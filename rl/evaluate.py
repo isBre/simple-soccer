@@ -4,7 +4,7 @@ and the dashboard parse them); checked against them by tests/test_evaluate.py.
 
   python3 rl/evaluate.py league_eval --model res://out_5v5/x.json --games 4 [--duration 180] [--stride 2] [--greedy]
       The net drives ALL 5 players (keeper included) against each of the 16 rule-based teams, on both sides. Also writes
-      rl/teams_info.json (id, strength, style, tier, held_out) for the trainer. Held-out teams (never trained against): sorted
+      rl/teams_info.json (id, strength, plays: the archetypes of its line-up, tier, held_out) for the trainer. Held-out teams (never trained against): sorted
       by strength, indices 1, 5, 9, 13 (one per tier).
   python3 rl/evaluate.py h2h_eval --a MODEL --b MODEL --name "RL Team 4" [--games 2] [--duration 90]
       Head to head of two nets (game-model JSON files), both sides. Prints
@@ -95,7 +95,7 @@ def league_teams():
     ids, info = [], {}
     for i, t in enumerate(teams):
         ids.append(t.id)
-        info[t.id] = {"id": t.id, "strength": snapped(t.strength(), 0.1), "style": t.style_id, "tier": tiers[min(i // 4, 3)],
+        info[t.id] = {"id": t.id, "strength": snapped(t.strength(), 0.1), "plays": [p.algorithm for p in t.players if p.kind == "rules"], "tier": tiers[min(i // 4, 3)],
                       "held_out": i % 4 == 1}
     return ids, info
 
@@ -319,7 +319,7 @@ class Behaviour:
             team = m.team_lists[t]
             if t == 0:
                 for p in team:
-                    self.roles[p.slot] = p.role
+                    self.roles[p.slot] = p.line          # the formation spot of the slot (rule teams)
                     _bin(self.heat[p.slot], p.pos, m, t)
                 _bin(self.heat[5], m.ball.pos, m, t)
                 self._scout_tick(m, team)

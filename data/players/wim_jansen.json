@@ -1,0 +1,13 @@
+{
+ "id": "wim_jansen",
+ "name": "Wim Jansen",
+ "kind": "net",
+ "model": "models/x_wide_kickstart_best.json",
+ "description": "Neural net. wide_kickstart: the wide net (256 per layer) distilled from jit8, then kickstarted PPO. Elo 1561 (66th of 98) in the old 5v5 ladder of 2026-11-26 (team ratings, before players existed); scored 1.01 and conceded 0.77 per match against the average team.",
+ "origin": {
+  "made": "2026-11-27",
+  "legacy_elo": 1561,
+  "line": "team 46 wide",
+  "run": "wide_kickstart"
+ }
+}

@@ -1,0 +1,16 @@
+{
+ "id": "giorgio_ferri",
+ "name": "Giorgio Ferri",
+ "kind": "rules",
+ "algorithm": "sweeper",
+ "settings": {
+  "sweep": 0.29,
+  "step_up": 0.25
+ },
+ "skill": 72,
+ "description": "Sweeper: The last man: reads every ball behind the line.",
+ "origin": {
+  "made": "2026-11-27",
+  "from": "rule-based archetype sweeper"
+ }
+}

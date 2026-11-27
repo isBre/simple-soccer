@@ -1,0 +1,27 @@
+{
+  "id": "iron_wall",
+  "name": "Iron Wall",
+  "short": "IRW",
+  "colors": {
+    "primary": "5d6d7e",
+    "secondary": "f0f0f0"
+  },
+  "kit": "solid",
+  "logo": {
+    "shape": "hex",
+    "pattern": "quarters",
+    "symbol": "cross",
+    "c1": "5d6d7e",
+    "c2": "f0f0f0",
+    "c3": "ffffff"
+  },
+  "lineup": [
+    "marco_bellini",
+    "giorgio_ferri",
+    "omar_haddad",
+    "tomasz_kowal",
+    "viktor_lund"
+  ],
+  "league": "mixed",
+  "rl_eval": false
+}

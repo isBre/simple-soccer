@@ -1,30 +1,319 @@
 {
-  "_doc": "Matches played by tests/test_match.py and compared with tests/golden/match_<name>.json (a scripted human where control is set). control: 0 none, 1 one human player, 2 whole team (Q switches).",
-  "pitches": {
-    "test_walls": {"id": "test_walls", "name": "Test walls", "sizes": [3], "half_w": 330.0, "half_h": 160.0, "goal_half": 60.0,
-                   "net_depth": 40.0, "out_x": 380.0, "out_y": 190.0, "center_r": 70.0, "post_r": 8.0,
-                   "obstacles": [[0.0, 95.0, 14.0]],
-                   "walls": [{"a": [-140, -160], "b": [-60, -100], "ball": true, "player": true, "bc": 0.8},
-                             {"a": [140, 160], "b": [60, 100], "ball": true, "player": false, "bc": 1.0},
-                             {"a": [-200, 120], "b": [-120, 160], "ball": false, "player": true, "bc": 0.5}]}
+ "_doc": "Matches played by tests/test_match.py and compared with tests/golden/match_<name>.json (a scripted human where control is set). control: 0 none, 1 one human player, 2 whole team (Q switches).",
+ "pitches": {
+  "test_walls": {
+   "id": "test_walls",
+   "name": "Test walls",
+   "sizes": [
+    3
+   ],
+   "half_w": 330.0,
+   "half_h": 160.0,
+   "goal_half": 60.0,
+   "net_depth": 40.0,
+   "out_x": 380.0,
+   "out_y": 190.0,
+   "center_r": 70.0,
+   "post_r": 8.0,
+   "obstacles": [
+    [
+     0.0,
+     95.0,
+     14.0
+    ]
+   ],
+   "walls": [
+    {
+     "a": [
+      -140,
+      -160
+     ],
+     "b": [
+      -60,
+      -100
+     ],
+     "ball": true,
+     "player": true,
+     "bc": 0.8
+    },
+    {
+     "a": [
+      140,
+      160
+     ],
+     "b": [
+      60,
+      100
+     ],
+     "ball": true,
+     "player": false,
+     "bc": 1.0
+    },
+    {
+     "a": [
+      -200,
+      120
+     ],
+     "b": [
+      -120,
+      160
+     ],
+     "ball": false,
+     "player": true,
+     "bc": 0.5
+    }
+   ]
+  }
+ },
+ "scenarios": [
+  {
+   "name": "rules_5v5_arena",
+   "home": "aurora",
+   "away": "tide",
+   "pitch": "arena",
+   "size": 5,
+   "duration": 70,
+   "seed": 11
   },
-  "scenarios": [
-    {"name": "rules_5v5_arena", "home": "aurora", "away": "tide", "pitch": "arena", "size": 5, "duration": 70, "seed": 11},
-    {"name": "rules_5v5_arena_b", "home": "harbor", "away": "scorpions", "pitch": "arena", "size": 5, "duration": 70, "seed": 12},
-    {"name": "rules_4v4_big", "home": "cobalt", "away": "onyx", "pitch": "big", "size": 4, "duration": 60, "seed": 13},
-    {"name": "rules_5v5_pillars", "home": "fern", "away": "ember", "pitch": "big_pillars", "size": 5, "duration": 60, "seed": 14},
-    {"name": "rules_3v3_classic", "home": "granite", "away": "lime", "pitch": "classic", "size": 3, "duration": 60, "seed": 15},
-    {"name": "rules_2v2_futsal", "home": "bulls", "away": "rose", "pitch": "futsal", "size": 2, "duration": 50, "seed": 16},
-    {"name": "rules_1v1_futsal", "home": "owls", "away": "arrows", "pitch": "futsal", "size": 1, "duration": 50, "seed": 17},
-    {"name": "walls_3v3", "home": "dune", "away": "borealis", "pitch": "test_walls", "size": 3, "duration": 60, "seed": 18},
-    {"name": "net_vs_rules", "home": "rl_team_5", "away": "cobalt", "pitch": "arena", "size": 5, "duration": 60, "seed": 19},
-    {"name": "net_vs_net_greedy", "home": "rl_team_4", "away": "rl_team_2", "pitch": "arena", "size": 5, "duration": 50, "seed": 20, "temperature": 0.0},
-    {"name": "net_3v3_falls_back", "home": "rl_team", "away": "aurora", "pitch": "classic", "size": 3, "duration": 40, "seed": 21},
-    {"name": "human_single", "home": "tide", "away": "granite", "pitch": "arena", "size": 5, "duration": 60, "seed": 22, "control": 1, "human_team": 0},
-    {"name": "human_team_switch", "home": "lime", "away": "aurora", "pitch": "classic", "size": 3, "duration": 60, "seed": 23, "control": 2, "human_team": 1},
-    {"name": "human_team_auto", "home": "rose", "away": "fern", "pitch": "arena", "size": 5, "duration": 50, "seed": 24, "control": 2, "human_team": 0, "auto_switch": true},
-    {"name": "overtime_shootout", "home": "granite", "away": "scorpions", "pitch": "classic", "size": 3, "duration": 8, "seed": 25, "allow_draw": false, "overtime": 6},
-    {"name": "overtime_shootout_b", "home": "onyx", "away": "owls", "pitch": "arena", "size": 5, "duration": 6, "seed": 26, "allow_draw": false, "overtime": 5},
-    {"name": "score_limit", "home": "harbor", "away": "dune", "pitch": "futsal", "size": 2, "duration": 120, "seed": 27, "score_limit": 2}
-  ]
+  {
+   "name": "rules_5v5_arena_b",
+   "home": "harbor",
+   "away": "scorpions",
+   "pitch": "arena",
+   "size": 5,
+   "duration": 70,
+   "seed": 12
+  },
+  {
+   "name": "rules_4v4_big",
+   "home": "cobalt",
+   "away": "onyx",
+   "pitch": "big",
+   "size": 4,
+   "duration": 60,
+   "seed": 13
+  },
+  {
+   "name": "rules_5v5_pillars",
+   "home": "fern",
+   "away": "ember",
+   "pitch": "big_pillars",
+   "size": 5,
+   "duration": 60,
+   "seed": 14
+  },
+  {
+   "name": "rules_3v3_classic",
+   "home": "granite",
+   "away": "lime",
+   "pitch": "classic",
+   "size": 3,
+   "duration": 60,
+   "seed": 15
+  },
+  {
+   "name": "rules_2v2_futsal",
+   "home": "bulls",
+   "away": "rose",
+   "pitch": "futsal",
+   "size": 2,
+   "duration": 50,
+   "seed": 16
+  },
+  {
+   "name": "rules_1v1_futsal",
+   "home": "owls",
+   "away": "arrows",
+   "pitch": "futsal",
+   "size": 1,
+   "duration": 50,
+   "seed": 17
+  },
+  {
+   "name": "walls_3v3",
+   "home": "dune",
+   "away": "borealis",
+   "pitch": "test_walls",
+   "size": 3,
+   "duration": 60,
+   "seed": 18
+  },
+  {
+   "name": "net_vs_rules",
+   "home": "rl_team_5",
+   "away": "cobalt",
+   "pitch": "arena",
+   "size": 5,
+   "duration": 60,
+   "seed": 19
+  },
+  {
+   "name": "net_vs_net_greedy",
+   "home": "rl_team_4",
+   "away": "rl_team_2",
+   "pitch": "arena",
+   "size": 5,
+   "duration": 50,
+   "seed": 20,
+   "temperature": 0.0
+  },
+  {
+   "name": "net_3v3_falls_back",
+   "home": "aurora",
+   "away": "lime",
+   "pitch": "classic",
+   "size": 3,
+   "duration": 40,
+   "seed": 21,
+   "net": "data/models/rl_5v5_arena.json"
+  },
+  {
+   "name": "mixed_5v5",
+   "home": "all_stars",
+   "away": "high_flyers",
+   "pitch": "arena",
+   "size": 5,
+   "duration": 50,
+   "seed": 28
+  },
+  {
+   "name": "mixed_3v3",
+   "home": "iron_wall",
+   "away": "all_stars",
+   "pitch": "classic",
+   "size": 3,
+   "duration": 50,
+   "seed": 29
+  },
+  {
+   "name": "human_single",
+   "home": "tide",
+   "away": "granite",
+   "pitch": "arena",
+   "size": 5,
+   "duration": 60,
+   "seed": 22,
+   "control": 1,
+   "human_team": 0
+  },
+  {
+   "name": "human_team_switch",
+   "home": "lime",
+   "away": "aurora",
+   "pitch": "classic",
+   "size": 3,
+   "duration": 60,
+   "seed": 23,
+   "control": 2,
+   "human_team": 1
+  },
+  {
+   "name": "human_team_auto",
+   "home": "rose",
+   "away": "fern",
+   "pitch": "arena",
+   "size": 5,
+   "duration": 50,
+   "seed": 24,
+   "control": 2,
+   "human_team": 0,
+   "auto_switch": true
+  },
+  {
+   "name": "humans_coop",
+   "home": "tide",
+   "away": "granite",
+   "pitch": "arena",
+   "size": 3,
+   "duration": 60,
+   "seed": 25,
+   "humans": [
+    {
+     "team": 0,
+     "mode": 1,
+     "slot": -1
+    },
+    {
+     "team": 0,
+     "mode": 1,
+     "slot": -1
+    }
+   ]
+  },
+  {
+   "name": "humans_versus",
+   "home": "lime",
+   "away": "aurora",
+   "pitch": "arena",
+   "size": 5,
+   "duration": 60,
+   "seed": 26,
+   "humans": [
+    {
+     "team": 0,
+     "mode": 2
+    },
+    {
+     "team": 1,
+     "mode": 2
+    }
+   ]
+  },
+  {
+   "name": "humans_2v1",
+   "home": "rose",
+   "away": "fern",
+   "pitch": "arena",
+   "size": 4,
+   "duration": 50,
+   "seed": 27,
+   "humans": [
+    {
+     "team": 0,
+     "mode": 1,
+     "slot": 2
+    },
+    {
+     "team": 0,
+     "mode": 1,
+     "slot": -1
+    },
+    {
+     "team": 1,
+     "mode": 2,
+     "auto_switch": true
+    }
+   ]
+  },
+  {
+   "name": "golden_goal",
+   "home": "granite",
+   "away": "scorpions",
+   "pitch": "classic",
+   "size": 3,
+   "duration": 8,
+   "seed": 25,
+   "allow_draw": false
+  },
+  {
+   "name": "golden_goal_b",
+   "home": "onyx",
+   "away": "owls",
+   "pitch": "arena",
+   "size": 5,
+   "duration": 6,
+   "seed": 26,
+   "allow_draw": false
+  },
+  {
+   "name": "score_limit",
+   "home": "harbor",
+   "away": "dune",
+   "pitch": "futsal",
+   "size": 2,
+   "duration": 120,
+   "seed": 27,
+   "score_limit": 2
+  }
+ ]
 }

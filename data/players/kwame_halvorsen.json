@@ -1,0 +1,17 @@
+{
+ "id": "kwame_halvorsen",
+ "name": "Kwame Halvorsen",
+ "kind": "rules",
+ "algorithm": "poacher",
+ "settings": {
+  "greed": 0.72,
+  "depth": 0.82,
+  "drop": 0.41
+ },
+ "skill": 75,
+ "description": "Poacher: Always on the last defender's shoulder.",
+ "origin": {
+  "made": "2026-11-27",
+  "from": "rule-based archetype poacher"
+ }
+}

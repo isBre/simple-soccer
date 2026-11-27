@@ -17,3 +17,6 @@ exp/**/*.tmp
 
 # imitation-learning models trained locally (il/train.py)
 out_il/
+
+# this machine only, never pushed: the ratings database (elo/), the teams built in the game
+local/

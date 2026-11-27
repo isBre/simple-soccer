@@ -1,0 +1,27 @@
+{
+  "id": "academy",
+  "name": "Academy XI",
+  "short": "ACA",
+  "colors": {
+    "primary": "7fc8f8",
+    "secondary": "203040"
+  },
+  "kit": "stripes",
+  "logo": {
+    "shape": "circle",
+    "pattern": "stripes",
+    "symbol": "star",
+    "c1": "7fc8f8",
+    "c2": "203040",
+    "c3": "ffffff"
+  },
+  "lineup": [
+    "pablo_nieto",
+    "tiago_lima",
+    "ben_carter",
+    "kofi_mensah",
+    "daan_de_vries"
+  ],
+  "league": "mixed",
+  "rl_eval": false
+}

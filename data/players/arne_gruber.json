@@ -1,0 +1,16 @@
+{
+ "id": "arne_gruber",
+ "name": "Arne Gruber",
+ "kind": "rules",
+ "algorithm": "shadow",
+ "settings": {
+  "tight": 0.7,
+  "read": 0.41
+ },
+ "skill": 68,
+ "description": "Shadow: Sticks to the best attacker like a shadow.",
+ "origin": {
+  "made": "2026-11-27",
+  "from": "rule-based archetype shadow"
+ }
+}

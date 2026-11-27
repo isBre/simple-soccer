@@ -1,0 +1,17 @@
+{
+ "id": "enzo_diallo",
+ "name": "Enzo Diallo",
+ "kind": "rules",
+ "algorithm": "playmaker",
+ "settings": {
+  "vision_bias": 0.94,
+  "patience": 0.69,
+  "shoot": 0.05
+ },
+ "skill": 54,
+ "description": "Playmaker: Sees the pass nobody else sees.",
+ "origin": {
+  "made": "2026-11-27",
+  "from": "rule-based archetype playmaker"
+ }
+}

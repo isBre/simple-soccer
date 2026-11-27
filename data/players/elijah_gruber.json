@@ -1,0 +1,16 @@
+{
+ "id": "elijah_gruber",
+ "name": "Elijah Gruber",
+ "kind": "rules",
+ "algorithm": "shadow",
+ "settings": {
+  "tight": 0.85,
+  "read": 0.58
+ },
+ "skill": 75,
+ "description": "Shadow: Wins it goal-side, every time.",
+ "origin": {
+  "made": "2026-11-27",
+  "from": "rule-based archetype shadow"
+ }
+}

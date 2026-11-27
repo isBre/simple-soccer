@@ -11,6 +11,32 @@ dashboard: `http://<pi-address>:8080`. Newest entries at the bottom; the agent a
   placed in the ladder and its rating settles as the ladder plays. During training every check also gives an estimated Elo (24 matches
   against mixed ladder entries, about ±140). Points against the rule bots saturate near 3 and are kept only as a health check.
 - **No fixed roles.** One net drives all 5 players; the observation has no player slot or ID, so roles must come from the situation (decided 2026-11-14).
+- **Players and teams** (user, 2026-11-27; branch `game-players`, phase A): a **player** is a brain with a name (`data/players`: rule-based
+  style + skill, Opus, or a net), every player has the same body; a **team** is an identity and a line-up of 5 players (no tactic, no formation: every player plays its own style), mixed
+  line-ups allowed (`soccer/teams.py`, `soccer/ai/lineup.py`). **No keeper role** in the match (any player takes the kickoff, no saves,
+  the rule AI picks a goal guard by situation from the formation's spots); **no shootouts**: a knockout draw is golden-goal overtime
+  without a time limit. The old nets are players that only play 5v5 (46 / 54 inputs); the ladder's old team ratings no longer apply
+  to the rule teams (their files changed). Next: phase B (game UI), C (local rating database, player and team Elo per size), D (55-number
+  observation with on/off flags and whose kickoff, curriculum 1v0 -> 5v5 from scratch).
+- **Ratings per machine and per size** (user, 2026-11-27; `docs/ratings.md`, `elo/`): every player, team and checkpoint has an Elo
+  per team size from matches played on this machine, stored in `local/elo.db` (never pushed). Team = average of its players on the
+  pitch + a small bonus (prior 50 Elo); the average rule-based player of a size is pinned at 1500. A clone runs `python3 -m elo init`
+  once; the web app refines in the background. The old team ladder (`exp/ladder.jsonl`) is archived, not imported. Runs are judged
+  by their 5v5 rating on the machine that rated them.
+- **Fair information: every player sees the public view only** (user, 2026-11-27; `docs/public_view.md`, `soccer/ai/view.py`,
+  enforced by `tests/test_view.py`). A player may use what a spectator could know (the ball and anonymous bodies with their last
+  32 ticks, clock, score, overtime, state, kickoff, last touch, pitch, the public physics) and anything it computes from it; never
+  the match engine or another team's inside (brain, plan, memory, random numbers, buttons). Players are anonymous: only your own
+  skill is known (others are judged with the generic skill 70). No team tactics and no team brain (next decision). Every net
+  observation is a function of the view. Opus 5.5 High was removed (it planned on a clone of the match).
+- **Every player decides alone; teammates talk only through calls** (user, 2026-11-27; `soccer/ai/players/`, `soccer/ai/kit.py`,
+  `docs/public_view.md`). No team brain: every agent (rule-based or net) decides from its team's view, and the only thing that
+  passes between teammates is a call (`none`, `ball`, `open`, `run`, `cover`), which the opponents never hear (the nets of the
+  next generation will make calls too, phase D). Rule-based players are ten archetypes with their own algorithms on a shared
+  base and toolkit, not styles; the Rule Based League teams are line-ups of five different archetypes (88 rule players).
+  **New baseline**: every evaluation against rule teams before this date (league points, `full/g1/d90`, the tiers of
+  `rl/teams_info.json`) was played against the old team-brain bots and is not comparable; `elo.ENGINE` = 2 (ratings start over:
+  `python3 -m elo init` on every machine).
 - **Observation `team` (46 numbers):** me, my 4 teammates nearest first, the 5 opponents nearest first, the ball (positions and velocities,
   normalised), a kickoff flag and a goal-celebration flag. No goal positions, no "ball relative to me", no score, no time.
 - **Reward terms come back one at a time** on top of the minimal set, each as its own experiment judged by a full evaluation (2026-11-16).

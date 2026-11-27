@@ -1,0 +1,16 @@
+{
+ "id": "sam_taylor",
+ "name": "Sam Taylor",
+ "kind": "rules",
+ "algorithm": "box_to_box",
+ "settings": {
+  "engine": 0.68,
+  "shoot": 0.7
+ },
+ "skill": 71,
+ "description": "Box-to-box: Covers every blade of grass.",
+ "origin": {
+  "made": "2026-11-27",
+  "from": "rule-based archetype box_to_box"
+ }
+}

@@ -1,0 +1,13 @@
+{
+ "id": "noah_fischer",
+ "name": "Noah Fischer",
+ "kind": "net",
+ "model": "data/models/rl_5v5_arena_v3.json",
+ "description": "Neural net. RL Team 3: self-play training to update 500 (54 numbers with slot). Elo 1527 (72nd of 98) in the old 5v5 ladder of 2026-11-26 (team ratings, before players existed); scored 1.04 and conceded 0.94 per match against the average team.",
+ "origin": {
+  "made": "2026-11-27",
+  "legacy_elo": 1527,
+  "line": "legacy 54",
+  "team": "rl_team_3"
+ }
+}

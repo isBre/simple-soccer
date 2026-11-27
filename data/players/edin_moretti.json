@@ -1,0 +1,16 @@
+{
+ "id": "edin_moretti",
+ "name": "Edin Moretti",
+ "kind": "rules",
+ "algorithm": "dribbler",
+ "settings": {
+  "daring": 0.76,
+  "shoot": 0.6
+ },
+ "skill": 72,
+ "description": "Dribbler: Wants the ball and runs at people.",
+ "origin": {
+  "made": "2026-11-27",
+  "from": "rule-based archetype dribbler"
+ }
+}

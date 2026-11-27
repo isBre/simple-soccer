@@ -1,0 +1,16 @@
+{
+ "id": "felix_wagner",
+ "name": "Felix Wagner",
+ "kind": "rules",
+ "algorithm": "presser",
+ "settings": {
+  "intensity": 0.89,
+  "cut": 0.72
+ },
+ "skill": 79,
+ "description": "Presser: Never lets a defender settle.",
+ "origin": {
+  "made": "2026-11-27",
+  "from": "rule-based archetype presser"
+ }
+}

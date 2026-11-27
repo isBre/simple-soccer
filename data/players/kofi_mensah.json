@@ -1,0 +1,16 @@
+{
+ "id": "kofi_mensah",
+ "name": "Kofi Mensah",
+ "kind": "rules",
+ "algorithm": "dribbler",
+ "settings": {
+  "daring": 0.61,
+  "shoot": 0.63
+ },
+ "skill": 59,
+ "description": "Dribbler: Curls past defenders on the run.",
+ "origin": {
+  "made": "2026-11-27",
+  "from": "rule-based archetype dribbler"
+ }
+}

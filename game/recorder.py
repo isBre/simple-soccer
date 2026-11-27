@@ -25,13 +25,12 @@ import secrets
 import numpy as np
 
 from soccer.ai.nets import features_team
-from soccer.match import AI_PERIOD, DIRS, NONE, PLAYING
+from soccer.match import AI_PERIOD, DIRS, PLAYING
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 VERSION = 1
 OBS = "team46"
 MIN_ROWS = 300                    # 10 s of play: shorter aborted matches are not worth a file
-ROLES = ("GK", "DEF", "MID", "FWD")
 _UNIT = [d / abs(d) if abs(d) > 0 else 0j for d in DIRS]
 
 
@@ -99,12 +98,12 @@ class Recorder:
             "setup": self.setup,
             "teams": [{"id": cfg.teams[t].id, "name": cfg.teams[t].name, "league": cfg.teams[t].league} for t in (0, 1)],
             "human_team": cfg.human_team, "control": {1: "single", 2: "team"}.get(cfg.control, "none"),
-            "players": [{"uid": q.uid, "team": q.team, "slot": q.slot, "role": q.role, "name": q.pdef.name, "number": q.pdef.number,
+            "players": [{"uid": q.uid, "team": q.team, "slot": q.slot, "line": q.line, "name": q.pdef.name, "player": q.pdef.id,
                          "rows": ctrl.count(q.uid)} for q in self.players],
             "pitch": {"id": pd.id, "half_w": pd.half_w, "half_h": pd.half_h, "goal_half": pd.goal_half, "out_x": pd.out_x,
                       "out_y": pd.out_y},
             "state_layout": "per player in uid order (team 0 slots, team 1 slots): x, y, vx, vy; then ball x, y, vx, vy",
-            "result": None if result is None else {"scores": result["scores"], "shootout": result["shootout"], "winner": result["winner"],
+            "result": None if result is None else {"scores": result["scores"], "overtime": result["overtime"], "winner": result["winner"],
                                                    "team_stats": result["team_stats"], "ticks": result["ticks"], "puzzle": result.get("puzzle")},
             "scores_at_save": list(m.scores),
         }
@@ -130,5 +129,6 @@ class Recorder:
 
 
 def wanted(setup, m):
-    """Record this match? Only when the page asked for it and a human plays."""
-    return bool(setup.get("record")) and m.cfg.control != NONE
+    """Record this match? Only when the page asked for it and one human plays (the datasets have one controlled player; local
+    multiplayer matches are not recorded)."""
+    return bool(setup.get("record")) and len(m.humans) == 1

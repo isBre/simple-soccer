@@ -1,0 +1,16 @@
+{
+ "id": "caio_nakamura",
+ "name": "Caio Nakamura",
+ "kind": "rules",
+ "algorithm": "target_man",
+ "settings": {
+  "height": 0.69,
+  "turn": 0.36
+ },
+ "skill": 87,
+ "description": "Target man: Lays it off and spins in behind.",
+ "origin": {
+  "made": "2026-11-27",
+  "from": "rule-based archetype target_man"
+ }
+}

@@ -1,0 +1,16 @@
+{
+ "id": "cian_gruber",
+ "name": "Cian Gruber",
+ "kind": "rules",
+ "algorithm": "presser",
+ "settings": {
+  "intensity": 0.77,
+  "cut": 0.69
+ },
+ "skill": 72,
+ "description": "Presser: Cuts the passing lanes before you see them.",
+ "origin": {
+  "made": "2026-11-27",
+  "from": "rule-based archetype presser"
+ }
+}

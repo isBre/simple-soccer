@@ -1,0 +1,17 @@
+{
+ "id": "emre_jensen",
+ "name": "Emre Jensen",
+ "kind": "rules",
+ "algorithm": "winger",
+ "settings": {
+  "width": 0.64,
+  "cut_in": 0.48,
+  "track": 0.21
+ },
+ "skill": 74,
+ "description": "Winger: Runs the line and whips it in.",
+ "origin": {
+  "made": "2026-11-27",
+  "from": "rule-based archetype winger"
+ }
+}

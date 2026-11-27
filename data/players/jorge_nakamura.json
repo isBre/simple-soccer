@@ -1,0 +1,16 @@
+{
+ "id": "jorge_nakamura",
+ "name": "Jorge Nakamura",
+ "kind": "rules",
+ "algorithm": "shadow",
+ "settings": {
+  "tight": 0.75,
+  "read": 0.52
+ },
+ "skill": 55,
+ "description": "Shadow: Reads the pass before it is made.",
+ "origin": {
+  "made": "2026-11-27",
+  "from": "rule-based archetype shadow"
+ }
+}

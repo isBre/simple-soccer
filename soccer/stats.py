@@ -1,4 +1,5 @@
-"""Per-player match counters (PlayerMatchStats) and the match totals (MatchStats). Grades come from rating.py."""
+"""Per-player match counters (PlayerMatchStats) and the match totals (MatchStats). Simple counts, no grades and no keeper
+statistics (there is no keeper: a shot on target stopped by anyone is a block)."""
 import math
 
 
@@ -9,8 +10,8 @@ def snapped(x: float, step: float) -> float:
 
 FIELDS_INT = ("touches", "passes_ok", "passes_failed", "passes_received", "progressive_passes", "key_passes", "shots",
               "shots_on_target", "goals", "assists", "own_goals", "big_chances", "big_scored", "tackles", "interceptions",
-              "recoveries", "clearances", "blocks", "saves", "dribbles", "dispossessed", "conceded", "scored_for", "keeper_ticks")
-FIELDS_FLOAT = ("pass_value", "xg", "xa", "save_xg", "conceded_xg", "carry_dist", "distance", "rating")
+              "recoveries", "clearances", "blocks", "dribbles", "dispossessed", "conceded", "scored_for")
+FIELDS_FLOAT = ("pass_value", "xg", "xa", "carry_dist", "distance")
 
 
 class PlayerMatchStats:
@@ -21,7 +22,6 @@ class PlayerMatchStats:
             setattr(self, k, 0)
         for k in FIELDS_FLOAT:
             setattr(self, k, 0.0)
-        self.rating = 6.0
 
     def passes(self):
         return self.passes_ok + self.passes_failed
@@ -41,11 +41,9 @@ class PlayerMatchStats:
                 "goals": self.goals, "assists": self.assists, "own_goals": self.own_goals,
                 "xg": snapped(self.xg, 0.01), "xa": snapped(self.xa, 0.01), "big_chances": self.big_chances,
                 "big_scored": self.big_scored, "tackles": self.tackles, "interceptions": self.interceptions,
-                "recoveries": self.recoveries, "clearances": self.clearances, "blocks": self.blocks, "saves": self.saves,
-                "save_xg": snapped(self.save_xg, 0.01), "conceded_xg": snapped(self.conceded_xg, 0.01),
+                "recoveries": self.recoveries, "clearances": self.clearances, "blocks": self.blocks,
                 "dribbles": self.dribbles, "dispossessed": self.dispossessed, "conceded": self.conceded,
-                "keeper_ticks": self.keeper_ticks, "distance": snapped(self.distance / 10.0, 0.1),
-                "def_actions": self.defensive_actions(), "rating": self.rating}
+                "distance": snapped(self.distance / 10.0, 0.1), "def_actions": self.defensive_actions()}
 
     def state(self):
         return {k: getattr(self, k) for k in FIELDS_INT + FIELDS_FLOAT}

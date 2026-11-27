@@ -1,0 +1,17 @@
+{
+ "id": "ivan_petrov",
+ "name": "Ivan Petrov",
+ "kind": "rules",
+ "algorithm": "poacher",
+ "settings": {
+  "greed": 0.8,
+  "depth": 0.91,
+  "drop": 0.06
+ },
+ "skill": 62,
+ "description": "Poacher: Shoots at the first sight of goal.",
+ "origin": {
+  "made": "2026-11-27",
+  "from": "rule-based archetype poacher"
+ }
+}

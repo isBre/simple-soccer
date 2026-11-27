@@ -1,0 +1,16 @@
+{
+ "id": "viktor_lund",
+ "name": "Viktor Lund",
+ "kind": "rules",
+ "algorithm": "shadow",
+ "settings": {
+  "tight": 0.57,
+  "read": 0.82
+ },
+ "skill": 86,
+ "description": "Shadow: Reads the pass before it is made.",
+ "origin": {
+  "made": "2026-11-27",
+  "from": "rule-based archetype shadow"
+ }
+}

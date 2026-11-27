@@ -1,0 +1,17 @@
+{
+ "id": "kasper_medina",
+ "name": "Kasper Medina",
+ "kind": "rules",
+ "algorithm": "winger",
+ "settings": {
+  "width": 0.95,
+  "cut_in": 0.38,
+  "track": 0.51
+ },
+ "skill": 79,
+ "description": "Winger: Hugs the touchline and crosses low.",
+ "origin": {
+  "made": "2026-11-27",
+  "from": "rule-based archetype winger"
+ }
+}

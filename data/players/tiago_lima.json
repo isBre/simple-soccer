@@ -1,0 +1,17 @@
+{
+ "id": "tiago_lima",
+ "name": "Tiago Lima",
+ "kind": "rules",
+ "algorithm": "winger",
+ "settings": {
+  "width": 0.82,
+  "cut_in": 0.13,
+  "track": 0.16
+ },
+ "skill": 60,
+ "description": "Winger: Pure pace down the flank.",
+ "origin": {
+  "made": "2026-11-27",
+  "from": "rule-based archetype winger"
+ }
+}

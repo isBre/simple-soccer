@@ -1,0 +1,16 @@
+{
+ "id": "yaw_boateng",
+ "name": "Yaw Boateng",
+ "kind": "rules",
+ "algorithm": "dribbler",
+ "settings": {
+  "daring": 0.7,
+  "shoot": 0.61
+ },
+ "skill": 82,
+ "description": "Dribbler: Curls past defenders on the run.",
+ "origin": {
+  "made": "2026-11-27",
+  "from": "rule-based archetype dribbler"
+ }
+}

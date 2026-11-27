@@ -72,7 +72,7 @@ function render() {
     if (lastHTML !== key) { lastHTML = key; document.title = "Simple Soccer"; Game.show(r.parts); }
     return;
   }
-  Game.stopMatch();
+  Game.stopMatch(); Music.stop(0.6);                       // the Lab makes no sound
   if (!state.ov && !state.firstFail && !pending._ov) { pending._ov = true; poll().finally(() => { delete pending._ov; }); }
   for (const a of document.querySelectorAll("[data-v]")) a.classList.toggle("on", a.dataset.v === (r.view === "run" ? "runs" : r.view));
   document.body.dataset.view = r.view;
@@ -118,6 +118,10 @@ document.addEventListener("click", (e) => {
   if (kd) { const p = route().params; p.set("kind", kd.dataset.kind); location.hash = "#/compare?" + p.toString(); return; }
   const lgp = t.closest("[data-league]");
   if (lgp) { rk.league = lgp.dataset.league; rerender(); return; }
+  const rkw = t.closest("[data-rkwhat]");
+  if (rkw) { rk.what = rkw.dataset.rkwhat; rk.league = "all"; rerender(); return; }
+  const rks = t.closest("[data-rksize]");
+  if (rks) { rk.size = +rks.dataset.rksize; loadRanking(true); return; }
   const hrs = t.closest("[data-hours]");
   if (hrs) { state.healthHours = +hrs.dataset.hours; state.health = null; rerender(); return; }
   const rm = t.closest("[data-rmrun]");

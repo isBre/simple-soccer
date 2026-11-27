@@ -4,7 +4,7 @@ import { menu, showcase } from "./menu.js";
 import { text } from "./render.js";
 import { report } from "./report.js";
 
-export const G = { cat: null, byId: {}, keyHandler: null, match: null, pending: null, report: null, tab: 0, busy: false, pz: null, showcase: null };
+export const G = { cat: null, byId: {}, playerById: {}, keyHandler: null, match: null, pending: null, report: null, tab: 0, busy: false, pz: null, showcase: null };
 export const SAVE = "soccer.tournament";
 export const CONTROLS = ["single", "team", "none"];
 // "Record my play": the match is saved as a dataset file for imitation learning (game/recorder.py), remembered in this browser
@@ -24,10 +24,19 @@ export async function api(path, body) {
   if (!r.ok) throw new Error(d.error || "HTTP " + r.status);
   return d;
 }
-export async function catalog() {
-  if (!G.cat) { G.cat = await api("/api/game/catalog"); for (const t of G.cat.teams) G.byId[t.id] = t; }
+export async function catalog(fresh = false) {
+  if (!G.cat || fresh) {
+    G.cat = await api("/api/game/catalog");
+    G.byId = {}; G.playerById = {};
+    for (const t of G.cat.teams) G.byId[t.id] = t;
+    for (const p of G.cat.players) G.playerById[p.id] = p;
+  }
   return G.cat;
 }
+// a player's name as a link to its page (players removed since the page loaded: plain text)
+export const playerLink = (id, name) => (G.playerById[id] ? `<a class="pl-link" href="#/game/players/${encodeURIComponent(id)}">${esc(name ?? G.playerById[id].name)}</a>` : esc(name ?? id));
+export const KIND_SHORT = { rules: "Rule-based", net: "Net" };
+export const sizesText = (sizes) => (sizes.length === 5 ? "all sizes" : sizes.map((n) => n + "v" + n).join(" "));
 export const loadT = () => { try { return JSON.parse(localStorage.getItem(SAVE) || "null"); } catch (e) { return null; } };
 export const saveT = (t) => { try { localStorage.setItem(SAVE, JSON.stringify(t)); } catch (e) {} };
 export const leagueTeams = (id) => G.cat.teams.filter((t) => t.league === id);
@@ -51,7 +60,19 @@ export function overlay(html) { const o = document.createElement("div"); o.class
 // ---------- page shell of the other game pages: a slim top row (back to the menu, keys), then the page ----------
 export const KEYS_HTML = (keys) => keys.map(([k, d]) => `<span><kbd>${k}</kbd> ${d}</span>`).join("");
 export const shell = (body, keys = [], cls = "") => `<div class="gp ${cls}"><div class="ks-top"><nav class="ks-links"><a href="#/game">‹ Menu</a></nav><div class="ks-keys">${KEYS_HTML(keys)}</div></div>${body}</div>`;
-export const eloText = (t) => (t.elo != null ? `Elo ${t.elo}` : "Elo not rated yet");
+// a team's or player's Elo at a size (5v5 when no size is given): "Elo 1612 ± 40", "provisional" under 6 games
+export const eloText = (t, size) => {
+  const r = t.ratings && t.ratings[String(size || 5)];
+  if (r && r.games) return `Elo ${r.elo} ± ${r.pm}${size ? ` (${size}v${size})` : ""}${r.placed ? "" : ", provisional"}`;
+  if (!size && t.elo != null) return `Elo ${t.elo}`;
+  return size ? `Not rated at ${size}v${size} yet` : "Elo not rated yet";
+};
+// the Elo of every size in one line: "1v1 1490 · 2v2 – · … · 5v5 1612"
+export const eloSizes = (t) => [1, 2, 3, 4, 5].filter((n) => !t.sizes || t.sizes.includes(n)).map((n) => {
+  const r = t.ratings && t.ratings[String(n)];
+  return `<span class="elo-sz"><small>${n}v${n}</small> ${r && r.games ? `<b>${r.elo}</b><small>±${r.pm}</small>` : "–"}</span>`;
+}).join("");
 export const playsText = (t) => t.plays || "Play style not measured yet (python3 game/profiles.py).";
-export const whoDrives = (t) => (t.id.startsWith("net_") ? "Driven by a trained net (reinforcement learning), with RL Team 5's squad."
-  : t.net ? "Every player, the keeper included, is driven by a trained net (reinforcement learning)." : "Driven by the handmade AI.");
+export const whoDrives = (t) => (t.net ? "Every player is the same trained net (reinforcement learning); it plays 5v5 only."
+  : t.kinds.length > 1 ? "A mixed line-up: " + t.kinds.map((k) => ({ rules: "rule-based", net: "net" })[k]).join(", ") + " players."
+  : "Driven by the handmade AI.");

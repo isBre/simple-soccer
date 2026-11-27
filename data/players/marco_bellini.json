@@ -1,0 +1,16 @@
+{
+ "id": "marco_bellini",
+ "name": "Marco Bellini",
+ "kind": "rules",
+ "algorithm": "sweeper",
+ "settings": {
+  "sweep": 0.57,
+  "step_up": 0.13
+ },
+ "skill": 88,
+ "description": "Sweeper: Guards the goal like a keeper.",
+ "origin": {
+  "made": "2026-11-27",
+  "from": "rule-based archetype sweeper"
+ }
+}

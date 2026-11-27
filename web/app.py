@@ -1,14 +1,15 @@
 """The web app: one server for both areas of the page.
 
-  Game   play Simple Soccer in the browser: quick match, teams, tournaments, match report (game/: the back end)
+  Game   play Simple Soccer in the browser: quick match, teams, players, rankings, tournaments, match report (game/: the back end)
   Lab    the experiment pipeline of this machine (Pi or Mac): runs, live demo match, comparisons, docs (lab/dashboard.py: the back end)
 
   python3 web/app.py [--port 8080]       then open http://<this machine>:8080  (#/game = Game, #/ = Lab)
 
 Pages: web/index.html (shell), web/style.css, web/lab/*.js (the Lab, plain scripts), web/game.js + web/game/*.js (the Game, ES modules),
-web/game.css, web/draw.js, web/sound.js.
+web/game.css, web/draw.js, web/sound.js (every sound, synthesised), web/music.js (the menu songs, synthesised).
 Routes: everything of lab/dashboard.py (/api/overview, /api/v1/..., /api/live, ...), plus /api/game/... (game/routes.py) and
 /ws/match (a live match over a WebSocket, game/session.py). The game needs numpy (net teams); without it the Lab still works.
+Unless --no-helpers, it also refines this machine's ratings in the background while the machine is idle (elo/, local/elo.db).
 No login: use it on a trusted network only."""
 import argparse
 import json
@@ -70,7 +71,9 @@ class Handler(lab_api.Handler):
         except ImportError as e:
             return self.send(json.dumps({"error": "the game needs numpy on the server: %s" % e}).encode(), "application/json", 503)
         try:
-            code, out = routes.handle(method, path, body)
+            from urllib.parse import parse_qsl
+            query = dict(parse_qsl(self.path.split("?", 1)[1])) if "?" in self.path else {}
+            code, out = routes.handle(method, path, body, query)
         except Exception as e:                                       # a bug: report it, keep serving
             code, out = 500, {"error": repr(e)}
         return self.send(json.dumps(out, separators=(",", ":")).encode(), "application/json", code)
@@ -97,16 +100,27 @@ class Handler(lab_api.Handler):
             sock.close()
 
 
+def _refine():
+    """The ratings keep refining in the background while the machine is idle (elo/api.py refine: niced workers, paused by a high load
+    average or local/refine_off; one refiner per machine)."""
+    try:
+        from elo import api as elo_api
+        elo_api.refine(log=lambda s: print("elo:", s, flush=True))
+    except ImportError as e:                       # no numpy: the Lab still works, just without ratings
+        print("elo: no background ratings (%s)" % e, flush=True)
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--port", type=int, default=8080)
     ap.add_argument("--host", default="0.0.0.0", help="0.0.0.0 = the local network can open it; 127.0.0.1 = this machine only")
-    ap.add_argument("--no-helpers", action="store_true", help="no health sampler and no live demo match from this server (tests)")
+    ap.add_argument("--no-helpers", action="store_true", help="no health sampler, no live demo match and no background ratings from this server (tests)")
     a = ap.parse_args()
     threading.Thread(target=lab_api.Live.listen, daemon=True).start()
     if not a.no_helpers:
         threading.Thread(target=lab_api.health_sampler, daemon=True).start()
         threading.Thread(target=lab_api.follow_live, daemon=True).start()
+        threading.Thread(target=_refine, daemon=True).start()
     server = ThreadingHTTPServer((a.host, a.port), Handler)
     server.daemon_threads = True
     print("Simple Soccer web app on http://%s:%d  (Game: #/game, Lab: #/)" % ("localhost" if a.host == "0.0.0.0" else a.host, a.port), flush=True)

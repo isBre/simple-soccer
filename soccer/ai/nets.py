@@ -1,4 +1,6 @@
-"""Neural-net teams: the observation a net sees, loading game-model JSON files, the forward pass and action sampling.
+"""Neural-net players: the observation a net sees (a function of the public view, docs/public_view.md; `m` is a View in the
+game and the match itself only in training, where both give the same numbers), loading game-model JSON files, the forward pass
+and action sampling.
 
 A game model is {"sizes": [n_in, h1, ..., 10], "W": [flat row-major weights per layer], "B": [biases], "kick_bias": k}: ReLU
 hidden layers, linear output. Outputs 0..8 are move logits (DIRS, in the player's own frame: +x towards the opponent goal),
@@ -6,9 +8,12 @@ output 9 is the kick logit."""
 import json
 import math
 import os
+import random
 import threading
 
 import numpy as np
+
+from .agent import Act
 
 TEAM_OBS = 46                     # role-free team observation (features_team)
 RANK_OBS = 56                     # features_team + 10 rank numbers (features_rank)
@@ -190,7 +195,11 @@ def features_group(m, players, n_in):
 
 
 def fits(n_in, team_size):
-    return n_in in (8 * team_size + 9, 8 * team_size + 14, 8 * team_size + 6, 10 * team_size + 6)
+    """A net can play this team size: the ego layouts (8n+9, 8n+14) at any size; the team (46) and rank (56) observations exist
+    only for 5v5 (features_for picks them by input size, so a 46-input net is never read as the rank layout of 4v4)."""
+    if n_in in (TEAM_OBS, RANK_OBS):
+        return team_size == 5
+    return n_in in (8 * team_size + 9, 8 * team_size + 14)
 
 
 # ---------------------------------------------------------------- nets
@@ -241,12 +250,13 @@ class NetBot:
     """Plays one player from a net's output: samples the move from softmax(logits / T) and the kick from sigmoid(logit)
     (temperature 0 = the best move, kick when the logit is positive)."""
 
-    def __init__(self, net, temperature=1.0):
+    def __init__(self, net, temperature=1.0, seed=0):
         self.net = net
         self.temperature = temperature
+        self.rng = random.Random(seed)          # its own random numbers (lineup.build seeds it from the match)
 
     def act(self, m, p, out):
-        """out: this player's 10 net outputs. Sets p.input_dir / p.input_kick."""
+        """out: this player's 10 net outputs -> its Act (a net of this generation calls nothing)."""
         best = 0
         for k in range(1, 9):
             if out[k] > out[best]:
@@ -254,17 +264,15 @@ class NetBot:
         t = self.temperature
         if t > 0.0:
             w = [math.exp((float(out[k]) - float(out[best])) / t) for k in range(9)]
-            r = p.rng.random() * sum(w)
+            r = self.rng.random() * sum(w)
             for k in range(9):
                 r -= w[k]
                 if r <= 0.0:
                     best = k
                     break
         zk = min(max(float(out[9]) + self.net.kick_bias, -60.0), 60.0)
-        kick = p.rng.random() < 1.0 / (1.0 + math.exp(-zk)) if t > 0.0 else zk > 0.0
+        kick = self.rng.random() < 1.0 / (1.0 + math.exp(-zk)) if t > 0.0 else zk > 0.0
         d = DIRS[best]
         d = complex(d.real * m.attack_dir(p.team), d.imag)
         l = abs(d)
-        p.input_dir = d / l if l > 0.0 else 0j
-        p.input_kick = kick
-        p.kick_intent = ""
+        return Act(d / l if l > 0.0 else 0j, kick, "none", "")

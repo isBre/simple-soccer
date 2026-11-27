@@ -1,0 +1,16 @@
+{
+ "id": "enzo_pavlov",
+ "name": "Enzo Pavlov",
+ "kind": "rules",
+ "algorithm": "presser",
+ "settings": {
+  "intensity": 0.51,
+  "cut": 0.59
+ },
+ "skill": 59,
+ "description": "Presser: Cuts the passing lanes before you see them.",
+ "origin": {
+  "made": "2026-11-27",
+  "from": "rule-based archetype presser"
+ }
+}

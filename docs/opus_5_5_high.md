@@ -1,5 +1,9 @@
 # Opus 5.5 High: how the team was built, and where it stands
 
+> **Removed on 2026-11-27.** Opus planned on a clone of the whole match (the engine's state and the other agents' memory),
+> which the fair-information rule does not allow ([public_view.md](public_view.md)). Its code (`soccer/ai/opus.py`,
+> `tools/tune_opus.py`, `data/styles/opus_high.json`) is in git history up to commit 22d007c. Everything below describes it as it was.
+
 Opus 5.5 High is a team for the **Rule Based League**: no neural net, no training, a hand-written team brain
 ([`soccer/ai/opus.py`](../soccer/ai/opus.py)). The brief: the strongest bot possible under one rule, **it must look like real
 football**. The players cooperate to win; they don't all run after the ball.
@@ -19,18 +23,21 @@ short.
   28 %) and plays **~18 passes a match at 80 %** (Silver Arrows ~10 at 59 %).
 - **Thinks with physics.** In build-up it simulates ~50 kicks per decision (three aim samples each) and every player's exact
   reach, and picks the kick by who gets to the ball first and what that is worth.
-- **Tuned against the nets, twice.** Its numbers were tuned with CMA-ES against 10 trained nets. The second run (section 9)
+- **Thinks ahead.** From just inside our own half the player on the ball plays his options (shots at the posts, dribbles at
+  angles, passes, through balls) 1.25 s forward in a copy of the match and takes the best outcome (sections 13 and 14).
+- **Tuned against the nets.** Its numbers were tuned with CMA-ES against 10 trained nets. The second run (section 9)
   added a territory term and an outlet player after measuring that the nets pinned it in its own third; on fresh seeds it added
-  **+0.44 points and +0.47 goal difference per match against the nets** (z = 4.5 and 4.9) over the first tuned version.
+  **+0.44 points and +0.47 goal difference per match against the nets** (z = 4.5 and 4.9) over the first tuned version. The
+  latest run (section 14), against the strongest nets of 2026-11-26, added +0.25 points per match against them.
 - **Strength:**
-  - **Against the whole field** (every other ladder entry, both sides, same seeds): **1.79 points per match, +0.61 goal
-    difference** (v4 1.69 and +0.47; first tuned version ~1.2 and −0.1). Against the 25 trained nets and RL teams alone:
-    1.54 points, +0.33 goal difference.
-  - **Lab ranking (v6, section 13):** **1776 Elo (95 % 1707–1844) after 164 games**, **5th of 42**, the top rule team by ~500
-    points (Silver Arrows 1283), ahead of 21 of the 25 trained nets and RL teams. v6 plays the finisher's options 1.25 s forward
-    in a copy of the match before choosing (shots at the posts, dribbles at angles, passes, through balls). v5 was 1679, v4 1623.
-  - **Trained nets:** ~60–110 Elo behind the best four (jit8 1883, RL Team 5 1874, RL Team 4 1856, anchor_wall_strong 1837).
-  - **Against the rule teams:** 2.72 points per match in the ladder (56 won, 6 drawn, 2 lost; 2.44 goals for, 0.12 against).
+  - **Against the whole field** (every other entry of the 42-entry ladder, both sides, same seeds): v6 **2.17 points per
+    match, +1.34 goal difference** (v5 1.87 and +0.72; first tuned version ~1.2 and −0.1); against the 25 trained nets and RL
+    teams alone 1.83 points, +0.69. Against the 20 strongest nets of the later 97-entry ladder v7 scores ~1.7 points, +0.4.
+  - **Lab ranking (v7, section 14):** **1851 Elo (95 % 1778–1925) after 164 games**, **4th of 42**, the top rule team by ~570
+    points (Silver Arrows 1283), behind only jit8 (1881), RL Team 5 (1874) and RL Team 4 (1854), all within its interval. v7 is v6
+    re-tuned against the strongest nets of 2026-11-26, which trap the ball in our corners: the finisher's rollout planner now
+    starts in our own half. v6 (the planner, section 13) was 1776, v5 1679, v4 1623.
+  - **Against the rule teams:** 2.62 points per match in the ladder (52 won, 12 drawn, none lost; 0.05 goals against).
 
 ![Live match: defending](opus/screen_defending.jpg)
 *A live match in the browser, before tuning (Opus in orange defends the left goal). One player (#5) engages the man on the ball; the others hold
@@ -623,20 +630,73 @@ result is bit-for-bit the same as in-process (same score and tick hash over a fu
 hitches (99th percentile frame gap 132 → 65 ms, worst 230 → 98 ms), but during Opus attacks ~1.4 frames a second still arrive
 late. Ladder, A/B and tournament runs stay in-process.
 
-## 14. Limits and next steps
+## 14. Seventh round: the corner siege (v7)
 
-- **The planner only works in the opponents' third.** In build-up the single-kick model chose as well as rollouts did (section
-  13). A planner for defending (who presses, who covers) has not been tried.
-- **The opponents in a rollout are a generic handmade team.** It predicts handmade defenders better than nets: the planner's gain
-  against the nets is about half its gain against the handmade teams. A cheap learned model of how the nets move could narrow that
-  without reading their code during a match.
-- **The best nets are still ~100 Elo higher** (jit8 1883). They win goal-line scrambles with numbers; Opus refuses to swarm by
-  design.
-- **It costs CPU**: ~7 s per 90 s match instead of ~1 s (slower for big tournaments). In the live game a plan arrives in one
-  tick, so even with the worker pool there are short stutters during Opus attacks; thinking ahead of time or reusing plans both
-  cost strength (section 13). Faster rollouts (a lighter copy of the match, fewer candidates per player) are the way out.
-- **Its interval on the ladder is still wide** (164 games); the runner narrows it once this branch is on `main` and the Pi plays
-  more rounds.
+By 2026-11-26 the ladder had grown to 97 entries, most of them new nets (the b256, anchor and dist runs, several trained with
+wall and corner rewards), and v6 had slipped to 8th, then 10th (1655 there). Against the 20 strongest of them it scored 1.61 points
+per match (1.03 goals for, 0.66 against). Before changing anything, the matches were measured.
+
+**What the top nets do to us** (Opus v6 against the 20 strongest nets, 40-80 matches, scratch scripts `diag*.py`):
+
+| Measure | Against the top nets | Against the handmade teams |
+|---|---|---|
+| Share of the match the ball is in our last fifth of the pitch | **47 %** | 7 % |
+| ... of that, in a corner against our end line | 52 % | |
+| Opus kicks from our last fifth per match / reaching a team-mate / getting the ball out of our third | 38 / 18 % / 1 % | 2.4 / 53 % / 10 % |
+| Shots for / against per match (xG) | 6.0 / 10.1 (0.78 / 2.54) | |
+| Shots against from 80-150 px, players of each side within 200 px of our goal | 7.1 per match, ~4 and ~4 | |
+
+The goals we conceded came at the end of sieges: the ball pinned in our corners and on our goal line for 5-20 s, 4 players of each
+side within 160 px of our goal, the ball going in off one of 40-60 touches (in 37 of 61 the last touch was ours). The nets do not
+build chances; they trap us.
+
+**Tried and left out:**
+
+| Change | Against the top nets (points / goal difference, z) |
+|---|---|
+| Goal-mouth clear: any player (keeper too) with the ball in reach near our goal kicks it away at once (3 versions) | neutral (z −0.2 to +0.3) |
+| Another generic opponent in the rollouts: gegenpress / high press / all-out attack | gegenpress +0.11 / +0.21 on 4 seeds, −0.12 / −0.07 on 6 fresh ones; the others neutral |
+| A blind poke only within 250 px of our goal (instead of 500) | −0.12 / −0.11 (z −1.3) |
+| A deep planner: in our last quarter the player on the ball checks his kick with rollouts (clearances at 7 angles, passes, carrying it out) and holds the choice for 30 ticks | **−0.35 / −0.42 (z −2.7 / −3.0)** |
+
+The deep planner failed because the generic opponent in the copy presses far less than these nets: what looks safe in the copy is
+cut out in the match.
+
+**Tuning again.** All 40 numbers were tuned once more with CMA-ES (`tools/tune_opus.py` with `NETS` set to the 10 strongest nets
+of that day, 3 seeds a side per candidate, the finisher's rollouts off to make a match 4.5x cheaper). On the validation seeds, still
+without rollouts, the mean of generation 8 scored 1.48 points / +0.19 per match against 1.14 / −0.06; later generations did not
+validate better. Its main change is **FINAL_FROM −0.27 instead of +0.15**: the direct finishing play, with the rollout planner, starts
+just inside our own half, so the team plays its way out of a press with the planner instead of the single-kick model. Smaller
+changes: a blind poke only within 257 px of our goal, the outlet player higher (OUTLET_X 0.02), the first-time hit a little more
+eager, the keeper sweeping more.
+
+Measured with the rollouts on (paired, the 20 strongest nets + 4 handmade teams, both sides; points / goal difference per match, z):
+
+| Version | Seeds | All 24 | Top 20 nets | Handmade |
+|---|---|---|---|---|
+| Tuned (v7) vs v6 | 6 fresh | +0.18 / +0.20 (1.9 / 1.8) | +0.23 / +0.22 (2.0 / 1.8) | −0.02 / +0.10 |
+| ... the same without the new FINAL_FROM | same 6 | −0.02 / +0.01 | −0.02 / +0.09 | +0.02 / −0.38 |
+| Tuned (v7) vs v6 | 6 other fresh | **+0.25 / +0.24 (2.5 / 2.2)** | **+0.25 / +0.29 (2.1 / 2.5)** | +0.29 / +0.00 |
+| ... only FINAL_FROM −0.27 | same 6 | +0.17 / +0.20 (1.8 / 2.0) | +0.14 / +0.16 (1.3 / 1.5) | +0.33 / +0.40 |
+
+**Lab ranking** (the 42-entry ladder of this branch, the same as for v6): 164 games (115 won, 36 drawn, 13 lost): **1851 Elo
+(95 % 1778–1925), 4th of 42**, +75 on v6 (1776). Against the nets and RL teams 2.13 points per match (63-24-13; goals 1.67 for,
+0.58 against; v6 1.80, 52-24-24, 1.21 / 0.56); against the handmade teams 2.62 (52-12-0, 1.73 / 0.05). Above it: jit8 1881,
+RL Team 5 1874, RL Team 4 1854 (all three within its interval). The price is CPU: the planner now works over most of the pitch,
+~20 s of CPU per 90 s match (v6 ~7 s).
+
+## 15. Limits and next steps
+
+- **The planner's opponent is a generic handmade team.** Against nets that trap the ball in our corners it predicts too little
+  pressure, which is why a planner deep in our half failed (section 14). A cheap learned model of how the nets move could change
+  that without reading their code during a match.
+- **The best nets are still a little higher** (jit8 1881, RL Team 5 1874), within the interval of a 164-game placement.
+- **It costs CPU**: ~20 s per 90 s match instead of ~1 s without rollouts (slow for big tournaments). In the live game a plan
+  arrives in one tick, so even with the worker pool there are short stutters while Opus has the ball beyond our own third;
+  thinking ahead of time or reusing plans both cost strength (section 13). Faster rollouts (a lighter copy of the match, fewer
+  candidates) are the way out.
+- **Its interval on the ladder is still wide** (164 games); the runner narrows it once this branch is on `main` and plays more
+  rounds.
 
 ## Reproduce
 

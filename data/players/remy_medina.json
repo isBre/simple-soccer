@@ -1,0 +1,16 @@
+{
+ "id": "remy_medina",
+ "name": "Remy Medina",
+ "kind": "rules",
+ "algorithm": "target_man",
+ "settings": {
+  "height": 0.61,
+  "turn": 0.26
+ },
+ "skill": 80,
+ "description": "Target man: The reference point up front.",
+ "origin": {
+  "made": "2026-11-27",
+  "from": "rule-based archetype target_man"
+ }
+}

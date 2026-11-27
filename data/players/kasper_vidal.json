@@ -1,0 +1,17 @@
+{
+ "id": "kasper_vidal",
+ "name": "Kasper Vidal",
+ "kind": "rules",
+ "algorithm": "winger",
+ "settings": {
+  "width": 0.7,
+  "cut_in": 0.32,
+  "track": 0.38
+ },
+ "skill": 56,
+ "description": "Winger: Pure pace down the flank.",
+ "origin": {
+  "made": "2026-11-27",
+  "from": "rule-based archetype winger"
+ }
+}

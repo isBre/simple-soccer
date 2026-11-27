@@ -1,0 +1,17 @@
+{
+ "id": "nikolai_orlov",
+ "name": "Nikolai Orlov",
+ "kind": "rules",
+ "algorithm": "poacher",
+ "settings": {
+  "greed": 0.82,
+  "depth": 0.52,
+  "drop": 0.45
+ },
+ "skill": 84,
+ "description": "Poacher: Lives in the box and needs half a chance.",
+ "origin": {
+  "made": "2026-11-27",
+  "from": "rule-based archetype poacher"
+ }
+}

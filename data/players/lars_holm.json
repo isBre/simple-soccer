@@ -1,0 +1,16 @@
+{
+ "id": "lars_holm",
+ "name": "Lars Holm",
+ "kind": "rules",
+ "algorithm": "presser",
+ "settings": {
+  "intensity": 0.75,
+  "cut": 0.76
+ },
+ "skill": 90,
+ "description": "Presser: Presses from the first minute to the last.",
+ "origin": {
+  "made": "2026-11-27",
+  "from": "rule-based archetype presser"
+ }
+}

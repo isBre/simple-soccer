@@ -1,0 +1,16 @@
+{
+ "id": "jonas_brandt",
+ "name": "Jonas Brandt",
+ "kind": "rules",
+ "algorithm": "ball_winner",
+ "settings": {
+  "range": 0.38,
+  "bite": 0.88
+ },
+ "skill": 80,
+ "description": "Ball winner: Hunts the ball all over the pitch.",
+ "origin": {
+  "made": "2026-11-27",
+  "from": "rule-based archetype ball_winner"
+ }
+}

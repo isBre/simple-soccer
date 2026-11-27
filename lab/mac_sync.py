@@ -51,7 +51,7 @@ def sync(pi, pi_root):
     ok = True
     # 1. push
     ok &= run(rs + ["--exclude=/queue/", "--exclude=*.cancel", "--exclude=/audit.jsonl", "--exclude=/hidden_runs.json",
-                    "--exclude=/ladder_off", "--exclude=*.tmp", EXP + "/", "%s:%s/exp/" % (pi, pi_root)])
+                    "--exclude=*.tmp", EXP + "/", "%s:%s/exp/" % (pi, pi_root)])
     ok &= run(rs + ["--include=x_*.out", "--include=x_*_train.jsonl", "--include=sp_eval/", "--include=sp_eval/***", "--include=check/", "--include=check/***",
                     "--exclude=*", os.path.join(ROOT, "logs") + "/", "%s:%s/logs/" % (pi, pi_root)])
     ckpt = os.path.join(ROOT, "out_5v5", "ckpt")

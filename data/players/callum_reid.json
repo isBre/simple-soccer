@@ -1,0 +1,16 @@
+{
+ "id": "callum_reid",
+ "name": "Callum Reid",
+ "kind": "rules",
+ "algorithm": "target_man",
+ "settings": {
+  "height": 0.6,
+  "turn": 0.5
+ },
+ "skill": 58,
+ "description": "Target man: Lays it off and spins in behind.",
+ "origin": {
+  "made": "2026-11-27",
+  "from": "rule-based archetype target_man"
+ }
+}

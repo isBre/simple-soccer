@@ -1,0 +1,16 @@
+{
+ "id": "xavi_vasquez",
+ "name": "Xavi Vasquez",
+ "kind": "rules",
+ "algorithm": "presser",
+ "settings": {
+  "intensity": 0.52,
+  "cut": 0.61
+ },
+ "skill": 79,
+ "description": "Presser: Presses from the first minute to the last.",
+ "origin": {
+  "made": "2026-11-27",
+  "from": "rule-based archetype presser"
+ }
+}

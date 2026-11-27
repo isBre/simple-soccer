@@ -1,0 +1,17 @@
+{
+ "id": "kwame_kruger",
+ "name": "Kwame Kruger",
+ "kind": "rules",
+ "algorithm": "playmaker",
+ "settings": {
+  "vision_bias": 0.66,
+  "patience": 0.64,
+  "shoot": 0.24
+ },
+ "skill": 52,
+ "description": "Playmaker: Plays the through ball into the run.",
+ "origin": {
+  "made": "2026-11-27",
+  "from": "rule-based archetype playmaker"
+ }
+}

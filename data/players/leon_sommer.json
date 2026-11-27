@@ -1,0 +1,13 @@
+{
+ "id": "leon_sommer",
+ "name": "Leon Sommer",
+ "kind": "net",
+ "model": "models/x_b256_lr1e4_s23_best.json",
+ "description": "Neural net. b256_lr1e4_s23: the anchor recipe, rollout 256, learning rate 1e-4, seed 23; the highest scorer of the 46-number line. Elo 1696 (5th of 98) in the old 5v5 ladder of 2026-11-26 (team ratings, before players existed); scored 1.90 and conceded 0.74 per match against the average team.",
+ "origin": {
+  "made": "2026-11-27",
+  "legacy_elo": 1696,
+  "line": "team 46",
+  "run": "b256_lr1e4_s23"
+ }
+}

@@ -1,0 +1,17 @@
+{
+ "id": "malik_pavlov",
+ "name": "Malik Pavlov",
+ "kind": "rules",
+ "algorithm": "poacher",
+ "settings": {
+  "greed": 0.66,
+  "depth": 0.91,
+  "drop": 0.27
+ },
+ "skill": 58,
+ "description": "Poacher: Shoots at the first sight of goal.",
+ "origin": {
+  "made": "2026-11-27",
+  "from": "rule-based archetype poacher"
+ }
+}

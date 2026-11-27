@@ -1,11 +1,12 @@
-// The Game (web/game.js has the overview): teams & squads.
-import { $, G, RAT, card, eloText, esc, go, leagueTeams, mount, playsText, prefs, savePrefs, shell, table, whoDrives } from "./core.js";
+// The Game (web/game.js has the overview): teams and their players.
+import { $, G, eloSizes, eloText, esc, go, leagueTeams, mount, playerLink, playsText, prefs, savePrefs, shell, table, whoDrives } from "./core.js";
+import { badge } from "./players.js";
 import { match, play } from "./match.js";
 import { menu } from "./menu.js";
 import { closeLists, listPick } from "./quick.js";
 import { text } from "./render.js";
 
-// ---------- teams & squads: one league at a time (strongest first), the picked team in its colours with its squad ----------
+// ---------- teams: one league at a time (strongest first), the picked team in its colours with its line-up ----------
 export function teams(id) {
   const L = G.cat.leagues;
   let team = G.byId[id] || G.cat.teams[0];
@@ -32,19 +33,22 @@ export function teams(id) {
     history.replaceState(null, "", "#/game/teams/" + encodeURIComponent(t.id));
     for (const b of v.querySelectorAll("[data-team]")) b.classList.toggle("on", b.dataset.team === t.id);
     v.querySelector(`[data-team="${CSS.escape(t.id)}"]`)?.scrollIntoView({ block: "nearest" });
-    const order = { GK: 0, DEF: 1, MID: 2, FWD: 3 };
-    const squad = t.players.slice().sort((a, b) => (order[a.pos] ?? 9) - (order[b.pos] ?? 9) || b.overall - a.overall);
-    const cols = [{ t: "#", w: 44 }, { t: "Player" }, { t: "Pos", w: 60 }, { t: "OVR", w: 60, a: "r" }, { t: "Fin", w: 54, a: "r" }, { t: "Pas", w: 54, a: "r" },
-      { t: "Def", w: 54, a: "r" }, { t: "Mov", w: 54, a: "r" }, { t: "Rea", w: 54, a: "r" }];
-    const prow = squad.map((p) => ({ cells: [{ text: p.number, color: "var(--g-muted)" }, esc(p.name), { text: p.pos, color: "var(--g-muted)" },
-      { text: p.overall, color: RAT(p.overall / 10), bold: true }, ...[p.finishing, p.passing, p.defending, p.positioning, p.reaction].map((x) => ({ text: x, color: RAT(x / 10) }))] }));
+    // the line-up: each player once, with how many slots it fills
+    const counts = {};
+    t.lineup.forEach((id) => { counts[id] = (counts[id] || 0) + 1; });
+    const cols = [{ t: "", w: 46 }, { t: "Player" }, { t: "Type", w: 130 }, { t: "Plays as", w: 130 }, { t: "Skill", w: 60, a: "r" }, { t: "Slots", w: 60, a: "r" }, { t: "Sizes", w: 90, a: "r" }];
+    const prow = Object.keys(counts).map((id) => G.playerById[id]).filter(Boolean).map((p) => ({
+      cells: [badge(p, 30), playerLink(p.id, p.name), { text: p.kind_label, color: "var(--g-muted)" },
+        { text: p.plays || "–", color: "var(--g-muted)" }, p.skill ?? "–", "×" + counts[p.id],
+        { text: p.sizes.length === 5 ? "all" : p.sizes.map((n) => n + "v" + n).join(" "), color: "var(--g-muted)" }] }));
     const d = $("#t-detail", v);
     d.innerHTML = `<section class="gp-hero row" style="--kc:#${t.colors[0]}"><div class="ks-mark" aria-hidden="true"></div><span class="gt-crest"></span>
-        <div class="gt-info"><div class="gp-pill">${esc(t.league_name)}</div><h1 class="gt-name">${esc(t.name)}</h1><div class="ks-elo">${esc(eloText(t))}</div>
+        <div class="gt-info"><div class="gp-pill">${esc(t.league_name)}</div><h1 class="gt-name">${esc(t.name)}</h1><div class="ks-elo">${esc(eloText(t))}</div><div class="elo-sizes">${eloSizes(t)}</div>
         <p class="gt-plays">${esc(playsText(t))}</p><div class="gt-who">${esc(whoDrives(t))}</div></div>
-        <button type="button" class="ks-go gt-play" id="t-play">Quick match</button></section>
-      <section class="gp-card"><h2>Squad</h2>${table(cols, prow)}
-        <div class="g-caption">Fin finishing, Pas passing, Def defending, Mov positioning, Rea reaction. Attributes change AI decisions, never the physics.</div></section>`;
+        <div class="gt-actions"><button type="button" class="ks-go gt-play" id="t-play">Quick match</button>
+          <a class="ks-btn2 gt-edit" href="#/game/build/${encodeURIComponent(t.id)}${t.custom ? "" : "/copy"}">${t.custom ? "Edit team" : "Copy and edit"}</a></div></section>
+      <section class="gp-card"><h2>Line-up</h2>${table(cols, prow)}
+        <div class="g-caption">Every player has the same body; the skill only changes how precise a rule-based player is. A match of N per side fields the first N of the line-up who can play that size. Click a player for who it is and how it was made.</div></section>`;
     $(".ks-mark", d).append(Draw.logoCanvas(t.logo, 560));
     $(".gt-crest", d).append(Draw.logoCanvas(t.logo, 150));
     $("#t-play", d).onclick = () => playWith(t);

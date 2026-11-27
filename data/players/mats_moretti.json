@@ -1,0 +1,17 @@
+{
+ "id": "mats_moretti",
+ "name": "Mats Moretti",
+ "kind": "rules",
+ "algorithm": "playmaker",
+ "settings": {
+  "vision_bias": 0.53,
+  "patience": 0.7,
+  "shoot": 0.49
+ },
+ "skill": 79,
+ "description": "Playmaker: Plays the through ball into the run.",
+ "origin": {
+  "made": "2026-11-27",
+  "from": "rule-based archetype playmaker"
+ }
+}

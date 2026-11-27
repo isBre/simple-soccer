@@ -1,0 +1,16 @@
+{
+ "id": "carlos_lindgren",
+ "name": "Carlos Lindgren",
+ "kind": "rules",
+ "algorithm": "sweeper",
+ "settings": {
+  "sweep": 0.19,
+  "step_up": 0.44
+ },
+ "skill": 74,
+ "description": "Sweeper: Calm at the back, clears it long.",
+ "origin": {
+  "made": "2026-11-27",
+  "from": "rule-based archetype sweeper"
+ }
+}

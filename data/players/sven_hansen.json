@@ -1,0 +1,17 @@
+{
+ "id": "sven_hansen",
+ "name": "Sven Hansen",
+ "kind": "rules",
+ "algorithm": "winger",
+ "settings": {
+  "width": 0.78,
+  "cut_in": 0.31,
+  "track": 0.4
+ },
+ "skill": 70,
+ "description": "Winger: Pure pace down the flank.",
+ "origin": {
+  "made": "2026-11-27",
+  "from": "rule-based archetype winger"
+ }
+}

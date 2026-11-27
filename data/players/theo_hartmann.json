@@ -1,0 +1,13 @@
+{
+ "id": "theo_hartmann",
+ "name": "Theo Hartmann",
+ "kind": "net",
+ "model": "models/t48_best.json",
+ "description": "Neural net. t48: the first 46-number role-free net (distilled from jit8, then PPO with the minimal rewards at lr 5e-5). Elo 1329 (79th of 98) in the old 5v5 ladder of 2026-11-26 (team ratings, before players existed); scored 0.67 and conceded 1.49 per match against the average team.",
+ "origin": {
+  "made": "2026-11-27",
+  "legacy_elo": 1329,
+  "line": "team 46",
+  "run": "t48"
+ }
+}

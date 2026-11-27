@@ -1,0 +1,13 @@
+{
+ "id": "finn_dahl",
+ "name": "Finn Dahl",
+ "kind": "net",
+ "model": "models/x_dist_team46_s23_best.json",
+ "description": "Neural net. dist_team46_s23: the anchor recipe from the long distillation of jit8 (team46_long), seed 23; the strongest 46-number net. Elo 1703 (3rd of 98) in the old 5v5 ladder of 2026-11-26 (team ratings, before players existed); scored 1.56 and conceded 0.55 per match against the average team.",
+ "origin": {
+  "made": "2026-11-27",
+  "legacy_elo": 1703,
+  "line": "team 46",
+  "run": "dist_team46_s23"
+ }
+}

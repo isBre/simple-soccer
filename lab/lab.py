@@ -10,7 +10,7 @@ so it works even when the dashboard is down. Every command prints one JSON objec
   python3 lab/lab.py compare A B [--kind full] [--group league|greedy|h2h]   paired difference, z, p, MDE, verdict (same protocol only)
   python3 lab/lab.py ablation [--kind full]          every run vs its reference, Holm-corrected over the batch
   python3 lab/lab.py events [--since 2026-11-16T20:00]   runs started/resumed/finished, evaluations, reboots
-  python3 lab/lab.py ranking [--league rl]           Elo ranking of every team of every league (lab/ladder.py), 95% intervals
+  python3 lab/lab.py ranking [--size 5] [--league rl]  ratings of one size (elo/, this machine): players, teams, checkpoints, 95% intervals
   python3 lab/lab.py estimates [--run NAME]          estimated Elo of the checkpoints during training (lab/ladder.py estimate)
   python3 lab/lab.py queue list | validate F | add F [--position N] | cancel NAME | move NAME N
   python3 lab/lab.py schema                          what every metric means (unit, direction, protocol)
@@ -443,28 +443,29 @@ def cmd_queue(a):
 
 
 def cmd_ranking(a):
-    """The Elo ranking of every team of every league (lab/ladder.py): rating with 95% interval, games, record."""
+    """The ratings of one size (elo/, this machine's local database; 5v5 by default): rating with 95% interval, games, record."""
     from lab import ladder
-    r = ladder.ranking()
+    r = ladder.ranking(getattr(a, "size", None) or 5)
     rows = r["rows"] if not a.league else [x for x in r["rows"] if x["league"] == a.league]
-    keep = ("rank", "id", "name", "league", "kind", "elo", "lo", "hi", "games", "w", "d", "l", "agf", "aga", "agf_se", "aga_se", "gf", "ga", "placed")
-    return {"protocol": r["protocol"], "matches": r["matches"], "stale": r["stale"], "last": r["last"], "ladder_off": r["off"],
+    keep = ("rank", "id", "name", "entry", "league", "kind", "elo", "lo", "hi", "games", "w", "d", "l", "agf", "aga", "agf_se", "aga_se",
+            "gf", "ga", "bonus", "via", "placed")
+    return {"protocol": r["protocol"], "size": r["size"], "matches": r["matches"], "stale": r["stale"], "last": r["last"], "rounds_off": r["off"],
             "rows": [{k: x.get(k) for k in keep} for x in rows]}
 
 
 def cmd_ladder(a):
-    """Starts the Elo ranking over, when the user decides: `ladder archive` shows what would move, `ladder archive --yes` moves
-    every stored match and the rating history to exp/ladder_archive/<date>[_<label>]/ (kept, no longer counted; audited)."""
-    from lab import ladder
+    """Starts the ratings over, when the user decides: `ladder archive` shows what would move, `ladder archive --yes` moves this
+    machine's database (local/elo.db) to local/elo_archive/<date>[_<label>].db (kept, no longer counted; audited)."""
+    from elo import api as elo_api
     if a.action != "archive":
         raise LabError("unknown ladder action %r" % a.action, "python3 lab/lab.py ladder archive [--label NAME] [--yes]")
-    info = ladder.archive(a.label or "", dry_run=not a.yes)
+    info = elo_api.archive(a.label or "", dry_run=not a.yes)
     if not info["files"]:
-        raise LabError("nothing to archive: no exp/ladder.jsonl here", "run it on the machine that plays the ladder (lab/MAC.md)")
+        raise LabError("nothing to archive: no ratings database on this machine", "python3 -m elo status")
     if not a.yes:
         return {"dry_run": True, "would_archive": info,
-                "hint": "this starts the Elo ranking over (every team back to 1500, placement matches first); add --yes to do it"}
-    audit("ladder_archive", folder=info["folder"], matches=info["matches"], label=info["label"])
+                "hint": "this starts the ratings over (every entry back to the prior, placement games first); add --yes to do it"}
+    audit("ladder_archive", folder=info["to"], matches=info["matches"], label=info["label"])
     return {"archived": info}
 
 
@@ -517,7 +518,8 @@ def parser():
     p.add_argument("--run")
     p.add_argument("--matches", action="store_true", help="with the match list of each estimate")
     p = sub.add_parser("ranking")
-    p.add_argument("--league", help="rules | rl | ml | dl")
+    p.add_argument("--league", help="rules | rl | mixed | mine")
+    p.add_argument("--size", type=int, default=5, help="team size 1-5 (default 5)")
     p = sub.add_parser("ladder", help="ladder archive [--label NAME] [--yes]: start the Elo ranking over (only when the user asks)")
     p.add_argument("action", choices=["archive"])
     p.add_argument("--label", help="a word for the archive folder, e.g. before_v2_rewards")

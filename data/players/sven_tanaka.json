@@ -1,0 +1,16 @@
+{
+ "id": "sven_tanaka",
+ "name": "Sven Tanaka",
+ "kind": "rules",
+ "algorithm": "dribbler",
+ "settings": {
+  "daring": 0.72,
+  "shoot": 0.74
+ },
+ "skill": 87,
+ "description": "Dribbler: Beats a man and then another.",
+ "origin": {
+  "made": "2026-11-27",
+  "from": "rule-based archetype dribbler"
+ }
+}

@@ -1,0 +1,17 @@
+{
+ "id": "emil_novak",
+ "name": "Emil Novak",
+ "kind": "rules",
+ "algorithm": "playmaker",
+ "settings": {
+  "vision_bias": 0.84,
+  "patience": 0.5,
+  "shoot": 0.05
+ },
+ "skill": 70,
+ "description": "Playmaker: Drops deep and dictates the tempo.",
+ "origin": {
+  "made": "2026-11-27",
+  "from": "rule-based archetype playmaker"
+ }
+}

@@ -1,0 +1,16 @@
+{
+ "id": "ibrahim_delgado",
+ "name": "Ibrahim Delgado",
+ "kind": "rules",
+ "algorithm": "presser",
+ "settings": {
+  "intensity": 0.85,
+  "cut": 0.44
+ },
+ "skill": 70,
+ "description": "Presser: Never lets a defender settle.",
+ "origin": {
+  "made": "2026-11-27",
+  "from": "rule-based archetype presser"
+ }
+}

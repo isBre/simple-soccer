@@ -1,9 +1,10 @@
 """The match core (soccer/) against stored matches (tests/golden/match_<name>.json).
 
-Plays every match of tests/scenarios.json (all sizes, every pitch plus one with extra walls, net teams, a scripted human in
-single and team control, overtime, shootouts, score limit) with the real AI and compares: the score, ball position and
-ball speed every second (so a FAIL says when the match started to differ) and the complete result (events, team and
-player statistics, grades).
+Plays every match of tests/scenarios.json (all sizes, every pitch plus one with extra walls, net teams, mixed line-ups of
+rule and net players, a net that does not fit the size, a scripted human in single and team control, several humans
+(co-op, versus, 2v1), golden-goal
+overtime, score limit) with the real AI and compares: the score, ball position and ball speed every second (so a FAIL says
+when the match started to differ) and the complete result (events, team and player statistics).
 
   python3 tests/test_match.py [--update] [scenario names...]"""
 import cmath
@@ -14,7 +15,7 @@ import sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 from soccer.data import Pitch                                   # noqa: E402
-from soccer.match import ENDED, Match, make_config             # noqa: E402
+from soccer.match import ENDED, SINGLE, TEAM, Human, Match, check_humans, make_config  # noqa: E402
 from tests import golden                                       # noqa: E402
 
 MAX_TICKS = 60 * 60 * 10
@@ -29,25 +30,35 @@ def build(sc_def, pitches):
     cfg.control = int(sc_def.get("control", 0))
     cfg.human_team = int(sc_def.get("human_team", 0))
     cfg.auto_switch = bool(sc_def.get("auto_switch", False))
+    cfg.humans = list(sc_def.get("humans", []))                  # local multiplayer: several humans
     cfg.allow_draw = bool(sc_def.get("allow_draw", True))
-    cfg.overtime = float(sc_def.get("overtime", 60.0))
     cfg.score_limit = int(sc_def.get("score_limit", 0))
     cfg.net_temperature = float(sc_def.get("temperature", 1.0))
+    if sc_def.get("net"):                                        # one net for the home team instead of its line-up
+        cfg.nets[0] = {"model": os.path.join(ROOT, sc_def["net"])}
     return Match(cfg)
 
 
 def scripted_human(m):
-    """The human's keys, a fixed function of the tick: a new direction every 40 ticks, a short kick every 37."""
-    m.set_human_input(cmath.exp(1j * ((m.tick // 40) * 2.399963)), m.tick % 37 < 3)
-    if m.cfg.control == 2 and not m.cfg.auto_switch and m.tick % 240 == 0:
-        m.switch_controlled()
+    """The human's keys, a fixed function of the tick: a new direction every 40 ticks, a short kick every 37 (Q every 240 in team
+    control). Several humans (local multiplayer): human k is the same script shifted by k * 13 ticks."""
+    if not m.cfg.humans:
+        m.set_human_input(cmath.exp(1j * ((m.tick // 40) * 2.399963)), m.tick % 37 < 3)
+        if m.cfg.control == 2 and not m.cfg.auto_switch and m.tick % 240 == 0:
+            m.switch_controlled()
+        return
+    for k, h in enumerate(m.humans):
+        t = m.tick + 13 * k
+        m.set_human_input(cmath.exp(1j * ((t // 40) * 2.399963 + k)), t % 37 < 3, k)
+        if h.mode == 2 and not h.auto_switch and t % 240 == 0:
+            m.switch_controlled(None, k)
 
 
 def play(sc_def, pitches):
     m = build(sc_def, pitches)
     trace = []
     while m.state != ENDED and m.tick < MAX_TICKS:
-        if m.cfg.control:
+        if m.humans:
             scripted_human(m)
         m.step()
         if m.tick % 60 == 0:
@@ -70,12 +81,35 @@ def first_divergence(name, got):
     return None
 
 
+def humans_rules():
+    """check_humans (local multiplayer): which line-ups of people a match accepts. True if every case is decided right."""
+    H = Human
+    cases = [("one person", [H(0, SINGLE)], 3, True), ("versus, whole teams", [H(0, TEAM), H(1, TEAM)], 3, True),
+             ("co-op, one player each", [H(0, SINGLE), H(0, SINGLE, 2)], 3, True),
+             ("2v1", [H(0, SINGLE, 0), H(0, SINGLE), H(1, TEAM)], 3, True),
+             ("shared side, whole team", [H(0, SINGLE), H(0, TEAM)], 3, False),
+             ("two on one player", [H(1, SINGLE, 1), H(1, SINGLE, 1)], 3, False),
+             ("more people than players", [H(0, SINGLE), H(0, SINGLE)], 1, False),
+             ("slot outside the size", [H(0, SINGLE, 3)], 3, False)]
+    bad = []
+    for name, hs, size, want in cases:
+        try:
+            check_humans(hs, size)
+            got = True
+        except ValueError:
+            got = False
+        if got != want:
+            bad.append(name)
+    print("%-24s %s    %s" % ("humans_rules", "OK" if not bad else "FAIL", "%d cases" % len(cases) if not bad else ", ".join(bad)))
+    return not bad
+
+
 def main():
     args = [a for a in sys.argv[1:] if not a.startswith("--")]
     update = "--update" in sys.argv
     spec = json.load(open(os.path.join(ROOT, "tests", "scenarios.json")))
     todo = [s for s in spec["scenarios"] if not args or s["name"] in args]
-    ok_all = True
+    ok_all = humans_rules() if not args else True
     for s in todo:
         got = play(s, spec["pitches"])
         ok = golden.check("match_" + s["name"], got, update, s["name"], show=3)

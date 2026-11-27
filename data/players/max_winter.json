@@ -1,0 +1,13 @@
+{
+ "id": "max_winter",
+ "name": "Max Winter",
+ "kind": "net",
+ "model": "models/x_b256_long_best.json",
+ "description": "Neural net. b256_long: the anchor recipe with twice the batch (rollout 256) and 600 updates. Elo 1667 (7th of 98) in the old 5v5 ladder of 2026-11-26 (team ratings, before players existed); scored 1.40 and conceded 0.60 per match against the average team.",
+ "origin": {
+  "made": "2026-11-27",
+  "legacy_elo": 1667,
+  "line": "team 46",
+  "run": "b256_long"
+ }
+}

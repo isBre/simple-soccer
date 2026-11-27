@@ -1,0 +1,16 @@
+{
+ "id": "daan_de_vries",
+ "name": "Daan de Vries",
+ "kind": "rules",
+ "algorithm": "box_to_box",
+ "settings": {
+  "engine": 0.5,
+  "shoot": 0.41
+ },
+ "skill": 56,
+ "description": "Box-to-box: Arrives late in the box.",
+ "origin": {
+  "made": "2026-11-27",
+  "from": "rule-based archetype box_to_box"
+ }
+}

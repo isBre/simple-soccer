@@ -1,0 +1,16 @@
+{
+ "id": "mikkel_moretti",
+ "name": "Mikkel Moretti",
+ "kind": "rules",
+ "algorithm": "ball_winner",
+ "settings": {
+  "range": 0.53,
+  "bite": 0.74
+ },
+ "skill": 81,
+ "description": "Ball winner: Wins it back and gives it simply.",
+ "origin": {
+  "made": "2026-11-27",
+  "from": "rule-based archetype ball_winner"
+ }
+}

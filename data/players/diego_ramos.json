@@ -1,0 +1,17 @@
+{
+ "id": "diego_ramos",
+ "name": "Diego Ramos",
+ "kind": "rules",
+ "algorithm": "poacher",
+ "settings": {
+  "greed": 0.89,
+  "depth": 0.63,
+  "drop": 0.38
+ },
+ "skill": 68,
+ "description": "Poacher: Shoots at the first sight of goal.",
+ "origin": {
+  "made": "2026-11-27",
+  "from": "rule-based archetype poacher"
+ }
+}

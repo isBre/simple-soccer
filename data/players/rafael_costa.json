@@ -1,0 +1,17 @@
+{
+ "id": "rafael_costa",
+ "name": "Rafael Costa",
+ "kind": "rules",
+ "algorithm": "winger",
+ "settings": {
+  "width": 0.95,
+  "cut_in": 0.08,
+  "track": 0.62
+ },
+ "skill": 73,
+ "description": "Winger: Hugs the touchline and crosses low.",
+ "origin": {
+  "made": "2026-11-27",
+  "from": "rule-based archetype winger"
+ }
+}

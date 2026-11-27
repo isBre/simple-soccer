@@ -1,5 +1,5 @@
 // The Game (web/game.js has the overview): new tournament and the tournament hub.
-import { $, CHEV, CONTROLS, G, api, btn, card, eloText, esc, go, header, leagueTeams, loadT, mount, overlay, pitchOf, playsText, prefs, savePrefs, saveT, shell, table, teamCell, view } from "./core.js";
+import { $, CHEV, CONTROLS, G, api, btn, card, eloText, esc, go, header, leagueTeams, loadT, mount, overlay, pitchOf, playerLink, playsText, prefs, savePrefs, saveT, shell, table, teamCell, view } from "./core.js";
 import { match, play } from "./match.js";
 import { menu } from "./menu.js";
 import { SIZES, drawReel, listPick, playControls, prefIdx, seg, youPill } from "./quick.js";
@@ -134,12 +134,11 @@ export function renderHub(t, vw) {
 export const nameOf = (id) => esc(G.byId[id]?.name || id);
 export function fixtureRow(t, f, detail) {
   const you = (id) => (id === t.user_team ? youPill : "");
-  const score = f.played ? `${f.hg} – ${f.ag}${f.pens && f.pens.length ? `<small>pens ${f.pens[0]}–${f.pens[1]}</small>` : ""}` : '<span class="vs">vs</span>';
+  const score = f.played ? `${f.hg} – ${f.ag}${f.ot ? "<small>golden goal</small>" : ""}` : '<span class="vs">vs</span>';
   let out = `<div class="gf${f.home === t.user_team || f.away === t.user_team ? " mine" : ""}"><span class="h">${you(f.home)}${nameOf(f.home)}</span>${Draw.logoTag(f.home, 30)}
     <span class="sc">${score}</span>${Draw.logoTag(f.away, 30)}<span class="a">${nameOf(f.away)}${you(f.away)}</span></div>`;
   if (detail && f.played) {
     let txt = f.goals.map((g) => `${Math.floor(g.clock / 60) + 1}' ${g.scorer}${g.own ? " (OG)" : ""}`).join(", ");
-    if (f.mom) txt += (txt ? "  ·  " : "") + "Player of the match: " + f.mom;
     if (txt) out += `<div class="gf-d">${esc(txt)}</div>`;
   }
   return out;
@@ -184,13 +183,13 @@ export function resultsTab(t) {
   return out || '<p class="gh-empty">No matches played yet.</p>';
 }
 export function playersTab(t, vw) {
-  const lists = [["Top scorers", "goals", "Goals"], ["Top assists", "assists", "Assists"], ["Best average grade", "rating", "Grade"], ["Player of the match awards", "motm", "Awards"]];
+  const lists = [["Top scorers", "goals", "Goals"], ["Top assists", "assists", "Assists"], ["Most shots", "shots", "Shots"]];
   return `<div class="gh-grid">${lists.map(([title, kind, col]) => {
     const rows = vw.top[kind] || [];
     const body = rows.length ? table([{ t: "#", w: 36 }, { t: "Player" }, { t: col, w: 76, a: "r" }], rows.map((ps, i) => {
       const mine = ps.team === t.user_team;
-      const val = kind === "rating" ? (ps.rating_sum / Math.max(1, ps.apps)).toFixed(2) : String(ps[kind]);
-      return { hl: mine, cells: [{ text: i + 1, color: "var(--g-muted)" }, teamCell(G.byId[ps.team] || { id: ps.team }, ps.name, "", 22), { text: val, bold: true }] };
+      const val = String(ps[kind]);
+      return { hl: mine, cells: [{ text: i + 1, color: "var(--g-muted)" }, `<span class="teamcell">${Draw.logoTag(ps.team, 22)}${playerLink(ps.id, ps.name)}</span>`, { text: val, bold: true }] };
     })) : '<p class="gh-empty">No matches played yet.</p>';
     return `<section class="gp-card"><h2>${esc(title)}</h2>${body}</section>`;
   }).join("")}</div>`;

@@ -1,0 +1,13 @@
+{
+ "id": "kai_vogel",
+ "name": "Kai Vogel",
+ "kind": "net",
+ "model": "models/x_kickstart_persist_best.json",
+ "description": "Neural net. kickstart_persist: 46 numbers, PPO with a slowly fading pull towards jit8, strong opponents. Elo 1591 (58th of 98) in the old 5v5 ladder of 2026-11-26 (team ratings, before players existed); scored 1.19 and conceded 0.73 per match against the average team.",
+ "origin": {
+  "made": "2026-11-27",
+  "legacy_elo": 1591,
+  "line": "team 46",
+  "run": "kickstart_persist"
+ }
+}

@@ -1,0 +1,16 @@
+{
+ "id": "tomasz_kowal",
+ "name": "Tomasz Kowal",
+ "kind": "rules",
+ "algorithm": "shadow",
+ "settings": {
+  "tight": 0.47,
+  "read": 0.37
+ },
+ "skill": 77,
+ "description": "Shadow: Wins it goal-side, every time.",
+ "origin": {
+  "made": "2026-11-27",
+  "from": "rule-based archetype shadow"
+ }
+}

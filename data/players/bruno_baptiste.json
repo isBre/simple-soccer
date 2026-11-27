@@ -1,0 +1,16 @@
+{
+ "id": "bruno_baptiste",
+ "name": "Bruno Baptiste",
+ "kind": "rules",
+ "algorithm": "dribbler",
+ "settings": {
+  "daring": 0.63,
+  "shoot": 0.57
+ },
+ "skill": 65,
+ "description": "Dribbler: Curls past defenders on the run.",
+ "origin": {
+  "made": "2026-11-27",
+  "from": "rule-based archetype dribbler"
+ }
+}

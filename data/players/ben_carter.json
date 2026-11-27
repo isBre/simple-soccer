@@ -1,0 +1,16 @@
+{
+ "id": "ben_carter",
+ "name": "Ben Carter",
+ "kind": "rules",
+ "algorithm": "box_to_box",
+ "settings": {
+  "engine": 0.93,
+  "shoot": 0.64
+ },
+ "skill": 58,
+ "description": "Box-to-box: Arrives late in the box.",
+ "origin": {
+  "made": "2026-11-27",
+  "from": "rule-based archetype box_to_box"
+ }
+}

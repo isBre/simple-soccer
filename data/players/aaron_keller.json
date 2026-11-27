@@ -1,0 +1,16 @@
+{
+ "id": "aaron_keller",
+ "name": "Aaron Keller",
+ "kind": "rules",
+ "algorithm": "dribbler",
+ "settings": {
+  "daring": 0.88,
+  "shoot": 0.43
+ },
+ "skill": 77,
+ "description": "Dribbler: Beats a man and then another.",
+ "origin": {
+  "made": "2026-11-27",
+  "from": "rule-based archetype dribbler"
+ }
+}

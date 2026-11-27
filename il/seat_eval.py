@@ -23,7 +23,7 @@ def play(job):
     m = Match(c)
     seat = None
     if model:
-        seat = next(p for p in m.team_lists[side] if p.role == role)
+        seat = next(p for p in m.team_lists[side] if p.line == role)          # the player on that formation spot
         seat.bot_ai = nets.NetBot(nets.load({"model": model}), temp)
     chg = n = 0
     prev = None

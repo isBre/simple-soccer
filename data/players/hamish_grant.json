@@ -1,0 +1,16 @@
+{
+ "id": "hamish_grant",
+ "name": "Hamish Grant",
+ "kind": "rules",
+ "algorithm": "target_man",
+ "settings": {
+  "height": 0.64,
+  "turn": 0.29
+ },
+ "skill": 77,
+ "description": "Target man: Lays it off and spins in behind.",
+ "origin": {
+  "made": "2026-11-27",
+  "from": "rule-based archetype target_man"
+ }
+}

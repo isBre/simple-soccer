@@ -1,0 +1,16 @@
+{
+ "id": "milan_nakamura",
+ "name": "Milan Nakamura",
+ "kind": "rules",
+ "algorithm": "presser",
+ "settings": {
+  "intensity": 0.91,
+  "cut": 0.72
+ },
+ "skill": 57,
+ "description": "Presser: Presses from the first minute to the last.",
+ "origin": {
+  "made": "2026-11-27",
+  "from": "rule-based archetype presser"
+ }
+}

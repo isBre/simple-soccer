@@ -1,7 +1,6 @@
 """Quick check of trained imitation models (il/train.py) in real matches: each model plays a fixed set of opponents spread over
-the Elo ranking (2 seeds x both sides each, 5v5 arena 90 s, RL Team 5's squad, as the ranking's nets), and gets a provisional
-Elo: the ranking's stored results (exp/ladder.jsonl) plus these matches, fitted together (lab/ladder.py fit). Nothing is
-written to the ranking. Also the behaviour of the model's players (same definitions as rl/evaluate.py and il/analysis.py):
+the 5v5 ratings (2 seeds x both sides each, arena 90 s, five copies of the net, as the ratings' checkpoints), and gets a
+provisional Elo against them, their ratings held fixed (elo/model.py rating_vs_fixed). Nothing is written to the ratings. Also the behaviour of the model's players (same definitions as rl/evaluate.py and il/analysis.py):
 direction changes per second, idle %, kick presses per minute, shots, passes.
 
   python3 il/quick_eval.py out_il/a.json out_il/b.json [--seeds 2] [--workers 9]"""
@@ -18,22 +17,26 @@ if ROOT not in sys.path:
 
 from lab import ladder                           # noqa: E402
 
-OPPONENTS = ["rules:cobalt", "rules:owls", "rules:tide", "net:t46_best", "team:rl_team", "net:t48_u100", "team:rl_team_2",
-             "net:team46_start", "net:x_anchor_wall_best", "team:rl_team_5"]
-
-
-def _cfg(e, c, side):
-    c.nets[side] = {"model": os.path.join(ROOT, e["model"])} if e["model"] else None
+OPPONENTS = ["player:daan_de_vries", "player:sam_taylor", "player:felix_wagner", "net:t46_best", "player:elias_berg", "net:t48_u100",
+             "player:hugo_lindqvist", "net:team46_start", "net:x_anchor_wall_best", "player:leo_schneider"]
 
 
 def play(job):
     me, opp, seed, my_side = job
     temp = me.get("temperature", 1.0)
-    from soccer.match import AI_PERIOD, ENDED, Match, make_config
+    from elo.play import _team
+    from soccer.data import database
+    from soccer.match import AI_PERIOD, ENDED, Match, MatchConfig
+    from soccer.players import PlayerDef
+    from soccer.teams import Team
+    db = database()
     home, away = (me, opp) if my_side == 0 else (opp, me)
-    c = make_config(home["team"], away["team"], "arena", 5, ladder.DURATION, seed)
-    _cfg(home, c, 0)
-    _cfg(away, c, 1)
+    c = MatchConfig()
+    c.pitch = db.pitches["arena"]
+    c.teams = [_team(home, db, PlayerDef, Team), _team(away, db, PlayerDef, Team)]
+    c.team_size = 5
+    c.duration = ladder.DURATION
+    c.match_seed = seed
     m = Match(c)
     for p in m.team_lists[my_side]:             # the model's own temperature (0 = always the most likely move); the opponent keeps 1
         if hasattr(p.bot_ai, "temperature"):
@@ -66,22 +69,22 @@ def main():
     ap.add_argument("--temperature", type=float, nargs="+", default=[1.0], help="one evaluation per value (0 = greedy)")
     ap.add_argument("--workers", type=int, default=max(1, (os.cpu_count() or 2) - 1))
     a = ap.parse_args()
-    ros = ladder.roster()
-    by = {e["id"]: e for e in ros}
-    res = ladder.results()
-    base = ladder.fit(ros, res)
+    from elo import api as elo_api, model
+    r5 = elo_api.ratings(5)
+    by = {i: e.spec() for i, e in r5.ros.entries.items()}
     report = {}
     for path, temp in [(p, t) for p in a.models for t in a.temperature]:
         stem = os.path.basename(path)[:-5] + ("" if temp == 1.0 else "@T%g" % temp)
-        me = {"temperature": temp, "id": "try:" + stem, "name": stem, "league": "try", "kind": "net", "team": ladder.NET_SQUAD,
-              "model": os.path.relpath(os.path.abspath(path), ROOT), "sha": ladder._sha(path)}
+        me = {**ladder.checkpoint_spec(os.path.abspath(path), "try:" + stem, stem), "temperature": temp}
         jobs = [(me, by[o], 1000 + 7919 * s + i, side) for i, o in enumerate(OPPONENTS) if o in by for s in range(a.seeds) for side in (0, 1)]
         t0 = time.time()
         with mp.get_context("spawn").Pool(a.workers) as pool:
             out = pool.map(play, jobs)
-        recs = [{"protocol": ladder.PROTOCOL, "a": me["id"], "b": r["opp"], "a_sha": me["sha"], "b_sha": by[r["opp"]]["sha"],
-                 "ga": r["gf"], "gb": r["ga"]} for r in out]
-        rat = ladder.fit(ros + [me], res + recs)[me["id"]]
+        elo, se = model.rating_vs_fixed([r5.rat[r["opp"]]["elo"] for r in out],
+                                        [1.0 if r["gf"] > r["ga"] else 0.5 if r["gf"] == r["ga"] else 0.0 for r in out])
+        rat = {"elo": elo, "lo": elo - 1.96 * se, "hi": elo + 1.96 * se, "w": sum(r["gf"] > r["ga"] for r in out),
+               "d": sum(r["gf"] == r["ga"] for r in out), "l": sum(r["gf"] < r["ga"] for r in out),
+               "gf": sum(r["gf"] for r in out), "ga": sum(r["ga"] for r in out)}
         n = sum(r["n"] for r in out)
         per_opp = {}
         for r in out:

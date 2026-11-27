@@ -18,7 +18,8 @@ Everything is written to exp/ (see lab/tracker.py). After a reboot the runner re
   ~/rl-venv/bin/python lab/exp_runner.py --loop [--viewer]        (installed as the systemd service soccer-exp.service)
 
 While the queue is empty (--loop) it plays rounds of the Elo ranking (lab/ladder.py round: 6 pairs, 2 matches each, 3 niced
-workers, a few minutes on the Pi) and looks at the queue again after each round. `touch exp/ladder_off` stops that.
+workers, a few minutes on the Pi) and looks at the queue again after each round. `touch local/refine_off` stops that (and the web
+app's refining); a finished run is still placed.
 """
 import argparse
 import glob
@@ -183,13 +184,13 @@ def keep_best(tag, update):
 
 
 def place_in_ladder(tag, rounds=3):
-    """Plays ladder rounds right after a run until its best checkpoint is placed (PLACEMENT games): otherwise a busy queue would
-    leave it unrated. New entries are paired first (ladder.choose_pairs)."""
+    """Plays 5v5 rounds of the ratings right after a run until its best checkpoint is placed (PLACEMENT games): otherwise a busy
+    queue would leave it unrated. New entries are paired first (elo/schedule.py)."""
     from lab import ladder
     for _ in range(rounds):
-        rat = ladder.fit()
+        rat = ladder.rows()
         r = rat.get("net:%s_best" % tag)
-        if r is None or r["games"] >= ladder.PLACEMENT or not ladder_round():
+        if r is None or r["games"] >= ladder.PLACEMENT or not ladder_round(size=5, force=True):
             return
 
 
@@ -344,7 +345,7 @@ def run_experiment(spec_path, viewer=False):
     if os.path.exists(cancel_flag):
         os.remove(cancel_flag)
     log("%s finished: %s" % (name, state))
-    if state == "done" and not os.path.exists(os.path.join(EXP, "ladder_off")):
+    if state == "done":
         place_in_ladder(tag)
 
 
@@ -368,13 +369,16 @@ def next_spec():
 LADDER_PAIRS = 6
 
 
-def ladder_round():
-    """One round of the Elo ranking while nothing else runs. True if it played (so the loop looks at the queue right away)."""
-    if os.path.exists(os.path.join(EXP, "ladder_off")):
+def ladder_round(size=None, force=False):
+    """One round of the ratings (elo/: every size, the one that needs it most unless `size`) while nothing else runs. True if it
+    played (so the loop looks at the queue right away). Nothing while local/refine_off exists, unless `force` (placing a run)."""
+    from elo.api import rounds_off
+    if rounds_off() and not force:
         return False
     t0 = time.time()
     try:
-        p = subprocess.run([sys.executable, os.path.join(ROOT, "lab", "ladder.py"), "round", "--pairs", str(LADDER_PAIRS), "--workers", "3"],
+        p = subprocess.run([sys.executable, os.path.join(ROOT, "lab", "ladder.py"), "round", "--pairs", str(LADDER_PAIRS), "--workers", "3"]
+                           + (["--size", str(size)] if size else []),
                            cwd=ROOT, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, timeout=3600)
     except subprocess.TimeoutExpired:
         log("ladder round timed out")

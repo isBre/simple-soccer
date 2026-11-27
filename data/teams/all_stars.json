@@ -1,0 +1,27 @@
+{
+  "id": "all_stars",
+  "name": "All Stars",
+  "short": "ALL",
+  "colors": {
+    "primary": "f4c430",
+    "secondary": "1b1b3a"
+  },
+  "kit": "band",
+  "logo": {
+    "shape": "shield",
+    "pattern": "band",
+    "symbol": "crown",
+    "c1": "f4c430",
+    "c2": "1b1b3a",
+    "c3": "ffffff"
+  },
+  "lineup": [
+    "lars_holm",
+    "leo_schneider",
+    "jasper_klein",
+    "viktor_lund",
+    "mateo_alonso"
+  ],
+  "league": "mixed",
+  "rl_eval": false
+}

@@ -109,11 +109,12 @@ def match_row(path, d, F):
     roles = {}
     for p in m["players"]:
         if p["rows"]:
-            roles[p["role"]] = roles.get(p["role"], 0) + p["rows"]
+            spot = p.get("line", p.get("role", "-"))       # the formation spot ("role" in recordings made before players existed)
+            roles[spot] = roles.get(spot, 0) + p["rows"]
     b = _behaviour(F)
     return {"id": os.path.basename(path)[:-4], "started": m["started"], "control": m["control"], "complete": m["complete"],
             "team": m["teams"][h], "opponent": m["teams"][1 - h], "gf": gf, "ga": ga, "outcome": outcome,
-            "shootout": res["shootout"] if res else [], "rows": F["N"], "minutes": F["N"] / PER_SEC / 60.0,
+            "shootout": (res.get("shootout") or []) if res else [], "rows": F["N"], "minutes": F["N"] / PER_SEC / 60.0,
             "picked": setup.get("player", ""), "roles": roles, "duration": setup.get("duration"),
             "puzzle": puzzle, "session": setup.get("session"), "round": setup.get("round"),
             "dir_changes_s": b["dir_changes_s"], "kick_presses_min": b["kick_presses_s"] * 60.0, "idle_pct": b["idle_pct"],

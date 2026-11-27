@@ -1,0 +1,17 @@
+{
+ "id": "remy_vidal",
+ "name": "Remy Vidal",
+ "kind": "rules",
+ "algorithm": "poacher",
+ "settings": {
+  "greed": 0.56,
+  "depth": 0.63,
+  "drop": 0.2
+ },
+ "skill": 55,
+ "description": "Poacher: Shoots at the first sight of goal.",
+ "origin": {
+  "made": "2026-11-27",
+  "from": "rule-based archetype poacher"
+ }
+}

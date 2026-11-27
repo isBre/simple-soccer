@@ -1,0 +1,16 @@
+{
+ "id": "edin_nakamura",
+ "name": "Edin Nakamura",
+ "kind": "rules",
+ "algorithm": "target_man",
+ "settings": {
+  "height": 0.63,
+  "turn": 0.44
+ },
+ "skill": 53,
+ "description": "Target man: Lays it off and spins in behind.",
+ "origin": {
+  "made": "2026-11-27",
+  "from": "rule-based archetype target_man"
+ }
+}
