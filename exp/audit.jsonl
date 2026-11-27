@@ -82,3 +82,5 @@
 {"t": "2026-11-27T17:55:41", "action": "queue_add", "name": "cur2", "stages": ["cur2_1v0", "cur2_1v1", "cur2_2v2", "cur2_3v3", "cur2_4v4", "cur2_5v5"], "position": null}
 {"t": "2026-11-27T19:28:23", "action": "queue_add", "name": "cur2_2v2b", "stages": ["cur2_2v2b", "cur2_3v3", "cur2_4v4", "cur2_5v5"], "why": "supervision: 2v2 peaked and slid at lr 3e-4; a second 2v2 stage, lr 1e-4 and plateau 6 after 600 for the rest"}
 {"t": "2026-11-27T20:05:24", "action": "queue_add", "name": "cur2_3v3b", "stages": ["cur2_3v3b", "cur2_4v4", "cur2_5v5"], "why": "supervision: cur2_3v3 stopped by the divergence check meant for strong nets (fixed in beef28d)"}
+{"t": "2026-11-27T22:20:00", "action": "queue_add", "name": "cur2_4v4b", "stages": ["cur2_4v4b", "cur2_5v5b"], "why": "supervision: 4v4 (shaping 0.25) flat and 5v5 (no shaping) diverged; again with shaping 0.5"}
+{"t": "2026-11-27T23:39:22", "action": "queue_add", "name": "cur2_5v5c", "why": "supervision: 5v5 diverged twice; once more without the divergence check, at least 1000 updates"}
