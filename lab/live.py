@@ -71,7 +71,7 @@ def opponent(rng):
         sel = {}
     if not isinstance(sel, dict) or sel.get("kind", "random") == "random":
         pool = [{"kind": "rule", "team": t.id, "label": t.id.replace("_", " ").title()}
-                for t in database().teams.values() if not t.ml_model]
+                for t in database().teams.values() if not t.net_model]
         pool += [{"kind": "net", "model": "data/models/rl_5v5_arena_v4.json", "label": "RL Team 4"},
                  {"kind": "net", "model": "data/models/rl_5v5_arena_v5.json", "label": "RL Team 5"},
                  {"kind": "net", "model": "out_5v5/ckpt/t48_u100.json", "label": "Start net t48_u100"},

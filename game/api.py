@@ -75,8 +75,8 @@ def team_sha(t):
     """The files a team's play depends on (team file, net), as a short hash."""
     path = os.path.join(ROOT, "data", "teams", t.id + ".json")
     sha = _sha(path) if os.path.exists(path) else ""
-    if t.ml_model:
-        model = os.path.join(ROOT, t.ml_model)
+    if t.net_model:
+        model = os.path.join(ROOT, t.net_model)
         if os.path.exists(model):
             sha += _sha(model)
     return sha
@@ -214,7 +214,7 @@ def player_info(p, elo=None):
 
 
 def team_info(t, elo=None):
-    net = bool(t.ml_model)
+    net = bool(t.net_model)
     s = t.strength()
     elo = elo_table() if elo is None else elo
     rs = _ratings(elo.get("team:" + t.id))

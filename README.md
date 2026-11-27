@@ -211,7 +211,7 @@ result, which the report shows. Tournament rounds are simulated in one request (
   `python3 il/human_data.py [--check]` lists the files (and rebuilds every observation from the raw state). Plan:
   [docs/imitation_plan.md](docs/imitation_plan.md).
 - A net plays a team through `MatchConfig.nets[team]` (`{"model": path}` or `{"dict": model}`, loaded in the match's own
-  process); a team with `ml_model` in its JSON gets its net automatically.
+  process); a team whose every slot is the same net player (`Team.net_model`) plays as that net.
 - Speed (`python3 tools/bench.py`, on a Mac): rule-vs-rule 5v5 about 10,600 ticks/s (177x real time), the training
   environment about 5,700 steps/s per process. The Godot implementation did about 7,200 and 3,400.
 

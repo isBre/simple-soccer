@@ -51,7 +51,7 @@ class Team:
         return None
 
     @property
-    def ml_model(self):
+    def net_model(self):
         """Model path of a team that is one net in every slot ("" otherwise): the ladder and the training tools treat such a
         team as that net."""
         p = self.net_player

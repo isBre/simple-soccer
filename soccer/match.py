@@ -1,15 +1,15 @@
-"""The match: a deterministic (seeded) Haxball-style simulation at a fixed 60 Hz. Physics, match rules, touches, stats,
-the result. Started as a line-by-line port of the Godot game's MatchSim (matched it tick by tick before Godot was removed);
-tests/test_match.py now guards it against stored matches. Positions and velocities are complex numbers: x = .real, y = .imag.
+"""The match: a deterministic (seeded) Haxball-style simulation at a fixed 60 Hz. Match rules, kickoffs, touches, stats, the
+result; the bodies and their contacts are soccer/physics.py, the people at the controls soccer/control.py. It began as a
+port of the old Godot game, and tests/test_match.py guards it against stored matches. Positions and velocities are complex
+numbers: x = .real, y = .imag.
 
-The AI is plugged in as `match.ai` (soccer.ai.MatchAI by default): it is asked once per AI tick to update the team plans
-and set the inputs of the bots that are due, exactly when Godot's MatchSim asked its brain."""
+The AI is plugged in as `match.ai` (soccer.ai.MatchAI by default): every AI tick it lets the bots that are due decide and sets
+their inputs."""
 import math
-import os
 
 from . import rating
 from .control import NONE, TEAM, HumanControl, check_humans, config_humans
-from .data import ROOT, database
+from .data import database
 from .physics import (BALL_DAMPING, KIND_BALL, KIND_PLAYER, KIND_STATIC, PLAYER_ACCEL, PLAYER_DAMPING, PLAYER_KICK_ACCEL, Disc,
                       prepare_walls, resolve)
 from .rng import RandomNumberGenerator
@@ -40,11 +40,6 @@ def rotated(z: complex, a: float) -> complex:
     return z * complex(math.cos(a), math.sin(a))
 
 
-def res_path(path: str) -> str:
-    """res://x -> <project>/x (model paths in team files are Godot paths)."""
-    return os.path.join(ROOT, path[6:]) if path.startswith("res://") else path
-
-
 class Player(Disc):
     """A player disc. The AI adds its own fields (soccer.ai) on top."""
 
@@ -55,7 +50,6 @@ class Player(Disc):
         self.uid = 0                 # team * 16 + slot
         self.line = "MID"            # line of the kickoff spot (GK / DEF / MID / FWD), the same for every team; read only by the AI
         self.pdef = None             # players.PlayerDef: who this is (name, kind, style, skill)
-        self.brain = None            # the team brain that commands this player (soccer/ai/lineup.py)
         self.is_human = False
         self.human = None            # the Human controlling this player (None: nobody)
         self.bot = True              # decided by the AI; False = a human or an external controller (RL training)
@@ -76,7 +70,7 @@ class Player(Disc):
 
 
 class MatchConfig:
-    """Everything needed to set up one match (MatchConfig in Godot)."""
+    """Everything needed to set up one match."""
 
     def __init__(self):
         self.pitch = None
@@ -783,7 +777,7 @@ class Match(HumanControl):
 
     def puzzle_layout(self, seed: int):
         """Puzzle (the Live page): every player and the ball at random places, play from the first tick.
-        Same draws as the Live viewer's Godot code had (a RandomNumberGenerator seeded with `seed`)."""
+        The layout is drawn from its own RandomNumberGenerator seeded with `seed`, so a seed always gives the same puzzle."""
         rng = RandomNumberGenerator(seed)
         self.kickoff_active = False
         self.kickoff_taker = None
