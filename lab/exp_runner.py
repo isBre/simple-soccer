@@ -9,7 +9,8 @@ in "args" (e.g. {"workers_rule": 2}). Per experiment the runner:
   2. trains; every `fast_every` updates selfplay pauses for a check: an estimated Elo (lab/ladder.py estimate: `elo_pairs` pairs
      of matches against mixed ladder entries, exp/elo_estimates.jsonl), plus the fixed rule-bot matches when `fast_rules` is 1,
   3. stops early: `diverged` (training points vs the rule bots fall under 70% of their start value, for a run that starts at 1
-     point per match or more) or `regressed`
+     point per match or more; a spec with "diverge": false switches it off, e.g. to see whether a new size recovers from a dip)
+     or `regressed`
      (two estimated Elos in a row below the start net's by more than 2 standard errors of the difference),
   4. otherwise runs a FULL evaluation (behaviour, scouting) of the last checkpoint and of the one with the highest estimated Elo,
      keeps the better of the two by estimated Elo as the run's best checkpoint (x_<run>_best) and places it in the Elo ladder.
@@ -320,7 +321,8 @@ def run_experiment(spec_path, viewer=False):
                 stop_reason = "plateau"
             elif bad_checks >= 2:
                 stop_reason = "regressed"
-            elif pts is not None and base_train and base_train >= DIVERGE_MIN and upd >= start_update + 60 and n >= 96 and pts < DIVERGE_FRACTION * base_train:
+            elif spec.get("diverge", True) and pts is not None and base_train and base_train >= DIVERGE_MIN and upd >= start_update + 60 \
+                    and n >= 96 and pts < DIVERGE_FRACTION * base_train:
                 stop_reason = "diverged"
             if stop_reason != "budget":
                 log("%s: %s at update %d (training points %.2f, start %.2f) - stopping" % (name, stop_reason, upd, pts or 0, base_train or 0))
