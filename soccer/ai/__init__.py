@@ -4,6 +4,7 @@ agent decides from its team's public view (view.py, docs/public_view.md): the ba
 the clock, the score, the kickoff and its teammates' calls, never the match engine or another agent's inside. Its answer is an
 Act (agent.py): its buttons and its call. MatchAI is what soccer.match.Match calls on every AI tick: it refreshes the two views,
 lets the due agents decide and hands each one's buttons and call back to the match."""
+from ..match import AI_PERIOD
 from . import nets
 from .lineup import build
 from .view import View
@@ -26,7 +27,7 @@ class MatchAI:
         for t in (0, 1):
             v = views[t]
             for p in m.team_lists[t]:
-                if not p.bot or p.is_human or (m.tick + p.slot) % 2 != 0:
+                if not p.bot or p.is_human or (m.tick + p.slot) % AI_PERIOD != 0:
                     continue
                 if isinstance(p.bot_ai, nets.NetBot):
                     by_net.setdefault(id(p.bot_ai.net), []).append(p)

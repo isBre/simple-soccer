@@ -13,7 +13,7 @@ import threading
 
 import numpy as np
 
-from ..match import INTENTS
+from ..match import DIRS, INTENTS
 from .agent import Act
 
 TEAM_OBS = 46                     # role-free team observation (features_team)
@@ -21,7 +21,6 @@ RANK_OBS = 56                     # features_team + 10 rank numbers (features_ra
 SLOTS_OBS = 76                    # every size, with the teammates' calls (features_slots); the net file says "obs": "slots76"
 SLOTS_NAME = "slots76"
 CALL_OUT = 15                     # outputs of a net that calls: 9 moves, 1 kick, 5 calls (INTENTS order)
-DIRS = [0j, -1j, 1 - 1j, 1 + 0j, 1 + 1j, 1j, -1 + 1j, -1 + 0j, -1 - 1j]
 
 
 # ---------------------------------------------------------------- observations
