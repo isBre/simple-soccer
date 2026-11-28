@@ -1,13 +1,11 @@
 """The physics of a match: Haxball-style discs (ball, players, posts) and wall segments, at one step per tick. Positions and
-velocities are complex numbers (soccer/vec.py). soccer/match.py moves the bodies and calls resolve() for the contacts every
-tick; the constants are public (docs/public_view.md), so anyone may simulate the bodies forward."""
+velocities are complex numbers (vec.py). match.py moves the bodies and calls resolve() for the contacts every
+tick; the constants are public (public.py), so anyone may simulate the bodies forward."""
 import math
 
+from .public import BALL_DAMPING
+
 KIND_BALL, KIND_PLAYER, KIND_STATIC = 1, 2, 4
-BALL_DAMPING = 0.99           # the ball keeps this share of its speed every tick
-PLAYER_DAMPING = 0.96
-PLAYER_ACCEL = 0.1            # px/tick^2 with the stick held (top speed PLAYER_ACCEL * PLAYER_DAMPING / (1 - PLAYER_DAMPING) = 2.4)
-PLAYER_KICK_ACCEL = 0.07      # while holding the kick button
 
 
 class Disc:

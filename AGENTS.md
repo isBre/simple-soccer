@@ -16,7 +16,7 @@ run every command below with it active (`source .venv/bin/activate`) or with `.v
   (`python3 -m elo init` once after cloning; the web app refines in the background).
 - `docs/lab_design.md`: the Lab's look (tokens, components, page layouts); read it before changing a Lab page.
 - `docs/public_view.md`: **what a player may know**. Every agent (rule-based, net, anything new) decides from the same public view
-  (`soccer/ai/view.py`): anonymous bodies, their recent history, clock, score, kickoff, last touch, the pitch and the physics, plus
+  (`soccer/core/view.py`): anonymous bodies, their recent history, clock, score, kickoff, last touch, the pitch and the physics, plus
   anything it computes from that; never the match engine or another team's inside. A new observation or agent is a function of the
   view; `tests/test_view.py` enforces the rule.
 - The match itself (physics, rules, stats, AI) is the Python core `soccer/`; training (`rl/env.py`) and evaluations

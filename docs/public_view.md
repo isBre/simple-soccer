@@ -1,7 +1,7 @@
 # The public view: what a player may know
 
 Every player of a match decides from the same information, whatever drives it: a rule-based bot, a neural net, or any agent
-you write. This page is the specification; `soccer/ai/view.py` implements it and `tests/test_view.py` enforces it.
+you write. This page is the specification; `soccer/core/view.py` implements it and `tests/test_view.py` enforces it.
 
 ## The rule
 
@@ -23,11 +23,11 @@ teammates included. Players talk only through their **calls** (below).
 | History | `ball_at(delay)`, `pos_at(uid, delay)` | the ball and every player `delay` ticks ago, for the last `HIST` = 32 ticks |
 | Clock | `tick`, `time_left`, `duration`, `overtime` | the match clock (60 ticks per second), seconds left, match length, golden-goal overtime on |
 | Score | `scores` | `[team 0, team 1]` |
-| State | `state`, `celebrating()` | playing, or a goal being celebrated (`soccer.match.PLAYING`, `GOAL`) |
+| State | `state`, `celebrating()` | playing, or a goal being celebrated (`soccer.core.public.PLAYING`, `GOAL`) |
 | Kickoff | `kickoff_active`, `kickoff_team`, `kickoff_taker` | a kickoff is on, whose it is, which body takes it |
 | Touches | `last_touch`, `last_touch_tick` | the body that touched the ball last, and when (it could be inferred from the history) |
 | Pitch | `pitch` | its size, goals, walls and obstacles (`soccer.data.Pitch`) |
-| Physics | `soccer.match`: `KICK_STRENGTH`, `KICK_RANGE`, `BALL_DAMPING` (0.99), `PLAYER_DAMPING` (0.96), `PLAYER_ACCEL` (0.1), `PLAYER_KICK_ACCEL` (0.07), `AI_PERIOD` | the rules of motion are public: anyone may simulate the ball and the players forward from the view |
+| Physics | `soccer.core.public`: `KICK_STRENGTH`, `KICK_RANGE`, `BALL_DAMPING` (0.99), `PLAYER_DAMPING` (0.96), `PLAYER_ACCEL` (0.1), `PLAYER_KICK_ACCEL` (0.07), `AI_PERIOD` | the rules of motion are public: anyone may simulate the ball and the players forward from the view |
 | Helpers | `attack_dir(team)`, `deepest(team)` | +1 / -1 (the direction a team attacks), the body nearest a team's own goal line (who seems to guard it) |
 
 Direction: team 0 attacks towards +x, team 1 towards -x. Every Body is the same object for the whole match (updated in place
@@ -37,7 +37,7 @@ each tick), so an agent may remember bodies between ticks.
 
 On its own bodies a team also sees:
 
-- `intent`: what that teammate calls, one of `soccer.match.INTENTS`, and `intent_tick`, since when. A call is cheap talk:
+- `intent`: what that teammate calls, one of `soccer.core.public.INTENTS`, and `intent_tick`, since when. A call is cheap talk:
   nobody has to obey it. Every agent makes one with each decision; it reaches the teammates on the next tick (everyone decides
   from the view as it was at the start of the tick).
 
@@ -61,11 +61,11 @@ An agent controls one player. Every tick it is due (every `AI_PERIOD` = 2 ticks,
 with its team's view and its own body:
 
 ```python
-from soccer.ai.agent import Act
+from soccer.core.act import Act
 
 class MyBot:
     def decide(self, view, me):
-        """Returns an Act: dir (complex, length <= 1, world frame), kick (bool), intent (a call, soccer.match.INTENTS) and
+        """Returns an Act: dir (complex, length <= 1, world frame), kick (bool), intent (a call, soccer.core.public.INTENTS) and
         kind ("pass", "shoot", "clear", "long" or "": only labels the kick for the statistics)."""
         to_ball = view.ball_pos - me.pos
         near = abs(to_ball) < me.radius + view.ball_r + 4.0

@@ -1,13 +1,13 @@
 """The toolkit every rule-based player builds on (soccer/ai/players/): the physics a player can predict (where the ball will be,
 who gets there first), how to run (arrive, chase), how to strike the ball in a direction, how to read shooting and passing
-lanes, and how to guard a goal. Pure functions of the public view (`v`, soccer/ai/view.py) and a body: no state, no agent.
+lanes, and how to guard a goal. Pure functions of the public view (`v`, soccer/core/view.py) and a body: no state, no agent.
 
-The physics is public (soccer.match constants): a kick adds KICK_STRENGTH px/tick along player -> ball to the ball's velocity,
+The physics is public (soccer.core.public constants): a kick adds KICK_STRENGTH px/tick along player -> ball to the ball's velocity,
 the ball keeps BALL_DAMPING of its speed every tick, a player accelerates at PLAYER_ACCEL with damping PLAYER_DAMPING."""
 import math
 
-from ..match import BALL_DAMPING, KICK_RANGE, KICK_STRENGTH
-from ..vec import INF, clamp, cross, dot, from_angle, lerp, normalized, rotated, angle
+from ..core.public import BALL_DAMPING, KICK_RANGE, KICK_STRENGTH
+from ..core.vec import INF, clamp, cross, dot, from_angle, lerp, normalized, rotated, angle
 
 # Written out rather than derived: computed in floats they come out a bit off 2.4 / 24 / 0.01 (tests/test_vec.py checks they agree)
 TOP = 2.4                               # a player's top speed, px/tick: PLAYER_ACCEL * PLAYER_DAMPING / (1 - PLAYER_DAMPING)

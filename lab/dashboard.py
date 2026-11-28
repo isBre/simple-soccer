@@ -204,7 +204,7 @@ def obs_blocks(mod, obs, size, opp_mode):
 def action_heads(outputs):
     """The net's outputs as a table: [{outputs, head, choices, pick, off}]."""
     from soccer.ai.nets import CALL_OUT
-    from soccer.match import DIRS, INTENTS
+    from soccer.core.public import DIRS, INTENTS
     n = len(DIRS)
     heads = [{"outputs": "0–%d" % (n - 1), "head": "Move", "choices": "stand still or one of %d directions (forward = towards the opponent goal)" % (n - 1),
               "pick": "softmax over the %d logits, sampled" % n},
@@ -257,7 +257,7 @@ def training_setup(cfg, st, row):
         net = [mod.OBS_DIMS[obs], hid, hid, 15 if obs == "slots" else 10]          # two hidden layers; the slots net calls
     outputs = net[-1] if net else 10
     size, opp_mode = int(v.get("size") or 5), v.get("opp_mode", "rules")
-    from soccer.match import AI_PERIOD, INTENTS, TICK
+    from soccer.core.public import AI_PERIOD, INTENTS, TICK
     return {"obs": {"name": obs, "inputs": net[0] if net else mod.OBS_DIMS.get(obs), "about": mod.OBS_DESC.get(obs, ""), "size": size,
                     "opp_mode": opp_mode, "hidden": net[1:-1], "blocks": obs_blocks(mod, obs, size, opp_mode), "scale": mod.OBS_SCALE},
             "actions": {"outputs": outputs, "moves": 9, "kick": True, "calls": list(INTENTS) if outputs >= 15 else [], "heads": action_heads(outputs),

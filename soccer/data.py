@@ -1,8 +1,10 @@
-"""Game data for the match core: pitches, kickoff spots (formations.json), players (soccer/players.py) and teams
+"""Game data: pitches (as soccer.core.pitch.Pitch), kickoff spots (formations.json), players (soccer/players.py) and teams
 (soccer/teams.py), read from the JSON files under data/; the web game (game/api.py) shows the same data."""
 import glob
 import json
 import os
+
+from .core.pitch import Pitch
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA = os.path.join(ROOT, "data")
@@ -23,24 +25,6 @@ def local_dir():
 def my_teams_dir():
     """Where the teams built in the game are kept: local/my_teams, or $SOCCER_MY_TEAMS (tests)."""
     return os.environ.get("SOCCER_MY_TEAMS") or os.path.join(local_dir(), "my_teams")
-
-class Pitch:
-    """A pitch (PitchDef): goal line x = half_w, touch line y = half_h, posts, outer walls for players, obstacles, extra walls."""
-    NUM = ("half_w", "half_h", "goal_half", "net_depth", "out_x", "out_y", "center_r", "post_r", "box_depth", "box_half")
-    DEFAULTS = dict(half_w=370.0, half_h=170.0, goal_half=64.0, net_depth=40.0, out_x=420.0, out_y=200.0, center_r=75.0,
-                    post_r=8.0, box_depth=0.0, box_half=0.0)
-
-    def __init__(self, d):
-        self.raw = d
-        self.id = str(d.get("id", "pitch"))
-        self.name = str(d.get("name", self.id))
-        self.sizes = list(d.get("sizes", [3]))
-        for k in self.NUM:
-            setattr(self, k, float(d.get(k, self.DEFAULTS[k])))
-        self.obstacles = [[float(v) for v in o] for o in d.get("obstacles", [])]
-        self.walls = [{"a": complex(w["a"][0], w["a"][1]), "b": complex(w["b"][0], w["b"][1]),
-                       "ball": bool(w.get("ball", True)), "player": bool(w.get("player", False)), "bc": float(w.get("bc", 1.0))}
-                      for w in d.get("walls", [])]
 
 
 _FORMATIONS = None

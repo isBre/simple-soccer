@@ -10,7 +10,7 @@ Page -> server (JSON):
                                            these back to back.
   {"in": [dx, dy, kick], "h": n?}         the keys of person n (default 0: local multiplayer has one per device, in the order of the
                                            setup's "humans"; direction normalised by the page), sent when they change
-  {"switch": 1, "h": n?}                   TEAM control: the teammate nearest the ball; again within 1 s: the next nearest (Match.switch_controlled)
+  {"switch": 1, "h": n?}                   TEAM control: the teammate nearest the ball; again within 1 s: the next nearest (soccer.game.humans People.switch_controlled)
   {"pause": true|false}  {"speed": 1|2|4|8}  {"quit": 1}
 Server -> page:
   {"k": "m", ...}   once: teams (kits, logos), players, pitch, statics
@@ -24,8 +24,9 @@ import random
 import time
 
 from game import api, recorder
-from soccer.control import SINGLE
-from soccer.match import ENDED, GOAL, PLAYING, Match
+from soccer.core.public import ENDED, GOAL, PLAYING
+from soccer.game import new_game
+from soccer.game.humans import SINGLE
 
 TICK = 1.0 / 60.0
 INTRO_TICKS = 130
@@ -33,8 +34,10 @@ PUZZLE_READY = 75                 # ticks the puzzle's random layout is shown be
 PUZZLE_GOAL_TICKS = 100           # a puzzle round ends this long after the first goal (the banner is half shown)
 
 
-def meta(m):
-    cfg, p = m.cfg, m.pitch
+def meta(g):
+    """The match's description for the page (g: soccer.game.Game)."""
+    m, cfg = g.match, g.cfg
+    p = m.pitch
     raw = p.raw
     colors = raw.get("colors", {})
     kits = api.resolve_kits(*cfg.teams)
@@ -44,16 +47,16 @@ def meta(m):
         teams.append({"id": tm.id, "name": tm.name, "short": str(tm.raw.get("short", tm.name[:3].upper())), "kit": kits[t],
                       "pattern": str(tm.raw.get("kit", "solid")), "logo": tm.raw.get("logo", {}), "kinds": tm.kinds()})
     return {"k": "m", "teams": teams, "control": cfg.control, "human_team": cfg.human_team, "duration": cfg.duration,
-            "humans": [{"team": h.team, "mode": h.mode} for h in m.humans],
+            "humans": [{"team": h.team, "mode": h.mode} for h in g.people.humans],
             "ball_r": m.ball.radius,
-            "players": [{"uid": q.uid, "team": q.team, "slot": q.slot, "number": q.slot + 1, "name": q.pdef.name, "player": q.pdef.id,
-                         "kind": q.pdef.kind, "r": q.radius} for t in (0, 1) for q in m.team_lists[t]],
+            "players": [{"uid": q.uid, "team": q.team, "slot": q.slot, "number": q.slot + 1, "name": q.label.name, "player": q.label.id,
+                         "kind": q.label.kind, "r": q.radius} for t in (0, 1) for q in m.team_lists[t]],
             "pitch": {**{k: getattr(p, k) for k in ("half_w", "half_h", "goal_half", "net_depth", "out_x", "out_y", "center_r",
                                                     "box_depth", "box_half", "post_r")},
                       "stripes": int(raw.get("stripes", 0)), "pitch": str(colors.get("pitch", "718c5a")).lstrip("#"),
                       "outer": str(colors.get("outer", "5b7347")).lstrip("#"), "line": str(colors.get("line", "c7e6bd")).lstrip("#"),
                       "statics": [[s.pos.real, s.pos.imag, s.radius] for s in m.statics]},
-            "warnings": list(getattr(m.ai, "warnings", []))}
+            "warnings": list(g.warnings)}
 
 
 class KickoffIntro:
@@ -76,7 +79,9 @@ def _uid(p):
     return p.uid if p is not None else -1
 
 
-def frame(m, intro, events, clock=0):
+def frame(g, intro, events, clock=0):
+    """One frame for the page (g: soccer.game.Game)."""
+    m, ppl = g.match, g.people
     pos, flags = [], []
     for t in (0, 1):
         for q in m.team_lists[t]:
@@ -84,9 +89,9 @@ def frame(m, intro, events, clock=0):
             flags.append((1 if q.is_human else 0) | (2 if q.input_kick else 0) | (4 if q.kick_used else 0))
     return {"k": "f", "t": m.tick, "st": m.state, "sc": list(m.scores), "tl": m.time_left, "ot": bool(m.overtime), "ots": round(m.ot_time, 2),
             "ko": bool(m.kickoff_active), "kt": m.kickoff_team, "gt": m.goal_team, "gs": _uid(m.goal_scorer), "gp": m.goal_pause,
-            "gtm": m.goal_timer, "w": m.winner, "cu": _uid(m.controlled),
-            "nx": _uid(m.next_switch(clock)), "nw": m.in_switch_window(clock),
-            "hu": [[_uid(h.controlled), _uid(m.next_switch(clock, h)), m.in_switch_window(clock, h)] for h in m.humans],
+            "gtm": m.goal_timer, "w": m.winner, "cu": _uid(ppl.controlled),
+            "nx": _uid(ppl.next_switch(clock)), "nw": ppl.in_switch_window(clock),
+            "hu": [[_uid(h.controlled), _uid(ppl.next_switch(clock, h)), ppl.in_switch_window(clock, h)] for h in ppl.humans],
             "in": intro, "b": [round(m.ball.pos.real, 2), round(m.ball.pos.imag, 2)], "p": pos, "h": flags, "ev": events}
 
 
@@ -112,26 +117,27 @@ def _run(ws, rec):
             return
         first = next((x for x in msgs if isinstance(x, dict) and "setup" in x), None)
     try:
-        m = Match(api.config(first["setup"]))
+        g = new_game(api.config(first["setup"]))
+        m, ppl = g.match, g.people
         puzzle = first.get("puzzle") is not None
         if puzzle:
             m.puzzle_layout(int(first["puzzle"]))
-            if first["setup"].get("player") == "random" and m.cfg.control == SINGLE:
-                m.set_controlled(random.Random(int(first["puzzle"])).choice(m.team_lists[m.cfg.human_team]))
+            if first["setup"].get("player") == "random" and g.cfg.control == SINGLE:
+                ppl.set_controlled(random.Random(int(first["puzzle"])).choice(m.team_lists[g.cfg.human_team]))
     except Exception as e:                                  # bad setup: tell the page
         ws.send({"k": "e", "error": "%s: %s" % (type(e).__name__, e)})
         ws.close()
         return
-    if recorder.wanted(first["setup"], m):
-        rec.append(recorder.Recorder(m, {**first["setup"], "puzzle": first.get("puzzle")}, min_rows=30 if puzzle else recorder.MIN_ROWS))
-    ws.send({**meta(m), "rec": bool(rec)})
+    if recorder.wanted(first["setup"], g):
+        rec.append(recorder.Recorder(g, {**first["setup"], "puzzle": first.get("puzzle")}, min_rows=30 if puzzle else recorder.MIN_ROWS))
+    ws.send({**meta(g), "rec": bool(rec)})
     paused, speed, clock = False, 1, 0                      # clock: frames played (the Q window)
-    keys = [(0j, False) for _ in m.humans]                  # every person's keys (local multiplayer: one per device)
+    keys = [(0j, False) for _ in ppl.humans]                # every person's keys (local multiplayer: one per device)
     switch = set()                                          # who pressed Q since the last frame
     intro, result_sent = KickoffIntro(PUZZLE_READY if puzzle else 0), False
     goal_end = None
     next_t = time.monotonic()
-    ws.send(frame(m, intro.left, []))
+    ws.send(frame(g, intro.left, []))
     while True:
         msgs = ws.poll(next_t - time.monotonic())
         if msgs is None:
@@ -166,12 +172,12 @@ def _run(ws, rec):
         clock += 1
         held = intro.hold(m)
         for k in sorted(switch):                            # at once, also during the kickoff intro (picks the kickoff taker)
-            m.set_human_input(*keys[k], k)
-            m.switch_controlled(clock, k)
+            ppl.press(*keys[k], k)
+            ppl.switch_controlled(clock, k)
         switch.clear()
         if not held:
             for k, ks in enumerate(keys):
-                m.set_human_input(*ks, k)
+                ppl.press(*ks, k)
             n_ev = len(m.events)
             for _ in range(speed):
                 if m.state == ENDED:
@@ -182,11 +188,11 @@ def _run(ws, rec):
                 if puzzle and goal_end is None and m.state == GOAL:
                     goal_end = m.tick + PUZZLE_GOAL_TICKS
             events = m.events[n_ev:]
-        ws.send(frame(m, intro.left, events, clock))
+        ws.send(frame(g, intro.left, events, clock))
         if (m.state == ENDED or goal_end is not None and m.tick >= goal_end) and not result_sent:
             result = m.make_result()
-            if m.humans:
-                result["humans"] = [{"team": h.team, "mode": h.mode, "played": list(h.played)} for h in m.humans]
+            if ppl.humans:
+                result["humans"] = [{"team": h.team, "mode": h.mode, "played": list(h.played)} for h in ppl.humans]
             if puzzle:
                 result["puzzle"] = {"end": "goal" if goal_end is not None else "time", "seconds": round(m.elapsed(), 2)}
             if rec:

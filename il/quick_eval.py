@@ -23,7 +23,8 @@ def play(job):
     temp = me.get("temperature", 1.0)
     from elo.play import _team
     from soccer.data import database
-    from soccer.match import AI_PERIOD, ENDED, Match, MatchConfig
+    from soccer.core.public import AI_PERIOD, ENDED
+    from soccer.game import MatchConfig, new_match
     from soccer.players import PlayerDef
     from soccer.teams import Team
     db = database()
@@ -34,10 +35,10 @@ def play(job):
     c.team_size = 5
     c.duration = ladder.DURATION
     c.match_seed = seed
-    m = Match(c)
+    m = new_match(c)
     for p in m.team_lists[my_side]:             # the model's own temperature (0 = always the most likely move); the opponent keeps 1
-        if hasattr(p.bot_ai, "temperature"):
-            p.bot_ai.temperature = temp
+        if hasattr(p.brain, "temperature"):
+            p.brain.temperature = temp
     st = {"n": 0, "chg": 0, "idle": 0, "rise": 0}
     prev, prevk = {}, {}
     while m.state != ENDED and m.tick < ladder.MAX_TICKS:

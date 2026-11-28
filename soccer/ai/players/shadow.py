@@ -2,7 +2,7 @@
 stays goal-side of that player; a pass towards that player it reads early and steps in front to cut it out. On the ball it keeps things simple:
 the safest pass, else a clearance."""
 from .. import kit
-from ..agent import Act
+from ...core.act import Act
 from .base import RuleAgent
 
 

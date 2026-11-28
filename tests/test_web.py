@@ -36,7 +36,7 @@ import urllib.request
 
 from game import api, session
 from lab import live as lab_live
-from soccer.match import Match, make_config
+from soccer.game import make_config, new_game
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -149,8 +149,8 @@ def main():
         run = next((r["name"] for r in runs["data"] if r.get("net")), runs["data"][0]["name"])
         su = json.loads(get(port, "/api/run/" + run)[1]).get("setup") or {}
         rewards = {r["k"]: r for r in su.get("rewards", [])}
-        m = Match(make_config(lab_live.OUR_TEAM, "ember", "arena", 5, 90.0, 1))
-        lm, gm = lab_live.live_meta(m, "x_test", "x_test_u100", {"team": "ember", "model": None, "label": "Ember"}, "match"), session.meta(m)
+        g = new_game(make_config(lab_live.OUR_TEAM, "ember", "arena", 5, 90.0, 1))
+        lm, gm = lab_live.live_meta(g, "x_test", "x_test_u100", {"team": "ember", "model": None, "label": "Ember"}, "match"), session.meta(g)
         results.append(check("lab", su.get("obs", {}).get("about") and su.get("actions", {}).get("moves") == 9 and "goals" in rewards
                              and su["obs"].get("blocks") and len(su["actions"].get("heads", [])) == 3 and su.get("reward_groups")
                              and all(t.get("group") for t in su.get("training", []))

@@ -17,7 +17,7 @@ import os
 import numpy as np
 
 from il import human_data
-from soccer.match import AI_PERIOD, DIRS
+from soccer.core.public import AI_PERIOD, DIRS
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 

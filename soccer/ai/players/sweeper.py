@@ -1,8 +1,8 @@
 """Sweeper: the last man. It stays deepest, calls "cover" and guards our goal (reads shots and runs onto their path, comes out
 to narrow the angle), sweeps up balls played in behind the defence, and clears long, preferably to a teammate calling "run"."""
-from ...vec import clamp
+from ...core.vec import clamp
 from .. import kit
-from ..agent import Act
+from ...core.act import Act
 from .base import RuleAgent
 
 

@@ -30,7 +30,8 @@ def _team(spec, db, PlayerDef, Team):
 def play_pair(job):
     """job = (spec_a, spec_b, size, seed): both legs, two result dicts (a is always the first entry)."""
     from soccer.data import database
-    from soccer.match import ENDED, Match, MatchConfig
+    from soccer.core.public import ENDED
+    from soccer.game import MatchConfig, new_match
     from soccer.players import PlayerDef
     from soccer.teams import Team
     sa, sb, size, seed = job
@@ -44,7 +45,7 @@ def play_pair(job):
         c.team_size = size
         c.duration = DURATION
         c.match_seed = seed
-        m = Match(c)
+        m = new_match(c)
         while m.state != ENDED and m.tick < MAX_TICKS:
             m.step()
         g = {home["id"]: m.scores[0], away["id"]: m.scores[1]}

@@ -1,32 +1,23 @@
-"""The match: a deterministic (seeded) Haxball-style simulation at a fixed 60 Hz. Match rules, kickoffs, touches, stats, the
-result; the bodies and their contacts are soccer/physics.py, the people at the controls soccer/control.py. It began as a
-port of the old Godot game, and tests/test_match.py guards it against stored matches. Positions and velocities are complex
-numbers: x = .real, y = .imag.
+"""The match: a deterministic (seeded) Haxball-style simulation at a fixed 60 Hz: the rules, kickoffs, touches and stats, the
+result. The bodies and their contacts are physics.py. Positions and velocities are complex numbers: x = .real, y = .imag.
 
-The AI is plugged in as `match.ai` (soccer.ai.MatchAI by default): every AI tick it lets the bots that are due decide and sets
-their inputs."""
+Every player is a seat, and a brain plugged in from outside decides for it: a rule-based bot, a net, a person, or nothing (the
+seat is driven with act(), e.g. by the RL trainer). The match owns the timing: it asks a person every tick and a bot every
+AI_PERIOD ticks (staggered by slot), always with its team's public View, and applies the Act it returns. A brain is any object
+with decide(view, me) -> Act; it may declare `person = True` (the rules involving people apply to it) and a shared `batch`
+object, in which case batch.decide_batch(views, [(brain, me), ...]) decides all of that batch's due seats of the tick at once."""
 import math
 
 from . import rating
-from .control import NONE, SINGLE, SWITCH_WINDOW, TEAM, Human, HumanControl, check_humans, config_humans  # noqa: F401 (older imports)
-from .data import database, res_path  # noqa: F401 (res_path: older imports from soccer.match)
-from .physics import (BALL_DAMPING, KIND_BALL, KIND_PLAYER, KIND_STATIC, PLAYER_ACCEL, PLAYER_DAMPING, PLAYER_KICK_ACCEL, Disc,
-                      prepare_walls, resolve)
+from .physics import KIND_BALL, KIND_PLAYER, KIND_STATIC, Disc, prepare_walls, resolve
+from .public import (AI_PERIOD, BALL_DAMPING, ENDED, GOAL, HIST, INTENTS, KICK_RANGE, KICK_STRENGTH, PLAYER_ACCEL, PLAYER_DAMPING,
+                     PLAYER_KICK_ACCEL, PLAYING, TICK)
 from .rng import RandomNumberGenerator
 from .stats import MatchStats, snapped
 from .vec import clamp, dot, limit_length, normalized, roundi
+from .view import View
 
-TICK = 1.0 / 60.0
-KICK_STRENGTH = 5.0
-KICK_RANGE = 4.0
 GOAL_PAUSE = 210
-AI_PERIOD = 2
-HIST = 32
-PLAYING, GOAL, ENDED = 0, 1, 2
-# What a player can call to its teammates (the only way players talk; the opponents do not hear it): docs/public_view.md
-INTENTS = ("none", "ball", "open", "run", "cover")
-# discrete actions of the RL trainer: move index -> direction in the player's own frame (+x towards the opponent goal)
-DIRS = [0j, -1j, 1 - 1j, 1 + 0j, 1 + 1j, 1j, -1 + 1j, -1 + 0j, -1 - 1j]
 
 
 # The engine's own from_angle / rotated (math.cos / math.sin): vec.py's versions (cmath.rect, used by the AI) differ from these in
@@ -41,7 +32,7 @@ def rotated(z: complex, a: float) -> complex:
 
 
 class Player(Disc):
-    """A player disc. The AI adds its own fields (soccer.ai) on top."""
+    """A seat: a player disc, its line-up spot, the brain that decides for it (None: driven with Match.act) and what it does."""
 
     def __init__(self):
         super().__init__(radius=15.0, inv_mass=0.5, damping=PLAYER_DAMPING, b_coef=0.5, kind=KIND_PLAYER)
@@ -49,11 +40,10 @@ class Player(Disc):
         self.slot = 0
         self.uid = 0                 # team * 16 + slot
         self.line = "MID"            # line of the kickoff spot (GK / DEF / MID / FWD), the same for every team; read only by the AI
-        self.pdef = None             # players.PlayerDef: who this is (name, kind, style, skill)
-        self.is_human = False
-        self.human = None            # the Human controlling this player (None: nobody)
-        self.bot = True              # decided by the AI; False = a human or an external controller (RL training)
-        self.ai_seed = 0
+        self.label = None            # who this is, for the result (any object with .id, .name, .kind: soccer.game puts the PlayerDef)
+        self.brain = None            # what decides for this seat (None: driven with Match.act)
+        self.is_human = False        # its brain is a person (public: the rules involving people use it)
+        self.brain_seed = 0          # a random seed drawn by the match for this seat's brain
         self.ps = None
         self.home = 0j               # formation spot in the attack frame (-1 own goal line .. +1 opponent goal line)
         self.spawn = 0j              # kickoff position (world)
@@ -69,45 +59,28 @@ class Player(Disc):
         self.kick_accel = PLAYER_KICK_ACCEL
 
 
-class MatchConfig:
-    """Everything needed to set up one match."""
+class MatchSetup:
+    """What the core needs to set up a match: the pitch, the clock and the rules, the seed, and per team its slots
+    [(label, line, fx, fy), ...] (a line-up: soccer.game builds it from a team) and an id for the result."""
 
-    def __init__(self):
-        self.pitch = None
-        self.teams = [None, None]           # teams.Team; [0] attacks right (left side), [1] attacks left
-        self.team_size = 3
-        self.duration = 180.0
-        self.score_limit = 0
-        self.allow_draw = True              # False: a draw goes to golden-goal overtime (no time limit, no shootout)
-        self.match_seed = 1
-        self.control = NONE
-        self.human_team = 0
-        self.auto_switch = False
-        self.human_slot = -1                # SINGLE control: the line-up slot the human plays (-1 = auto: the most advanced spot)
-        self.humans = []                    # local multiplayer: [{"team", "mode", "slot", "auto_switch"}], one per person; when empty,
-                                            # control / human_team / human_slot / auto_switch describe the one human (or nobody)
-        self.nets = [None, None]            # {"model": path} | {"dict": model} | None: one net for the whole team instead of its line-up
-        self.net_temperature = 1.0
+    def __init__(self, pitch, slots, team_ids=("", ""), duration=180.0, score_limit=0, allow_draw=True, seed=1):
+        self.pitch = pitch
+        self.slots = [list(slots[0]), list(slots[1])]
+        self.team_ids = list(team_ids)
+        self.duration = duration
+        self.score_limit = score_limit
+        self.allow_draw = allow_draw              # False: a draw goes to golden-goal overtime (no time limit, no shootout)
+        self.seed = seed
 
 
-def make_config(team_a, team_b, pitch_id="arena", size=5, duration=180.0, seed=1, db=None) -> MatchConfig:
-    """Database.make_config: a match between two teams of data/teams."""
-    db = db or database()
-    c = MatchConfig()
-    c.pitch = db.pitches.get(pitch_id) or next(iter(db.pitches.values()))
-    c.teams = [db.teams[team_a], db.teams[team_b]]
-    c.team_size = size
-    c.duration = duration
-    c.match_seed = seed
-    return c
-
-
-class Match(HumanControl):
-    def __init__(self, cfg: MatchConfig, ai=True):
-        self.cfg = cfg
-        self.pitch = cfg.pitch
+class Match:
+    def __init__(self, setup: MatchSetup, seating=None):
+        """seating(match) -> {uid: brain}, called once the seats exist (their brain_seed drawn); seats it leaves out stay
+        empty (driven with act())."""
+        self.setup = setup
+        self.pitch = setup.pitch
         self.rng = RandomNumberGenerator()
-        self.rng.seed = cfg.match_seed
+        self.rng.seed = setup.seed
         self.ball = None
         self.statics = []
         self.movers = []
@@ -120,7 +93,7 @@ class Match(HumanControl):
         self._wall_cache = {}               # id(segs) -> (segs, physics.prepare_walls(segs))
         self.scores = [0, 0]
         self.tick = 0
-        self.time_left = cfg.duration
+        self.time_left = setup.duration
         self.overtime = False               # golden goal: the first goal ends the match
         self.ot_time = 0.0                  # seconds of overtime played
         self.state = PLAYING
@@ -161,24 +134,23 @@ class Match(HumanControl):
         self.team_touch_player = [None, None]
         self.team_touch_tick = [-999, -999]
         self.ball_hist = [0j] * HIST
-        self.pos_hist = [{} for _ in range(HIST)]   # every player's position in the last HIST ticks (public: soccer/ai/view.py)
+        self.pos_hist = [{} for _ in range(HIST)]   # every player's position in the last HIST ticks (public: soccer/core/view.py)
         self.hist_idx = 0
         self.stats = MatchStats()
         self.events = []
         self.log_events = False
         self.ev_log = []
-        self.humans = config_humans(cfg)
-        check_humans(self.humans, cfg.team_size)
+        self.people = []                    # the person brains, in the order they were first seated (the kickoff rule uses it)
+        self._seat_of = {}                  # id(person) -> uid of the seat it is in now
+        self.tick_hooks = []                # f(match) called every tick after the goal celebration, before the kicks (seat policies)
         self._build_stadium()
         self._build_players()
         self._reset_positions()
-        if self.humans:
-            self._pick_initial_controlled()
-            self._setup_kickoff_taker()
-        self.ai = None
-        if ai:
-            from .ai import MatchAI
-            self.ai = MatchAI(self)
+        for uid, brain in (seating(self) if seating is not None else {}).items():
+            self.seat(uid, brain)
+        if self.people:
+            self._setup_kickoff_taker()             # people seated at the start take part in the first kickoff
+        self.views = [View(self, 0), View(self, 1)]
 
     # ------------------------------------------------------------ setup
 
@@ -201,7 +173,7 @@ class Match(HumanControl):
 
     @property
     def duration(self):
-        return self.cfg.duration
+        return self.setup.duration
 
     def _static_disc(self, p, r):
         return Disc(p, r, 0.0, 1.0, 0.5, KIND_STATIC)
@@ -239,17 +211,15 @@ class Match(HumanControl):
             self._add_seg(w["ball"], w["player"], w["a"], w["b"], w["bc"])
 
     def _build_players(self):
-        cfg = self.cfg
         self.movers.append(self.ball)
         for t in (0, 1):
-            team = cfg.teams[t]
             ax = self.attack_dir(t)
-            for i, (pdef, line, fx, fy) in enumerate(team.lineup(cfg.team_size)):
+            for i, (label, line, fx, fy) in enumerate(self.setup.slots[t]):
                 p = Player()
                 p.team = t
                 p.slot = i
                 p.uid = t * 16 + i
-                p.pdef = pdef
+                p.label = label
                 p.line = line
                 p.home = complex(fx, fy)
                 sp = complex(ax * fx * self.pitch.half_w, fy * self.pitch.half_h)
@@ -258,7 +228,7 @@ class Match(HumanControl):
                     sp = normalized(sp) * minr if abs(sp) > 0.01 else complex(-ax * minr, 0.0)
                 p.spawn = sp
                 p.ps = self.stats.get_player(p.uid)
-                p.ai_seed = self.rng.randi()
+                p.brain_seed = self.rng.randi()
                 self.players.append(p)
                 self.movers.append(p)
                 self.team_lists[t].append(p)
@@ -288,8 +258,8 @@ class Match(HumanControl):
 
     def _setup_kickoff_taker(self):
         """Random taker (any player), placed right behind the ball so the kickoff is immediate. The kick direction is random
-        inside a forward cone and the taker waits a few ticks, so bot-vs-bot kickoffs differ every time. A human-controlled
-        player on the kickoff team always takes it himself."""
+        inside a forward cone and the taker waits a few ticks, so bot-vs-bot kickoffs differ every time. A seat a person drives
+        on the kickoff team always takes it (the first person seated, if several)."""
         self.kickoff_taker = None
         lst = self.team_lists[self.kickoff_team]
         if not lst:
@@ -298,9 +268,9 @@ class Match(HumanControl):
             m.pos = m.spawn
         ax = self.attack_dir(self.kickoff_team)
         forced = None
-        for h in self.humans:                      # the first human of the kickoff team takes it
-            if h.team == self.kickoff_team and h.controlled is not None and h.controlled.team == h.team:
-                forced = h.controlled
+        for p in self.people_seats():                 # the first person of the kickoff team takes it
+            if p.team == self.kickoff_team:
+                forced = p
                 break
         taker = forced if forced is not None else lst[self.rng.randi() % len(lst)]
         ang = 0.0 if forced is not None else clamp(self.rng.randfn(0.0, 0.55), -0.95, 0.95)
@@ -309,24 +279,98 @@ class Match(HumanControl):
         self.kickoff_taker = taker
         self.kickoff_go = self.tick + self.rng.randi_range(6, 28)
 
-    # ------------------------------------------------------------ human control (the rest: soccer/control.py)
+    # ------------------------------------------------------------ seats
 
-    def _human_kickoff_wait(self, h) -> bool:
-        """Human h's kickoff, not taken yet, with h's player as the taker."""
-        return self.state == PLAYING and self.kickoff_active and self.kickoff_team == h.team \
-            and h.controlled is not None and self.kickoff_taker is h.controlled
+    def seat(self, uid, brain):
+        """Puts `brain` in seat `uid` (None: empty, driven with act()). A person leaving a seat leaves no buttons held; a person
+        taking one calls nothing yet."""
+        p = self.by_uid[uid]
+        prev = p.brain
+        if prev is brain:
+            return
+        if p.is_human:
+            p.input_dir = 0j
+            p.input_kick = False
+            del self._seat_of[id(prev)]
+        p.brain = brain
+        p.is_human = bool(getattr(brain, "person", False))
+        if p.is_human:
+            if brain not in self.people:
+                self.people.append(brain)
+            self._seat_of[id(brain)] = uid
+            p.intent, p.intent_tick = "none", self.tick
+
+    def switch(self, person, uid, back):
+        """A person moves to seat `uid` (TEAM control) and `back` takes the seat it leaves. A kick held through the switch needs a
+        fresh press; during the person's own kickoff wait the new seat becomes the taker (the old one back to its kickoff spot)."""
+        old = self.seat_of(person)
+        p = self.by_uid[uid]
+        own_kickoff = self.awaits_kickoff(old.uid)
+        self.seat(old.uid, back)
+        self.seat(uid, person)
+        if getattr(person, "kick", False):
+            p.kick_used = True
+        if own_kickoff:
+            old.pos, p.pos = old.spawn, -self.kickoff_dir * (p.radius + self.ball.radius + 2.0)
+            old.vel = p.vel = 0j
+            self.kickoff_taker = p
+
+    def seat_of(self, person):
+        """The seat a person is in now (None: not seated)."""
+        uid = self._seat_of.get(id(person))
+        return None if uid is None else self.by_uid[uid]
+
+    def people_seats(self):
+        """The seats people drive, in the order the people were first seated."""
+        return [self.by_uid[self._seat_of[id(b)]] for b in self.people if id(b) in self._seat_of]
+
+    def awaits_kickoff(self, uid) -> bool:
+        """Seat `uid` is its team's kickoff taker and the kickoff is not taken yet."""
+        p = self.by_uid[uid]
+        return self.state == PLAYING and self.kickoff_active and self.kickoff_team == p.team and self.kickoff_taker is p
+
+    def act(self, uid, a):
+        """Applies Act `a` to an empty seat (one driven from outside, e.g. by the RL trainer)."""
+        p = self.by_uid[uid]
+        if p.brain is not None:
+            raise ValueError("seat %d has a brain: it decides itself" % uid)
+        self._apply(p, a)
+
+    def _apply(self, p, a):
+        p.input_dir, p.input_kick, p.kick_intent = a.dir, a.kick, a.kind
+        intent = a.intent if a.intent in INTENTS else "none"
+        if intent != p.intent:
+            p.intent, p.intent_tick = intent, self.tick
+
+    def _decide(self):
+        """The bots that are due decide, each from its team's view as it was at the start of the tick (nobody hears a call made in
+        the same tick); brains sharing a batch decide together after the others, in the order they first came up."""
+        views = [v.refresh(self) for v in self.views]
+        batches = {}
+        for t in (0, 1):
+            v = views[t]
+            for p in self.team_lists[t]:
+                b = p.brain
+                if b is None or p.is_human or (self.tick + p.slot) % AI_PERIOD != 0:
+                    continue
+                key = getattr(b, "batch", None)
+                if key is not None:
+                    batches.setdefault(id(key), (key, []))[1].append(p)
+                else:
+                    self._apply(p, b.decide(v, v.bodies[p.uid]))
+        for key, group in batches.values():
+            group.sort(key=lambda p: p.team)
+            acts = key.decide_batch(views, [(p.brain, views[p.team].bodies[p.uid]) for p in group])
+            for p, a in zip(group, acts):
+                self._apply(p, a)
 
     # ------------------------------------------------------------ simulation
 
     def ball_at(self, delay: int) -> complex:
         return self.ball_hist[(self.hist_idx - 1 - delay + HIST * 2) % HIST]
 
-    def over(self) -> bool:
-        """The match has ended."""
-        return self.state == ENDED
-
     def elapsed(self) -> float:
-        t = self.cfg.duration - self.time_left
+        t = self.setup.duration - self.time_left
         return t + self.ot_time
 
     def step(self):
@@ -336,20 +380,20 @@ class Match(HumanControl):
         update = self.tick % AI_PERIOD == 0
         due = False
         for p in self.players:
-            if p.is_human:
-                p.input_dir = p.human.dir
-                p.input_kick = p.human.kick
-            elif p.bot and (self.tick + p.slot) % AI_PERIOD == 0:
+            if p.is_human:                          # a person every tick: the buttons held now
+                v = self.views[p.team]
+                a = p.brain.decide(v, v.bodies[p.uid])
+                p.input_dir = a.dir
+                p.input_kick = a.kick
+            elif p.brain is not None and (self.tick + p.slot) % AI_PERIOD == 0:
                 due = True
-        if self.ai is not None and (update or due):
-            self.ai.decide(self, update)          # team plans every AI_PERIOD ticks, then the bots that are due
+        if update or due:
+            self._decide()
 
         if self.state == GOAL:
             self._celebrate()
-        if self.tick % 20 == 0:
-            for h in self.humans:
-                if h.auto_switch and h.mode == TEAM:
-                    self._auto_switch(h)
+        for f in self.tick_hooks:
+            f(self)
 
         for p in self.players:
             self._handle_kick(p)
@@ -660,7 +704,7 @@ class Match(HumanControl):
                     self.time_left -= TICK
                     if self.time_left <= 0.0:
                         self.time_left = 0.0
-                        if self.scores[0] != self.scores[1] or self.cfg.allow_draw:
+                        if self.scores[0] != self.scores[1] or self.setup.allow_draw:
                             self._end_match()
                         else:
                             self.overtime = True          # golden goal: play on until someone scores
@@ -669,7 +713,7 @@ class Match(HumanControl):
         elif self.state == GOAL:
             self.goal_timer -= 1
             if self.goal_timer <= 0:
-                limit_hit = self.cfg.score_limit > 0 and (self.scores[0] >= self.cfg.score_limit or self.scores[1] >= self.cfg.score_limit)
+                limit_hit = self.setup.score_limit > 0 and (self.scores[0] >= self.setup.score_limit or self.scores[1] >= self.setup.score_limit)
                 if limit_hit or self.overtime:
                     self._end_match()
                 else:
@@ -713,13 +757,13 @@ class Match(HumanControl):
               "ball_speed": abs(self.ball.vel)}
         if scorer is not None:
             ev["scorer"] = scorer.uid
-            ev["scorer_name"] = scorer.pdef.name
+            ev["scorer_name"] = scorer.label.name
             if scorer.team == team:
                 scorer.ps.goals += 1
                 ac = self.assist_cand
                 if ac is not None and ac is not scorer and ac.team == team and tick - self.assist_tick < 420:
                     ev["assist"] = ac.uid
-                    ev["assist_name"] = ac.pdef.name
+                    ev["assist_name"] = ac.label.name
                     ac.ps.assists += 1
             else:
                 ev["own"] = True
@@ -749,7 +793,7 @@ class Match(HumanControl):
         plist = []
         for p in self.players:
             d = p.ps.to_dict()
-            d.update({"uid": p.uid, "id": p.pdef.id, "name": p.pdef.name, "kind": p.pdef.kind, "team": p.team, "slot": p.slot})
+            d.update({"uid": p.uid, "id": p.label.id, "name": p.label.name, "kind": p.label.kind, "team": p.team, "slot": p.slot})
             plist.append(d)
         tstats = []
         total_poss = self.stats.possession_ticks[0] + self.stats.possession_ticks[1]
@@ -769,9 +813,9 @@ class Match(HumanControl):
                 ts["touches"] += ps.touches
             ts["possession"] = 50.0 if total_poss == 0 else 100.0 * self.stats.possession_ticks[t] / total_poss
             tstats.append(ts)
-        return {"teams": [self.cfg.teams[0].id, self.cfg.teams[1].id], "scores": [self.scores[0], self.scores[1]],
+        return {"teams": list(self.setup.team_ids), "scores": [self.scores[0], self.scores[1]],
                 "winner": self.winner, "overtime": self.overtime, "overtime_s": round(self.ot_time, 1), "events": self.events,
-                "players": plist, "team_stats": tstats, "duration": self.cfg.duration,
+                "players": plist, "team_stats": tstats, "duration": self.setup.duration,
                 "ticks": self.tick, "kickoff_waits": list(self.kickoff_waits), "zones": list(self.zone_ticks),
                 "idle": self.idle_ticks}
 
@@ -796,19 +840,3 @@ class Match(HumanControl):
             p.pos = pos
             p.vel = 0j
             placed.append(pos)
-
-    # ------------------------------------------------------------ RL interface
-
-    def set_intent(self, p, intent: str):
-        """What player p calls to its teammates (INTENTS; anything else is "none"); intent_tick is when it last changed."""
-        if intent not in INTENTS:
-            intent = "none"
-        if intent != p.intent:
-            p.intent, p.intent_tick = intent, self.tick
-
-    def set_action(self, p, move_idx: int, kick: bool):
-        """Discrete action of the trainer: move_idx 0..8 (DIRS, in the player's own frame) plus kick."""
-        d = DIRS[move_idx]
-        d = complex(d.real * self.attack_dir(p.team), d.imag)
-        p.input_dir = normalized(d)
-        p.input_kick = kick

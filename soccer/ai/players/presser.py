@@ -1,9 +1,9 @@
 """Presser: pressure everywhere. Without the ball it goes at the opponent on it when nobody else does ("ball"), otherwise at the
 opponent most likely to receive next, standing in the passing lane between the carrier and that player. On the ball it plays forward
 fast: a shot if there is one, else the first forward pass, else it drives on."""
-from ...vec import lerp
+from ...core.vec import lerp
 from .. import kit
-from ..agent import Act
+from ...core.act import Act
 from .base import RuleAgent
 
 

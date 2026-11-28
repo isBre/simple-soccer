@@ -70,7 +70,7 @@ New folder `il/` (imitation learning), used by both pipelines:
 - `il/offline.py`: offline metrics on the held-out matches: move accuracy, top-2 accuracy, log loss, kick F1, each split by situation
   (on ball / off ball, attacking / defending). Reference baselines: "always run at the ball", and how often the rule bots and the best
   RL net would have made the user's move.
-- Runtime: a team in a match is driven by a "bot" per player (`p.bot_ai`). DL models export to the existing net JSON format, so
+- Runtime: a team in a match is driven by a brain per seat (`p.brain`, soccer/core/match.py). DL models export to the existing net JSON format, so
   `NetBot` plays them with no new code. ML models need a small `ModelBot` in `soccer/ai/` (loads the saved model, batches the 5
   players per call like `NetBot`, samples or takes the most likely move).
 - **No fixed roles, also here** (user, 2026-11-19): the model drives all 5 players, keeper slot included, like the RL nets. Roles must

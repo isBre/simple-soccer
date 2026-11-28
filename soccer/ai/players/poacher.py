@@ -1,8 +1,8 @@
 """Poacher: lives on the shoulder of the last defender and finishes. It runs in behind (calls "run"), shoots at the first
 chance, lays the ball off when it cannot, and leaves the defending to the others (it never guards the goal)."""
-from ...vec import clamp
+from ...core.vec import clamp
 from .. import kit
-from ..agent import Act
+from ...core.act import Act
 from .base import RuleAgent
 
 

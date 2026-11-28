@@ -22,7 +22,8 @@ import time
 
 from game import session
 from soccer.data import database, res_path
-from soccer.match import ENDED, Match, make_config
+from soccer.core.public import ENDED
+from soccer.game import make_config, new_game
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -87,16 +88,16 @@ def opponent(rng):
     return {"team": NET_TEAM, "model": model, "label": sel.get("label", "RL Team 4")}
 
 
-def live_meta(m, tag, playing, opp, mode):
+def live_meta(g, tag, playing, opp, mode):
     """The Game's match meta plus who plays: our side is the run's newest checkpoint, the other side the opponent; `elo` = the rating
     entries the page looks the two sides up by (an id, else the net file)."""
-    d = session.meta(m)
+    d = session.meta(g)
     run = tag[2:] if tag.startswith("x_") else tag
     d["teams"][0].update(name="%s · %s" % (run, playing.rsplit("_", 1)[-1]), short="RUN")
     if opp["model"]:
         d["teams"][1].update(name=opp["label"], short="NET")
     stem = lambda path: os.path.basename(path)[:-5] if path else ""
-    d.update(id=m.cfg.match_seed, tag=tag, playing=playing, opponent=opp["label"], mode=mode, upd=last_update(tag),
+    d.update(id=g.cfg.match_seed, tag=tag, playing=playing, opponent=opp["label"], mode=mode, upd=last_update(tag),
              elo=[{"id": "net:" + playing, "model": ""},
                   {"id": "net:" + stem(opp["model"]) if opp["model"] else "team:" + opp["team"], "model": opp["model"] or ""}])
     return d
@@ -113,10 +114,11 @@ def play(tag, start, rng, sock):
         cfg.nets[0] = {"dict": json.load(f)}           # loaded per match (not cached): a new checkpoint every few minutes
     if opp["model"]:
         cfg.nets[1] = {"model": os.path.join(ROOT, opp["model"])}
-    m = Match(cfg)
+    g = new_game(cfg)
+    m = g.match
     if mode == "puzzle":
         m.puzzle_layout(rng.randrange(1 << 31))
-    head = json.dumps(live_meta(m, tag, os.path.basename(ckpt)[:-5], opp, mode)).encode()
+    head = json.dumps(live_meta(g, tag, os.path.basename(ckpt)[:-5], opp, mode)).encode()
 
     def send(d):
         try:
@@ -135,7 +137,7 @@ def play(tag, start, rng, sock):
             send(head)
             if read_text("live_mode.json") + read_text("live_opponent.json") != choices:
                 return                                 # the dashboard picked another opponent or mode
-        send({**session.frame(m, intro.left, m.events[n_ev:]), "id": m.cfg.match_seed})
+        send({**session.frame(g, intro.left, m.events[n_ev:]), "id": g.cfg.match_seed})
         n += 1
         now = time.monotonic()
         if mode == "puzzle" and goal_at is None and sum(m.scores) > 0:

@@ -1,12 +1,12 @@
 """Tournaments: fixtures, results, standings, player statistics. A port of the Godot game's Tournament
-(scripts/tournament/tournament.gd); with Godot's random generator (soccer/rng.py) the same seed gives the same fixtures.
+(scripts/tournament/tournament.gd); with Godot's random generator (soccer/core/rng.py) the same seed gives the same fixtures.
 
 A tournament is plain JSON (the browser keeps it); the functions here take it, change it and return it:
   create(...)          a new tournament          view(t)            what the pages show (standings, round, top players)
   user_fixture(t)      the player's next match   setup_for(t, fix)  its match setup (game/api.py)
   record(t, fix, res)  stores a result and advances the rounds when they are complete"""
 
-from soccer.rng import RandomNumberGenerator
+from soccer.core.rng import RandomNumberGenerator
 
 LEAGUE, KNOCKOUT, GROUPS = 0, 1, 2
 FORMAT_NAMES = ["League (round robin)", "Knockout cup", "Groups + knockout"]

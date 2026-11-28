@@ -7,22 +7,21 @@ simulating forward, searching). It never sees the match engine or another agent'
   in the view      the ball and every player as an anonymous body (team, line-up slot, kickoff spot and its line, position,
                    velocity, size), the last HIST frames of all of them, the match clock (tick, 60 per second), score, time
                    left, overtime, state (playing / goal celebration), the kickoff (on, whose, who takes it), the last touch
-                   (who and when), the pitch, and the physics as public constants (soccer.match: KICK_STRENGTH, KICK_RANGE,
-                   damping, AI_PERIOD); on your own team's bodies: what each teammate calls (`intent`, soccer.match.INTENTS,
+                   (who and when), the pitch, and the physics as public constants (soccer.core.public: KICK_STRENGTH, KICK_RANGE,
+                   damping, AI_PERIOD); on your own team's bodies: what each teammate calls (`intent`, public.INTENTS,
                    and since when, `intent_tick`) and whether a person controls it (`is_human`)
   not in the view  who a player is (name, kind, skill: only your own, in your own agent), the match object, every other
                    agent's inside, teammates included: its plan, its memory, its random numbers, the buttons it is about to
                    press; the opponents' calls; the moment the other team's kickoff taker will kick
 
-Every player decides alone (soccer/ai/__init__.py): players talk only through their calls. Each team gets its own View with its
-own Body objects (MatchAI builds them; nobody shares a Body across teams); on the opponents' bodies the calls stay "none" and
+Every player decides alone (its brain, soccer.core.match): players talk only through their calls. Each team gets its own View with its
+own Body objects (the match builds them; nobody shares a Body across teams); on the opponents' bodies the calls stay "none" and
 is_human False. Bodies are the same objects for the whole match (updated in place every tick), so an agent may remember them.
 
 `reaction_delay` and `defend_q` on a Body are the GENERIC assumption about an unknown player (skill 70): an agent judges
-others, teammates included, by how they move, never by who they are. A player's own skill is in its own bot (soccer/ai/skill.py).
+others, teammates included, by how they move, never by who they are. A player's own skill is in its own brain (soccer/ai/skill.py).
 """
-from ..match import GOAL, HIST
-from .skill import quality
+from .public import GOAL, HIST, quality
 
 GENERIC_SKILL = 70.0                                   # what an agent assumes about any player but itself
 _GQ = quality(GENERIC_SKILL)
@@ -63,7 +62,7 @@ class View:
     def __init__(self, m, team):
         self.team = team
         self.pitch = m.pitch
-        self.duration = m.cfg.duration
+        self.duration = m.duration
         self.bodies = {p.uid: Body(p) for t in (0, 1) for p in m.team_lists[t]}
         self.team_lists = [[self.bodies[p.uid] for p in m.team_lists[t]] for t in (0, 1)]
         self.players, self.in_play = [], self.team_lists
@@ -97,7 +96,7 @@ class View:
         self.kickoff_go = m.kickoff_go if m.kickoff_team == t else None     # only the taker's own team knows when it kicks
         self.last_touch = self.bodies[m.last_touch.uid] if m.last_touch is not None else None
         self.last_touch_tick = m.last_touch_tick
-        self.human_mates = [self.bodies[h.controlled.uid] for h in m.humans if h.controlled is not None and h.controlled.team == t]
+        self.human_mates = [self.bodies[p.uid] for p in m.people_seats() if p.team == t]
         self._ball_hist, self._pos_hist, self._hist_idx = m.ball_hist, m.pos_hist, m.hist_idx   # the public history (recorded by the match)
         return self
 

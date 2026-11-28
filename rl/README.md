@@ -30,7 +30,7 @@ python3 rl/evaluate.py league_eval --model res://data/models/rl_5v5_arena_v5.jso
 ## Every team size, with calls: the curriculum (phase D)
 
 The **`slots`** observation (76 numbers, `soccer/ai/obs.py` `features_slots`, built from the public view) fits every size from
-1v0 to 5v5: me; 4 teammate slots nearest first (position and speed, *on the pitch*, its **call**: 5 one-hot, `soccer.match.INTENTS`);
+1v0 to 5v5: me; 4 teammate slots nearest first (position and speed, *on the pitch*, its **call**: 5 one-hot, `soccer.core.public.INTENTS`);
 5 opponent slots nearest first (position and speed, *on the pitch*); the ball; kickoff on, *our* kickoff, goal celebration. A slot
 nobody fills is zeros with *on the pitch* 0, so one net plays every size and a stage's weights carry over to the next one.
 A net trained on it has **15 outputs** (9 moves, kick, 5 call logits) and calls to its teammates every decision; its file says
@@ -110,7 +110,7 @@ next to training it was starved: the same evaluation took hours instead of about
 5. **Heatmaps**: where each player slot and the ball spend their time (`HEAT` lines from `behaviour_stats`, team attacking to the right).
 6. **Scouting** (`SCOUT` line from `behaviour_stats`, JSON): team shape in and out of possession by depth rank (who is really the deepest / most advanced player: with no
    fixed roles the slot means nothing), how often the goal is guarded or empty, pressing distance and PPDA, possession, field tilt, and located events (shots for and against
-   with xG, completed passes between slots, tackles / interceptions / loose balls). The events come from `Match.log_events` (soccer/match.py) (off in games and training; on only here).
+   with xG, completed passes between slots, tackles / interceptions / loose balls). The events come from `Match.log_events` (soccer/core/match.py) (off in games and training; on only here).
    `eval_checkpoint.py --mode scout` runs just this part (about 2 minutes) for any net, e.g. RL Team 4/5 as references. The dashboard shows it on a run's Scouting tab.
 Every league and head-to-head number carries its standard error (`se`, and `gd` / `gdse` for the goal difference per match; points per match are 3 / 1 / 0, so 32 matches give about +-0.2): a difference smaller than about two standard errors is noise,
 the dashboard marks changes beyond noise between evaluations. The matches use fixed seeds, so every checkpoint plays the same kickoffs.

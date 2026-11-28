@@ -1,4 +1,4 @@
-"""One RL episode source on top of the match core (soccer.match): the learner controls players of team 0 with ONE shared
+"""One RL episode source on top of the match core (soccer.core.match, built by soccer.game): the learner controls players of team 0 with ONE shared
 policy (one observation per player, soccer/ai/obs.py). With `with_keeper` the goalkeeper slot is a normal learner player
 too: no rule-based keeper, no fixed formation. The rule-based players (opponents, a kept keeper) are played by the match AI.
 Started as a line-by-line port of the Godot environment (rl/rl_env.gd); tests/test_env.py guards it against stored runs.
@@ -17,10 +17,13 @@ Config (configure()):
 import math
 
 from soccer.ai.obs import features_many, features_slots
-from soccer.ai.view import View
+from soccer.core.act import Act
+from soccer.core.public import DIRS, ENDED, HIST, INTENTS, PLAYING
+from soccer.core.rng import RandomNumberGenerator
+from soccer.core.vec import normalized
+from soccer.core.view import View
 from soccer.data import database
-from soccer.match import ENDED, HIST, INTENTS, PLAYING, Match, MatchConfig
-from soccer.rng import RandomNumberGenerator
+from soccer.game import MatchConfig, new_match
 
 REPEAT = 2                 # sim ticks per decision (same as the match's AI_PERIOD)
 OUT_NONE, OUT_GOAL, OUT_OWN, OUT_TIMEOUT, OUT_CONCEDED, OUT_WIN, OUT_DRAW, OUT_LOSS = range(8)
@@ -118,7 +121,7 @@ class RLEnv:
         self.used_selfplay = self.opp_net is not None and self.rng.randf() < self.selfplay
         if self.used_selfplay:
             cfg.nets[1] = self.opp_net
-        sim = self.sim = Match(cfg)
+        sim = self.sim = new_match(cfg)
         self.episode_id += 1
         self.steps = 0
         self.ep_return = 0.0
@@ -136,7 +139,7 @@ class RLEnv:
             is_gk = p.line == "GK"
             if len(self.agents) < self.n_active and (self.with_keeper or not is_gk):
                 self.agents.append(p)
-                p.bot = False
+                sim.seat(p.uid, None)                   # a learner: driven by the trainer (act())
             elif is_gk and self.own_keeper and not self.with_keeper:
                 pass                                    # stays a rule-based keeper
             else:
@@ -151,7 +154,7 @@ class RLEnv:
                     ordered1.append(p)
             for p in ordered1:
                 self.opp_agents.append(p)
-                p.bot = False
+                sim.seat(p.uid, None)
         if self.opp == "none":
             ghosts += list(sim.team_lists[1])
         elif self.opp == "keeper":
@@ -181,7 +184,7 @@ class RLEnv:
 
     def _ghost(self, g):
         """Removes a player from the physics and the rule logic but keeps it in team_lists (observations)."""
-        g.bot = False
+        self.sim.seat(g.uid, None)
         if g in self.sim.movers:
             self.sim.movers.remove(g)
         if g in self.sim.players:
@@ -412,7 +415,7 @@ class RLEnv:
 
     def observe(self):
         """The observations of all agents (learners, then the self-play opponents), concatenated, each built from its team's
-        public view (soccer/ai/view.py), exactly as a net player sees the match when it plays."""
+        public view (soccer/core/view.py), exactly as a net player sees the match when it plays."""
         o = self.obs
         sim = self.sim
         groups = [(v.refresh(sim), ps) for v, ps in zip(self.views, (self.agents, self.opp_agents)) if ps]
@@ -436,10 +439,10 @@ class RLEnv:
         if not self.external_actions:
             w = self.act_width()
             for i, a in enumerate(all_agents):
-                sim.set_action(a, min(max(int(actions[i * w]), 0), 8), int(actions[i * w + 1]) != 0)
-                a.kick_intent = ""
-                if w == 3:
-                    sim.set_intent(a, INTENTS[min(max(int(actions[i * w + 2]), 0), len(INTENTS) - 1)])
+                d = DIRS[min(max(int(actions[i * w]), 0), 8)]           # a move in the agent's own frame (+x: towards the goal)
+                intent = INTENTS[min(max(int(actions[i * w + 2]), 0), len(INTENTS) - 1)] if w == 3 else a.intent
+                sim.act(a.uid, Act(normalized(complex(d.real * sim.attack_dir(a.team), d.imag)), int(actions[i * w + 1]) != 0,
+                                   intent, ""))
         for _ in range(REPEAT):
             sim.step()
             if not self.match_mode and sim.state != PLAYING:

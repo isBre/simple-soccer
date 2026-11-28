@@ -1,9 +1,9 @@
 """Ball winner: hunts the opponent with the ball. It goes for any ball an opponent has within its hunting range (calls "ball"
 even when a teammate is a little closer: two on the carrier), comes in from the goal side, and once it wins the ball gives it
 away at once to whoever calls "open" (or clears). With the ball ours it holds midfield behind the play."""
-from ...vec import clamp, lerp
+from ...core.vec import clamp, lerp
 from .. import kit
-from ..agent import Act
+from ...core.act import Act
 from .base import RuleAgent
 
 

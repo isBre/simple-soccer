@@ -4,11 +4,11 @@ play machinery (pick a kind of kick and an aim, then strike it). Each archetype 
 its own algorithm: what to do on the ball (`choose`), where to be without it (`off_ball`), how eager it is for the ball
 (`wants_ball`) and what it calls.
 
-An agent is alone: it reads its team's view and its own memory, never another agent (soccer/ai/agent.py)."""
-from ...match import BALL_DAMPING
-from ...vec import INF, clamp, lerp
+An agent is alone: it reads its team's view and its own memory, never another agent (soccer/core/act.py)."""
+from ...core.public import BALL_DAMPING
+from ...core.vec import INF, clamp, lerp
 from .. import kit
-from ..agent import Act
+from ...core.act import Act
 from ..skill import attach_skill
 
 

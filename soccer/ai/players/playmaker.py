@@ -1,9 +1,9 @@
 """Playmaker: the one who passes. It drops off to receive (calls "open" in a free pocket behind the ball), looks first for a
 teammate running in behind (a through ball into the space ahead of a "run"), then for the best open teammate, and rarely shoots.
 Without the ball it screens in front of the defence, between the ball and our goal."""
-from ...vec import clamp
+from ...core.vec import clamp
 from .. import kit
-from ..agent import Act
+from ...core.act import Act
 from .base import RuleAgent
 
 

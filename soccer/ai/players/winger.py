@@ -1,9 +1,9 @@
 """Winger: owns one touchline. With the ball ours it sprints up its flank ahead of the play (calls "run"); on the ball it runs
 down the line until it reaches the box, then crosses low into it (to a teammate there, else across the goal mouth), and shoots
 only from close. Without the ball it tracks back along its flank."""
-from ...vec import clamp
+from ...core.vec import clamp
 from .. import kit
-from ..agent import Act
+from ...core.act import Act
 from .base import RuleAgent
 
 

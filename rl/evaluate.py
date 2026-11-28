@@ -23,9 +23,10 @@ for _v in ("OPENBLAS_NUM_THREADS", "OMP_NUM_THREADS", "MKL_NUM_THREADS"):   # be
     os.environ.setdefault(_v, "1")                                         # thread pools in every worker starve the simulation
 
 from soccer.data import database, res_path                            # noqa: E402
-from soccer.match import ENDED, PLAYING, Match, MatchConfig           # noqa: E402
-from soccer.stats import snapped                                      # noqa: E402
-from soccer.vec import roundi                                         # noqa: E402
+from soccer.core.public import ENDED, PLAYING  # noqa: E402
+from soccer.game import MatchConfig, new_match  # noqa: E402
+from soccer.core.stats import snapped                                      # noqa: E402
+from soccer.core.vec import roundi                                         # noqa: E402
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -54,7 +55,7 @@ def _pool():
 
 
 def _play(cfg):
-    m = Match(cfg)
+    m = new_match(cfg)
     m.run_to_end()
     return m.make_result()
 
@@ -443,7 +444,7 @@ def behaviour_cfg(i, model_spec, greedy):
 
 def _behaviour_match(args):
     i, model_spec, greedy = args
-    m = Match(behaviour_cfg(i, model_spec, greedy))
+    m = new_match(behaviour_cfg(i, model_spec, greedy))
     m.log_events = True
     b = Behaviour()
     while m.state != ENDED and m.tick < 60 * 120:

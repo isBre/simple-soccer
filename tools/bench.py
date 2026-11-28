@@ -2,13 +2,13 @@
   python3 tools/bench.py"""
 import time
 
-from soccer.match import Match, make_config
+from soccer.game import make_config, new_match
 from rl.env import RLEnv
 
 t0, ticks = time.time(), 0
 ids = ["aurora", "cobalt", "granite", "tide"]
 for i in range(4):
-    m = Match(make_config(ids[i], ids[(i + 1) % 4], "arena", 5, 60.0, 100 + i))
+    m = new_match(make_config(ids[i], ids[(i + 1) % 4], "arena", 5, 60.0, 100 + i))
     m.run_to_end()
     ticks += m.tick
 dt = time.time() - t0

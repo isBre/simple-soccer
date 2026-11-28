@@ -1,7 +1,7 @@
 """Training data from the user's recorded play (data/human/, game/recorder.py) for the ML / DL leagues (docs/imitation_plan.md).
 
   X        the 46-number observation of the controlled player (the nets' input)
-  move     the move label 0..8 (soccer.match.DIRS, the player's own frame), taken `lag` decisions LATER than the observation: the
+  move     the move label 0..8 (soccer.core.public.DIRS, the player's own frame), taken `lag` decisions LATER than the observation: the
            user reacts to what they see with a delay, so the key they press at t+lag answers the picture at t
   kick     the kick label (same lag)
   match    the index of the match each row comes from (splits are always by match: neighbouring rows are near copies)
@@ -14,7 +14,7 @@ import os
 import numpy as np
 
 from il import human_data
-from soccer.match import AI_PERIOD
+from soccer.core.public import AI_PERIOD
 
 N_OBS = 46
 Y_INDEX = [4 * k + j for k in range(11) for j in (1, 3)]      # y position and y speed of me, 4 mates, 5 opponents, the ball

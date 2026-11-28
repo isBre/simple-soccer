@@ -1,6 +1,6 @@
 """The net the RL teams train: one shared policy for all the players of a team, and the helpers around it.
 Actor layout = the game-model layout: [n_in, h, h, 10] (9 move logits + 1 kick logit, ReLU), or [n_in, h, h, 15] for a net that
-calls (+ 5 call logits, soccer.match.INTENTS order; the slots observation), exported as game JSON with its observation's name
+calls (+ 5 call logits, soccer.core.public.INTENTS order; the slots observation), exported as game JSON with its observation's name
 (soccer/ai/nets.py plays it). Used by rl/selfplay.py (training) and rl/distill.py (copying a net into a new observation)."""
 import json
 import os

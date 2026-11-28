@@ -14,9 +14,9 @@ import random
 from concurrent.futures import ProcessPoolExecutor
 import multiprocessing as mp
 
-from soccer import control as sc
-from soccer import match as sm
 from soccer import data as sd
+from soccer import game as sg
+from soccer.game import humans as sc
 from soccer.data import database, resolve_kits, team_colors
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -365,7 +365,7 @@ def config(setup):
             raise KeyError("unknown team %r" % setup[k])
         if not all_teams[setup[k]].can_play(size):
             raise ValueError("%s cannot play %dv%d" % (all_teams[setup[k]].name, size, size))
-    c = sm.make_config(setup["home"], setup["away"], setup.get("pitch", "arena"), size,
+    c = sg.make_config(setup["home"], setup["away"], setup.get("pitch", "arena"), size,
                        float(setup.get("duration", 180.0)), int(setup.get("seed", random.getrandbits(31))))
     c.control = CONTROL.get(str(setup.get("control", "none")), sc.NONE)
     c.human_team = 1 if int(setup.get("human_team", 0)) == 1 else 0
@@ -379,7 +379,7 @@ def config(setup):
 
 
 def humans(lst, size):
-    """The "humans" of a setup as MatchConfig.humans; ValueError if they break the rules of local multiplayer (soccer/match.py
+    """The "humans" of a setup as MatchConfig.humans; ValueError if they break the rules of local multiplayer (soccer/core/match.py
     check_humans: a side with two or more people plays one player each, never the same one)."""
     out = []
     for h in lst or []:
@@ -395,7 +395,7 @@ def humans(lst, size):
 
 def play(setup):
     """Plays one whole match (no human) and returns its result. Runs in a worker process."""
-    m = sm.Match(config(setup))
+    m = sg.new_match(config(setup))
     m.run_to_end()
     return m.make_result()
 
