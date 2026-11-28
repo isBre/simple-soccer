@@ -203,8 +203,8 @@ def obs_blocks(mod, obs, size, opp_mode):
 
 def action_heads(outputs):
     """The net's outputs as a table: [{outputs, head, choices, pick, off}]."""
-    from soccer.ai.nets import CALL_OUT, DIRS
-    from soccer.match import INTENTS
+    from soccer.ai.nets import CALL_OUT
+    from soccer.match import DIRS, INTENTS
     n = len(DIRS)
     heads = [{"outputs": "0–%d" % (n - 1), "head": "Move", "choices": "stand still or one of %d directions (forward = towards the opponent goal)" % (n - 1),
               "pick": "softmax over the %d logits, sampled" % n},

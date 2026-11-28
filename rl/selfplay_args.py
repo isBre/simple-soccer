@@ -17,7 +17,7 @@ OBS_DESC = {                       # what each layout holds (soccer/ai/obs.py fe
     "legacy": "Me, the ball, the 4 teammates and 5 opponents in slot order, the ball and the opponent goal relative to me, and a one-hot "
               "of my slot (the first RL teams). 5v5 only.",
 }
-# the blocks of each layout, in order (soccer/ai/nets.py features_*; tests/test_lab.py checks them against the real features):
+# the blocks of each layout, in order (soccer/ai/obs.py features_*; tests/test_lab.py checks them against the real features):
 # (block, count, numbers each, contents). "pos, speed" = 4 numbers: x, y, vx, vy
 OBS_LAYOUT = {
     "slots": [("me", 1, 4, "position, speed"),

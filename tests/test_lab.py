@@ -49,11 +49,11 @@ def main():
 def setup_check():
     from lab import dashboard
     from rl import selfplay_args as sa
-    from soccer.ai import nets
+    from soccer.ai import nets, obs
     from soccer.match import Match, make_config
     m = Match(make_config("rl_team_5", "ember", "arena", 5, 90.0, 1))
     m.kickoff_active, p = True, m.team_lists[0][0]       # a kickoff: the flags are 1, so a misplaced flag shows below
-    feats = {"slots": nets.features_slots(m, p), "team": nets.features_team(m, p), "rank": nets.features_rank(m, p), "legacy": nets.features(m, p, True)}
+    feats = {"slots": obs.features_slots(m, p), "team": obs.features_team(m, p), "rank": obs.features_rank(m, p), "legacy": obs.features_ego(m, p)}
     bad = []
     for name, layout in sa.OBS_LAYOUT.items():
         blocks = dashboard.obs_blocks(sa, name, 5, "rules")
