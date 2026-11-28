@@ -33,7 +33,7 @@ if ROOT not in sys.path:                     # run as a script: the project root
 
 from rl.client import VecEnv                                                                   # noqa: E402
 from rl.agent import Agent, OUT, OUT_DRAW, OUT_GOAL, OUT_WIN, dists, load_padded, team_pools    # noqa: E402
-from soccer.ai.nets import SLOTS_NAME                                                         # noqa: E402
+from soccer.ai.obs import SLOTS_NAME                                                          # noqa: E402
 from rl.selfplay_args import OBS_DIMS, parser                                                  # noqa: E402
 
 torch.distributions.Distribution.set_default_validate_args(False)    # argument checks only (no effect on any value): ~20% of the rollout inference

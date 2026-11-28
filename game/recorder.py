@@ -1,7 +1,7 @@
 """Records the user's play in the browser game as a dataset for imitation learning (docs/imitation_plan.md, Phase 1).
 
 While a match with a human player is in play, every AI_PERIOD (2) ticks, the same rate as the bots and the RL nets decide, one row:
-  obs        features_team of the player the human controls (46 numbers, soccer/ai/nets.py): exactly a net's input
+  obs        features_team of the player the human controls (46 numbers, soccer/ai/obs.py): exactly a net's input
   state      the raw match: all players (uid order: team 0 slots, then team 1 slots) and the ball, x, y, vx, vy each, in world
              coordinates (team 0 attacks right). Any other observation can be recomputed from it later (il/human_data.py)
   ctrl       uid of the controlled player (changes in team control)
@@ -24,7 +24,8 @@ import secrets
 
 import numpy as np
 
-from soccer.ai.nets import features_team
+from soccer.ai.obs import features_team
+from soccer.ai.view import View
 from soccer.match import AI_PERIOD, DIRS, PLAYING
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -54,6 +55,7 @@ class Recorder:
         self.started = dt.datetime.now(dt.timezone.utc)
         self.rows = {k: [] for k in ("obs", "state", "ctrl", "move", "kick", "dir", "tick", "time_left", "score", "kickoff", "speed")}
         self.players = [q for t in (0, 1) for q in m.team_lists[t]]
+        self.views = {}                     # team -> its public view: the observation is built from it, as a net's is
         self.saved = None
 
     def __len__(self):
@@ -71,7 +73,10 @@ class Recorder:
         for q in self.players:
             st += (q.pos.real, q.pos.imag, q.vel.real, q.vel.imag)
         st += (m.ball.pos.real, m.ball.pos.imag, m.ball.vel.real, m.ball.vel.imag)
-        r["obs"].append(features_team(m, p))
+        if p.team not in self.views:
+            self.views[p.team] = View(m, p.team)
+        v = self.views[p.team].refresh(m)
+        r["obs"].append(features_team(v, v.bodies[p.uid]))
         r["state"].append(st)
         r["ctrl"].append(p.uid)
         r["move"].append(move_index(d, m.attack_dir(p.team)))

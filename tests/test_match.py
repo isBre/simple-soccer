@@ -15,7 +15,8 @@ import sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 from soccer.data import Pitch                                   # noqa: E402
-from soccer.match import ENDED, SINGLE, TEAM, Human, Match, check_humans, make_config  # noqa: E402
+from soccer.control import SINGLE, TEAM, Human, check_humans  # noqa: E402
+from soccer.match import ENDED, Match, make_config            # noqa: E402
 from tests import golden                                       # noqa: E402
 
 MAX_TICKS = 60 * 60 * 10

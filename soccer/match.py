@@ -1,16 +1,20 @@
-"""The match: a deterministic (seeded) Haxball-style simulation at a fixed 60 Hz. Physics, match rules, touches, stats,
-the result. Started as a line-by-line port of the Godot game's MatchSim (matched it tick by tick before Godot was removed);
-tests/test_match.py now guards it against stored matches. Positions and velocities are complex numbers: x = .real, y = .imag.
+"""The match: a deterministic (seeded) Haxball-style simulation at a fixed 60 Hz. Match rules, kickoffs, touches, stats, the
+result; the bodies and their contacts are soccer/physics.py, the people at the controls soccer/control.py. It began as a
+port of the old Godot game, and tests/test_match.py guards it against stored matches. Positions and velocities are complex
+numbers: x = .real, y = .imag.
 
-The AI is plugged in as `match.ai` (soccer.ai.MatchAI by default): it is asked once per AI tick to update the team plans
-and set the inputs of the bots that are due, exactly when Godot's MatchSim asked its brain."""
+The AI is plugged in as `match.ai` (soccer.ai.MatchAI by default): every AI tick it lets the bots that are due decide and sets
+their inputs."""
 import math
-import os
 
 from . import rating
-from .data import ROOT, database
+from .control import NONE, SINGLE, SWITCH_WINDOW, TEAM, Human, HumanControl, check_humans, config_humans  # noqa: F401 (older imports)
+from .data import database, res_path  # noqa: F401 (res_path: older imports from soccer.match)
+from .physics import (BALL_DAMPING, KIND_BALL, KIND_PLAYER, KIND_STATIC, PLAYER_ACCEL, PLAYER_DAMPING, PLAYER_KICK_ACCEL, Disc,
+                      prepare_walls, resolve)
 from .rng import RandomNumberGenerator
 from .stats import MatchStats, snapped
+from .vec import clamp, dot, limit_length, normalized, roundi
 
 TICK = 1.0 / 60.0
 KICK_STRENGTH = 5.0
@@ -18,34 +22,16 @@ KICK_RANGE = 4.0
 GOAL_PAUSE = 210
 AI_PERIOD = 2
 HIST = 32
-SWITCH_WINDOW = 60      # ticks (1 s): a Q within this time of the previous one moves on to the next player of the same ranking
 PLAYING, GOAL, ENDED = 0, 1, 2
-KIND_BALL, KIND_PLAYER, KIND_STATIC = 1, 2, 4
-NONE, SINGLE, TEAM = 0, 1, 2                  # MatchConfig.ControlMode
 # What a player can call to its teammates (the only way players talk; the opponents do not hear it): docs/public_view.md
 INTENTS = ("none", "ball", "open", "run", "cover")
 # discrete actions of the RL trainer: move index -> direction in the player's own frame (+x towards the opponent goal)
 DIRS = [0j, -1j, 1 - 1j, 1 + 0j, 1 + 1j, 1j, -1 + 1j, -1 + 0j, -1 - 1j]
 
 
-def clamp(x, lo, hi):
-    return lo if x < lo else (hi if x > hi else x)
-
-
-def dot(a: complex, b: complex) -> float:
-    return a.real * b.real + a.imag * b.imag
-
-
-def normalized(z: complex) -> complex:
-    l = abs(z)
-    return z / l if l > 0.0 else 0j
-
-
-def limit_length(z: complex, n: float = 1.0) -> complex:
-    l = abs(z)
-    return z / l * n if l > n else z
-
-
+# The engine's own from_angle / rotated (math.cos / math.sin): vec.py's versions (cmath.rect, used by the AI) differ from these in
+# the last bit for ~0.2% of angles, and the kickoff direction, the celebration and the puzzle layout are built with these. Using
+# one form everywhere changes the matches: it needs re-recorded tests/golden/ and an elo.ENGINE bump.
 def from_angle(a: float) -> complex:
     return complex(math.cos(a), math.sin(a))
 
@@ -54,36 +40,16 @@ def rotated(z: complex, a: float) -> complex:
     return z * complex(math.cos(a), math.sin(a))
 
 
-def res_path(path: str) -> str:
-    """res://x -> <project>/x (model paths in team files are Godot paths)."""
-    return os.path.join(ROOT, path[6:]) if path.startswith("res://") else path
-
-
-class Disc:
-    """A circle with Haxball-style physical properties."""
-    __slots__ = ("pos", "vel", "radius", "inv_mass", "damping", "b_coef", "kind")
-
-    def __init__(self, pos=0j, radius=10.0, inv_mass=1.0, damping=0.99, b_coef=0.5, kind=KIND_BALL):
-        self.pos = pos
-        self.vel = 0j
-        self.radius = radius
-        self.inv_mass = inv_mass
-        self.damping = damping
-        self.b_coef = b_coef
-        self.kind = kind
-
-
 class Player(Disc):
     """A player disc. The AI adds its own fields (soccer.ai) on top."""
 
     def __init__(self):
-        super().__init__(radius=15.0, inv_mass=0.5, damping=0.96, b_coef=0.5, kind=KIND_PLAYER)
+        super().__init__(radius=15.0, inv_mass=0.5, damping=PLAYER_DAMPING, b_coef=0.5, kind=KIND_PLAYER)
         self.team = 0
         self.slot = 0
         self.uid = 0                 # team * 16 + slot
         self.line = "MID"            # line of the kickoff spot (GK / DEF / MID / FWD), the same for every team; read only by the AI
         self.pdef = None             # players.PlayerDef: who this is (name, kind, style, skill)
-        self.brain = None            # the team brain that commands this player (soccer/ai/lineup.py)
         self.is_human = False
         self.human = None            # the Human controlling this player (None: nobody)
         self.bot = True              # decided by the AI; False = a human or an external controller (RL training)
@@ -99,54 +65,12 @@ class Player(Disc):
         self.intent_tick = 0
         self.in_contact = False
         self.rec_tick = -999
-        self.accel = 0.1
-        self.kick_accel = 0.07
-
-
-class Human:
-    """One person at the controls: a side (`team`), a mode (SINGLE: one player for the whole match; TEAM: the whole team,
-    switching with Q), the line-up slot asked for (SINGLE; -1 = auto), auto-switch (TEAM), the player controlled now, the
-    buttons held, the Q ranking and every player this human has controlled (`played`, uids). A team with two or more humans
-    plays SINGLE only, each human on a player of their own (check_humans)."""
-
-    def __init__(self, team=0, mode=SINGLE, slot=-1, auto_switch=False):
-        self.team, self.mode, self.slot, self.auto_switch = team, mode, slot, auto_switch
-        self.controlled = None
-        self.dir, self.kick = 0j, False
-        self.switch_order, self.switch_idx, self.switch_last = [], 0, -10 ** 9
-        self.played = []
-
-
-def config_humans(cfg) -> list:
-    """The Humans of a MatchConfig: cfg.humans, else the one human of control / human_team / human_slot / auto_switch."""
-    if cfg.humans:
-        return [Human(int(h.get("team", 0)), int(h.get("mode", SINGLE)), int(h.get("slot", -1)), bool(h.get("auto_switch", False)))
-                for h in cfg.humans]
-    if cfg.control != NONE:
-        return [Human(cfg.human_team, cfg.control, cfg.human_slot, cfg.auto_switch)]
-    return []
-
-
-def check_humans(humans, size):
-    """The rules of local multiplayer (ValueError if broken): a side is 0 or 1, a mode SINGLE or TEAM; at most `size` humans per
-    side; a side with two or more humans plays SINGLE only (each on one player for the whole match, nobody switches) and the
-    slots asked for there are different."""
-    for t in (0, 1):
-        mine = [h for h in humans if h.team == t]
-        if len(mine) > size:
-            raise ValueError("%d people on one side of a %dv%d match" % (len(mine), size, size))
-        if len(mine) >= 2 and any(h.mode != SINGLE for h in mine):
-            raise ValueError("two or more people on one side control one player each: nobody can control the whole team")
-        slots = [h.slot for h in mine if h.slot >= 0]
-        if len(slots) != len(set(slots)):
-            raise ValueError("two people on one side asked for the same player")
-    for h in humans:
-        if h.team not in (0, 1) or h.mode not in (SINGLE, TEAM) or h.slot >= size:
-            raise ValueError("bad human: side %r, mode %r, slot %r" % (h.team, h.mode, h.slot))
+        self.accel = PLAYER_ACCEL
+        self.kick_accel = PLAYER_KICK_ACCEL
 
 
 class MatchConfig:
-    """Everything needed to set up one match (MatchConfig in Godot)."""
+    """Everything needed to set up one match."""
 
     def __init__(self):
         self.pitch = None
@@ -178,7 +102,7 @@ def make_config(team_a, team_b, pitch_id="arena", size=5, duration=180.0, seed=1
     return c
 
 
-class Match:
+class Match(HumanControl):
     def __init__(self, cfg: MatchConfig, ai=True):
         self.cfg = cfg
         self.pitch = cfg.pitch
@@ -193,6 +117,7 @@ class Match:
         self.reset_count = 0
         self.bseg = []                      # walls for the ball: (a, b, bc)
         self.pseg = []                      # walls for the players
+        self._wall_cache = {}               # id(segs) -> (segs, physics.prepare_walls(segs))
         self.scores = [0, 0]
         self.tick = 0
         self.time_left = cfg.duration
@@ -288,7 +213,7 @@ class Match:
             self.pseg.append((a, b, bc))
 
     def _build_stadium(self):
-        self.ball = Disc(0j, 10.0, 1.0, 0.99, 0.5, KIND_BALL)
+        self.ball = Disc(0j, 10.0, 1.0, BALL_DAMPING, 0.5, KIND_BALL)
         pd = self.pitch
         hw, hh, gh, nd = pd.half_w, pd.half_h, pd.goal_half, pd.net_depth
         for sx in (-1.0, 1.0):
@@ -384,120 +309,7 @@ class Match:
         self.kickoff_taker = taker
         self.kickoff_go = self.tick + self.rng.randi_range(6, 28)
 
-    def _pick_initial_controlled(self):
-        """Every human's first player: SINGLE the slot asked for, else the most advanced formation spot still free; TEAM the
-        player nearest the centre. Humans who asked for a slot choose first."""
-        for h in sorted(self.humans, key=lambda h: h.slot < 0):
-            lst = self.team_lists[h.team]
-            free = [p for p in lst if p.human is None]
-            if not free:
-                continue
-            if h.mode == SINGLE:
-                if 0 <= h.slot < len(lst) and lst[h.slot].human is None:
-                    best = lst[h.slot]
-                else:
-                    best = max(free, key=lambda p: (p.home.real, p.slot))
-            else:
-                best = min(free, key=lambda p: abs(p.pos))
-            self.set_controlled(best, h)
-
-    # ------------------------------------------------------------ human control
-
-    def human(self, h=0) -> Human:
-        """A Human by number (0 = the first) or the Human itself."""
-        return h if isinstance(h, Human) else self.humans[h]
-
-    @property
-    def controlled(self):
-        """The first human's player (None without humans): the one-human view the recorder and older callers read."""
-        return self.humans[0].controlled if self.humans else None
-
-    def set_controlled(self, p, h=0):
-        """Hands player `p` to human `h` (not one another human controls)."""
-        h = self.human(h)
-        if p is not None and p.human is not None and p.human is not h:
-            return
-        old = h.controlled
-        if old is not None:
-            old.is_human = False
-            old.human = None
-            old.input_dir = 0j
-            old.input_kick = False
-        h.controlled = p
-        if p is not None:
-            p.is_human = True
-            p.intent, p.intent_tick = "none", self.tick      # a person calls nothing (yet)
-            p.human = h
-            if p.uid not in h.played:
-                h.played.append(p.uid)
-
-    def set_human_input(self, d: complex, kick: bool, h=0):
-        if self.humans:
-            h = self.human(h)
-            h.dir = d
-            h.kick = kick
-
-    def switch_controlled(self, now=None, h=0):
-        """TEAM control mode, the Q key of human `h`. The first press takes the teammate nearest to the ball; another press within
-        SWITCH_WINDOW of the previous one takes the next player of the same ranking (made at the first press, so it does not
-        reshuffle while the players move): 2nd nearest, 3rd, ..., then back to the player you started from.
-        `now` is the caller's clock in ticks (the web session counts real frames, so the window also runs during the kickoff
-        intro and at fast-forward speeds); default the match tick.
-        While the human's team waits to take a kickoff, the new player becomes the taker (placed behind the ball, the old taker goes
-        back to his kickoff spot). A kick held through the switch needs a fresh press on the new player."""
-        if not self.humans:
-            return
-        h = self.human(h)
-        if h.mode != TEAM:
-            return
-        now = self.tick if now is None else now
-        own_kickoff = self._human_kickoff_wait(h)
-        order, idx = self._switch_plan(h, now, own_kickoff)
-        h.switch_order, h.switch_idx, h.switch_last = order, idx, now
-        p = order[idx] if order else None
-        if p is None or p is h.controlled:
-            return
-        old = h.controlled
-        self.set_controlled(p, h)
-        if h.kick:
-            p.kick_used = True
-        if own_kickoff:
-            old.pos, p.pos = old.spawn, -self.kickoff_dir * (p.radius + self.ball.radius + 2.0)
-            old.vel = p.vel = 0j
-            self.kickoff_taker = p
-
-    def next_switch(self, now=None, h=0):
-        """The player a Q of human `h` at `now` would hand control to (None outside TEAM control or when it would change nothing):
-        what the page marks with a dashed ring. Reads the same ranking as switch_controlled without changing it."""
-        if not self.humans or self.state == ENDED:
-            return None
-        h = self.human(h)
-        if h.mode != TEAM:
-            return None
-        order, idx = self._switch_plan(h, self.tick if now is None else now, self._human_kickoff_wait(h))
-        p = order[idx] if order else None
-        return p if p is not h.controlled else None
-
-    def in_switch_window(self, now, h=0) -> bool:
-        """A Q of human `h` at `now` would continue the current ranking (2nd nearest, 3rd, ...) instead of starting a new one."""
-        if not self.humans:
-            return False
-        h = self.human(h)
-        idx, order = h.switch_idx, h.switch_order
-        return now - h.switch_last <= SWITCH_WINDOW and 0 <= idx < len(order) and order[idx] is h.controlled
-
-    def _switch_plan(self, h, now, own_kickoff):
-        """(ranking, index of the player a Q at `now` takes): the current ranking moved one on inside SWITCH_WINDOW, else a
-        new one (teammates nobody else controls, by distance to the ball, the controlled player at the end)."""
-        lst = [p for p in self.team_lists[h.team] if p.human is None or p.human is h]
-        order, idx = h.switch_order, h.switch_idx
-        if not self.in_switch_window(now, h):
-            others = sorted((p for p in lst if p is not h.controlled), key=lambda p: abs(p.pos - self.ball.pos))
-            order = others + ([h.controlled] if h.controlled is not None else [])
-            idx = -1
-        if order:
-            idx = (idx + 1) % len(order)
-        return order, idx
+    # ------------------------------------------------------------ human control (the rest: soccer/control.py)
 
     def _human_kickoff_wait(self, h) -> bool:
         """Human h's kickoff, not taken yet, with h's player as the taker."""
@@ -508,6 +320,10 @@ class Match:
 
     def ball_at(self, delay: int) -> complex:
         return self.ball_hist[(self.hist_idx - 1 - delay + HIST * 2) % HIST]
+
+    def over(self) -> bool:
+        """The match has ended."""
+        return self.state == ENDED
 
     def elapsed(self) -> float:
         t = self.cfg.duration - self.time_left
@@ -549,29 +365,7 @@ class Match:
             m.pos += m.vel
 
         movers = self.movers
-        n = len(movers)
-        statics = self.statics
-        collide = self._collide_discs
-        walls = self._collide_walls
-        bseg, pseg = self._walls(self.bseg), self._walls(self.pseg)
-        for i in range(n):
-            a = movers[i]
-            ar = a.radius
-            # the overlap test of _collide_discs inline: most pairs are far apart and the call would return at once
-            for j in range(i + 1, n):
-                b = movers[j]
-                diff = a.pos - b.pos
-                rsum = ar + b.radius
-                d2 = diff.real * diff.real + diff.imag * diff.imag
-                if not (d2 >= rsum * rsum or d2 < 0.00000001):
-                    collide(a, b)
-            for b in statics:
-                diff = a.pos - b.pos
-                rsum = ar + b.radius
-                d2 = diff.real * diff.real + diff.imag * diff.imag
-                if not (d2 >= rsum * rsum or d2 < 0.00000001):
-                    collide(a, b)
-            walls(a, bseg if a.kind == KIND_BALL else pseg)
+        resolve(movers, self.statics, self._walls(self.bseg), self._walls(self.pseg))
 
         self._apply_kickoff_limits()
 
@@ -612,18 +406,6 @@ class Match:
         if self.state != ENDED:
             self._end_match()
 
-    def _auto_switch(self, h):
-        best, best_d = None, math.inf
-        for p in self.team_lists[h.team]:
-            if p.human is not None and p.human is not h:
-                continue
-            d = abs(p.pos - self.ball.pos)
-            if d < best_d:
-                best_d, best = d, p
-        if best is not None and best is not h.controlled and h.controlled is not None \
-                and abs(h.controlled.pos - self.ball.pos) > best_d + 40.0:
-            self.set_controlled(best, h)
-
     def _handle_kick(self, p):
         if not p.input_kick:
             p.kick_used = False
@@ -638,66 +420,12 @@ class Match:
             p.kick_used = True
             self._register_touch(p, True)
 
-    @staticmethod
-    def _collide_discs(a, b):
-        diff = a.pos - b.pos
-        rsum = a.radius + b.radius
-        d2 = diff.real * diff.real + diff.imag * diff.imag
-        if d2 >= rsum * rsum or d2 < 0.00000001:
-            return
-        mass_sum = a.inv_mass + b.inv_mass
-        if mass_sum == 0.0:
-            return
-        dist = math.sqrt(d2)
-        nrm = diff / dist
-        share = a.inv_mass / mass_sum
-        pen = rsum - dist
-        a.pos += nrm * pen * share
-        b.pos -= nrm * pen * (1.0 - share)
-        rv = a.vel - b.vel
-        rel = rv.real * nrm.real + rv.imag * nrm.imag
-        if rel < 0.0:
-            bc = a.b_coef * b.b_coef
-            j = rel * (bc + 1.0) / mass_sum
-            a.vel -= nrm * j * a.inv_mass
-            b.vel += nrm * j * b.inv_mass
-
     def _walls(self, segs):
-        """segs prepared for _collide_walls: (a, b, bc, b - a, |b - a|^2, bounding box widened by 1 px), rebuilt if the list grew."""
-        cache = self.__dict__.setdefault("_wall_cache", {})
-        got = cache.get(id(segs))
+        """segs prepared for physics.collide_walls (prepare_walls), cached; rebuilt if the list grew."""
+        got = self._wall_cache.get(id(segs))
         if got is None or got[0] is not segs or len(got[1]) != len(segs):
-            prep = []
-            for a, b, c in segs:
-                ab = b - a
-                prep.append((a, b, c, ab, ab.real * ab.real + ab.imag * ab.imag, min(a.real, b.real) - 1.0, max(a.real, b.real) + 1.0,
-                             min(a.imag, b.imag) - 1.0, max(a.imag, b.imag) + 1.0))
-            got = cache[id(segs)] = (segs, prep)
+            got = self._wall_cache[id(segs)] = (segs, prepare_walls(segs))
         return got[1]
-
-    @staticmethod
-    def _collide_walls(d, segs):
-        """segs from _walls. A disc outside a segment's box widened by its radius (+1 px) cannot touch it: skipped."""
-        r = d.radius
-        for a, b, c, ab, l2, x0, x1, y0, y1 in segs:
-            pos = d.pos
-            px, py = pos.real, pos.imag
-            if px < x0 - r or px > x1 + r or py < y0 - r or py > y1 + r:
-                continue
-            pa = pos - a
-            t = (pa.real * ab.real + pa.imag * ab.imag) / l2
-            t = 0.0 if t < 0.0 else (1.0 if t > 1.0 else t)
-            diff = pos - (a + ab * t)
-            d2 = diff.real * diff.real + diff.imag * diff.imag
-            if d2 >= r * r or d2 < 0.00000001:
-                continue
-            dist = math.sqrt(d2)
-            nrm = diff / dist
-            d.pos += nrm * (r - dist)
-            v = d.vel
-            vn = v.real * nrm.real + v.imag * nrm.imag
-            if vn < 0.0:
-                d.vel -= nrm * vn * (1.0 + d.b_coef * c)
 
     def _celebrate(self):
         """After a goal the scorer's bot teammates run to him and form a huddle around him; the other team stands still.
@@ -867,8 +595,7 @@ class Match:
         if not self.log_events:
             return
         ax = self.attack_dir(team)
-        rnd = lambda x: math.floor(x + 0.5) if x >= 0 else -math.floor(-x + 0.5)       # Godot's roundf
-        self.ev_log.append([kind, self.tick, team, uid, rnd(a.real * ax), rnd(a.imag), rnd(b.real * ax), rnd(b.imag),
+        self.ev_log.append([kind, self.tick, team, uid, roundi(a.real * ax), roundi(a.imag), roundi(b.real * ax), roundi(b.imag),
                             snapped(v, 0.001)])
 
     def _classify_kick(self, p):
@@ -1050,7 +777,7 @@ class Match:
 
     def puzzle_layout(self, seed: int):
         """Puzzle (the Live page): every player and the ball at random places, play from the first tick.
-        Same draws as the Live viewer's Godot code had (a RandomNumberGenerator seeded with `seed`)."""
+        The layout is drawn from its own RandomNumberGenerator seeded with `seed`, so a seed always gives the same puzzle."""
         rng = RandomNumberGenerator(seed)
         self.kickoff_active = False
         self.kickoff_taker = None

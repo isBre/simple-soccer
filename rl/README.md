@@ -5,10 +5,10 @@ pipeline that runs these scripts unattended on the Pi (queue, runner, dashboard)
 
 The AI controls **all 5 players of a team, keeper included**, with one shared policy, so roles and formation are learned, not scripted.
 The actor has the game-model layout (`[n_in, h, h, 10]`: 9 move logits + 1 kick logit) and is exported as game model JSON; the match core (`soccer/ai/nets.py`) plays it as is.
-Two observation layouts exist (`selfplay.py --obs`, `env.py` config `obs`, chosen by the net's input size in `soccer/ai/nets.py` `features_for`):
+Two observation layouts exist (`selfplay.py --obs`, `env.py` config `obs`, chosen by the net's input size in `soccer/ai/obs.py` `features_for`):
 - **`team` (46 numbers, default for new runs, no player ID):** me (position and speed), my 4 teammates nearest first, the 5 opponents nearest first, the ball (position and speed),
   kickoff on (0/1), goal celebration on (0/1). Positions are scaled by the pitch, speeds by 5, the pitch is mirrored so the team attacks to the right. Sorting by distance instead of by
-  slot keeps a player from knowing a "role": it acts on the situation (see `features_team` in `soccer/ai/nets.py`).
+  slot keeps a player from knowing a "role": it acts on the situation (see `features_team` in `soccer/ai/obs.py`).
 - **`legacy` (54 numbers):** me first, ball, the 4 teammates and 5 opponents in slot order, ball and opponent goal relative to me, and a one-hot of the player's slot. The first RL teams (RL Team 1-5) use it.
 
 - `env.py`: the environment (episodes, random starts, every reward term) on the match core (`soccer/`); no Godot.
@@ -29,7 +29,7 @@ python3 -m venv ~/rl-venv && ~/rl-venv/bin/pip install torch numpy --index-url h
 
 ## Every team size, with calls: the curriculum (phase D)
 
-The **`slots`** observation (76 numbers, `soccer/ai/nets.py` `features_slots`, built from the public view) fits every size from
+The **`slots`** observation (76 numbers, `soccer/ai/obs.py` `features_slots`, built from the public view) fits every size from
 1v0 to 5v5: me; 4 teammate slots nearest first (position and speed, *on the pitch*, its **call**: 5 one-hot, `soccer.match.INTENTS`);
 5 opponent slots nearest first (position and speed, *on the pitch*); the ball; kickoff on, *our* kickoff, goal celebration. A slot
 nobody fills is zeros with *on the pitch* 0, so one net plays every size and a stage's weights carry over to the next one.

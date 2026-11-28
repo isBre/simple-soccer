@@ -54,7 +54,7 @@ class PlayerDef:
         """Team sizes this player can play (a net only those its observation fits)."""
         if self.kind != "net":
             return list(SIZES)
-        from .ai.nets import fits
+        from .ai.obs import fits
         return [n for n in SIZES if fits(self.n_in, n)]
 
     def can_play(self, size):

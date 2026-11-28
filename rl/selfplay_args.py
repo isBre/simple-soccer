@@ -5,8 +5,8 @@ import os
 
 OUT = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "out_5v5")   # = rl/agent.py OUT
 
-OBS_DIMS = {"legacy": 54, "team": 46, "rank": 56, "slots": 76}   # observation layouts (soccer/ai/nets.py): ego with player slot / role-free team / every size with calls
-OBS_DESC = {                       # what each layout holds (soccer/ai/nets.py features_*); the Lab's Setup tab shows it
+OBS_DIMS = {"legacy": 54, "team": 46, "rank": 56, "slots": 76}   # observation layouts (soccer/ai/obs.py): ego with player slot / role-free team / every size with calls
+OBS_DESC = {                       # what each layout holds (soccer/ai/obs.py features_*); the Lab's Setup tab shows it
     "team": "Me (position, speed), my 4 teammates nearest first, the 5 opponents nearest first (position and speed each), the ball "
             "(position, speed), kickoff on, goal celebration on. No player ID: sorting by distance keeps a player from knowing a role. 5v5 only.",
     "rank": "The team layout plus, for me and my 4 teammates, the rank in our team by distance to the ball and by depth (no fixed role: "

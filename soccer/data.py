@@ -9,6 +9,12 @@ DATA = os.path.join(ROOT, "data")
 MY_LEAGUE = "mine"                 # the league of the teams built in the game (local/my_teams)
 
 
+def res_path(path: str) -> str:
+    """res://x -> <repository>/x; other paths unchanged. res:// (the repository root) is kept from the Godot days: older
+    commands, specs and test scenarios still name models that way."""
+    return os.path.join(ROOT, path[6:]) if path.startswith("res://") else path
+
+
 def local_dir():
     """Everything that belongs to this machine only (git-ignored): local/, or $SOCCER_LOCAL (tests)."""
     return os.environ.get("SOCCER_LOCAL") or os.path.join(ROOT, "local")

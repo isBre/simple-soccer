@@ -5,7 +5,7 @@ Status: agreed plan, 2026-11-19. **Phase 1 (recorder), Phase 2 (Dataset page) an
 ## The idea in one paragraph
 
 Every team in the game is driven by one policy that decides for **one player** from that player's own 46-number observation
-(`features_team`, `soccer/ai/nets.py`) and is run once per player. When the user plays, they control one player, so every decision
+(`features_team`, `soccer/ai/obs.py`) and is run once per player. When the user plays, they control one player, so every decision
 they make is one training example of exactly that form: (their player's observation, their direction, their kick). Recording those
 gives a dataset. Models trained on it with supervised learning (imitation, "behaviour cloning") drive whole teams the same way the
 RL nets do. Teams trained with classic machine learning go in a new **Machine Learning League**, teams trained with neural nets in a

@@ -1,5 +1,6 @@
 """2-D vectors as Python complex numbers: x = z.real, y = z.imag. Addition, scaling and abs() run in C, which keeps the
-per-tick AI fast without numpy. Helpers mirror Godot's Vector2 methods of the same name."""
+per-tick physics and AI fast without numpy (numpy is slower than plain Python on objects this small). The engine (match.py,
+rating.py) and the AI (ai/) share these helpers; their names mirror Godot's Vector2 methods, from the port."""
 import cmath
 import math
 
@@ -38,19 +39,12 @@ def rotated(z: complex, a: float) -> complex:
 
 
 def lerp(a, b, t: float):
+    """a + (b - a) * t, for floats and vectors alike."""
     return a + (b - a) * t
 
 
 def clamp(x: float, lo: float, hi: float) -> float:
     return lo if x < lo else (hi if x > hi else x)
-
-
-def lerpf(a: float, b: float, t: float) -> float:
-    return a + (b - a) * t
-
-
-def sign(x: float) -> float:
-    return 1.0 if x > 0.0 else (-1.0 if x < 0.0 else 0.0)
 
 
 def roundi(x: float) -> int:

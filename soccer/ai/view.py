@@ -53,15 +53,20 @@ class Ball:
 
 class View:
     """The public view for team `team` (see the module docstring). refresh(m) copies the public state of the match in; the
-    view keeps no reference to the match."""
+    view keeps no reference to the match.
+
+    Training can take players off the pitch ("ghosts", rl/env.py: still in m.team_lists, no longer in m.players). The view
+    keeps both: `team_lists` are the full line-ups (every Body, ghosts where the match parks them; the fixed-size net
+    observations read these), `in_play` and `players` only the bodies on the pitch (what a player reasons about). In a match
+    without ghosts they hold the same bodies in the same order."""
 
     def __init__(self, m, team):
         self.team = team
         self.pitch = m.pitch
         self.duration = m.cfg.duration
-        self.bodies = {p.uid: Body(p) for p in m.players}
+        self.bodies = {p.uid: Body(p) for t in (0, 1) for p in m.team_lists[t]}
         self.team_lists = [[self.bodies[p.uid] for p in m.team_lists[t]] for t in (0, 1)]
-        self.players = [self.bodies[p.uid] for p in m.players]
+        self.players, self.in_play = [], self.team_lists
         self.by_uid = self.bodies
         self.ball = Ball(m.ball)
         self.ball_r = m.ball.radius
@@ -69,11 +74,17 @@ class View:
 
     def refresh(self, m):
         t = self.team
-        for p in m.players:
-            b = self.bodies[p.uid]
-            b.pos, b.vel = p.pos, p.vel
-            if p.team == t:                            # a team hears its own calls and knows which of its players a person controls
-                b.intent, b.intent_tick, b.is_human = p.intent, p.intent_tick, p.is_human
+        for lst in m.team_lists:
+            for p in lst:
+                b = self.bodies[p.uid]
+                b.pos, b.vel = p.pos, p.vel
+                if p.team == t:                        # a team hears its own calls and knows which of its players a person controls
+                    b.intent, b.intent_tick, b.is_human = p.intent, p.intent_tick, p.is_human
+        if len(m.players) != len(self.players):        # players only ever leave the pitch (training), so the count says it all
+            self.players = [self.bodies[p.uid] for p in m.players]
+            on = {b.uid for b in self.players}
+            self.in_play = [[b for b in lst if b.uid in on] for lst in self.team_lists] \
+                if len(on) < len(self.bodies) else self.team_lists
         self.ball.pos, self.ball.vel = m.ball.pos, m.ball.vel
         self.tick = m.tick
         self.state = m.state
@@ -116,7 +127,7 @@ class View:
 
     def deepest(self, team):
         """The player of `team` nearest its own goal line (who seems to guard the goal), None for a team of one."""
-        lst = self.team_lists[team]
+        lst = self.in_play[team]
         if len(lst) < 2:
             return None
         ax = self.attack_dir(team)

@@ -1,5 +1,5 @@
 """One RL episode source on top of the match core (soccer.match): the learner controls players of team 0 with ONE shared
-policy (one observation per player, soccer/ai/nets.py). With `with_keeper` the goalkeeper slot is a normal learner player
+policy (one observation per player, soccer/ai/obs.py). With `with_keeper` the goalkeeper slot is a normal learner player
 too: no rule-based keeper, no fixed formation. The rule-based players (opponents, a kept keeper) are played by the match AI.
 Started as a line-by-line port of the Godot environment (rl/rl_env.gd); tests/test_env.py guards it against stored runs.
 
@@ -22,7 +22,8 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
-from soccer.ai import nets                                           # noqa: E402
+from soccer.ai.obs import features_many, features_slots              # noqa: E402
+from soccer.ai.view import View                                      # noqa: E402
 from soccer.data import database                                     # noqa: E402
 from soccer.match import ENDED, HIST, INTENTS, PLAYING, Match, MatchConfig   # noqa: E402
 from soccer.rng import RandomNumberGenerator                         # noqa: E402
@@ -163,6 +164,7 @@ class RLEnv:
             ghosts += [p for p in sim.team_lists[1] if p.line != "GK"]
         for g in ghosts:
             self._ghost(g)
+        self.views = [View(sim, 0), View(sim, 1)]   # what the agents observe: each team's public view, like every player in a match
         if self.match_mode:
             sim.kickoff_team = self.rng.randi() % 2
             sim._reset_positions()
@@ -415,13 +417,22 @@ class RLEnv:
         return out
 
     def observe(self):
-        """The observations of all agents (learners, then the self-play opponents), concatenated."""
+        """The observations of all agents (learners, then the self-play opponents), concatenated, each built from its team's
+        public view (soccer/ai/view.py), exactly as a net player sees the match when it plays."""
         o = self.obs
+        sim = self.sim
+        groups = [(v.refresh(sim), ps) for v, ps in zip(self.views, (self.agents, self.opp_agents)) if ps]
+        out = []
         if o == "slots":                                   # players removed from the physics ("ghosts") are empty slots
-            on = {id(p) for p in self.sim.players}
-            return [x for a in self.agents + self.opp_agents for x in nets.features_slots(self.sim, a, on)]
-        return nets.features_many(self.sim, self.agents + self.opp_agents, team=o != "legacy", rank=o in ("rank", "both_rank"),
-                                  legacy=o not in ("team", "rank"))
+            on = {p.uid for p in sim.players}
+            for v, ps in groups:
+                for a in ps:
+                    out += features_slots(v, v.bodies[a.uid], on)
+            return out
+        for v, ps in groups:
+            out += features_many(v, [v.bodies[a.uid] for a in ps], team=o != "legacy", rank=o in ("rank", "both_rank"),
+                                 legacy=o not in ("team", "rank"))
+        return out
 
     def step(self, actions):
         """actions: move idx (0..8) and kick (0/1) per agent, and with the slots observation the call (index of INTENTS), flat

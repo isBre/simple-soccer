@@ -8,8 +8,11 @@
   calls       teammates hear each other's calls (some own-team body carries one during the match); the opponents' calls are
               never in a team's view
   opponents   a team's view of the opponents is anonymous: no calls, no human flag; the generic skill for everyone but yourself
-  slots obs   the every-size net observation (soccer/ai/nets.py features_slots, with the teammates' calls) built from a team's
-              view equals the one built from the match: a net that calls reads nothing the view does not have
+  obs         every net observation (soccer/ai/obs.py: slots76 and the ego layout at 1v1 / 3v3 / 5v5, team46, rank56 and the
+              batched features_many at 5v5) built from a team's view equals the one built from the match: a net reads nothing
+              the view does not have
+  ghosts      with players taken off the pitch (training), views built before and after keep them in team_lists where the
+              match parks them, leave them out of in_play / players, and still give the match's numbers for every observation
 
   python3 tests/test_view.py"""
 import ast
@@ -25,10 +28,11 @@ from soccer.match import Match, MatchConfig, Player, make_config   # noqa: E402
 from soccer.players import PlayerDef                                # noqa: E402
 from soccer.ai.view import GENERIC_DELAY, View                     # noqa: E402
 
-AGENTS = ["soccer/ai/agent.py", "soccer/ai/kit.py", "soccer/ai/nets.py", "soccer/ai/skill.py"] + \
+AGENTS = ["soccer/ai/agent.py", "soccer/ai/kit.py", "soccer/ai/nets.py", "soccer/ai/obs.py", "soccer/ai/skill.py"] + \
     sorted("soccer/ai/players/" + f for f in os.listdir(os.path.join(ROOT, "soccer", "ai", "players")) if f.endswith(".py"))
 DECIDE = AGENTS + ["soccer/ai/view.py"]
-PUBLIC = {"KICK_RANGE", "KICK_STRENGTH", "AI_PERIOD", "DIRS", "GOAL", "HIST", "PLAYING", "ENDED", "TICK", "INTENTS"}
+PUBLIC = {"KICK_RANGE", "KICK_STRENGTH", "BALL_DAMPING", "PLAYER_DAMPING", "PLAYER_ACCEL", "PLAYER_KICK_ACCEL", "AI_PERIOD", "DIRS", "GOAL", "HIST", "PLAYING", "ENDED", "TICK", "INTENTS"}
+ENGINE = {"match", "physics", "control"}                       # the engine modules: only PUBLIC names may come from them
 FORBIDDEN = {"bot_ai", "pdef", "cfg", "ai", "players_real", "humans", "team_lists_real"}
 
 
@@ -41,10 +45,14 @@ def imports_ok():
     bad = []
     for f in DECIDE:
         for node in ast.walk(ast.parse(open(os.path.join(ROOT, f)).read())):
-            if isinstance(node, ast.ImportFrom) and node.module and node.module.endswith("match"):
-                bad += ["%s: %s" % (f, a.name) for a in node.names if a.name not in PUBLIC]
-            if isinstance(node, ast.Import) and any(a.name.endswith("soccer.match") for a in node.names):
-                bad.append("%s: import soccer.match" % f)
+            if isinstance(node, ast.ImportFrom):
+                mod = (node.module or "").split(".")[-1]
+                if mod in ENGINE:                       # from ..match import X: only public constants
+                    bad += ["%s: %s" % (f, a.name) for a in node.names if a.name not in PUBLIC]
+                elif mod in ("", "soccer"):             # from .. import match / from soccer import physics: a whole engine module
+                    bad += ["%s: import %s" % (f, a.name) for a in node.names if a.name in ENGINE]
+            if isinstance(node, ast.Import) and any(a.name.split(".")[-1] in ENGINE for a in node.names):
+                bad.append("%s: import of the engine" % f)
     return check("imports", not bad, "; ".join(bad) or "only public constants from the engine")
 
 
@@ -120,8 +128,13 @@ def main():
             if v.kickoff_team != t and v.kickoff_go is not None:
                 bad.append("team %d knows the other team's kickoff timer" % t)
     ok &= check("opponents", not bad, "; ".join(bad) or "anonymous, no calls, generic skill")
-    from soccer.ai.nets import features_slots
-    diff, n = 0, 0
+    from soccer.ai import obs
+    layouts = {"slots76": lambda m, ps: [x for p in ps for x in obs.features_slots(m, p)],
+               "team46": lambda m, ps: [x for p in ps for x in obs.features_team(m, p)],
+               "rank56": lambda m, ps: [x for p in ps for x in obs.features_rank(m, p)],
+               "ego": lambda m, ps: [x for p in ps for x in obs.features_ego(m, p)],
+               "many": lambda m, ps: obs.features_many(m, ps, team=True, rank=True, legacy=True)}
+    diff, n = {k: 0 for k in layouts}, {k: 0 for k in layouts}
     for size in (1, 3, 5):
         m4 = Match(make_config("arrows", "aurora", "arena", size, 30.0, 8))
         for k in range(900):
@@ -130,11 +143,63 @@ def main():
                 continue
             for t in (0, 1):
                 v = m4.ai.views[t].refresh(m4)
-                for p in m4.team_lists[t]:
-                    n += 1
-                    diff += features_slots(v, v.bodies[p.uid]) != features_slots(m4, p)
-    ok &= check("slots obs", n > 0 and diff == 0, "%d observations at 1v1, 3v3 and 5v5, %d differ" % (n, diff))
+                mine = m4.team_lists[t]
+                for name, f in layouts.items():
+                    if size < 5 and name not in ("slots76", "ego"):
+                        continue                       # team46 / rank56 (and features_many with them) are 5v5 layouts
+                    n[name] += len(mine)
+                    diff[name] += f(v, [v.bodies[p.uid] for p in mine]) != f(m4, mine)
+    ok &= check("obs", all(n.values()) and not any(diff.values()),
+                ", ".join("%s %d (%d differ)" % (k, n[k], diff[k]) for k in layouts) + ": the view gives the match's numbers")
+    ok &= ghosts_ok(layouts)
     print("TOTAL ->", "PASS" if ok else "FAIL")
+
+
+def ghosts_ok(layouts):
+    """Training takes players off the pitch (rl/env.py _ghost: out of m.players and the physics, still in the line-ups, parked
+    below the pitch). A view built before (the AI's) and one built after (the trainer's) must both: keep every ghost in
+    team_lists where the match has it, leave it out of in_play / players, and give the match's numbers for every
+    observation (the slots one with the ghosts as empty slots, also through features_group)."""
+    from soccer.ai import obs
+    m = Match(make_config("arrows", "aurora", "arena", 5, 30.0, 5))
+    early = m.ai.views
+    ghosts = [p for p in m.team_lists[0] if p.line != "GK"][:2] + [p for p in m.team_lists[1] if p.line != "GK"][:3]
+    for g in ghosts:
+        g.bot = False
+        m.movers.remove(g)
+        m.players.remove(g)
+        g.pos, g.vel = complex(0.0, m.pitch.out_y * 2.5), 0j
+    late = [View(m, 0), View(m, 1)]
+    gone = {g.uid for g in ghosts}
+    bad, n = [], 0
+    for k in range(600):
+        m.step()
+        if k % 60:
+            continue
+        on = {p.uid for p in m.players}
+        for views in (early, late):
+            for t in (0, 1):
+                v = views[t].refresh(m)
+                if {b.uid for b in v.players} != on or any(b.uid in gone for lst in v.in_play for b in lst):
+                    bad.append("a ghost is in play in a view")
+                if any(v.bodies[g.uid].pos != g.pos for g in ghosts):
+                    bad.append("a ghost body is not where the match keeps it")
+                mine = [p for p in m.team_lists[t] if p.uid not in gone]
+                bodies = [v.bodies[p.uid] for p in mine]
+                for name, f in layouts.items():
+                    if name == "slots76":
+                        got, want = [x for b in bodies for x in obs.features_slots(v, b, on)], \
+                            [x for p in mine for x in obs.features_slots(m, p, on)]
+                    else:
+                        got, want = f(v, bodies), f(m, mine)
+                    n += 1
+                    if got != want:
+                        bad.append("%s differs" % name)
+                grouped = [x for o in obs.features_group(v, bodies, obs.SLOTS_OBS) for x in o]
+                if grouped != [x for p in mine for x in obs.features_slots(m, p, on)]:
+                    bad.append("features_group sees ghosts")
+    return check("ghosts", not bad, "; ".join(sorted(set(bad))) or
+                 "%d observations with %d ghosts, from views built before and after: in team_lists, not in play, the match's numbers" % (n, len(ghosts)))
     return 0 if ok else 1
 
 
