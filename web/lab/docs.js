@@ -130,7 +130,7 @@ function viewDocs(id) {
   for (const d of docs.list) (groups[d.group] = groups[d.group] || []).push(d);
   const side = Object.entries(groups).map(([g, ds]) => `<div class="doc-g">${esc(g)}</div>${ds.map((d) => `<a class="doc-l${d.id === id ? " on" : ""}" href="#/docs/${esc(d.id)}">${esc(d.title)}<small>${esc(d.path)}</small></a>`).join("")}`).join("");
   let body;
-  if (!id) body = `<div class="card"><h2>Docs</h2><p class="muted">The project's notes, read from the repository on the Pi: the lab notebook, the reward register, how to run experiments and how the game works.</p><div class="doc-cards">${docs.list.map((d) => `<a class="doc-card" href="#/docs/${esc(d.id)}"><b>${esc(d.title)}</b><span class="muted small">${esc(d.path)} · updated ${esc(ago(d.updated))}</span></a>`).join("")}</div></div>`;
+  if (!id) body = `<div class="card"><h2>Docs</h2><p class="muted">The project's notes, read from the repository: the lab notebook, the reward register, how to run experiments and how the game works.</p><div class="doc-cards">${docs.list.map((d) => `<a class="doc-card" href="#/docs/${esc(d.id)}"><b>${esc(d.title)}</b><span class="muted small">${esc(d.path)} · updated ${esc(ago(d.updated))}</span></a>`).join("")}</div></div>`;
   else {
     const d = docs.list.find((x) => x.id === id);
     if (!d) body = '<div class="empty">Unknown document.</div>';

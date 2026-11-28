@@ -1,7 +1,7 @@
 """python3 -m elo <command>
 
   init [--quick | --full | --games N] [--minutes M]   the setup: play until every entry has enough games at every size
-                                                       (quick: 30 games, ~10 min on a MacBook Air; full: 100 games, ~35 min; a Pi ~3x)
+                                                       (quick: 30 games, ~10 min on a MacBook Air; full: 100 games, ~35 min)
   round [--pairs 8] [--workers 3] [--size N] [--rounds R]   rounds of the most informative matches
   rank [--size 5] [--kind player|team|net]            the ranking of one size
   status                                               matches and entries per size, what is still unplaced

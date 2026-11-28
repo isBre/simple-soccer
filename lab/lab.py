@@ -2,7 +2,7 @@
 so it works even when the dashboard is down. Every command prints one JSON object ({"schema_version", "generated_at", "data"}),
 --pretty indents it. Exit code 1 on errors ({"error", "hint"}). The dashboard serves the same data under /api/v1/ (read-only).
 
-  python3 lab/lab.py status                          machine (Pi or Mac), runner, running experiment (progress, ETA, stalled?), last reboot
+  python3 lab/lab.py status                          machine, runner, running experiment (progress, ETA, stalled?), last reboot
   python3 lab/lab.py runs [--state done]             one row per run: settings changed, progress, verdict, cost
   python3 lab/lab.py run NAME [--tail 20]            one run: status, evaluations (summaries), training / PPO tail
   python3 lab/lab.py evals [--run R] [--kind full] [--protocol full/g1/d90]
@@ -28,8 +28,9 @@ import subprocess
 import sys
 import time
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))   # the project root BEFORE lab/ (lab/lab.py would hide the lab package)
-from lab import tracker  # noqa: E402
+if os.path.realpath(sys.path[0]) == os.path.dirname(os.path.realpath(__file__)):
+    del sys.path[0]                 # run as lab/<script>.py: lab/ would come first and lab/lab.py would hide the lab package
+from lab import tracker
 
 ROOT, EXP = tracker.ROOT, tracker.EXP
 LOGS = os.path.join(ROOT, "logs")
@@ -118,7 +119,7 @@ def speed(tr):
 
 # ---------------------------------------------------------------- machine health
 def health(hours=12.0):
-    """Health samples (every 10 s) of the last hours: time (ISO), boot id, throttle flags, temperature, load, free memory, clock."""
+    """Health samples (every 10 s) of the last hours (lab/health_log.py): time (ISO), boot id, temperature, load, free memory, thermal pressure."""
     path = os.path.join(LOGS, "health.log")
     if not os.path.exists(path):
         return []
@@ -128,10 +129,10 @@ def health(hours=12.0):
         if len(parts) < 2:
             continue
         d = dict(re.findall(r"(\w+)=([^\s]*)", parts[1]))
-        rows.append({"t": parts[0], "boot": d.get("boot"), "throttled": d.get("throttled"), "temp": num(d.get("temp", "").rstrip("'C")),
-                     "load": num(d.get("load")), "mem_mb": num(d.get("memfree", "").rstrip("MB")), "clock_mhz": num(d.get("clock", "").rstrip("MHz")),
-                     "swap_mb": num(d.get("swapused", "").rstrip("MB")), "thermal": num(d.get("thermal")), "battery": num(d.get("battery")),
-                     "power": d.get("power"), "kind": d.get("kind"), "machine": (d.get("machine") or "").replace("_", " ") or None,
+        rows.append({"t": parts[0], "boot": d.get("boot"), "temp": num(d.get("temp", "").rstrip("'C")),
+                     "load": num(d.get("load")), "mem_mb": num(d.get("memfree", "").rstrip("MB")),
+                     "thermal": num(d.get("thermal")), "battery": num(d.get("battery")),
+                     "power": d.get("power"), "machine": (d.get("machine") or "").replace("_", " ") or None,
                      "chip": (d.get("chip") or "").replace("_", " ") or None, "cores": num(d.get("cores")),
                      "mem_total_mb": num(d.get("memtotal", "").rstrip("MB")), "temp_src": d.get("temp_src")})
     return rows
@@ -141,19 +142,19 @@ THERMAL = ["nominal", "moderate", "heavy", "trapping", "sleeping"]       # macOS
 
 
 def machine(last):
-    """What the health box describes: the machine of the last health sample (the Pi when the sample has no machine keys)."""
-    kind = last.get("kind") or ("mac" if sys.platform == "darwin" else "pi")
-    mac = kind == "mac"
+    """What the health box describes: this machine, as its last health sample (lab/health_log.py) shows it."""
     boot = None
-    if mac:
+    try:
         m = re.search(r"sec = (\d+)", subprocess.run(["sysctl", "-n", "kern.boottime"], capture_output=True, text=True).stdout)
         boot = int(m.group(1)) if m else None
+    except OSError:
+        pass
     th = last.get("thermal")
-    return {"kind": kind, "name": last.get("machine") or ("Mac" if mac else "Raspberry Pi"), "chip": last.get("chip"),
-            "cores": int(last.get("cores") or os.cpu_count() or 4), "mem_total_mb": last.get("mem_total_mb") or (None if mac else 3800),
+    return {"name": last.get("machine") or "This machine", "chip": last.get("chip"),
+            "cores": int(last.get("cores") or os.cpu_count() or 4), "mem_total_mb": last.get("mem_total_mb"),
             "temp_label": "Battery temp" if last.get("temp_src") == "battery" else "Temperature", "temp_warn": 40 if last.get("temp_src") == "battery" else 75,
             "thermal": int(th) if th is not None else None, "thermal_text": THERMAL[int(th)] if th is not None and 0 <= th < len(THERMAL) else None,
-            "power": last.get("power"), "battery_pct": last.get("battery"), "boot_time": boot, "watchdog": kind == "pi"}
+            "power": last.get("power"), "battery_pct": last.get("battery"), "boot_time": boot}
 
 
 def reboots(rows=None):
@@ -167,8 +168,6 @@ def reboots(rows=None):
 
 
 def cmd_status(_a):
-    up = num(open("/proc/uptime").read().split()[0]) if os.path.exists("/proc/uptime") else None
-    mem = dict(re.findall(r"(\w+):\s+(\d+)", open("/proc/meminfo").read())) if os.path.exists("/proc/meminfo") else {}
     hl = health(48)
     last = hl[-1] if hl else {}
     mc = machine(last)
@@ -178,11 +177,10 @@ def cmd_status(_a):
         guard = guard if time.time() - guard.get("updated", 0) < 120 else {}
     except (OSError, ValueError):
         pass
-    if up is None and mc["boot_time"]:
-        up = time.time() - mc["boot_time"]
-    try:
-        active = subprocess.run(["systemctl", "is-active", "soccer-exp"], capture_output=True, text=True).stdout.strip() or None
-    except OSError:                                    # no systemd (not the Pi): the runner service is not installed here
+    up = time.time() - mc["boot_time"] if mc["boot_time"] else None
+    try:                                               # the runner is a process (lab/run.sh), not a service
+        active = subprocess.run(["pgrep", "-f", "lab/exp_runner.py"], capture_output=True).returncode == 0
+    except OSError:
         active = None
     running, fresh = None, None
     for p in glob.glob(os.path.join(EXP, "runs", "*", "status.json")):
@@ -208,19 +206,9 @@ def cmd_status(_a):
     rb = reboots(hl)
     return {"machine": {"uptime_hours": round(up / 3600, 2) if up else None, "boot_id": tracker.boot_id() or last.get("boot"), "last_sample": last.get("t"),
                    "temp_c": last.get("temp"), "load_1m": last.get("load"),
-                   "mem_free_mb": int(mem["MemAvailable"]) // 1024 if "MemAvailable" in mem else last.get("mem_mb"), **mc,
-                   "throttled": last.get("throttled"), "throttled_meaning": throttle_text(last.get("throttled"))},
-            "runner": {"service": active, "running": running, "queue": queue},
+                   "mem_free_mb": last.get("mem_mb"), **mc},
+            "runner": {"active": active, "running": running, "queue": queue},
             "last_reboot": rb[-1] if rb else None}
-
-
-def throttle_text(hex_):
-    if not hex_:
-        return None
-    v = int(hex_, 16)
-    names = {0x1: "under-voltage now", 0x2: "frequency capped now", 0x4: "throttled now", 0x8: "soft temperature limit now",
-             0x10000: "under-voltage since boot", 0x20000: "frequency capped since boot", 0x40000: "throttled since boot", 0x80000: "soft temperature limit since boot"}
-    return [t for bit, t in names.items() if v & bit] or ["ok"]
 
 
 # ---------------------------------------------------------------- runs and evaluations

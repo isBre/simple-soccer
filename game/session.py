@@ -24,7 +24,8 @@ import random
 import time
 
 from game import api, recorder
-from soccer.match import ENDED, GOAL, PLAYING, SINGLE, Match
+from soccer.control import SINGLE
+from soccer.match import ENDED, GOAL, PLAYING, Match
 
 TICK = 1.0 / 60.0
 INTRO_TICKS = 130

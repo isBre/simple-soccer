@@ -1,7 +1,6 @@
 #!/bin/sh
 # Installs the test check before every push (.githooks/pre-push) on this computer, keeping Git LFS's own pre-push step.
-# Run once from the project root: sh .githooks/install.sh   (on the computer you write code on; not on the Pi, whose pushes are
-# results, and whose CPU / maths library may not reproduce the stored test results bit for bit)
+# Run once from the project root: sh .githooks/install.sh
 set -e
 hooks=$(git rev-parse --git-common-dir)/hooks
 mkdir -p "$hooks"

@@ -4,7 +4,7 @@ Open http://<this machine>:8080/#/ from another computer; the Lab pages poll the
                       and what it changes against its control; the imitation trainings (out_il/); machine health. Runs listed in
                       exp/hidden_runs.json carry "hidden" (the reason): the Runs table leaves them out unless "Show hidden" is ticked
   /api/run/<name>     one run: spec and settings, training curve, PPO health, reward terms, every evaluation, heatmaps
-  /api/health         this machine's health log (throttling, temperature, load, memory) of the last hours
+  /api/health         this machine's health log (temperature, thermal pressure, load, memory) of the last hours
   /api/live           server-sent events: the live demo match of this machine's current run (relayed from UDP 127.0.0.1:7310, sent by lab/live.py)
   /results.md         the tracker's table as text
   /api/v1/<command>   the agent interface (lab/lab.py, read-only): status, runs, run/<name>, evals, best, compare?a=&b=, ablation, events?since=,
@@ -19,12 +19,12 @@ Open http://<this machine>:8080/#/ from another computer; the Lab pages poll the
   /api/live/opponent  POST {"id": ...}: with the mode, the ONLY writes of this server: which opponent the live demo match plays next
                       (logs/live_opponent.json, read by lab/live.py); ids come from the list above, requests from another web site are refused
 Standard library only and no internet needed (the charts are drawn in the browser as SVG). It reads exp/ and logs/; the one write is the opponent choice.
-Two helpers run beside the server (web/app.py starts them), so the Lab works on whatever machine serves it, Pi or Mac:
+Two helpers run beside the server (web/app.py starts them):
   health_sampler()    a health line every 10 s (lab/health_log.py) while no other sampler writes logs/health.log
   follow_live()       the live demo match (lab/live.py) of this machine's current run while no one else (the runner's --viewer) plays it
 There is NO login: use it on a trusted network only.
 
-  python3 web/app.py [--port 8080]                       (service soccer-dashboard, lab/systemd/)
+  python3 web/app.py [--port 8080]
 """
 import argparse
 import glob
@@ -38,13 +38,11 @@ import time
 from http.server import BaseHTTPRequestHandler
 from urllib.parse import unquote
 
+from lab import lab  # lab/lab.py: the agent CLI; /api/v1 serves the same functions
+from lab import tracker
+from lab import ladder
+
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-import sys  # noqa: E402
-if ROOT not in sys.path:
-    sys.path.insert(0, ROOT)
-from lab import lab  # noqa: E402  (lab/lab.py: the agent CLI; /api/v1 serves the same functions)
-from lab import tracker  # noqa: E402
-from lab import ladder  # noqa: E402
 EXP = os.path.join(ROOT, "exp")
 LOGS = os.path.join(ROOT, "logs")
 STATIC = os.path.join(ROOT, "web")                 # the page shell, styles and scripts (Lab and Game)
@@ -436,8 +434,6 @@ NET_LABELS = {"rl_5v5_arena_v4": "RL Team 4", "rl_5v5_arena_v5": "RL Team 5"}
 def dataset_view():
     """The Dataset page: the analysis of data/human/ and, as references, the behaviour of the newest full evaluation (the net
     and the rule bots it played, same definitions)."""
-    if ROOT not in sys.path:
-        sys.path.insert(0, ROOT)
     from il import analysis
     out = dict(analysis.summary())
     ref = None
@@ -536,7 +532,7 @@ class Live:
 
 
 def health_sampler():
-    """Health line every 10 s while no other sampler (lab/health_log.py, the Pi's soccer-health) keeps logs/health.log fresh."""
+    """Health line every 10 s while no other sampler (lab/health_log.py started by lab/run.sh) keeps logs/health.log fresh."""
     from lab import health_log
     try:
         health_log.sample(only_if_quiet=True)
@@ -565,7 +561,7 @@ def follow_live(every=10):
         others = [p for p in pids if own is None or int(p) != own.pid]
         tag, model = exp_runner.viewer_target()
         if tag and not (os.path.exists(os.path.join(ROOT, model)) or glob.glob(os.path.join(ROOT, "out_5v5", "ckpt", tag + "_u*.json"))):
-            tag = None                                           # its nets are not on this machine (results synced from elsewhere)
+            tag = None                                           # its nets are not on this machine (an imported run)
         if own is not None and (others or tag != cur):
             own.terminate()
             try:

@@ -10,16 +10,11 @@ Mirror augmentation (`mirror=True`): the pitch is symmetric top / bottom, so eve
 and y speed in the observation changes sign, up and down moves swap. Sorting by distance does not change.
 """
 import os
-import sys
 
 import numpy as np
 
-ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-if ROOT not in sys.path:
-    sys.path.insert(0, ROOT)
-
-from il import human_data                     # noqa: E402
-from soccer.match import AI_PERIOD            # noqa: E402
+from il import human_data
+from soccer.match import AI_PERIOD
 
 N_OBS = 46
 Y_INDEX = [4 * k + j for k in range(11) for j in (1, 3)]      # y position and y speed of me, 4 mates, 5 opponents, the ball

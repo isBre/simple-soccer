@@ -5,7 +5,7 @@ players talk only through their calls (intents, docs/public_view.md).
 MatchConfig.nets[t] overrides the line-up: one net drives every slot of that team (training, evaluation, the ladder). A net
 that cannot play the match's size is replaced by the team's own players; a net player that cannot play it by a box-to-box
 rule-based player of the same skill (see MatchAI.warnings)."""
-from . import nets, players
+from . import nets, obs, players
 
 
 def _load(spec, size, warnings, t):
@@ -15,7 +15,7 @@ def _load(spec, size, warnings, t):
     except (OSError, ValueError, KeyError, ConnectionError) as e:
         warnings.append("team %d: cannot load net %s (%s); its own players instead" % (t, spec, e))
         return None
-    if not nets.fits(net.n_in, size):
+    if not obs.fits(net.n_in, size):
         warnings.append("team %d: a net with %d inputs does not fit %d players; its own players instead" % (t, net.n_in, size))
         return None
     return net

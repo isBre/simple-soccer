@@ -18,14 +18,13 @@ import os
 import random
 import re
 import socket
-import sys
 import time
 
+from game import session
+from soccer.data import database, res_path
+from soccer.match import ENDED, Match, make_config
+
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-sys.path.insert(0, ROOT)
-from game import session                               # noqa: E402
-from soccer.data import database                       # noqa: E402
-from soccer.match import ENDED, Match, make_config     # noqa: E402
 
 LOGS = os.path.join(ROOT, "logs")
 CKPT = os.path.join(ROOT, "out_5v5", "ckpt")
@@ -71,7 +70,7 @@ def opponent(rng):
         sel = {}
     if not isinstance(sel, dict) or sel.get("kind", "random") == "random":
         pool = [{"kind": "rule", "team": t.id, "label": t.id.replace("_", " ").title()}
-                for t in database().teams.values() if not t.ml_model]
+                for t in database().teams.values() if not t.net_model]
         pool += [{"kind": "net", "model": "data/models/rl_5v5_arena_v4.json", "label": "RL Team 4"},
                  {"kind": "net", "model": "data/models/rl_5v5_arena_v5.json", "label": "RL Team 5"},
                  {"kind": "net", "model": "out_5v5/ckpt/t48_u100.json", "label": "Start net t48_u100"},
@@ -149,7 +148,7 @@ def play(tag, start, rng, sock):
                 return
         t_next += 1.0 / FPS
         time.sleep(max(0.0, t_next - time.monotonic()))
-        if time.monotonic() - t_next > 1.0:            # far behind (the Pi was busy): do not race to catch up
+        if time.monotonic() - t_next > 1.0:            # far behind (the machine was busy): do not race to catch up
             t_next = time.monotonic()
 
 
@@ -159,7 +158,7 @@ def main():
     ap.add_argument("--start", default="data/models/rl_5v5_arena_v5.json", help="model played before the first checkpoint")
     ap.add_argument("--matches", type=int, default=0, help="stop after this many matches (0 = never)")
     a = ap.parse_args()
-    start = os.path.join(ROOT, a.start.replace("res://", ""))
+    start = os.path.join(ROOT, res_path(a.start))
     rng = random.Random()
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     k = 0

@@ -3,19 +3,21 @@ who gets there first), how to run (arrive, chase), how to strike the ball in a d
 lanes, and how to guard a goal. Pure functions of the public view (`v`, soccer/ai/view.py) and a body: no state, no agent.
 
 The physics is public (soccer.match constants): a kick adds KICK_STRENGTH px/tick along player -> ball to the ball's velocity,
-the ball keeps 0.99 of its speed every tick, a player accelerates at 0.1 px/tick^2 with damping 0.96 (top speed 2.4 px/tick)."""
+the ball keeps BALL_DAMPING of its speed every tick, a player accelerates at PLAYER_ACCEL with damping PLAYER_DAMPING."""
 import math
 
-from ..match import KICK_RANGE, KICK_STRENGTH
+from ..match import BALL_DAMPING, KICK_RANGE, KICK_STRENGTH
 from ..vec import INF, clamp, cross, dot, from_angle, lerp, normalized, rotated, angle
 
-TOP = 2.4                               # a player's top speed, px/tick
-TAU = 24.0                              # ticks: its acceleration time constant
+# Written out rather than derived: computed in floats they come out a bit off 2.4 / 24 / 0.01 (tests/test_vec.py checks they agree)
+TOP = 2.4                               # a player's top speed, px/tick: PLAYER_ACCEL * PLAYER_DAMPING / (1 - PLAYER_DAMPING)
+TAU = 24.0                              # ticks: its acceleration time constant, PLAYER_DAMPING / (1 - PLAYER_DAMPING)
+_BALL_LOSS = 0.01                       # 1 - BALL_DAMPING: the share of its speed the ball loses every tick
 
-# (t, (1 - 0.99^t) / 0.01) for t = 1, 3, ..., 159: how far the ball travels in t ticks per unit of speed
-_Q = [(t, (1.0 - 0.99 ** t) / 0.01) for t in range(1, 161, 2)]
-_Q160 = (1.0 - 0.99 ** 160) / 0.01
-_QUICK = [(t, (1.0 - 0.99 ** t) / 0.01) for t in (2, 6, 12, 20, 30, 42, 56, 72, 90, 112, 136, 160)]
+# (t, (1 - d^t) / (1 - d)) for t = 1, 3, ..., 159, d = BALL_DAMPING: how far the ball travels in t ticks per unit of speed
+_Q = [(t, (1.0 - BALL_DAMPING ** t) / _BALL_LOSS) for t in range(1, 161, 2)]
+_Q160 = (1.0 - BALL_DAMPING ** 160) / _BALL_LOSS
+_QUICK = [(t, (1.0 - BALL_DAMPING ** t) / _BALL_LOSS) for t in (2, 6, 12, 20, 30, 42, 56, 72, 90, 112, 136, 160)]
 _ITAB = {}
 
 
@@ -29,11 +31,11 @@ def ball_at_t(v, bpos: complex, bvel: complex, q: float) -> complex:
 
 
 def ball_time(d: float) -> float:
-    """Ticks a freshly kicked ball (~5 px/tick, damping 0.99) needs to cover d px (300 when it never gets there)."""
-    r = 1.0 - d * 0.01 / 5.0
+    """Ticks a freshly kicked ball (~5 px/tick, BALL_DAMPING) needs to cover d px (300 when it never gets there)."""
+    r = 1.0 - d * _BALL_LOSS / 5.0
     if r <= 0.05:
         return 300.0
-    return math.log(r) / math.log(0.99)
+    return math.log(r) / math.log(BALL_DAMPING)
 
 
 def _table(rd: float):
@@ -287,7 +289,7 @@ def guard(v, me, bpos: complex, bvel: complex, delay: float, sweep: float):
         bp, vel, path, on_target = bpos, bvel, [], False
         for _ in range(100):
             bp += vel
-            vel *= 0.99
+            vel *= BALL_DAMPING
             path.append(bp)
             if (bp.real - (goal.real + ax * 10.0)) * (-ax) >= 0.0:
                 on_target = abs(bp.imag) < pd.goal_half + 25.0

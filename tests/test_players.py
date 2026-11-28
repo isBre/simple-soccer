@@ -15,14 +15,11 @@
 
   python3 tests/test_players.py"""
 import collections
-import os
 import random
 import sys
 
-ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-sys.path.insert(0, ROOT)
-from soccer.data import database                    # noqa: E402
-from soccer.match import ENDED, PLAYING, Match, make_config   # noqa: E402
+from soccer.data import database
+from soccer.match import ENDED, PLAYING, Match, make_config
 
 N, SECONDS = 10, 60.0
 

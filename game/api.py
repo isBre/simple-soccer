@@ -11,17 +11,15 @@ import json
 import math
 import os
 import random
-import sys
 from concurrent.futures import ProcessPoolExecutor
 import multiprocessing as mp
 
-ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-if ROOT not in sys.path:
-    sys.path.insert(0, ROOT)
+from soccer import control as sc
+from soccer import match as sm
+from soccer import data as sd
+from soccer.data import database, resolve_kits, team_colors
 
-from soccer import match as sm                                       # noqa: E402
-from soccer import data as sd                                         # noqa: E402
-from soccer.data import database, resolve_kits, team_colors   # noqa: E402
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 LEAGUES = [{"id": "rules", "name": "Rule Based League"}, {"id": "rl", "name": "Reinforcement Learning League"},
            {"id": "mixed", "name": "Mixed League"}, {"id": sd.MY_LEAGUE, "name": "My Teams"}]
@@ -30,7 +28,7 @@ KITS = ("solid", "stripes", "halves", "hoops", "band", "chevron")
 CREST = {"shape": ("shield", "circle", "hex", "diamond"), "pattern": ("solid", "stripes", "halves", "band", "quarters", "chevron"),
          "symbol": ("star", "bolt", "crown", "ring", "cross", "none")}
 LINEUP = 5
-CONTROL = {"none": sm.NONE, "single": sm.SINGLE, "team": sm.TEAM}
+CONTROL = {"none": sc.NONE, "single": sc.SINGLE, "team": sc.TEAM}
 KIND_LABEL = {"rules": "Rule-based", "net": "Neural net (RL)"}
 
 
@@ -74,8 +72,8 @@ def team_sha(t):
     """The files a team's play depends on (team file, net), as a short hash."""
     path = os.path.join(ROOT, "data", "teams", t.id + ".json")
     sha = _sha(path) if os.path.exists(path) else ""
-    if t.ml_model:
-        model = os.path.join(ROOT, t.ml_model)
+    if t.net_model:
+        model = os.path.join(ROOT, t.net_model)
         if os.path.exists(model):
             sha += _sha(model)
     return sha
@@ -213,7 +211,7 @@ def player_info(p, elo=None):
 
 
 def team_info(t, elo=None):
-    net = bool(t.ml_model)
+    net = bool(t.net_model)
     s = t.strength()
     elo = elo_table() if elo is None else elo
     rs = _ratings(elo.get("team:" + t.id))
@@ -369,7 +367,7 @@ def config(setup):
             raise ValueError("%s cannot play %dv%d" % (all_teams[setup[k]].name, size, size))
     c = sm.make_config(setup["home"], setup["away"], setup.get("pitch", "arena"), size,
                        float(setup.get("duration", 180.0)), int(setup.get("seed", random.getrandbits(31))))
-    c.control = CONTROL.get(str(setup.get("control", "none")), sm.NONE)
+    c.control = CONTROL.get(str(setup.get("control", "none")), sc.NONE)
     c.human_team = 1 if int(setup.get("human_team", 0)) == 1 else 0
     slot = str(setup.get("player", "")).strip()
     c.human_slot = int(slot) if slot.isdigit() and int(slot) < size else -1
@@ -385,13 +383,13 @@ def humans(lst, size):
     check_humans: a side with two or more people plays one player each, never the same one)."""
     out = []
     for h in lst or []:
-        mode = CONTROL.get(str(h.get("control", "single")), sm.SINGLE)
-        if mode == sm.NONE:
+        mode = CONTROL.get(str(h.get("control", "single")), sc.SINGLE)
+        if mode == sc.NONE:
             raise ValueError("a person in the match controls one player or the whole team")
         slot = str(h.get("player", "")).strip()
         out.append({"team": 1 if int(h.get("team", 0)) == 1 else 0, "mode": mode,
                     "slot": int(slot) if slot.isdigit() and int(slot) < size else -1, "auto_switch": False})
-    sm.check_humans([sm.Human(h["team"], h["mode"], h["slot"]) for h in out], size)
+    sc.check_humans([sc.Human(h["team"], h["mode"], h["slot"]) for h in out], size)
     return out
 
 
@@ -407,7 +405,7 @@ _pool = None
 
 def _worker_init():
     try:
-        os.nice(10)                     # tournament rounds must not starve a training run on the Pi
+        os.nice(10)                     # tournament rounds must not starve a training run
     except OSError:
         pass
 

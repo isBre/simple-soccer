@@ -23,10 +23,11 @@ there is no full evaluation: the best checkpoint is the one with the highest est
 an empty pitch), and it is placed in that size's ratings.
 Everything is written to exp/ (see lab/tracker.py). After a reboot the runner resumes the running experiment from its last checkpoint.
 
-  ~/rl-venv/bin/python lab/exp_runner.py --loop [--viewer]        (installed as the systemd service soccer-exp.service)
+  lab/run.sh                                         (the usual way: background QoS, health sampler, thermal guard; lab/SETUP.md)
+  python3 lab/exp_runner.py --loop [--viewer]          (with the venv active, lab/SETUP.md)
 
 While the queue is empty (--loop) it plays rounds of the Elo ranking (lab/ladder.py round: 6 pairs, 2 matches each, 3 niced
-workers, a few minutes on the Pi) and looks at the queue again after each round. `touch local/refine_off` stops that (and the web
+workers, a few minutes) and looks at the queue again after each round. `touch local/refine_off` stops that (and the web
 app's refining); a finished run is still placed.
 """
 import argparse
@@ -40,8 +41,9 @@ import subprocess
 import sys
 import time
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))   # the project root BEFORE lab/ (lab/lab.py would hide the lab package)
-from lab import tracker  # noqa: E402
+if os.path.realpath(sys.path[0]) == os.path.dirname(os.path.realpath(__file__)):
+    del sys.path[0]                 # run as lab/<script>.py: lab/ would come first and lab/lab.py would hide the lab package
+from lab import tracker
 
 ROOT, EXP = tracker.ROOT, tracker.EXP
 CKPT = os.path.join(ROOT, "out_5v5", "ckpt")
@@ -144,8 +146,8 @@ def viewer_window(tag, model):
 
 
 def viewer_target():
-    """(tag, start model) the live demo should show: the running experiment, else the most recently updated one (status files
-    written here or copied from another computer that trains, see lab/MAC.md). (None, None) when there is none."""
+    """(tag, start model) the live demo should show: the running experiment, else the most recently updated one.
+    (None, None) when there is none."""
     best = None
     for f in glob.glob(os.path.join(EXP, "runs", "*", "status.json")):
         try:
@@ -156,21 +158,6 @@ def viewer_target():
         except (OSError, ValueError, KeyError):
             continue
     return (best[1], best[2]) if best else (None, None)
-
-
-def view_only():
-    """--viewer-only: no training and no ladder here (the experiments run on another computer, lab/mac_sync.py copies their files
-    in); only the live demo match, following whichever experiment is current."""
-    stop_stale_workers()
-    live, cur = None, None
-    while True:
-        tag, model = viewer_target()
-        if tag and (tag != cur or live is None or live.poll() is not None):
-            if live is not None and live.poll() is None:
-                live.terminate()
-            live, cur = viewer_window(tag, model), tag
-            log("viewer: live demo follows %s" % tag)
-        time.sleep(30)
 
 
 def elo_estimate(model, tag, update, pairs, size=5):
@@ -438,11 +425,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--loop", action="store_true", help="keep waiting for new specs (the service); default: run the queue once and exit")
     ap.add_argument("--viewer", action="store_true", help="play the live match (headless; the dashboard's Live page shows it)")
-    ap.add_argument("--viewer-only", action="store_true", help="no training: only the live demo (experiments run on another computer)")
     a = ap.parse_args()
-    if a.viewer_only:
-        view_only()
-        return
     for d in ("queue", "running", "runs", "done", "failed", "parked"):
         os.makedirs(os.path.join(EXP, d), exist_ok=True)
     tracker.write_markdown()

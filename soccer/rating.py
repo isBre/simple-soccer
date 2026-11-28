@@ -3,10 +3,7 @@ stats). There are no player grades: a player's strength is measured by its Elo (
 import math
 
 from .stats import snapped
-
-
-def clamp(x, lo, hi):
-    return lo if x < lo else (hi if x > hi else x)
+from .vec import clamp
 
 
 def shot_xg(frm: complex, goal_x: float, goal_half: float) -> float:

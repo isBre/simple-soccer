@@ -20,14 +20,11 @@ import hashlib
 import json
 import os
 import random
-import sys
 import time
 
-ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-if ROOT not in sys.path:
-    sys.path.insert(0, ROOT)
+from elo import DURATION, MAX_TICKS, PLACEMENT, PROTOCOL as ELO_PROTOCOL, api as elo_api, model, play, roster as elo_roster
 
-from elo import DURATION, MAX_TICKS, PLACEMENT, PROTOCOL as ELO_PROTOCOL, api as elo_api, model, play, roster as elo_roster  # noqa: E402
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 EXP = os.path.join(ROOT, "exp")
 SIZE = 5                          # the experiments are 5v5 (the curriculum will add sizes)

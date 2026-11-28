@@ -14,12 +14,12 @@ import os
 import sys
 import tempfile
 
+from lab import tracker
+from rl import eval_checkpoint as ec
+from rl import evaluate as ev
+import golden
+
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-sys.path.insert(0, ROOT)
-from lab import tracker                   # noqa: E402
-from rl import eval_checkpoint as ec      # noqa: E402
-from rl import evaluate as ev             # noqa: E402
-from tests import golden                  # noqa: E402
 
 MODEL = "res://data/models/rl_5v5_arena_v5.json"
 

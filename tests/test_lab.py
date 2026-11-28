@@ -8,12 +8,9 @@
                has its group, who gets it and when; every tuning setting is a real option
 
   python3 tests/test_lab.py"""
-import os
 import sys
 
-ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-sys.path.insert(0, ROOT)
-from lab import tracker  # noqa: E402
+from lab import tracker
 
 
 def check(name, ok, detail=""):

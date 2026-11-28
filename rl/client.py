@@ -15,8 +15,6 @@ def _worker(conn, log_path):
     """One worker process: several environments stepped in lock-step ."""
     for v in ("OPENBLAS_NUM_THREADS", "OMP_NUM_THREADS", "MKL_NUM_THREADS"):
         os.environ.setdefault(v, "1")
-    if ROOT not in sys.path:
-        sys.path.insert(0, ROOT)
     try:
         from rl.env import RLEnv
         envs, opp_net = [], None

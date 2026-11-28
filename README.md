@@ -7,12 +7,16 @@
 A Haxball-style football game in the browser, built for AI experiments: custom 60 Hz Haxball physics, data-driven pitches/teams/players, rule-based and reinforcement-learning AI, per-player stats and grades, and tournaments.
 
 ```bash
+python3 -m venv .venv && .venv/bin/pip install -e '.[train]'     # once: the project as an installed package (numpy, torch)
+source .venv/bin/activate                                         # every new terminal (or call .venv/bin/python directly)
 python3 web/app.py
 ```
 
-Then open <http://localhost:8080/#/game> (from another computer: `http://<this machine>:8080`). It needs Python 3 with numpy; the
-same page has the **Lab** (the experiment dashboard) next to the **Game**. Dependencies are listed in `pyproject.toml` (numpy;
-torch for training); nothing needs installing, every script runs from the checkout as `python3 <dir>/<script>.py`. On the Raspberry Pi the service `soccer-dashboard` runs it.
+Then open <http://localhost:8080/#/game> (from another computer: `http://<this machine>:8080`). The same page has the **Lab** (the
+experiment dashboard) next to the **Game**. Dependencies and packages are listed in `pyproject.toml` (numpy; torch for training,
+`.[train]`); with the venv active every script runs as `python3 <dir>/<script>.py` from anywhere in the checkout, and the packages
+(`soccer`, `rl`, `lab`, `elo`, ...) import from anywhere (`python -m elo`, `python -m rl.evaluate ...`). One machine runs
+everything: [lab/SETUP.md](lab/SETUP.md).
 
 ## Screenshots
 
@@ -110,7 +114,7 @@ removed for this reason: "Opus 5.5 High: removed".)
   machine's ratings, `elo/`, see "Rankings") and one sentence on **how the team plays**, measured, not designed: `game/profiles.py` plays
   every team 16 scouting matches and stores the statistics in `data/team_profiles.json`; `game/api.py` `describe` turns what sets a
   team apart from its league (with the ball; without it; how it scores) into the sentence. Re-run `python3 game/profiles.py` after
-  adding teams or nets (on the Pi too: nets that only exist in `out_5v5/ckpt/` are profiled there; until then they show "Play style not measured yet"). Every team takes the same kickoff spots for a size (no formations, no tactics). The bar underneath: players per side, minutes, control (one player /
+  adding teams or nets (nets that only exist in `out_5v5/ckpt/` are profiled on the machine that has them; until then they show "Play style not measured yet"). Every team takes the same kickoff spots for a size (no formations, no tactics). The bar underneath: players per side, minutes, control (one player /
   whole team / watch), recording; More: the pitch.
 - **Dataset** ("Record my play", on by default, remembered in the browser): every match you play is saved as a training file for
   imitation learning (`data/human/`, see "Recording your play" below). A red REC mark shows in the corner while it records.
@@ -140,7 +144,7 @@ Four parts, each using the one below it:
 ```
 web/      the web app: one server (app.py) and the page, with two areas: Game and Lab
 game/     the game's back end: catalog, match setup, tournaments, live matches (the pages are web/game/)
-lab/      experiments on the Pi: queue, runner, Lab API, live demo match, agent CLI (the pages are web/lab/)
+lab/      experiments: queue, runner, Lab API, live demo match, agent CLI (the pages are web/lab/)
 rl/       training and evaluation of the net teams (PPO, environment, league / head-to-head / scouting)
 soccer/   the match core (Python): physics, rules, stats, grades, rule-based and net AI
 data/     pitches, players, teams, kickoff spots per size, shipped nets (JSON)
@@ -161,7 +165,7 @@ local/    this machine only, git-ignored: the ratings database, the teams you bu
 - `rl/` ([rl/README.md](rl/README.md)): `env.py`, `client.py`, `agent.py`, `selfplay.py`, `distill.py`, `evaluate.py`,
   `eval_checkpoint.py`, `export_team.py`, `selfplay_args.py` (the training options, without torch).
 - `lab/` ([lab/README.md](lab/README.md)): `exp_runner.py`, `tracker.py`, `lab.py`, `dashboard.py` (Lab API), `live.py`,
-  `systemd/`. Results and specs live in `exp/`, checkpoints in `out_5v5/`, logs in `logs/`.
+  `run.sh`, `health_log.py`, `thermal_guard.py`. Results and specs live in `exp/`, checkpoints in `out_5v5/`, logs in `logs/`.
 - `tests/` regression tests of the core, training environment, evaluations, tournaments and the web app (see "Tests"); `tools/`
   `bench.py` (core speed), `team_bench.py` (one team against the league / RL teams / trained nets: points, goals, and how
   much it plays as a team), `generate_data.py` (regenerates the pitches); `docs/` notebook,
@@ -211,18 +215,18 @@ result, which the report shows. Tournament rounds are simulated in one request (
   `python3 il/human_data.py [--check]` lists the files (and rebuilds every observation from the raw state). Plan:
   [docs/imitation_plan.md](docs/imitation_plan.md).
 - A net plays a team through `MatchConfig.nets[team]` (`{"model": path}` or `{"dict": model}`, loaded in the match's own
-  process); a team with `ml_model` in its JSON gets its net automatically.
-- Speed (`python3 tools/bench.py`, on a Mac): rule-vs-rule 5v5 about 10,600 ticks/s (177x real time), the training
+  process); a team whose every slot is the same net player (`Team.net_model`) plays as that net.
+- Speed (`python3 tools/bench.py`, MacBook Air M4): rule-vs-rule 5v5 about 10,600 ticks/s (177x real time), the training
   environment about 5,700 steps/s per process. The Godot implementation did about 7,200 and 3,400.
 
 ## Tests
 ```bash
-python3 tests/run_all.py            # everything, about 40 s; no Godot or other setup needed
+python3 tests/run_all.py            # everything, about 40 s, with the venv active (README top); no Godot needed
 sh .githooks/install.sh             # once per computer you write code on: runs the tests before every push that changes code
 ```
 With the hook installed, a push whose commits change code runs the tests first and is stopped if one fails (`git push
---no-verify` skips it once); pushes of results, notes or docs only (`exp/`, `docs/`, `*.md`) are not held up. Not on the Pi:
-its pushes are results, and another CPU / maths library may not reproduce the stored match results bit for bit.
+--no-verify` skips it once); pushes of results, notes or docs only (`exp/`, `docs/`, `*.md`) are not held up. The stored results were recorded on
+this machine; another CPU / maths library may not reproduce them bit for bit.
 Regression tests: each one plays fixed, seeded cases with the current code and compares them with the reference results in
 `tests/golden/`. A FAIL means the code now behaves differently. If that is intended (a physics, AI, reward or report change),
 re-record with `--update` (one test or `run_all.py --update`) and commit the new files together with the change. Matches are
@@ -254,7 +258,7 @@ until Godot was removed the tests replayed that implementation tick by tick (61,
 58,000 AI decisions identical). Those Godot-based tests are in the git history before the switch to `tests/golden/`.
 
 ## Experiments
-RL experiments run unattended on the Raspberry Pi through a queue (`exp/queue/`), a runner service and a web dashboard on port 8080: see [lab/README.md](lab/README.md) and [docs/experiment_pipeline.md](docs/experiment_pipeline.md).
+RL experiments run unattended through a queue (`exp/queue/`), a runner (`lab/run.sh`) and a web dashboard on port 8080: see [lab/README.md](lab/README.md) and [docs/experiment_pipeline.md](docs/experiment_pipeline.md).
 
 ## Machine learning
 
@@ -267,7 +271,7 @@ to its teammates like the rule-based players ("Every team size, with calls" in r
 The earlier GDScript experiments (imitation learning, DAgger and evolution strategies against the rule bots) are in the git
 history before the move of the AI to Python.
 
-**Raspberry Pi notes:** `rl/README.md` (setup, `--w_jitter` anti-twitch reward); the Lab's Live page plays the newest checkpoint of the running experiment (`lab/live.py`).
+**Training notes:** `rl/README.md` (setup, `--w_jitter` anti-twitch reward); the Lab's Live page plays the newest checkpoint of the running experiment (`lab/live.py`).
 
 ## Team control mode
 `MatchConfig.ControlMode.TEAM`: Q switches to the teammate nearest the ball; `auto_switch` does it automatically (`soccer/match.py` `set_controlled` / `switch_controlled`, per person: see "Local multiplayer").

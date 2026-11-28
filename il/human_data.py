@@ -5,7 +5,7 @@
                                            with the stored one (the raw state is enough to compute any observation later)
 
 In code: `files()`, `load(path)` -> dict of arrays + "meta", `observation(d, i)` -> the 46 numbers of row i recomputed from the
-state, `snapshot(d, i)` -> a light match-like object of row i for any feature function of soccer/ai/nets.py."""
+state, `snapshot(d, i)` -> a light match-like object of row i for any feature function of soccer/ai/obs.py."""
 import argparse
 import glob
 import json
@@ -14,12 +14,8 @@ import sys
 
 import numpy as np
 
-ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-if ROOT not in sys.path:
-    sys.path.insert(0, ROOT)
-
-from game.recorder import data_dir            # noqa: E402
-from soccer.ai.nets import features_team      # noqa: E402
+from game.recorder import data_dir
+from soccer.ai.obs import features_team
 
 MOVES = ["stand", "up", "up-fwd", "fwd", "down-fwd", "down", "down-back", "back", "up-back"]   # soccer.match.DIRS, own frame
 

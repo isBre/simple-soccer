@@ -9,9 +9,9 @@ import shutil
 import sys
 import tempfile
 
+from soccer.data import Database
+
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-sys.path.insert(0, ROOT)
-from soccer.data import Database  # noqa: E402
 
 
 def check(name, ok, detail=""):

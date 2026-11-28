@@ -5,8 +5,8 @@ import os
 
 OUT = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "out_5v5")   # = rl/agent.py OUT
 
-OBS_DIMS = {"legacy": 54, "team": 46, "rank": 56, "slots": 76}   # observation layouts (soccer/ai/nets.py): ego with player slot / role-free team / every size with calls
-OBS_DESC = {                       # what each layout holds (soccer/ai/nets.py features_*); the Lab's Setup tab shows it
+OBS_DIMS = {"legacy": 54, "team": 46, "rank": 56, "slots": 76}   # observation layouts (soccer/ai/obs.py): ego with player slot / role-free team / every size with calls
+OBS_DESC = {                       # what each layout holds (soccer/ai/obs.py features_*); the Lab's Setup tab shows it
     "team": "Me (position, speed), my 4 teammates nearest first, the 5 opponents nearest first (position and speed each), the ball "
             "(position, speed), kickoff on, goal celebration on. No player ID: sorting by distance keeps a player from knowing a role. 5v5 only.",
     "rank": "The team layout plus, for me and my 4 teammates, the rank in our team by distance to the ball and by depth (no fixed role: "
@@ -109,7 +109,7 @@ def parser():
     ap.add_argument("--fast_rules", type=int, default=1, help="1: the FAST check also plays the fixed matches against the rule bots (logs/sp_eval/<tag>_fast.txt); 0: only the estimated Elo")
     ap.add_argument("--elo_pairs", type=int, default=0, help="with each FAST check: estimated Elo from this many pairs of ladder matches (lab/ladder.py estimate, 2 matches per pair, training paused); 0 = none")
     ap.add_argument("--fast_ref", default="", help="game-model JSON of the net the run started from (the fast check plays it head to head)")
-    ap.add_argument("--learn_threads", type=int, default=2, help="torch threads of the learning step (all 4 would fight the env workers for the CPU: the Pi froze)")
+    ap.add_argument("--learn_threads", type=int, default=2, help="torch threads of the learning step (more would fight the env workers for the CPU)")
     ap.add_argument("--trainer_fg", type=int, default=1, help="macOS, runner in background mode (TrainerQos): 1 = the trainer process leaves it (about 1.5x faster, about 0.7 W more), 0 = it stays (coolest). Env workers and evaluations always keep it. Speed only")
     ap.add_argument("--base_port", type=int, default=7100, help="first port of the rule-group workers (self-play group: +100)")
     ap.add_argument("--hidden", type=int, default=128, help="width of the two hidden layers (must match --start)")

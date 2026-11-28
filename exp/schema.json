@@ -1,7 +1,7 @@
 {
  "schema_version": 2,
  "protocols": {
-  "full/g1/d90": "Full evaluation: 1 game per rule team and side = 32 matches of 90 s against all 16 rule-based teams (fixed seeds 50001..), plus best-move (greedy) play on every 2nd team, behaviour stats and head to head vs RL Team 4 / RL Team 5 / the start net. About 30-60 min on the Pi.",
+  "full/g1/d90": "Full evaluation: 1 game per rule team and side = 32 matches of 90 s against all 16 rule-based teams (fixed seeds 50001..), plus best-move (greedy) play on every 2nd team, behaviour stats and head to head vs RL Team 4 / RL Team 5 / the start net. About 30-60 min.",
   "fast/g2/d60": "(Off by default since 2026-11-21: fast_rules 1 turns it on.) Fast check: 2 games per team and side against every 3rd rule team (6 teams) = 24 matches of 60 s, plus head to head vs the start net. About 3-5 min. Only comparable with other fast checks.",
   "ladder/d90": "The Elo ladder (lab/ladder.py): every team and net against each other, 90 s matches, every pair from both sides with the same seed; the pairs are chosen to tell the most (close ratings, few games). Elo = Bradley-Terry fit of all results; goals = Poisson attack / defence fit of the same matches. The run's best checkpoint (x_<run>_best) is placed right after the run and keeps playing while the queue is empty.",
   "estimate/ladder/d90": "Estimated Elo during training (lab/ladder.py estimate, the check every fast_every updates, training paused): elo_pairs (12) pairs = 24 matches against placed ladder entries, half spread over the ranking, half near the checkpoint's level; only the checkpoint's rating and goal strengths are fitted, the ladder's held fixed. About ±140 Elo at 95%: a trend line, not a ranking. exp/elo_estimates.jsonl; update 0 = the start net."

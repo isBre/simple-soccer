@@ -5,14 +5,8 @@ A tournament is plain JSON (the browser keeps it); the functions here take it, c
   create(...)          a new tournament          view(t)            what the pages show (standings, round, top players)
   user_fixture(t)      the player's next match   setup_for(t, fix)  its match setup (game/api.py)
   record(t, fix, res)  stores a result and advances the rounds when they are complete"""
-import os
-import sys
 
-ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-if ROOT not in sys.path:
-    sys.path.insert(0, ROOT)
-
-from soccer.rng import RandomNumberGenerator        # noqa: E402
+from soccer.rng import RandomNumberGenerator
 
 LEAGUE, KNOCKOUT, GROUPS = 0, 1, 2
 FORMAT_NAMES = ["League (round robin)", "Knockout cup", "Groups + knockout"]

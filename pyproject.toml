@@ -1,5 +1,6 @@
-# The project's dependencies and packages. Nothing needs installing to run it: every script works from a checkout as
-# `python3 <dir>/<script>.py` (it puts the project root on the import path itself). `pip install -e .` in a venv also works.
+# The project's dependencies and packages. Install it once into a venv (README "Setup"):
+#   python3 -m venv .venv && .venv/bin/pip install -e '.[train]'
+# then every script runs as `python3 <dir>/<script>.py` with the venv active (source .venv/bin/activate) or as .venv/bin/python <dir>/<script>.py.
 [build-system]
 requires = ["setuptools>=61"]
 build-backend = "setuptools.build_meta"
@@ -15,4 +16,4 @@ train = ["torch"]                     # rl/selfplay.py, rl/ppo.py, rl/distill.py
 mlflow = ["mlflow-skinny"]            # optional mirror of exp/results.jsonl (EXP_MLFLOW=1, lab/tracker.py)
 
 [tool.setuptools.packages.find]
-include = ["soccer*", "game*", "rl*", "lab*", "il*"]
+include = ["soccer*", "game*", "rl*", "lab*", "il*", "elo*"]

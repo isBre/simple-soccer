@@ -5,7 +5,7 @@ Status: agreed plan, 2026-11-19. **Phase 1 (recorder), Phase 2 (Dataset page) an
 ## The idea in one paragraph
 
 Every team in the game is driven by one policy that decides for **one player** from that player's own 46-number observation
-(`features_team`, `soccer/ai/nets.py`) and is run once per player. When the user plays, they control one player, so every decision
+(`features_team`, `soccer/ai/obs.py`) and is run once per player. When the user plays, they control one player, so every decision
 they make is one training example of exactly that form: (their player's observation, their direction, their kick). Recording those
 gives a dataset. Models trained on it with supervised learning (imitation, "behaviour cloning") drive whole teams the same way the
 RL nets do. Teams trained with classic machine learning go in a new **Machine Learning League**, teams trained with neural nets in a
@@ -90,8 +90,8 @@ Same queue, same runner (`lab/exp_runner.py`), same files, same dashboard. A spe
  "data": {"control": "any", "lag": 3}, "notes": "why"}
 ```
 
-The runner for `ml` / `dl`: build the dataset → train (`il/train_ml.py` with scikit-learn, `il/train_dl.py` with torch; minutes on
-the Pi) → offline metrics → game evaluations (below) → verdict against `control`. A finished run can be **promoted** to a team in its
+The runner for `ml` / `dl`: build the dataset → train (`il/train_ml.py` with scikit-learn, `il/train_dl.py` with torch;
+minutes) → offline metrics → game evaluations (below) → verdict against `control`. A finished run can be **promoted** to a team in its
 league (`lab.py promote RUN --name "..."` writes `data/teams/<id>.json` with `"league": "ml"|"dl"` and the model under
 `data/models/`). `game/api.py` gets the two new leagues. Runs, Run pages and Compare in the Lab show them like RL runs, with an
 extra "Offline" tab.
@@ -123,7 +123,7 @@ distillation reached 86% agreement and still played much worse than its teacher)
      95% intervals, results in `exp/ladder.jsonl`, snapshots in `exp/ladder_ratings.jsonl`; a changed file starts that entry over),
      rounds played by the runner whenever the queue is empty (`exp/ladder_off` stops it), `lab.py ranking`, `/api/ranking`, the Lab's
      **Ranking** page. Nets of the `models/` folder and finished runs' `out_5v5/ckpt/x_*_best.json` play with RL Team 5's squad.
-     Seeded on the Mac with about 1,900 matches. Not yet: "You" in the ranking, the ratings in the game's team picker.
+     Seeded with about 1,900 matches. Not yet: "You" in the ranking, the ratings in the game's team picker.
 4. **Likeness: "does it play like you"**, only for ML/DL: distance between the model's scouting numbers and the user's dataset (direction
    changes/s, kick rate, distance to the ball, heatmap overlap, passes and shots per minute). One score 0-100 plus the per-metric gaps.
 5. **The user**: every recorded match already stores the opponent and the result, so the user's record against each team is free.
@@ -147,5 +147,5 @@ hybrid: the user's dataset as an anchor during PPO (like the `kickstart` term), 
 
 1. Hybrid (user data, then PPO): **not now**. Pure imitation first; decide after seeing how they play.
 2. Keeper: **the model drives all 5, no fixed roles**; roles come from the context, the user will defend sometimes.
-3. Dataset: **committed to git** (`data/human/`). Recordings land on the Pi and are committed with the usual results commits.
+3. Dataset: **committed to git** (`data/human/`). Recordings land in `data/human/` and are committed with the usual results commits.
 4. Evaluation: **an Elo ranking over all teams of all leagues**, updated from time to time by the runner.

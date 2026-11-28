@@ -75,16 +75,16 @@ function stagesLine(o, row) {
 const liveCard = () => `<a class="card s4 live-card" href="#/live" title="Open the live match">${cardHead("Live", '<span class="muted small">open →</span>')}
   <div class="lc-view"><canvas data-live="card"></canvas></div><div id="lc-foot" class="lc-foot"></div></a>`;
 function machineCard(o) {
-  const mc = o.status.machine, th = powerState(mc), cores = mc.cores || 4, mac = mc.kind === "mac", rb = o.status.last_reboot, mem = mc.last_sample != null ? mc.mem_free_mb : null;
+  const mc = o.status.machine, th = powerState(mc), cores = mc.cores || 4, rb = o.status.last_reboot, mem = mc.last_sample != null ? mc.mem_free_mb : null;
   const hl = (o.health || []).filter((r) => r.t && r.t.includes("T"));
   const spark = (k, color, lo, hi) => sparkline(hl.map((r) => [parseT(r.t), r[k]]).filter((p) => p[1] != null), color, 96, 22, lo, hi);
   const row = (label, value, sp) => `<div class="vrow"><span>${label}</span><b>${value}</b>${sp}</div>`;
   return `<section class="card s3 vitals">${cardHead(esc(machineName(mc)), '<a href="#/machine">details →</a>')}
     <div class="vtop"><div><div class="big ${mc.temp_c > tempWarn(mc) ? "neg" : ""}">${f(mc.temp_c, 0)}<small> °C</small></div><div class="muted small">${esc(mc.temp_label || "temperature")}</div></div>
-      ${spark("temp", css("--c2"), mac ? 20 : 30, mac ? 50 : 85)}</div>
+      ${spark("temp", css("--c2"), 20, 50)}</div>
     ${row("CPU load", `${f(mc.load_1m, 1)} <small>/ ${cores}</small>`, spark("load", css("--c1"), 0, cores * 3))}
-    ${row("Free memory", `<span class="${mem != null && mem < 500 ? "neg" : ""}">${mem != null ? f(mem / 1024, 1) : "–"}</span> <small>GB</small>`, spark("mem_mb", css("--c3"), 0, mc.mem_total_mb || 3800))}
-    ${row(mac ? "Thermal" : "Power", `<span class="${th.cls}">${esc(th.text)}</span>`, `<span class="muted small">${mc.uptime_hours != null ? "up " + dur(mc.uptime_hours * 3600) : ""}</span>`)}
+    ${row("Free memory", `<span class="${mem != null && mem < 500 ? "neg" : ""}">${mem != null ? f(mem / 1024, 1) : "–"}</span> <small>GB</small>`, spark("mem_mb", css("--c3"), 0, mc.mem_total_mb || 16384))}
+    ${row("Thermal", `<span class="${th.cls}">${esc(th.text)}</span>`, `<span class="muted small">${mc.uptime_hours != null ? "up " + dur(mc.uptime_hours * 3600) : ""}</span>`)}
     ${rb ? `<div class="vnote">Rebooted ${esc(ago(rb.back))}</div>` : ""}</section>`;
 }
 

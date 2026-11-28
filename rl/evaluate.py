@@ -17,31 +17,25 @@ import json
 import math
 import multiprocessing as mp
 import os
-import sys
 import time
 
 for _v in ("OPENBLAS_NUM_THREADS", "OMP_NUM_THREADS", "MKL_NUM_THREADS"):   # before numpy: the nets' products are tiny, and BLAS
     os.environ.setdefault(_v, "1")                                         # thread pools in every worker starve the simulation
 
-ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-if ROOT not in sys.path:
-    sys.path.insert(0, ROOT)
-
-from soccer.data import database                                      # noqa: E402
+from soccer.data import database, res_path                            # noqa: E402
 from soccer.match import ENDED, PLAYING, Match, MatchConfig           # noqa: E402
 from soccer.stats import snapped                                      # noqa: E402
+from soccer.vec import roundi                                         # noqa: E402
+
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 CORNER_ZONE = 150.0      # the ball counts as "in a corner" within this many px of both the goal line and the side line
 GX, GY = 14, 8           # heatmap grid (the RL team always attacks to the right)
 
 
 def res_abs(path):
-    return os.path.join(ROOT, path[6:]) if path.startswith("res://") else os.path.abspath(path)
-
-
-def gd_round(x):
-    """Godot's roundf: halves away from zero."""
-    return math.floor(x + 0.5) if x >= 0 else -math.floor(-x + 0.5)
+    """A model path as an absolute path (res:// = the repository root, soccer.data.res_path)."""
+    return os.path.abspath(res_path(path))
 
 
 def _f(fmt, x):
@@ -502,7 +496,7 @@ def scout_summary(results):
                         n_ok += 1
                         key = "%d-%d" % (int(e[3]) % 16, int(e[8]) % 16)
                         edges[key] = edges.get(key, 0) + 1
-                        pass_len.append(gd_round(math.hypot(e[6] - e[4], e[7] - e[5])))
+                        pass_len.append(roundi(math.hypot(e[6] - e[4], e[7] - e[5])))
                         if e[6] - e[4] >= hw * 0.2:
                             prog += 1
                 else:
@@ -520,8 +514,8 @@ def scout_summary(results):
         n = max(nph[ph], 1)
         for k in range(5):
             avg[ph].append([snapped(pos[ph][k][0] / n, 0.01), snapped(pos[ph][k][1] / n, 0.01)])
-        shape_out[ph] = {"width_px": gd_round(shape[ph][0] / n), "depth_px": gd_round(shape[ph][1] / n),
-                         "last_man_px": gd_round(shape[ph][2] / n), "back_line_px": gd_round(shape[ph][3] / n)}
+        shape_out[ph] = {"width_px": roundi(shape[ph][0] / n), "depth_px": roundi(shape[ph][1] / n),
+                         "last_man_px": roundi(shape[ph][2] / n), "back_line_px": roundi(shape[ph][3] / n)}
     role_share = []
     for k in range(5):
         s = sum(role[k])
@@ -533,10 +527,10 @@ def scout_summary(results):
             "ball_own_half_pct": snapped(100.0 * tot["own_half_ball"] / n_t, 0.1),
             "field_tilt_pct": snapped(100.0 * tot["tilt"] / max(nph["in"], 1), 0.1),
             "goal_guarded_pct": snapped(100.0 * tot["guarded"] / n_t, 0.1), "goal_empty_pct": snapped(100.0 * tot["empty"] / n_t, 0.1),
-            "deepest_to_goal_px": gd_round(tot["deep_dist"] / n_t), "at_wall_pct": snapped(100.0 * tot["wall"] / n_t, 0.1),
+            "deepest_to_goal_px": roundi(tot["deep_dist"] / n_t), "at_wall_pct": snapped(100.0 * tot["wall"] / n_t, 0.1),
             "ball_corner_pct": snapped(100.0 * tot["corner"] / n_t, 0.1),
             "ball_corner_ours_pct": snapped(100.0 * tot["corner_own"] / n_t, 0.1),
-            "press_d1_px": gd_round(press[0] / max(press[2], 1)), "press_d2_px": gd_round(press[1] / max(press[2], 1)),
+            "press_d1_px": roundi(press[0] / max(press[2], 1)), "press_d2_px": roundi(press[1] / max(press[2], 1)),
             "ppda": snapped(opp_build / max(def_high, 1), 0.01), "passes_match": snapped(n_pass / nm, 0.1),
             "pass_ok_pct": snapped(100.0 * n_ok / max(n_pass, 1), 0.1), "progressive_match": snapped(prog / nm, 0.1),
             "shape": shape_out, "avg_pos": avg, "role_share": role_share, "edges": edge_list, "pass_len": pass_len,

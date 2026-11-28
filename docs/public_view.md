@@ -19,7 +19,7 @@ teammates included. Players talk only through their **calls** (below).
 | Group | Field (`View`) | Meaning |
 |---|---|---|
 | Ball | `ball_pos`, `ball_vel`, `ball_r` | position (px, complex: x = `.real`, y = `.imag`), velocity (px per tick), radius |
-| Players | `team_lists[team]`, `players`, `bodies[uid]` | every player as a `Body`: `uid`, `team`, `slot` (line-up order), `radius`, `pos`, `vel`, `spawn` (kickoff position), `home` and `line` (kickoff spot and its line: GK / DEF / MID / FWD, the same layout for every team) |
+| Players | `team_lists[team]`, `in_play[team]`, `players`, `bodies[uid]` | every player as a `Body` (`team_lists` the full line-ups; `in_play` and `players` only the bodies on the pitch: they differ only in training, which can take players off the pitch): `uid`, `team`, `slot` (line-up order), `radius`, `pos`, `vel`, `spawn` (kickoff position), `home` and `line` (kickoff spot and its line: GK / DEF / MID / FWD, the same layout for every team) |
 | History | `ball_at(delay)`, `pos_at(uid, delay)` | the ball and every player `delay` ticks ago, for the last `HIST` = 32 ticks |
 | Clock | `tick`, `time_left`, `duration`, `overtime` | the match clock (60 ticks per second), seconds left, match length, golden-goal overtime on |
 | Score | `scores` | `[team 0, team 1]` |
@@ -27,7 +27,7 @@ teammates included. Players talk only through their **calls** (below).
 | Kickoff | `kickoff_active`, `kickoff_team`, `kickoff_taker` | a kickoff is on, whose it is, which body takes it |
 | Touches | `last_touch`, `last_touch_tick` | the body that touched the ball last, and when (it could be inferred from the history) |
 | Pitch | `pitch` | its size, goals, walls and obstacles (`soccer.data.Pitch`) |
-| Physics | `soccer.match`: `KICK_STRENGTH`, `KICK_RANGE`, `AI_PERIOD`, damping 0.99 (ball) / 0.96 (players) | the rules of motion are public: anyone may simulate the ball and the players forward from the view |
+| Physics | `soccer.match`: `KICK_STRENGTH`, `KICK_RANGE`, `BALL_DAMPING` (0.99), `PLAYER_DAMPING` (0.96), `PLAYER_ACCEL` (0.1), `PLAYER_KICK_ACCEL` (0.07), `AI_PERIOD` | the rules of motion are public: anyone may simulate the ball and the players forward from the view |
 | Helpers | `attack_dir(team)`, `deepest(team)` | +1 / -1 (the direction a team attacks), the body nearest a team's own goal line (who seems to guard it) |
 
 Direction: team 0 attacks towards +x, team 1 towards -x. Every Body is the same object for the whole match (updated in place
@@ -93,7 +93,7 @@ A new agent can use all of the view or any part of it; a new observation is a ne
 
 `tests/test_view.py` (part of `python3 tests/run_all.py`):
 
-- the decision modules (`soccer/ai/`: `agent.py`, `kit.py`, `nets.py`, `skill.py`, `view.py` and every archetype in
+- the decision modules (`soccer/ai/`: `agent.py`, `kit.py`, `nets.py`, `obs.py`, `skill.py`, `view.py` and every archetype in
   `players/`) import nothing from the engine but its public constants, and never name the engine's or another agent's inside;
 - after mixed matches, nothing an agent holds leads to the match, a real player, a card, a view, or any other agent, teammates
   included (a deliberate leak to a teammate or a view is caught);

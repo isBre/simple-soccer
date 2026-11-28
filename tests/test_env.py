@@ -11,11 +11,11 @@ import os
 import random
 import sys
 
+from rl.env import RLEnv
+from soccer.data import res_path
+import golden
+
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-sys.path.insert(0, ROOT)
-from rl.env import RLEnv                  # noqa: E402
-from soccer.match import res_path         # noqa: E402
-from tests import golden                  # noqa: E402
 
 
 def run(sc_def):
