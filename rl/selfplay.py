@@ -395,7 +395,7 @@ def main():
                         klt = (F.softmax(zt[:, :9], -1) * (F.log_softmax(zt[:, :9], -1) - F.log_softmax(z[:, :9], -1))).sum(-1).mean()
                         pt, ps = torch.sigmoid(zt[:, 9]), torch.sigmoid(z[:, 9]).clamp(1e-6, 1 - 1e-6)
                         klt = klt + (pt * (torch.log(pt.clamp(1e-6)) - torch.log(ps)) + (1 - pt) * (torch.log((1 - pt).clamp(1e-6)) - torch.log(1 - ps))).mean()
-                        health["kl_teacher"].append(float(klt))
+                        health["kl_teacher"].append(float(klt.detach()))
                         if kl_w > 0:
                             loss = loss + kl_w * klt
                     opt.zero_grad()
@@ -403,14 +403,14 @@ def main():
                     gn = nn.utils.clip_grad_norm_(agent.parameters(), 0.5)
                     opt.step()
                     health["kl"].append(float((f_lp[idx] - lp).mean().detach()))                  # approx KL(old || new)
-                    health["clipfrac"].append(float(((ratio - 1.0).abs() > 0.2).float().mean()))
-                    health["vloss"].append(float(vl))
-                    health["pg"].append(float(pg))
+                    health["clipfrac"].append(float(((ratio - 1.0).abs() > 0.2).float().mean().detach()))
+                    health["vloss"].append(float(vl.detach()))
+                    health["pg"].append(float(pg.detach()))
                     health["gradnorm"].append(float(gn))
-                    health["ent_move"].append(float(dm.entropy().mean()))
-                    health["ent_kick"].append(float(dk.entropy().mean()))
+                    health["ent_move"].append(float(dm.entropy().mean().detach()))
+                    health["ent_kick"].append(float(dk.entropy().mean().detach()))
                     if dc is not None:
-                        health["ent_call"].append(float(dc.entropy().mean()))
+                        health["ent_call"].append(float(dc.entropy().mean().detach()))
             t_learn = time.time() - t1
             with open(os.path.join(ROOT, "logs", args.tag + "_ppo.jsonl"), "a") as pf:      # PPO health, shown by the viewer's TRAINING page
                 pf.write(json.dumps({"upd": upd, "ev": ev, "kl_w": kl_w, **{k: float(np.mean(v)) for k, v in health.items() if v}}) + "\n")
