@@ -1,4 +1,4 @@
-"""Complete evaluation of one checkpoint, cheap enough to run next to training on a Raspberry Pi.
+"""Complete evaluation of one checkpoint, cheap enough to run next to training.
 
 Runs rl/evaluate.py (the nets are loaded in its worker processes):
   1. league_eval      all 16 rule-based teams, both sides (pts/m, GF/GA per team, per tier, trained-against vs held-out teams)

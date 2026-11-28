@@ -1,22 +1,22 @@
 # Experiment pipeline (design and plan)
 
-Goal: an autonomous loop on the Raspberry Pi where an experiment is a small file, a runner trains and evaluates it, results are
+Goal: an autonomous loop on one machine where an experiment is a small file, a runner trains and evaluates it, results are
 collected in one place that both people and the agent can read, and a web page on the local network shows everything.
 
 ## Constraints that shape the design
-- Raspberry Pi 4, 4 cores, 3.8 GB RAM, SD card. One experiment at a time. Training uses 3 cores, so the rest has to stay light.
-- The Pi froze twice (fan on, no ssh, no log). Training slowed 25-60x just before. So: fewer competing threads, a hardware watchdog,
-  and a runner that picks up after a reboot by itself.
+- One machine (a fanless MacBook Air M4) trains, evaluates, keeps the ratings and serves the dashboard. One experiment at a time.
+- Heat is the limit, not cores: the long simulation runs on the efficiency cores (`lab/run.sh`, background QoS), a thermal guard
+  pauses the run while the machine is too warm, few competing threads, and a runner that picks up after a restart (`lab/SETUP.md`).
 - The old evaluation is too noisy (+-0.2 points), too slow (hours) and has no resolution at the top (see "Evaluation").
 
 ## Pieces
 | Piece | File | What it does |
 |---|---|---|
-| Safety | `rl/selfplay.py`, systemd watchdog | learning step uses 2 threads; a frozen Pi reboots itself in ~15 s |
+| Safety | `rl/selfplay.py`, `lab/thermal_guard.py` | learning step uses 2 threads; the run pauses while the machine is too warm |
 | Evaluation | `rl/eval_checkpoint.py` (`--mode fast|full`, `--seed`) | paired seeds, ladder of fixed opponents, goal difference with error |
 | Tracker | `lab/tracker.py`, `exp/` | one record per run and per evaluation, readable by humans, the agent and the web page |
-| Runner | `lab/exp_runner.py` + systemd service | takes the next spec from `exp/queue/`, trains, evaluates, decides, repeats; resumes after reboot |
-| Dashboard | `lab/dashboard.py` (API), `web/` (pages, server) | the Lab area of the web app on port 8080, reachable from the local network (service `soccer-dashboard`, `web/app.py`) |
+| Runner | `lab/exp_runner.py` (started by `lab/run.sh`) | takes the next spec from `exp/queue/`, trains, evaluates, decides, repeats; resumes after reboot |
+| Dashboard | `lab/dashboard.py` (API), `web/` (pages, server) | the Lab area of the web app on port 8080, reachable from the local network (`web/app.py`) |
 | Agent loop | scheduled wake-ups | the agent reads `exp/results.md`, writes the next spec, leaves a summary |
 
 ## Experiment spec (`exp/queue/<NN>_<name>.json`)
@@ -49,7 +49,7 @@ exp/results.jsonl   one line per evaluation (run, update, kind, pts, se, gd, h2h
 exp/results.md      table for the agent and for humans, regenerated after every evaluation
 ```
 An optional mirror to `mlflow-skinny` (no server, writes the standard `mlruns/` folder) is enabled with `--mlflow`; copy the folder
-to another machine and run `mlflow ui` there to browse it. The full MLflow server is not installed on the Pi (memory).
+to another machine and run `mlflow ui` there to browse it. The full MLflow server is not needed.
 
 ## Dashboard
 `python3 web/app.py` serves a self-refreshing page on `0.0.0.0:8080`: current run and queue, a table of finished runs
@@ -60,10 +60,10 @@ login: use it on a trusted network only.
 History, conclusions and the review of every finished experiment: [experiment_log.md](experiment_log.md).
 Every ~hour the agent reads `exp/results.md`, compares the finished run with its baseline (using the standard errors), then
 adds the next spec. The default plan is one reward term at a time on top of the minimal set: win/draw bonus, xG against,
-goal-side positioning, compactness, too-far-from-ball, xG for, tackles. If the Pi is down, the agent notes it and waits.
+goal-side positioning, compactness, too-far-from-ball, xG for, tackles. If the runner is stopped, the agent notes it and waits.
 
 ## Build order
-1. safety changes, 2. evaluation (fast/full, seeds, ladder), 3. tracker + runner + service, 4. dashboard, 5. first queue, 6. docs and tests.
+1. safety changes, 2. evaluation (fast/full, seeds, ladder), 3. tracker + runner, 4. dashboard, 5. first queue, 6. docs and tests.
 
 ## Status
-Built and running as services (`lab/systemd/`). The live viewer is optional (`--viewer`): it costs ~900 MB and a core and the Pi froze while it ran, so unattended runs go without it.
+Built and running (`lab/run.sh`). The live demo match is played by the runner (`--viewer`) or, when the runner does not, by the web app (`lab/live.py`).

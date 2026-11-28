@@ -408,7 +408,7 @@ _pool = None
 
 def _worker_init():
     try:
-        os.nice(10)                     # tournament rounds must not starve a training run on the Pi
+        os.nice(10)                     # tournament rounds must not starve a training run
     except OSError:
         pass
 

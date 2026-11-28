@@ -203,10 +203,12 @@ def latest_any(run):
 
 
 def boot_id():
+    """Changes at every reboot: the boot time (macOS kern.boottime) as 8 hex digits, like lab/health_log.py's boot key."""
     try:
-        return open("/proc/sys/kernel/random/boot_id").read().strip()[:8]
-    except OSError:
+        m = re.search(r"sec = (\d+)", subprocess.run(["sysctl", "-n", "kern.boottime"], capture_output=True, text=True, timeout=5).stdout)
+    except (OSError, subprocess.SubprocessError):
         return None
+    return "%08x" % (int(m.group(1)) & 0xffffffff) if m else None
 
 
 def _num(pattern, text, cast=float):

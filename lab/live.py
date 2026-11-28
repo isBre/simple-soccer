@@ -149,7 +149,7 @@ def play(tag, start, rng, sock):
                 return
         t_next += 1.0 / FPS
         time.sleep(max(0.0, t_next - time.monotonic()))
-        if time.monotonic() - t_next > 1.0:            # far behind (the Pi was busy): do not race to catch up
+        if time.monotonic() - t_next > 1.0:            # far behind (the machine was busy): do not race to catch up
             t_next = time.monotonic()
 
 

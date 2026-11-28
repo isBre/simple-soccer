@@ -10,8 +10,8 @@ keeps refining them in the background. The code is `elo/`; `tests/test_elo.py` c
 python3 -m elo init
 ```
 
-`init` plays until every entry has 30 games at every size it can play (about 10 minutes on a MacBook Air, about 3x that on a
-Raspberry Pi 4); `--full` goes on to 100 games (about 35 minutes), `--minutes M` stops earlier and can be run again later. After
+`init` plays until every entry has 30 games at every size it can play (about 10 minutes on a MacBook Air M4);
+`--full` goes on to 100 games (about 35 minutes), `--minutes M` stops earlier and can be run again later. After
 that the web app refines the ratings by itself whenever the machine is idle (see Background).
 
 ## What is rated

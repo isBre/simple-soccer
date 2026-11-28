@@ -40,7 +40,7 @@ torch.distributions.Distribution.set_default_validate_args(False)    # argument 
 
 
 class TrainerQos:
-    """macOS: lab/mac_run.sh starts the runner with `taskpolicy -b` (background mode: efficiency cores only, low clock), the
+    """macOS: lab/run.sh starts the runner with `taskpolicy -b` (background mode: efficiency cores only, low clock), the
     coolest way to run the long simulation. The trainer process itself only works in short bursts (the nets between two env
     steps, the learning step) and otherwise waits for the env workers, so with --trainer_fg 1 it leaves background mode once its
     workers are started (they inherit background mode and keep it): the bursts run about 4.5 times faster on the performance cores

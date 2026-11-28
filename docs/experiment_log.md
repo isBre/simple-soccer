@@ -3,7 +3,7 @@
 What was tried, what came out, and what we concluded. Up to 2026-11-21 numbers are league points per match against the 16 rule-based teams
 (3 = always win), mean ± standard error, unless stated; from then on runs are judged by Elo and goals scored / conceded (standing decision below). Full evaluations use 90 s matches (32 matches); fast checks use 60 s matches
 against every 3rd team (24 matches) and are only comparable with other fast checks. Raw results: `exp/results.jsonl`, table: `exp/results.md`,
-dashboard: `http://<pi-address>:8080`. Newest entries at the bottom; the agent appends a review after every finished experiment.
+dashboard: `http://localhost:8080`. Newest entries at the bottom; the agent appends a review after every finished experiment.
 
 ## Standing decisions (read first)
 - **Runs are judged by Elo, goals scored and goals conceded** (user, 2026-11-21): the Elo ladder rating of the run's best checkpoint and
@@ -59,8 +59,7 @@ dashboard: `http://<pi-address>:8080`. Newest entries at the bottom; the agent a
   `defaults_for`). The plain controls `anchor_wall_repro` / `_s11` / `_s23` / `_s31` are rollout 128; the `anchor_bigbatch*` runs are
   the controls of the new default.
 - **Learning rate 5e-5** with a 30-update warm-up after every (re)start. 3e-4 and 1e-4 runs drifted away from the warm start.
-- **Raspberry Pi 4 (4 cores, 3.8 GB).** Training on 3 workers (2 rule + 1 self-play), learning step on 2 threads, evaluation processes on 1 BLAS thread (the nets run inside them since 2026-11-21; before, in separate net servers).
-  The live viewer runs on the Pi's touch screen (no keyboard) next to training.
+- **One machine** (user, 2026-11-28): the Raspberry Pi is retired (its services, watchdog and the sync are removed); one machine trains, evaluates, keeps the ratings, serves the dashboard and commits the results (`lab/SETUP.md`). The Pi's ratings database was not kept. Training stays on 3 workers (2 rule + 1 self-play), learning step on 2 threads, evaluation processes on 1 BLAS thread.
 
 ## History before the pipeline
 | Run | What | Result |

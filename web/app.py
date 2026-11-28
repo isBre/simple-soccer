@@ -1,7 +1,7 @@
 """The web app: one server for both areas of the page.
 
   Game   play Simple Soccer in the browser: quick match, teams, players, rankings, tournaments, match report (game/: the back end)
-  Lab    the experiment pipeline of this machine (Pi or Mac): runs, live demo match, comparisons, docs (lab/dashboard.py: the back end)
+  Lab    the experiment pipeline of this machine: runs, live demo match, comparisons, docs (lab/dashboard.py: the back end)
 
   python3 web/app.py [--port 8080]       then open http://<this machine>:8080  (#/game = Game, #/ = Lab)
 

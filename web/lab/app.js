@@ -44,10 +44,10 @@ async function poll() {
 function setPulse(ok) {
   const p = $("#pulse"), off = $("#offline"), chip = $("#machinechip"), s = state.ov?.status?.machine;
   p.className = "pulse " + (ok ? "ok" : "err");
-  if (chip && s) { chip.innerHTML = `<i class="${s.temp_c > tempWarn(s) || (s.throttled && s.throttled !== "0x0") || s.thermal > 0 ? "warn" : "ok"}"></i>${f(s.temp_c, 0)}°C · load ${f(s.load_1m, 1)}`; chip.title = machineName(s); }
+  if (chip && s) { chip.innerHTML = `<i class="${s.temp_c > tempWarn(s) || s.thermal > 0 ? "warn" : "ok"}"></i>${f(s.temp_c, 0)}°C · load ${f(s.load_1m, 1)}`; chip.title = machineName(s); }
   const down = !ok && state.firstFail && Date.now() - state.firstFail > 25000;
   off.hidden = !down;
-  if (down) off.innerHTML = `<b>The ${esc(machineName(s))} stopped answering</b>${state.lastOk ? " · last data " + new Date(state.lastOk).toLocaleTimeString() + " (" + dur((Date.now() - state.lastOk) / 1000) + " ago)" : ""}${s?.watchdog !== false ? " · if it froze, the watchdog reboots it and the runner resumes" : " · if it slept or rebooted, start the runner again"}`;
+  if (down) off.innerHTML = `<b>The ${esc(machineName(s))} stopped answering</b>${state.lastOk ? " · last data " + new Date(state.lastOk).toLocaleTimeString() + " (" + dur((Date.now() - state.lastOk) / 1000) + " ago)" : ""} · if it slept or rebooted, start the runner again (lab/run.sh)`;
 }
 
 // ---------- routing ----------
