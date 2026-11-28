@@ -53,13 +53,14 @@ class Ball:
 
 class View:
     """The public view for team `team` (see the module docstring). refresh(m) copies the public state of the match in; the
-    view keeps no reference to the match."""
+    view keeps no reference to the match. Every player of the line-ups has a Body, also one training took off the pitch (a
+    "ghost", rl/env.py: still in m.team_lists, no longer in m.players), which the view shows where the match keeps it."""
 
     def __init__(self, m, team):
         self.team = team
         self.pitch = m.pitch
         self.duration = m.cfg.duration
-        self.bodies = {p.uid: Body(p) for p in m.players}
+        self.bodies = {p.uid: Body(p) for t in (0, 1) for p in m.team_lists[t]}
         self.team_lists = [[self.bodies[p.uid] for p in m.team_lists[t]] for t in (0, 1)]
         self.players = [self.bodies[p.uid] for p in m.players]
         self.by_uid = self.bodies
@@ -69,7 +70,7 @@ class View:
 
     def refresh(self, m):
         t = self.team
-        for p in m.players:
+        for p in m.team_lists[0] + m.team_lists[1]:
             b = self.bodies[p.uid]
             b.pos, b.vel = p.pos, p.vel
             if p.team == t:                            # a team hears its own calls and knows which of its players a person controls

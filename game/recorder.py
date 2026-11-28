@@ -25,6 +25,7 @@ import secrets
 import numpy as np
 
 from soccer.ai.obs import features_team
+from soccer.ai.view import View
 from soccer.match import AI_PERIOD, DIRS, PLAYING
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -54,6 +55,7 @@ class Recorder:
         self.started = dt.datetime.now(dt.timezone.utc)
         self.rows = {k: [] for k in ("obs", "state", "ctrl", "move", "kick", "dir", "tick", "time_left", "score", "kickoff", "speed")}
         self.players = [q for t in (0, 1) for q in m.team_lists[t]]
+        self.views = {}                     # team -> its public view: the observation is built from it, as a net's is
         self.saved = None
 
     def __len__(self):
@@ -71,7 +73,9 @@ class Recorder:
         for q in self.players:
             st += (q.pos.real, q.pos.imag, q.vel.real, q.vel.imag)
         st += (m.ball.pos.real, m.ball.pos.imag, m.ball.vel.real, m.ball.vel.imag)
-        r["obs"].append(features_team(m, p))
+        v = self.views.get(p.team) or self.views.setdefault(p.team, View(m, p.team))
+        v.refresh(m)
+        r["obs"].append(features_team(v, v.bodies[p.uid]))
         r["state"].append(st)
         r["ctrl"].append(p.uid)
         r["move"].append(move_index(d, m.attack_dir(p.team)))

@@ -1,6 +1,7 @@
 """What a net player sees: its observation, a list of numbers computed from its team's public view (soccer/ai/view.py,
-docs/public_view.md) and nothing else. Training (rl/env.py), the game recorder and every match build it the same way, so a
-net sees in play exactly what it saw in training.
+docs/public_view.md) and nothing else. Every function takes the view as `m` and the player's own body as `p`. Training
+(rl/env.py), the game recorder and every match build it from a View, so a net sees in play exactly what it saw in training
+(tests/test_view.py also checks that the Match itself would give the same numbers).
 
 Layouts (a net file says "obs": "slots76"; older files are recognised by their input size, features_for / LAYOUTS):
   slots76   every team size, with the teammates' calls (features_slots)

@@ -443,3 +443,13 @@ v6 was merged in the evening (origin/main) and given 480 extra ladder games here
   extra games alongside the marathon; `logs/morning_ladder.sh` added ladder rounds until 07:45.
 - Next, for the user: a different lever than the PPO recipe, e.g. continuing jit8's own 54-number line with today's recipe (rollout 256,
   `w_wall`, KL to itself), or a new distillation of jit8 (longer DAgger) to close the gap at the start; or stop the search here.
+
+### Note 2026-11-27: training observes through the public view; ghost players fixed
+- `rl/env.py` builds every observation from its team's `View` (`soccer/ai/view.py`), as every net player does in a match; it used the
+  Match itself. Same numbers at every step of the nine `test_env` scenarios; no measurable cost (about 190 us per 5v5 env step
+  either way on the Mac, step + observation).
+- Bug found on the way: players training takes off the pitch ("ghosts": `n_active < size`, or `opp` `none` / `keeper`) stayed in the
+  rule players' views frozen at their kickoff spots, so the rule-based opponents and keepers marked and avoided phantoms. The view now
+  shows them where the match keeps them, off the pitch. Only the `curriculum_keeper` and `curriculum_rules` env scenarios changed
+  (re-recorded). The runner's runs are not affected: selfplay trains with `n_active = size`, and the phase D `1v0` stages have no
+  rule players. Matches, evaluations and ratings are unchanged (no `elo.ENGINE` bump).
