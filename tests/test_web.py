@@ -1,7 +1,7 @@
 """Smoke test of the web app (web/app.py): starts it on a free port and checks
   pages      the shell, styles and scripts are served; the Lab API answers (/api/v1/runs, /api/docs)
-  lab        a run's page says how it was trained (/api/run/<name> "setup": observation, actions, rewards with their meaning); the
-             Lab's live demo match (lab/live.py) streams the Game's own meta and frames, so the Game's renderer draws it
+  lab        a run's page says how it was trained (/api/run/<name> "setup": observation blocks, action heads, grouped rewards with their
+             meaning, grouped training settings); the Lab's live demo match (lab/live.py) streams the Game's own meta and frames, so the Game's renderer draws it
   catalog    leagues, players, teams (line-ups of known players), pitches, formations
   team select a mixed team fields the players who can play the size; a team of 5v5 nets is refused at 3v3
   live       a match played over the WebSocket (/ws/match, at 8x speed) ends with the same result as the same setup simulated
@@ -152,6 +152,8 @@ def main():
         m = Match(make_config(lab_live.OUR_TEAM, "ember", "arena", 5, 90.0, 1))
         lm, gm = lab_live.live_meta(m, "x_test", "x_test_u100", {"team": "ember", "model": None, "label": "Ember"}, "match"), session.meta(m)
         results.append(check("lab", su.get("obs", {}).get("about") and su.get("actions", {}).get("moves") == 9 and "goals" in rewards
+                             and su["obs"].get("blocks") and len(su["actions"].get("heads", [])) == 3 and su.get("reward_groups")
+                             and all(t.get("group") for t in su.get("training", []))
                              and all(r.get("help") for k, r in rewards.items() if r.get("v")) and set(gm) <= set(lm) and lm["elo"][1]["id"] == "team:ember",
                              "%s: %s observation, %d outputs, %d reward terms on; live meta = game meta + %s" % (
                                  run, su.get("obs", {}).get("name"), su.get("actions", {}).get("outputs", 0), sum(1 for r in rewards.values() if r.get("v")),

@@ -86,6 +86,8 @@ card's real width), so a wide card never makes a tall chart.
 - 25 rows per page (`pager`), the header stays visible (`th` is sticky inside `.card.flush`).
 - At most one emphasised column (Elo); the focus row (this run) is `tr.focus` (accent tint).
 - Long text never widens a column: `.clip` (ellipsis) or wrap in a sub-line (`.muted.small`).
+- Group rows: `grpRow(title, cols, side)` → `tr.grp` (eyebrow label on `--panel-2`, optional settings on the right) splits a long
+  table into sections. A value that differs from its reference (minimal set, default) is `.hl` (accent, bold), with the reference in its own column.
 
 ## 4. Pages
 | Page | Layout |
@@ -93,7 +95,7 @@ card's real width), so a wide card never makes a tall chart.
 | **Now** | Fills the window like a dashboard, no scrolling. Run strip (full width: name, stage, chips, one-line notes, KPIs, progress bar with a tick per Elo check, curriculum stages, queue) → row: estimated Elo chart (s5) · Live mini card (s4) · machine (s3) → row: ratings top 5 with Players / Teams / Checkpoints (s5) · timeline + the latest events (s7); the two rows share the height left. |
 | **Live** | Full height: the match (drawn by the Game's renderer, `web/game/render.js`) and a 260 px side panel (run progress, both sides' Elo, mode, camera, opponent). |
 | **Runs** | Filter bar → paginated table, the latest run first (sortable by Elo and the other columns). |
-| **Run** | Header (name, state, chips, notes clamped, a fact grid on the right) → tabs: Summary · Training · Evaluation · Behaviour · Scouting · Setup (observation, actions, rewards, training). |
+| **Run** | Header (name, state, chips, notes clamped, a fact grid on the right) → tabs: Summary · Training · Evaluation · Behaviour · Scouting · Setup: four tables — Observation (s7: indices, block, numbers, contents, slots filled at this size) · Actions (s5: outputs, head, choices, sampling) · Rewards (s12: grouped terms with weight, minimal, who gets it, when, tuning settings, meaning; off terms behind a toggle) · Training (s12: grouped settings with value, Lab default, meaning). |
 | **Compare** | Run chips + add / presets → Elo and goals table (the judging numbers) → Elo and goals charts → folded full-evaluation details. |
 | **Ranking** | Head with the size control → filter bar (entry, league, search) → paginated table → rating history · latest matches. |
 | **Events** | Filter bar → paginated feed with day separators. |

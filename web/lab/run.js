@@ -162,34 +162,74 @@ function runBehaviour(d) {
     <section class="card"><div class="card-h"><h2>Where the players are</h2><span class="muted small">share of time · attacking right</span></div><div class="heats">${heats || '<div class="empty">no heatmaps</div>'}</div>
     <div class="hlegend"><span>rare</span><i></i><span>often</span></div><p class="muted small">Per player slot: with no fixed roles a slot is not a position. Role-based views come with the scouting page.</p></section>`;
 }
-// how the run was trained (dashboard.training_setup): what the net sees, what it can do, what it is rewarded for, how it learns
-const OPP_MODE = { rules: "against the rule teams (the first N players of each line-up) and snapshots of itself", none: "on an empty pitch: first-goal episodes from random starts" };
+// ---------- SETUP ----------
+// how the run was trained (dashboard.training_setup), as four tables: what the net sees, what it can do, what it is rewarded for,
+// how it learns. Highlighted (.hl) = differs from the minimal reward set / the Lab's default
+const OPP_MODE = { rules: "the rule teams (the first N players of each line-up) and snapshots of itself", none: "none: an empty pitch, first-goal episodes from random starts" };
+const sameVal = (x, y) => x === y || (x == null && y == null) || String(x) === String(y);
+const setVal = (v) => (v === "" || v == null ? '<span class="muted">–</span>' : esc(shortVal(v)));
 function runSetup(d) {
   const su = d.setup; if (!su) return '<div class="empty">No setup recorded for this run</div>';
-  const o = su.obs, a = su.actions, same = (x, y) => x === y || (x == null && y == null) || String(x) === String(y);
-  const help = (h) => (h ? `<div class="muted small">${esc(h)}</div>` : "");
-  const obs = `<section class="card s6">${cardHead("Observation", `<span class="muted small">${esc(o.name)} · ${o.inputs} numbers per player</span>`)}
-    <p>${esc(o.about)}</p><dl class="kv"><dt>Team size</dt><dd>${o.size}v${o.size}</dd><dt>Opponents</dt><dd>${esc(OPP_MODE[o.opp_mode] || o.opp_mode)}</dd>
-    <dt>Net</dt><dd>${o.inputs} inputs → ${o.hidden.length ? o.hidden.join(" → ") + " hidden → " : ""}${a.outputs} outputs, one net shared by every player</dd></dl></section>`;
-  const actions = `<section class="card s6">${cardHead("Actions", `<span class="muted small">${a.outputs} outputs, every decision (30 per second)</span>`)}
-    <dl class="kv"><dt>Move</dt><dd>one of 9: stand still or one of 8 directions (mirrored so that forward is always towards the opponent goal)</dd>
-    <dt>Kick</dt><dd>on / off</dd>${a.calls.length ? `<dt>Call</dt><dd>one of ${a.calls.map((c) => `<span class="chip">${esc(c)}</span>`).join(" ")} to the teammates (no reward: its meaning is learned)</dd>` : "<dt>Call</dt><dd class=\"muted\">none (a net with 10 outputs does not call)</dd>"}</dl>
-    <p class="muted small">Training samples the move and the call from the net's probabilities and the kick from its own; the Live match and the evaluations sample too.</p></section>`;
-  const on = su.rewards.filter((r) => r.fixed || r.v), off = su.rewards.filter((r) => !r.fixed && !r.v);
-  const rrow = (r) => `<tr><td><b>${esc(TERM_LABEL[r.k.replace(/^w_/, "")] || r.k.replace(/^w_/, "").replace(/_/g, " "))}</b> <span class="mono muted small">${esc(r.fixed ? "" : r.k)}</span>${help(r.help)}</td>
-    <td class="r">${r.fixed ? '<span class="muted">always</span>' : esc(shortVal(r.v))}</td>
-    <td class="r">${r.fixed ? "" : same(r.v, r.minimal) ? '<span class="muted">same</span>' : `<span class="chip rw" title="the minimal set has ${esc(shortVal(r.minimal))}">was ${esc(shortVal(r.minimal))}</span>`}</td></tr>`;
-  const mods = su.reward_options.map((r) => `<dt title="${esc(r.help)}">${esc(r.k)}</dt><dd class="${same(r.v, r.minimal) ? "" : "hl"}">${esc(shortVal(r.v))}</dd>`).join("");
-  const rewards = `<section class="card flush s8">${cardHead("Rewards", '<span class="muted small">per decision, summed over the match · compared with the minimal set</span>')}
-    <table><thead><tr><th>Term</th><th class="r">Weight</th><th class="r">vs minimal</th></tr></thead><tbody>${on.map(rrow).join("")}</tbody></table>
-    <details class="pad"><summary class="muted small">${off.length} terms off: ${off.map((r) => esc(r.k)).join(", ")}</summary><table class="mini"><tbody>${off.map(rrow).join("")}</tbody></table></details>
-    <div class="pad"><div class="eyebrow">Reward options</div><dl class="kv">${mods}</dl></div></section>`;
-  const train = `<section class="card s4">${cardHead("Training", '<span class="muted small">PPO self-play · highlighted = not the default</span>')}
-    <dl class="kv">${su.training.map((r) => `<dt title="${esc(r.help)}">${esc(r.k)}</dt><dd class="${same(r.v, r.default) || r.k === "start" ? "" : "hl"}" title="${esc(r.help)}">${esc(r.v === "" || r.v == null ? "–" : shortVal(r.v))}</dd>`).join("")}</dl></section>`;
+  return `<div class="grid">${setupObs(su)}${setupActions(su)}${setupRewards(su)}${setupTraining(su)}${setupRaw(d)}</div>`;
+}
+function setupObs(su) {
+  const o = su.obs, a = su.actions, blocks = o.blocks || [], slots = blocks.some((b) => b.filled != null), cols = slots ? 5 : 4;
+  const fill = (b) => (b.filled == null ? '<span class="muted">always</span>' : b.filled === b.count ? `all ${b.count}` : b.filled ? `${b.filled} of ${b.count} <span class="muted small">· rest zeros</span>` : '<span class="muted">empty · zeros</span>');
+  const rows = blocks.map((b) => `<tr class="${b.filled === 0 ? "dim" : ""}"><td class="mono">${b.from === b.to ? b.from : `${b.from}–${b.to}`}</td><td><b>${esc(b.block)}</b></td>
+    <td class="r">${b.count > 1 ? `<span class="muted">${b.count} × ${b.each} =</span> ` : ""}<b>${b.count * b.each}</b></td><td class="wrap">${esc(b.what)}</td>${slots ? `<td class="nowrap">${fill(b)}</td>` : ""}</tr>`).join("");
+  const total = `<tr class="lad"><td></td><td><b>total</b></td><td class="r"><b>${o.inputs ?? "–"}</b></td><td colspan="${cols - 3}" class="muted small">numbers per player, every decision</td></tr>`;
+  const net = `${o.inputs} → ${o.hidden.length ? o.hidden.join(" → ") + " → " : ""}${a.outputs}`;
+  return `<section class="card flush s7">${cardHead("Observation", `<span class="muted small"><span class="mono">${esc(o.name)}</span> · ${o.inputs} inputs · ${o.size}v${o.size}</span>`)}
+    ${blocks.length ? `<table class="setup"><thead><tr><th>Indices</th><th>Block</th><th class="r">Numbers</th><th>Contents</th>${slots ? `<th>At ${o.size}v${o.size}</th>` : ""}</tr></thead><tbody>${rows}${total}</tbody></table>` : ""}
+    <div class="pad"><dl class="kv"><dt>Scaling</dt><dd>${esc(o.scale || "")}</dd><dt>Opponents</dt><dd>${esc(OPP_MODE[o.opp_mode] || o.opp_mode)}</dd>
+      <dt>Net</dt><dd><span class="mono">${net}</span> · one net shared by every player</dd></dl>
+      ${o.about ? `<p class="muted small">${esc(o.about)}</p>` : ""}</div></section>`;
+}
+function setupActions(su) {
+  const a = su.actions;
+  const rows = (a.heads || []).map((h) => `<tr class="${h.off ? "dim" : ""}"><td class="mono">${esc(h.outputs)}</td><td><b>${esc(h.head)}</b></td><td class="wrap">${esc(h.choices)}</td><td class="wrap">${esc(h.pick)}</td></tr>`).join("");
+  return `<section class="card flush s5">${cardHead("Actions", `<span class="muted small">${a.outputs} outputs · ${a.per_second ?? 30} decisions / s</span>`)}
+    <table class="setup"><thead><tr><th>Outputs</th><th>Head</th><th>Choices</th><th>How it is picked</th></tr></thead><tbody>${rows}</tbody></table>
+    <p class="muted small pad">Every player decides on its own from its own observation. Training samples every head from the net's probabilities; the Live match and the evaluations sample too.</p></section>`;
+}
+function setupRewards(su) {
+  const showOff = state.open["setup-off"], rs = su.rewards || [];
+  const changed = (r) => !r.fixed && !sameVal(r.v, r.minimal);
+  const pChanged = (p) => !sameVal(p.v, p.minimal);
+  const on = (r) => r.fixed || !!r.v;
+  const prm = (p) => `<span class="prm${pChanged(p) ? " hl" : ""}" title="${esc(p.k)}: ${esc(p.help)}${pChanged(p) ? ` · minimal ${esc(shortVal(p.minimal))}` : ""}">${esc(p.label)} <b>${p.k === "pass_individual" ? (p.v ? "yes" : "no") : esc(shortVal(p.v))}</b></span>`;
+  const w = (v) => (v ? esc(shortVal(v)) : '<span class="muted">off</span>');
+  const row = (r) => `<tr class="${on(r) ? "" : "dim"}"><td><b>${esc(r.label)}</b><div class="mono muted small">${r.fixed ? "always on" : esc(r.k)}</div></td>
+    <td class="r">${r.fixed ? '<span class="muted">fixed</span>' : `<span class="${changed(r) ? "hl" : ""}">${w(r.v)}</span>`}</td>
+    <td class="r">${r.fixed ? "" : w(r.minimal)}</td><td>${esc(r.who)}</td><td class="wrap when">${esc(r.when)}</td>
+    <td class="wrap">${(r.params || []).map(prm).join(" ")}</td><td class="wrap what">${esc(r.help)}</td></tr>`;
+  const shown = (r) => on(r) || changed(r) || showOff;
+  const body = (su.reward_groups || []).map((g) => {
+    const list = rs.filter((r) => r.group === g.name && shown(r));
+    return list.length ? grpRow(g.name, 7, (g.params || []).map(prm).join(" ")) + list.map(row).join("") : "";
+  }).join("");
+  const nOn = rs.filter(on).length, nOff = rs.length - nOn;
+  const nCh = rs.filter(changed).length + (su.reward_groups || []).flatMap((g) => g.params || []).concat(rs.flatMap((r) => r.params || [])).filter(pChanged).length;
+  const side = `<span class="muted small">${nOn} on · ${nCh ? `<b class="hl">${nCh} changed</b>` : "nothing changed"} vs the minimal set</span>
+    <button class="linkbtn" data-open="setup-off">${showOff ? "hide" : "show"} the ${nOff} terms that are off</button>`;
+  return `<section class="card flush s12">${cardHead("Rewards", side)}
+    <table class="setup"><thead><tr><th>Term</th><th class="r">Weight</th><th class="r">Minimal</th><th>Goes to</th><th>When</th><th>Settings</th><th>What it does</th></tr></thead><tbody>${body}</tbody></table>
+    <p class="muted small pad">Summed over the match. <i>player</i>: that player's own reward · <i>team</i>: every player of the team gets it. What we know about each term: <a href="#/docs/docs__rewards.md">the reward register</a>.</p></section>`;
+}
+function setupTraining(su) {
+  const ts = su.training || [], diff = (t) => t.k !== "start" && !sameVal(t.v, t.default);
+  const groups = [...new Set(ts.map((t) => t.group))];
+  const row = (t) => `<tr><td class="mono">${esc(t.k)}</td><td class="r" title="${esc(t.v ?? "")}"><span class="${diff(t) ? "hl" : ""}">${setVal(t.v)}</span></td>
+    <td class="r muted">${t.k === "start" ? "" : setVal(t.default)}</td><td class="wrap what">${esc(t.help)}</td></tr>`;
+  const n = ts.filter(diff).length;
+  return `<section class="card flush s12">${cardHead("Training", `<span class="muted small">PPO self-play · ${n ? `<b class="hl">${n} differ</b>` : "nothing differs"} from the Lab's defaults</span>`)}
+    <table class="setup"><thead><tr><th>Setting</th><th class="r">Value</th><th class="r">Lab default</th><th>Meaning</th></tr></thead>
+    <tbody>${groups.map((g) => grpRow(g, 4) + ts.filter((t) => t.group === g).map(row).join("")).join("")}</tbody></table></section>`;
+}
+function setupRaw(d) {
   const c = d.config || {};
-  const raw = `<details class="card s12"><summary>Spec and all ${Object.keys(c).length} settings</summary><div class="grid"><pre class="s5">${esc(JSON.stringify(d.status.spec || {}, null, 1))}</pre>
+  return `<details class="card s12"><summary>Spec and all ${Object.keys(c).length} settings</summary><div class="grid"><pre class="s5">${esc(JSON.stringify(d.status.spec || {}, null, 1))}</pre>
     <dl class="kv s7">${Object.keys(c).sort().map((k) => `<dt>${esc(k)}</dt><dd>${esc(typeof c[k] === "object" ? JSON.stringify(c[k]) : c[k])}</dd>`).join("")}</dl></div></details>`;
-  return `<div class="grid">${obs}${actions}${rewards}${train}${raw}</div>`;
 }
 
 // ---------- SCOUTING ----------

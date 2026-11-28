@@ -146,17 +146,84 @@ def changes(st, spec):
 
 # the Setup tab: how a run was trained. Every option comes with the meaning the training script itself gives it (rl/selfplay_args.py)
 FIXED_REWARDS = [("goals", "+10 for every goal scored, -10 for every goal conceded (the whole team; always on)"),
-                 ("time", "-0.0005 per decision (always on)")]
-REWARD_MODS = ("pass_individual", "coop_cap", "random_start", "xg_cap", "def_cap", "space_radius", "far_radius", "goalside_lane",
-               "compact_len", "compact_wid", "keeper_free")
-TRAINING_KEYS = ("start", "updates", "lr", "rollout", "minibatch", "epochs", "gamma", "lam", "ent", "hidden", "workers_rule",
-                 "workers_self", "opp_models", "pfsp", "snapshot_every", "teacher", "kl_coef", "kl_decay", "fast_every", "elo_pairs", "seed")
+                 ("time", "-0.0005 per decision: a small push to get on with it (always on)")]
+# every reward term (rl/env.py): flag -> (group, label, who gets it, when). who "pass": the passer / receiver with pass_individual 1,
+# else the whole team. tests/test_lab.py checks that every w_* option of rl/selfplay_args.py is here
+REWARD_GROUPS = ("Result", "Passing", "Cooperation", "Shooting", "Defence", "Positioning", "Discipline", "Shaping", "Other")
+REWARD_INFO = {
+    "goals": ("Result", "goals", "team", "per goal"),
+    "time": ("Result", "time", "team", "every decision"),
+    "w_win": ("Result", "win bonus", "team", "end of a won match"),
+    "w_draw": ("Result", "draw bonus", "team", "end of a drawn match"),
+    "w_pass_prog": ("Passing", "progressive pass", "pass", "per progressive pass"),
+    "w_pass_fail": ("Passing", "failed pass", "pass", "per failed pass"),
+    "w_pass_ok": ("Cooperation", "completed pass", "pass", "per completed pass (not progressive)"),
+    "w_recv": ("Cooperation", "pass received", "player", "per pass received (only with pass_individual 1)"),
+    "w_key_pass": ("Cooperation", "key pass", "pass", "per key pass"),
+    "w_xa": ("Cooperation", "expected assist", "pass", "per pass, by the xG of the shot it led to"),
+    "w_xg": ("Shooting", "xG for", "player", "per shot, by its xG"),
+    "w_xga": ("Defence", "xG against", "team", "per opponent shot, by its xG"),
+    "w_tackle": ("Defence", "tackles", "player", "per tackle or interception"),
+    "w_goalside": ("Defence", "goal-side", "player", "every decision"),
+    "w_opp_half": ("Defence", "opp. in our half", "team", "every decision"),
+    "w_compact": ("Defence", "compactness", "team", "every decision"),
+    "w_open": ("Positioning", "open for a pass", "player", "every decision"),
+    "w_space": ("Positioning", "spacing", "player", "every decision"),
+    "w_far": ("Positioning", "far from the ball", "player", "every decision"),
+    "w_wall": ("Positioning", "at the wall", "player", "every decision"),
+    "w_corner": ("Positioning", "ball in a corner", "player", "every decision"),
+    "w_keeper": ("Positioning", "keeper strays", "player", "every decision"),
+    "w_kick": ("Discipline", "kick discipline", "player", "every decision"),
+    "w_jitter": ("Discipline", "twitching", "player", "per sharp change of direction"),
+    "shaping": ("Shaping", "ball shaping", "team", "every decision"),
+}
+# the options that tune one term (shown on its row) or a whole group (shown on the group's row): option -> label
+TERM_PARAMS = {"w_space": {"space_radius": "radius px"}, "w_far": {"far_radius": "radius px"}, "w_goalside": {"goalside_lane": "lane px"},
+               "w_compact": {"compact_len": "length px", "compact_wid": "width px"}, "w_keeper": {"keeper_free": "free zone px"},
+               "w_xg": {"xg_cap": "cap / match"}, "w_tackle": {"def_cap": "cap / match"}}
+GROUP_PARAMS = {"Passing": {"pass_individual": "credit to the passer"}, "Cooperation": {"coop_cap": "cap / match"}}
+TRAINING_GROUPS = [("Run", ("start", "updates", "seed")),
+                   ("PPO", ("lr", "rollout", "minibatch", "epochs", "gamma", "lam", "ent")),
+                   ("Net", ("hidden",)),
+                   ("Episodes and opponents", ("random_start", "workers_rule", "workers_self", "envs_per_worker", "opp_models", "pfsp",
+                                               "snapshot_every", "resample_every")),
+                   ("Teacher", ("teacher", "kl_coef", "kl_decay")),
+                   ("Checks", ("fast_every", "elo_pairs", "ckpt_every"))]
+
+
+def obs_blocks(mod, obs, size, opp_mode):
+    """The observation as a table: [{block, count, each, from, to, what, filled}] (filled: slots in use at this size, slots only)."""
+    out, i = [], 0
+    for block, count, each, what in mod.OBS_LAYOUT.get(obs, []):
+        row = {"block": block, "count": count, "each": each, "from": i, "to": i + count * each - 1, "what": what}
+        if obs == "slots" and block in ("teammates", "opponents"):
+            row["filled"] = min(size - 1, 4) if block == "teammates" else (0 if opp_mode == "none" else min(size, 5))
+        out.append(row)
+        i += count * each
+    return out
+
+
+def action_heads(outputs):
+    """The net's outputs as a table: [{outputs, head, choices, pick, off}]."""
+    from soccer.ai.nets import CALL_OUT, DIRS
+    from soccer.match import INTENTS
+    n = len(DIRS)
+    heads = [{"outputs": "0–%d" % (n - 1), "head": "Move", "choices": "stand still or one of %d directions (forward = towards the opponent goal)" % (n - 1),
+              "pick": "softmax over the %d logits, sampled" % n},
+             {"outputs": str(n), "head": "Kick", "choices": "on / off", "pick": "sigmoid of the logit, sampled"}]
+    if outputs >= CALL_OUT:
+        heads.append({"outputs": "%d–%d" % (n + 1, n + len(INTENTS)), "head": "Call", "choices": " / ".join(INTENTS),
+                      "pick": "softmax over the %d logits, sampled; the teammates see it, no reward of its own: its meaning is learned" % len(INTENTS)})
+    else:
+        heads.append({"outputs": "–", "head": "Call", "choices": "none", "pick": "a net with %d outputs does not call" % outputs, "off": True})
+    return heads
 
 
 def training_setup(cfg, st, row):
-    """{obs, actions, rewards, reward_options, training}: the observation layout, the net's outputs, every reward weight (with the
-    minimal set's value) and the main training settings of a run, from its config file (logs/<tag>_config.json) or, before that
-    exists, its status."""
+    """{obs, actions, rewards, reward_groups, training}: the observation layout (blocks with their indices), the net's outputs,
+    every reward weight (with the minimal set's value, its group, who gets it and when, and the options that tune it) and the
+    training settings (with the Lab's default) of a run, from its config file (logs/<tag>_config.json) or, before that exists,
+    its status."""
     mod = tracker.selfplay_args()
     acts = [a for a in mod.parser()._actions if a.option_strings and a.dest != "help"]
     helps, defaults = {a.dest: (a.help or "").replace("%%", "%") for a in acts}, {a.dest: a.default for a in acts}
@@ -165,21 +232,42 @@ def training_setup(cfg, st, row):
     if "opp" in spec:
         top["opp_mode"] = spec["opp"]
     v = {**defaults, **{k: val for k, (_, val) in settings(st, spec).items()}, **top, **cfg}
-    minimal = tracker.minimal_for(lab_time(st.get("started")))
-    item = lambda k: {"k": k, "v": v.get(k), "default": defaults.get(k), "help": helps.get(k, "")}
-    reward = lambda k: {**item(k), "minimal": minimal.get(k, defaults.get(k))}
+    started = lab_time(st.get("started"))
+    minimal = tracker.minimal_for(started)
+    lab_default = {**defaults, **minimal, **tracker.defaults_for(started)}         # what a spec gets when it does not set it
+    lab_default["start"] = None                                                    # a spec always names its start
+    item = lambda k: {"k": k, "v": v.get(k), "default": lab_default.get(k), "help": helps.get(k, "")}
+    param = lambda k, label: {"k": k, "label": label, "v": v.get(k), "minimal": minimal.get(k, defaults.get(k)), "help": helps.get(k, "")}
+    individual = bool(v.get("pass_individual"))
+
+    def reward(k, fixed=False, help_text=None):
+        group, label, who, when = REWARD_INFO.get(k, ("Other", k.replace("w_", "").replace("_", " "), "", ""))
+        r = {"k": k, "label": label, "group": group, "who": ("player" if individual else "team") if who == "pass" else who, "when": when,
+             "help": help_text if help_text is not None else helps.get(k, ""),
+             "params": [param(p, lb) for p, lb in TERM_PARAMS.get(k, {}).items() if p in helps]}
+        if fixed:
+            return {**r, "v": None, "fixed": True}
+        return {**r, "v": v.get(k), "default": defaults.get(k), "minimal": minimal.get(k, defaults.get(k))}
+
+    rewards = [reward(k, True, h) for k, h in FIXED_REWARDS] + [reward(k) for k in sorted(helps) if k.startswith("w_") or k == "shaping"]
+    rewards.sort(key=lambda r: REWARD_GROUPS.index(r["group"]))                   # stable: the fixed terms first in Result
     net = [int(x) for x in str(row.get("net") or "").split("-") if x.isdigit()]
     by_inputs = {n: name for name, n in mod.OBS_DIMS.items()}
     obs = cfg.get("obs") or top.get("obs") or (by_inputs.get(net[0]) if net else None) or "team"
+    if not net and obs in mod.OBS_DIMS:                # from scratch, or the start file is gone: the net rl/selfplay.py builds
+        hid = int(v.get("hidden") or 128)
+        net = [mod.OBS_DIMS[obs], hid, hid, 15 if obs == "slots" else 10]          # two hidden layers; the slots net calls
     outputs = net[-1] if net else 10
-    from soccer.match import INTENTS
-    return {"obs": {"name": obs, "inputs": net[0] if net else mod.OBS_DIMS.get(obs), "about": mod.OBS_DESC.get(obs, ""), "size": v.get("size", 5),
-                    "opp_mode": v.get("opp_mode", "rules"), "hidden": net[1:-1]},
-            "actions": {"outputs": outputs, "moves": 9, "kick": True, "calls": list(INTENTS) if outputs >= 15 else []},
-            "rewards": [{"k": k, "v": None, "fixed": True, "help": h} for k, h in FIXED_REWARDS]
-                       + [reward(k) for k in sorted(helps) if k.startswith("w_") or k == "shaping"],
-            "reward_options": [reward(k) for k in REWARD_MODS if k in helps],
-            "training": [item(k) for k in TRAINING_KEYS if k in v]}
+    size, opp_mode = int(v.get("size") or 5), v.get("opp_mode", "rules")
+    from soccer.match import AI_PERIOD, INTENTS, TICK
+    return {"obs": {"name": obs, "inputs": net[0] if net else mod.OBS_DIMS.get(obs), "about": mod.OBS_DESC.get(obs, ""), "size": size,
+                    "opp_mode": opp_mode, "hidden": net[1:-1], "blocks": obs_blocks(mod, obs, size, opp_mode), "scale": mod.OBS_SCALE},
+            "actions": {"outputs": outputs, "moves": 9, "kick": True, "calls": list(INTENTS) if outputs >= 15 else [], "heads": action_heads(outputs),
+                        "per_second": round(1.0 / (TICK * AI_PERIOD))},
+            "rewards": rewards,
+            "reward_groups": [{"name": g, "params": [param(p, lb) for p, lb in GROUP_PARAMS.get(g, {}).items() if p in helps]}
+                              for g in REWARD_GROUPS if any(r["group"] == g for r in rewards)],
+            "training": [{**item(k), "group": g} for g, keys in TRAINING_GROUPS for k in keys if k in v]}
 
 
 def lab_time(started):

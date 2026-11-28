@@ -87,6 +87,8 @@ function ema(points, a) {
 
 // ---------- small components ----------
 function kpi(label, value, sub = "", cls = "") { return `<div class="kpi"><div class="l">${label}</div><div class="v ${cls}">${value}</div>${sub ? `<div class="s">${sub}</div>` : ""}</div>`; }
+// a section row inside a table (docs/lab_design.md Tables): the title as an eyebrow across `cols` columns, `side` (html) after it
+const grpRow = (title, cols, side = "") => `<tr class="grp"><td colspan="${cols}">${esc(title)}${side ? `<span class="grp-side">${side}</span>` : ""}</td></tr>`;
 const cardHead = (title, side = "") => `<div class="card-h"><h2>${title}</h2>${side ? `<div class="side">${side}</div>` : ""}</div>`;
 const smoothControl = () => `<label class="smooth">smoothing <input type="range" min="0" max="0.97" step="0.01" value="${state.smooth}" data-smooth> <b>${f(state.smooth, 2)}</b></label>`;
 // a segmented control: options [[value, label, count?]]; a click calls onSeg[name](value) (pages register their handlers)
