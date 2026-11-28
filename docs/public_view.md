@@ -19,7 +19,7 @@ teammates included. Players talk only through their **calls** (below).
 | Group | Field (`View`) | Meaning |
 |---|---|---|
 | Ball | `ball_pos`, `ball_vel`, `ball_r` | position (px, complex: x = `.real`, y = `.imag`), velocity (px per tick), radius |
-| Players | `team_lists[team]`, `players`, `bodies[uid]` | every player as a `Body`: `uid`, `team`, `slot` (line-up order), `radius`, `pos`, `vel`, `spawn` (kickoff position), `home` and `line` (kickoff spot and its line: GK / DEF / MID / FWD, the same layout for every team) |
+| Players | `team_lists[team]`, `in_play[team]`, `players`, `bodies[uid]` | every player as a `Body` (`team_lists` the full line-ups; `in_play` and `players` only the bodies on the pitch: they differ only in training, which can take players off the pitch): `uid`, `team`, `slot` (line-up order), `radius`, `pos`, `vel`, `spawn` (kickoff position), `home` and `line` (kickoff spot and its line: GK / DEF / MID / FWD, the same layout for every team) |
 | History | `ball_at(delay)`, `pos_at(uid, delay)` | the ball and every player `delay` ticks ago, for the last `HIST` = 32 ticks |
 | Clock | `tick`, `time_left`, `duration`, `overtime` | the match clock (60 ticks per second), seconds left, match length, golden-goal overtime on |
 | Score | `scores` | `[team 0, team 1]` |

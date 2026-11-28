@@ -24,7 +24,7 @@ import time
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 from game import session                               # noqa: E402
-from soccer.data import database                       # noqa: E402
+from soccer.data import database, res_path             # noqa: E402
 from soccer.match import ENDED, Match, make_config     # noqa: E402
 
 LOGS = os.path.join(ROOT, "logs")
@@ -159,7 +159,7 @@ def main():
     ap.add_argument("--start", default="data/models/rl_5v5_arena_v5.json", help="model played before the first checkpoint")
     ap.add_argument("--matches", type=int, default=0, help="stop after this many matches (0 = never)")
     a = ap.parse_args()
-    start = os.path.join(ROOT, a.start.replace("res://", ""))
+    start = os.path.join(ROOT, res_path(a.start))
     rng = random.Random()
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     k = 0

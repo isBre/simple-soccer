@@ -73,8 +73,9 @@ class Recorder:
         for q in self.players:
             st += (q.pos.real, q.pos.imag, q.vel.real, q.vel.imag)
         st += (m.ball.pos.real, m.ball.pos.imag, m.ball.vel.real, m.ball.vel.imag)
-        v = self.views.get(p.team) or self.views.setdefault(p.team, View(m, p.team))
-        v.refresh(m)
+        if p.team not in self.views:
+            self.views[p.team] = View(m, p.team)
+        v = self.views[p.team].refresh(m)
         r["obs"].append(features_team(v, v.bodies[p.uid]))
         r["state"].append(st)
         r["ctrl"].append(p.uid)

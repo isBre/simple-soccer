@@ -8,8 +8,8 @@ their inputs."""
 import math
 
 from . import rating
-from .control import NONE, TEAM, HumanControl, check_humans, config_humans
-from .data import database
+from .control import NONE, SINGLE, SWITCH_WINDOW, TEAM, Human, HumanControl, check_humans, config_humans  # noqa: F401 (older imports)
+from .data import database, res_path  # noqa: F401 (res_path: older imports from soccer.match)
 from .physics import (BALL_DAMPING, KIND_BALL, KIND_PLAYER, KIND_STATIC, PLAYER_ACCEL, PLAYER_DAMPING, PLAYER_KICK_ACCEL, Disc,
                       prepare_walls, resolve)
 from .rng import RandomNumberGenerator

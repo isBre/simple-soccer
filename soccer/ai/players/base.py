@@ -35,8 +35,8 @@ class Sit:
         d = agent.reaction_delay
         self.ball = v.ball_at(d)
         self.bvel = (self.ball - v.ball_at(d + 4)) / 4.0
-        self.mates = [b for b in v.team_lists[me.team] if b is not me]
-        self.opps = v.team_lists[1 - me.team]
+        self.mates = [b for b in v.in_play[me.team] if b is not me]     # the players on the pitch (not training's ghosts)
+        self.opps = v.in_play[1 - me.team]
         lt = v.last_touch
         self.have = lt is not None and lt.team == me.team
         self.lost = lt is not None and lt.team != me.team
