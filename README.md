@@ -55,7 +55,7 @@ there: **Whole team** (switch with Q / LB / RB), **Any player** (the most advanc
 - In the match every device moves only its own person's player, marked with a translucent ring in that person's colour (P1 red,
   P2 blue; off screen: an arrow on the window edge with P1 / P2). Anyone can pause; the pause card says who plays what. A controller of the
   match that disconnects pauses it until it is back. Multiplayer matches are not recorded (the datasets have one player).
-- Engine: `soccer/match.py` `Human` (one per person: side, mode, slot, controlled player, keys, Q ranking) and `check_humans` (the
+- Engine: `soccer/core/match.py` `Human` (one per person: side, mode, slot, controlled player, keys, Q ranking) and `check_humans` (the
   rules above); the setup's `"humans"` list (`game/api.py`), `"h"` on the inputs (`game/session.py`), `web/game/sides.js` (the
   picker), `web/game/pad.js` / `match.js` (one input per device). Tournaments and the Puzzle are one person.
 
@@ -86,13 +86,13 @@ The ten archetypes (`soccer/ai/players/`, one file each, on the shared base `bas
 `tests/test_players.py` checks that each one plays as it says (the sweeper is the deepest, the winger the widest, ...).
 A **team** (`data/teams/<id>.json`, `soccer/teams.py`) is an identity (name, colours, kit, crest) and a
 **line-up** of 5 players in order. A match of N per side fields the first N who can play that size; the same player may appear
-several times and line-ups may be **mixed** (rule-based and net players together, `soccer/ai/lineup.py`). The Rule Based League
+several times and line-ups may be **mixed** (rule-based and net players together, `soccer/game/seating.py`). The Rule Based League
 teams field five different rule-based players each. The current nets understand
 only 5v5, so a team of nets only plays 5v5. Kickoffs use a random taker (any player), direction and short delay (seeded by the
 match seed). A knockout draw goes to **golden-goal overtime** (no time limit, no penalties).
 
 ## What a player can see (fair information)
-Every player decides from the same **public view** (`soccer/ai/view.py`; the specification is [docs/public_view.md](docs/public_view.md)):
+Every player decides from the same **public view** (`soccer/core/view.py`; the specification is [docs/public_view.md](docs/public_view.md)):
 what a spectator could know, plus anything it computes from that (inferring, predicting, simulating, searching). Players are
 anonymous: nobody knows who another player is or how good it is, only its own skill.
 
@@ -106,7 +106,7 @@ anonymous: nobody knows who another player is or how good it is, only its own sk
 
 `tests/test_view.py` enforces the rule (imports, names, no agent reaches the match, a view or another agent, teammates
 included; calls heard only by teammates; anonymous opponents). An agent is any object with `decide(view, me)` returning an
-`Act` (buttons and a call, `soccer/ai/agent.py`); the spec shows a minimal one. (Opus 5.5 High, which planned on a clone of the whole match, was
+`Act` (buttons and a call, `soccer/core/act.py`); the spec shows a minimal one. (Opus 5.5 High, which planned on a clone of the whole match, was
 removed for this reason: "Opus 5.5 High: removed".)
 
 ## Modes
@@ -274,7 +274,7 @@ history before the move of the AI to Python.
 **Training notes:** `rl/README.md` (setup, `--w_jitter` anti-twitch reward); the Lab's Live page plays the newest checkpoint of the running experiment (`lab/live.py`).
 
 ## Team control mode
-`MatchConfig.ControlMode.TEAM`: Q switches to the teammate nearest the ball; `auto_switch` does it automatically (`soccer/match.py` `set_controlled` / `switch_controlled`, per person: see "Local multiplayer").
+`MatchConfig.ControlMode.TEAM`: Q switches to the teammate nearest the ball; `auto_switch` does it automatically (`soccer/game/humans.py` `People.set_controlled` / `switch_controlled`, per person: see "Local multiplayer").
 
 ## Not included (by design)
 Fatigue, fouls, offside, substitutions.
@@ -283,8 +283,8 @@ Fatigue, fouls, offside, substitutions.
 ## Player statistics
 
 There are no player grades: a player's strength is measured by its Elo. The match counts goals, assists, shots (and xG,
-`soccer/rating.py` `shot_xg`), passes (and their value, `pass_value`, which also feeds the RL rewards), tackles, interceptions,
-recoveries, dribbles and blocked shots per player (`soccer/stats.py`).
+`soccer/core/rating.py` `shot_xg`), passes (and their value, `pass_value`, which also feeds the RL rewards), tackles, interceptions,
+recoveries, dribbles and blocked shots per player (`soccer/core/stats.py`).
 
 
 ## Human control and keeper (AI notes)
@@ -297,7 +297,7 @@ recoveries, dribbles and blocked shots per player (`soccer/stats.py`).
 ## Goals and kickoffs
 
 - After a goal the scorer's bot teammates run to him and huddle (the human-controlled player is never steered, he can move freely); the pause
-  lasts 2.5-4.3 s depending on how far they have to run (`soccer/match.py` `goal_pause`). The view adds rings and confetti.
+  lasts 2.5-4.3 s depending on how far they have to run (`soccer/core/match.py` `goal_pause`). The view adds rings and confetti.
 - At kickoff the kicking team may use the whole centre circle, including the part on the opponents' side, so the
   ball can be played backwards. The other team stays out of the circle and in its own half.
 

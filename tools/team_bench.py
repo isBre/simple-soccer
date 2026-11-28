@@ -11,7 +11,8 @@ import os
 import time
 
 from soccer.data import database
-from soccer.match import ENDED, PLAYING, Match, make_config
+from soccer.core.public import ENDED, PLAYING
+from soccer.game import make_config, new_match
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -29,7 +30,7 @@ def play(args):
     cfg = make_config(a, b, pitch, size, duration, seed)
     if net is not None:
         cfg.nets[1 - side] = net
-    m = Match(cfg)
+    m = new_match(cfg)
     t = side
     keeper = lambda: m.keeper_uid[t]
     samples = near_sum = swarm = spread_sum = 0

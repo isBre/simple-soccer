@@ -1,9 +1,9 @@
 """Box-to-box: follows the phase of play. When we have the ball it supports the carrier ("open") and, once the ball is in the
 attacking third, makes a late run into the box ("run"); when we lose it, it sprints back to a cover spot between the ball and our
 goal. On the ball it weighs shot, pass and carry evenly."""
-from ...vec import clamp
+from ...core.vec import clamp
 from .. import kit
-from ..agent import Act
+from ...core.act import Act
 from .base import RuleAgent
 
 

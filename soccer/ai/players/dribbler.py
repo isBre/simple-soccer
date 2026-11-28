@@ -1,9 +1,9 @@
 """Dribbler: wants the ball at its feet and takes people on. It carries the ball on curving paths around the defenders (it looks
 further ahead and turns harder than anyone), shoots once it has beaten its man, and passes only when it is cornered. Without the
 ball it drifts into the half-space near the ball and calls "open"."""
-from ...vec import clamp
+from ...core.vec import clamp
 from .. import kit
-from ..agent import Act
+from ...core.act import Act
 from .base import RuleAgent
 
 

@@ -1,4 +1,4 @@
-"""What a net player sees: its observation, a list of numbers computed from its team's public view (soccer/ai/view.py,
+"""What a net player sees: its observation, a list of numbers computed from its team's public view (soccer/core/view.py,
 docs/public_view.md) and nothing else. Every function takes the view as `m` and the player's own body as `p`. Training
 (rl/env.py), the game recorder and every match build it from a View, so a net sees in play exactly what it saw in training
 (tests/test_view.py also checks that the Match itself would give the same numbers).
@@ -8,7 +8,7 @@ Layouts (a net file says "obs": "slots76"; older files are recognised by their i
   team46    5v5, role-free: teammates and opponents nearest first (features_team)
   rank56    team46 + each player's rank by distance to the ball and by depth (features_rank)
   ego       8n + 14 numbers (54 at 5v5): slot order, the ball and the goal relative to me, my slot (features_ego; the oldest nets)"""
-from ..match import INTENTS
+from ..core.public import INTENTS
 
 TEAM_OBS = 46                     # role-free team observation (features_team)
 RANK_OBS = 56                     # features_team + 10 rank numbers (features_rank)

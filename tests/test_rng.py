@@ -1,10 +1,10 @@
-"""The random generator (soccer/rng.py, a copy of Godot's PCG32) against its stored outputs (tests/golden/rng.json).
+"""The random generator (soccer/core/rng.py, a copy of Godot's PCG32) against its stored outputs (tests/golden/rng.json).
 Every match seed, kickoff and random start comes from it, so its outputs must never change.
 
   python3 tests/test_rng.py [--update]"""
 import sys
 
-from soccer.rng import RandomNumberGenerator
+from soccer.core.rng import RandomNumberGenerator
 import golden
 
 SEEDS = [0, 1, 42, 12345, 987654321, (1 << 40) + 7]

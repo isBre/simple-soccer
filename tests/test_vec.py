@@ -1,17 +1,17 @@
-"""The vector helpers (soccer/vec.py) and the physics numbers the AI writes out (soccer/ai/kit.py) against the engine's.
+"""The vector helpers (soccer/core/vec.py) and the physics numbers the AI writes out (soccer/ai/kit.py) against the engine's.
 
   roundi      halves away from zero, like Godot's roundi (Python's round() rounds halves to even), and returns an int
   vectors     normalized, limit_length, dot, cross, rotated on plain cases
   angles      vec.from_angle (cmath.rect, the AI's) and match.from_angle (cos / sin, the engine's) agree to 1e-15
-              (they are not bit-identical: soccer/match.py says why both exist)
-  physics     kit.TOP, kit.TAU and kit._BALL_LOSS agree with soccer.match's BALL_DAMPING / PLAYER_DAMPING / PLAYER_ACCEL
+              (they are not bit-identical: soccer/core/match.py says why both exist)
+  physics     kit.TOP, kit.TAU and kit._BALL_LOSS agree with soccer.core.public's BALL_DAMPING / PLAYER_DAMPING / PLAYER_ACCEL
 
   python3 tests/test_vec.py"""
 import math
 import random
 import sys
 
-from soccer import match, vec
+from soccer.core import match, public, vec
 from soccer.ai import kit
 
 
@@ -41,8 +41,8 @@ def main():
     worst = max(abs(vec.from_angle(a) - match.from_angle(a)) for a in (rng.uniform(-7.0, 7.0) for _ in range(20000)))
     ok &= check("angles", worst < 1e-15, "largest difference %.1e over 20000 angles" % worst)
 
-    d, acc = match.PLAYER_DAMPING, match.PLAYER_ACCEL
-    errs = {"TOP": kit.TOP - acc * d / (1.0 - d), "TAU": kit.TAU - d / (1.0 - d), "_BALL_LOSS": kit._BALL_LOSS - (1.0 - match.BALL_DAMPING)}
+    d, acc = public.PLAYER_DAMPING, public.PLAYER_ACCEL
+    errs = {"TOP": kit.TOP - acc * d / (1.0 - d), "TAU": kit.TAU - d / (1.0 - d), "_BALL_LOSS": kit._BALL_LOSS - (1.0 - public.BALL_DAMPING)}
     bad = ["%s off by %.1e" % (k, e) for k, e in errs.items() if abs(e) > 1e-9]
     ok &= check("physics", not bad, "; ".join(bad) or "kit's TOP, TAU and ball loss match the engine")
     print("TOTAL ->", "PASS" if ok else "FAIL")

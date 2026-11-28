@@ -5,7 +5,7 @@ While a match with a human player is in play, every AI_PERIOD (2) ticks, the sam
   state      the raw match: all players (uid order: team 0 slots, then team 1 slots) and the ball, x, y, vx, vy each, in world
              coordinates (team 0 attacks right). Any other observation can be recomputed from it later (il/human_data.py)
   ctrl       uid of the controlled player (changes in team control)
-  move       the human's direction as one of the 9 net moves (soccer.match.DIRS, 0 = stand), in the player's own frame
+  move       the human's direction as one of the 9 net moves (soccer.core.public.DIRS, 0 = stand), in the player's own frame
              (+x towards the opponent goal), so it is directly a net's action label
   kick       kick key held (0/1)
   dir        the raw direction the page sent (world frame, unit length or 0)
@@ -25,8 +25,8 @@ import secrets
 import numpy as np
 
 from soccer.ai.obs import features_team
-from soccer.ai.view import View
-from soccer.match import AI_PERIOD, DIRS, PLAYING
+from soccer.core.view import View
+from soccer.core.public import AI_PERIOD, DIRS, PLAYING
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 VERSION = 1
@@ -48,8 +48,9 @@ def move_index(d: complex, attack: float) -> int:
 
 
 class Recorder:
-    def __init__(self, m, setup, min_rows=MIN_ROWS):
-        self.m = m
+    def __init__(self, g, setup, min_rows=MIN_ROWS):
+        self.g, self.m = g, g.match          # g: soccer.game.Game
+        m = self.m
         self.min_rows = min_rows
         self.setup = dict(setup)
         self.started = dt.datetime.now(dt.timezone.utc)
@@ -64,11 +65,11 @@ class Recorder:
     def due(self):
         """True when the coming step is a decision tick and the human plays (call before Match.step())."""
         m = self.m
-        return (m.tick + 1) % AI_PERIOD == 0 and m.state == PLAYING and m.controlled is not None
+        return (m.tick + 1) % AI_PERIOD == 0 and m.state == PLAYING and self.g.people.controlled is not None
 
     def sample(self, d: complex, kick: bool, speed: int):
         """One row: the state now and the input the human holds for the coming step."""
-        m, p, r = self.m, self.m.controlled, self.rows
+        m, p, r = self.m, self.g.people.controlled, self.rows
         st = []
         for q in self.players:
             st += (q.pos.real, q.pos.imag, q.vel.real, q.vel.imag)
@@ -92,7 +93,7 @@ class Recorder:
         """Writes the file (once). Returns its path, or None when there is too little to keep."""
         if self.saved or len(self) < self.min_rows:
             return self.saved
-        m, cfg = self.m, self.m.cfg
+        m, cfg = self.m, self.g.cfg
         pd = m.pitch
         ctrl = self.rows["ctrl"]
         meta = {
@@ -103,7 +104,7 @@ class Recorder:
             "setup": self.setup,
             "teams": [{"id": cfg.teams[t].id, "name": cfg.teams[t].name, "league": cfg.teams[t].league} for t in (0, 1)],
             "human_team": cfg.human_team, "control": {1: "single", 2: "team"}.get(cfg.control, "none"),
-            "players": [{"uid": q.uid, "team": q.team, "slot": q.slot, "line": q.line, "name": q.pdef.name, "player": q.pdef.id,
+            "players": [{"uid": q.uid, "team": q.team, "slot": q.slot, "line": q.line, "name": q.label.name, "player": q.label.id,
                          "rows": ctrl.count(q.uid)} for q in self.players],
             "pitch": {"id": pd.id, "half_w": pd.half_w, "half_h": pd.half_h, "goal_half": pd.goal_half, "out_x": pd.out_x,
                       "out_y": pd.out_y},
@@ -133,7 +134,7 @@ class Recorder:
         return path
 
 
-def wanted(setup, m):
+def wanted(setup, g):
     """Record this match? Only when the page asked for it and one human plays (the datasets have one controlled player; local
     multiplayer matches are not recorded)."""
-    return bool(setup.get("record")) and len(m.humans) == 1
+    return bool(setup.get("record")) and len(g.people.humans) == 1

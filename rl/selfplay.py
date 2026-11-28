@@ -8,7 +8,7 @@ Two groups of env workers run side by side and feed ONE learner (shared policy o
                  other slots = past snapshots of the learner (resampled every few updates).
 Extra reward terms (per player) push towards human-like play: completed progressive passes are paid, key passes
 (a pass whose receiver shoots) and the xA of those shots are paid, failed passes cost, teammates should not bunch up ("storm"), and kick must only be pressed when the ball is in reach.
-With --obs slots (76 numbers, every size) the net also makes a call to its teammates every decision (soccer.match.INTENTS, 5
+With --obs slots (76 numbers, every size) the net also makes a call to its teammates every decision (soccer.core.public.INTENTS, 5
 logits after the kick); calls carry no reward: what they come to mean is up to training. --start scratch = a fresh net.
 
   python3 rl/selfplay.py --updates 1500

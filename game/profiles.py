@@ -29,9 +29,10 @@ def _play(job):
     """Worker: one profiling match of team `tid` (side 0) -> the Behaviour record."""
     from game import api
     from rl.evaluate import Behaviour
-    from soccer.match import ENDED, Match
+    from soccer.core.public import ENDED
+    from soccer.game import new_match
     tid, opp, seed = job
-    m = Match(api.config({"home": tid, "away": opp, "pitch": "arena", "size": 5, "duration": 60.0, "seed": seed, "control": "none"}))
+    m = new_match(api.config({"home": tid, "away": opp, "pitch": "arena", "size": 5, "duration": 60.0, "seed": seed, "control": "none"}))
     m.log_events = True
     b = Behaviour()
     while m.state != ENDED and m.tick < 60 * 120:

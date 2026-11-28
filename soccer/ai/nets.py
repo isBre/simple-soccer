@@ -12,9 +12,9 @@ import threading
 
 import numpy as np
 
-from ..match import DIRS, INTENTS
-from .agent import Act
-from .obs import SLOTS_NAME, SLOTS_OBS
+from ..core.act import Act
+from ..core.public import DIRS, INTENTS
+from .obs import SLOTS_NAME, SLOTS_OBS, features_group
 
 CALL_OUT = 15                     # outputs of a net that calls: 9 moves, 1 kick, 5 calls (INTENTS order)
 
@@ -44,6 +44,17 @@ class Net:
             if i < last:
                 np.maximum(h, 0.0, out=h)
         return h
+
+    def decide_batch(self, views, seats):
+        """Every NetBot of this net that is due this tick, in one forward pass: seats = [(bot, me)] sorted by team, views =
+        both teams' views. Returns their Acts in the same order."""
+        feats = []
+        for t in (0, 1):
+            mine = [me for _, me in seats if me.team == t]
+            if mine:
+                feats += features_group(views[t], mine, self.n_in)
+        out = self.forward(feats)
+        return [bot.act(views[me.team], me, o) for (bot, me), o in zip(seats, out)]
 
 
 _cache = {}
@@ -75,7 +86,15 @@ class NetBot:
     def __init__(self, net, temperature=1.0, seed=0):
         self.net = net
         self.temperature = temperature
-        self.rng = random.Random(seed)          # its own random numbers (lineup.build seeds it from the match)
+        self.rng = random.Random(seed)          # its own random numbers (soccer.game seats it with the seat's brain_seed)
+
+    @property
+    def batch(self):
+        """All the NetBots of one net decide together (Net.decide_batch): one forward pass per net and tick."""
+        return self.net
+
+    def decide(self, view, me):
+        return self.net.decide_batch([view, view], [(self, me)])[0]
 
     def act(self, m, p, out):
         """out: this player's net outputs -> its Act (a net with 10 outputs calls nothing)."""

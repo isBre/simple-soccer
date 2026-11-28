@@ -1,14 +1,10 @@
 """A player's skill (0-100, data/players) as the rule-based AI's precision and reaction. It never changes the physics: every
 body is the same, a bot is exactly as good as its player. The skill lives in the player's own bot: no other agent can read it
-(soccer/ai/view.py: others are judged by the generic skill)."""
+(soccer/core/view.py: others are judged by the generic skill)."""
 import random
 
-from ..vec import clamp, lerp, roundi
-
-
-def quality(skill: float) -> float:
-    """Maps a skill (0-100) to a 0..1 quality: 40 -> 0, 95 -> 1."""
-    return clamp((skill - 40.0) / 55.0, 0.0, 1.0)
+from ..core.public import quality
+from ..core.vec import lerp, roundi
 
 
 def attach_skill(bot, skill, seed):

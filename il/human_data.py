@@ -17,7 +17,7 @@ import numpy as np
 from game.recorder import data_dir
 from soccer.ai.obs import features_team
 
-MOVES = ["stand", "up", "up-fwd", "fwd", "down-fwd", "down", "down-back", "back", "up-back"]   # soccer.match.DIRS, own frame
+MOVES = ["stand", "up", "up-fwd", "fwd", "down-fwd", "down", "down-back", "back", "up-back"]   # soccer.core.public.DIRS, own frame
 
 
 def files(folder=None):

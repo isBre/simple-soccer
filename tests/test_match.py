@@ -12,9 +12,10 @@ import json
 import os
 import sys
 
-from soccer.data import Pitch
-from soccer.control import SINGLE, TEAM, Human, check_humans
-from soccer.match import ENDED, Match, make_config
+from soccer.core.pitch import Pitch
+from soccer.core.public import ENDED
+from soccer.game import make_config, new_game
+from soccer.game.humans import SINGLE, TEAM, Human, check_humans
 import golden
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -37,30 +38,32 @@ def build(sc_def, pitches):
     cfg.net_temperature = float(sc_def.get("temperature", 1.0))
     if sc_def.get("net"):                                        # one net for the home team instead of its line-up
         cfg.nets[0] = {"model": os.path.join(ROOT, sc_def["net"])}
-    return Match(cfg)
+    return new_game(cfg)
 
 
-def scripted_human(m):
+def scripted_human(g):
     """The human's keys, a fixed function of the tick: a new direction every 40 ticks, a short kick every 37 (Q every 240 in team
     control). Several humans (local multiplayer): human k is the same script shifted by k * 13 ticks."""
-    if not m.cfg.humans:
-        m.set_human_input(cmath.exp(1j * ((m.tick // 40) * 2.399963)), m.tick % 37 < 3)
-        if m.cfg.control == 2 and not m.cfg.auto_switch and m.tick % 240 == 0:
-            m.switch_controlled()
+    m, ppl, cfg = g.match, g.people, g.cfg
+    if not cfg.humans:
+        ppl.press(cmath.exp(1j * ((m.tick // 40) * 2.399963)), m.tick % 37 < 3)
+        if cfg.control == 2 and not cfg.auto_switch and m.tick % 240 == 0:
+            ppl.switch_controlled()
         return
-    for k, h in enumerate(m.humans):
+    for k, h in enumerate(ppl.humans):
         t = m.tick + 13 * k
-        m.set_human_input(cmath.exp(1j * ((t // 40) * 2.399963 + k)), t % 37 < 3, k)
+        ppl.press(cmath.exp(1j * ((t // 40) * 2.399963 + k)), t % 37 < 3, k)
         if h.mode == 2 and not h.auto_switch and t % 240 == 0:
-            m.switch_controlled(None, k)
+            ppl.switch_controlled(None, k)
 
 
 def play(sc_def, pitches):
-    m = build(sc_def, pitches)
+    g = build(sc_def, pitches)
+    m = g.match
     trace = []
     while m.state != ENDED and m.tick < MAX_TICKS:
-        if m.humans:
-            scripted_human(m)
+        if g.people.humans:
+            scripted_human(g)
         m.step()
         if m.tick % 60 == 0:
             trace.append([m.tick, list(m.scores), m.ball.pos, abs(m.ball.vel)])

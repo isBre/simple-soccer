@@ -1,20 +1,15 @@
-"""The match core: everything a match is, without any UI. The browser game (game/ + web/: menus, tournaments, drawing,
-keyboard) sits on top; training, evaluations (rl/) and the Lab's live demo (lab/live.py) use it too.
+"""The game in three layers, each importing only the ones above it in this list:
 
-  data.py     loads the JSON files under data/: pitches, kickoff spots, players, teams
-  players.py  a player: a brain with a name (a rule-based archetype + skill, or a net) and the team sizes it can play
-  teams.py    a team: identity and a line-up of players (mixed line-ups allowed); no tactic, no formation
-  match.py    the match at 60 ticks/s: kickoffs, touches, passes and shots, goals, golden-goal overtime, result
-              (no keeper role, no shootout: every player has the same body and the same rules)
-  physics.py  discs and walls: the bodies, their constants and the contacts of one tick
-  control.py  the people at the controls: who plays which player, the Q switch of TEAM control
-  stats.py    per-player counters          rating.py   xG of a shot, value of a pass
-  rng.py      Godot's random number generator, bit for bit (kickoffs draw exactly like the Godot version)
-  vec.py      2-D vector helpers on complex numbers (engine and AI)
-  ai/         the AI, every player alone: view.py (the public view), agent.py (an agent's answer: buttons and a call),
-              lineup.py (who drives each slot), players/ (the rule-based archetypes), kit.py (their toolkit), skill.py
-              (skill -> precision), nets.py (net players), obs.py (what a net sees)
+  core/   the game itself and nothing that plays it: the rules and physics of a match at 60 ticks/s (match.py, physics.py), what
+          a player may see (view.py, public.py) and answer (act.py), seeded random numbers, stats, the value of shots and passes.
+          Every player is a seat; whatever decides for it is a brain plugged in from outside.
+  ai/     the brains: rule-based archetypes (players/, on kit.py and skill.py), net players (nets.py, seeing obs.py), a person
+          at the controls (person.py). Each decides alone from its team's public view (docs/public_view.md).
+  game/   a match between two teams: the config (setup.py), who sits in each seat (seating.py), the people at the controls and
+          TEAM-mode switching (humans.py), new_match / new_game (play.py).
+
+  data.py, players.py, teams.py   the JSON files under data/: pitches, kickoff spots, players, teams
 
 Quick use:
-  from soccer.match import Match, make_config
-  m = Match(make_config("aurora", "tide", "arena", 5, 90.0, seed=1)); m.run_to_end(); print(m.make_result()["scores"])"""
+  from soccer.game import make_config, new_match
+  m = new_match(make_config("aurora", "tide", "arena", 5, 90.0, seed=1)); m.run_to_end(); print(m.make_result()["scores"])"""

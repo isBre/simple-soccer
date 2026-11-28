@@ -19,7 +19,8 @@ import random
 import sys
 
 from soccer.data import database
-from soccer.match import ENDED, PLAYING, Match, make_config
+from soccer.core.public import ENDED, PLAYING
+from soccer.game import make_config, new_match
 
 N, SECONDS = 10, 60.0
 
@@ -32,7 +33,7 @@ def measure():
     goals, ended = [], 0
     for _ in range(N):
         a, b = rng.sample(teams, 2)
-        m = Match(make_config(a, b, "arena", 5, SECONDS, rng.randrange(1, 1 << 30)))
+        m = new_match(make_config(a, b, "arena", 5, SECONDS, rng.randrange(1, 1 << 30)))
         hw, hh = m.pitch.half_w, m.pitch.half_h
         while m.state != ENDED and m.tick < SECONDS * 60 * 4:
             m.step()
@@ -42,7 +43,7 @@ def measure():
                 ax = 1.0 if t == 0 else -1.0
                 deep = min(m.team_lists[t], key=lambda p: p.pos.real * ax)
                 for p in m.team_lists[t]:
-                    c = acc[p.pdef.algorithm]
+                    c = acc[p.label.algorithm]
                     c["n"] += 1
                     c["x"] += p.pos.real * ax / hw
                     c["y"] += abs(p.pos.imag) / hh

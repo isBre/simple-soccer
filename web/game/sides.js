@@ -4,7 +4,7 @@
 //   Whole team   switch with Q / LB / RB (only for someone alone on a side)
 //   Any player   one player for the whole match, the most advanced spot still free
 //   #N name      that player of the line-up, for the whole match
-// A side with two or more people plays one player each, never the same one (soccer/match.py check_humans). Every device moves its
+// A side with two or more people plays one player each, never the same one (soccer/core/match.py check_humans). Every device moves its
 // own card: ← → (stick, D-pad, arrows, A / D) side, ↑ ↓ (W / S) what it controls; Enter / A / Start kick off, Esc / B back.
 // The places are remembered in this browser (prefs.devices). Nobody on a side: watch the match.
 import { G, esc, prefs, savePrefs } from "./core.js";

@@ -1,9 +1,9 @@
 """Target man: the reference point up front. It holds a high central spot and calls "open" (play it into me); on the ball it
 shields it with its body and lays it off to a teammate running past ("run") or the nearest open one; with its back free it turns
 and shoots. It does not chase deep."""
-from ...vec import clamp
+from ...core.vec import clamp
 from .. import kit
-from ..agent import Act
+from ...core.act import Act
 from .base import RuleAgent
 
 

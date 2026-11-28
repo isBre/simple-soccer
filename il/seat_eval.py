@@ -13,13 +13,14 @@ OPPONENTS = ["cobalt", "fern", "owls", "rose", "aurora", "tide"]
 def play(job):
     team, opp, seed, side, model, temp, role = job
     from soccer.ai import nets
-    from soccer.match import AI_PERIOD, ENDED, Match, make_config
+    from soccer.core.public import AI_PERIOD, ENDED
+    from soccer.game import make_config, new_match
     c = make_config(team, opp, "arena", 5, 90.0, seed) if side == 0 else make_config(opp, team, "arena", 5, 90.0, seed)
-    m = Match(c)
+    m = new_match(c)
     seat = None
     if model:
         seat = next(p for p in m.team_lists[side] if p.line == role)          # the player on that formation spot
-        seat.bot_ai = nets.NetBot(nets.load({"model": model}), temp)
+        m.seat(seat.uid, nets.NetBot(nets.load({"model": model}), temp))
     chg = n = 0
     prev = None
     near = 0
