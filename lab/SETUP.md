@@ -7,7 +7,8 @@ One machine trains, runs the experiment queue, serves the dashboard (port 8080) 
 ## Once
 ```
 git clone https://github.com/isBre/simple-soccer.git && cd simple-soccer     # needs git-lfs: brew install git-lfs && git lfs install
-python3 -m venv ~/rl-venv && ~/rl-venv/bin/pip install numpy torch
+python3 -m venv .venv && .venv/bin/pip install -e '.[train]'                 # the project as an installed package
+source .venv/bin/activate                                                    # every new terminal; the commands below assume it
 sh .githooks/install.sh                                                      # the tests before a push that changes code
 python3 -m elo init                                                          # the ratings database of this machine (docs/ratings.md)
 ```
@@ -15,7 +16,7 @@ Checkpoints (`out_5v5/`), logs (`logs/`) and the ratings database (`local/`) are
 
 ## Every time
 ```
-lab/run.sh                     # the runner (background QoS, no idle sleep), the health sampler and the thermal guard
+lab/run.sh                     # the runner (background QoS, no idle sleep), the health sampler and the thermal guard (.venv/bin/python)
 python3 web/app.py             # the dashboard and the game: http://localhost:8080 (#/ = Lab, #/game = Game)
 ```
 Stop the runner with `pkill -f lab/exp_runner.py`. Nothing restarts after a reboot or a sleep: start `lab/run.sh` again and the runner

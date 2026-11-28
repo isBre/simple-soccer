@@ -38,13 +38,11 @@ import time
 from http.server import BaseHTTPRequestHandler
 from urllib.parse import unquote
 
+from lab import lab  # lab/lab.py: the agent CLI; /api/v1 serves the same functions
+from lab import tracker
+from lab import ladder
+
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-import sys  # noqa: E402
-if ROOT not in sys.path:
-    sys.path.insert(0, ROOT)
-from lab import lab  # noqa: E402  (lab/lab.py: the agent CLI; /api/v1 serves the same functions)
-from lab import tracker  # noqa: E402
-from lab import ladder  # noqa: E402
 EXP = os.path.join(ROOT, "exp")
 LOGS = os.path.join(ROOT, "logs")
 STATIC = os.path.join(ROOT, "web")                 # the page shell, styles and scripts (Lab and Game)
@@ -348,8 +346,6 @@ NET_LABELS = {"rl_5v5_arena_v4": "RL Team 4", "rl_5v5_arena_v5": "RL Team 5"}
 def dataset_view():
     """The Dataset page: the analysis of data/human/ and, as references, the behaviour of the newest full evaluation (the net
     and the rule bots it played, same definitions)."""
-    if ROOT not in sys.path:
-        sys.path.insert(0, ROOT)
     from il import analysis
     out = dict(analysis.summary())
     ref = None

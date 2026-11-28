@@ -21,12 +21,12 @@ import os
 import sys
 import types
 
+import numpy as np
+from soccer.match import Match, MatchConfig, Player, make_config
+from soccer.players import PlayerDef
+from soccer.ai.view import GENERIC_DELAY, View
+
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-sys.path.insert(0, ROOT)
-import numpy as np                                                   # noqa: E402
-from soccer.match import Match, MatchConfig, Player, make_config   # noqa: E402
-from soccer.players import PlayerDef                                # noqa: E402
-from soccer.ai.view import GENERIC_DELAY, View                     # noqa: E402
 
 AGENTS = ["soccer/ai/agent.py", "soccer/ai/kit.py", "soccer/ai/nets.py", "soccer/ai/obs.py", "soccer/ai/skill.py"] + \
     sorted("soccer/ai/players/" + f for f in os.listdir(os.path.join(ROOT, "soccer", "ai", "players")) if f.endswith(".py"))

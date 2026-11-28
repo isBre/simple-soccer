@@ -34,11 +34,11 @@ import time
 import urllib.error
 import urllib.request
 
+from game import api, session
+from lab import live as lab_live
+from soccer.match import Match, make_config
+
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-sys.path.insert(0, ROOT)
-from game import api, session   # noqa: E402
-from lab import live as lab_live  # noqa: E402
-from soccer.match import Match, make_config   # noqa: E402
 
 
 class WS:

@@ -18,9 +18,7 @@ import random
 import sys
 import tempfile
 
-ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-sys.path.insert(0, ROOT)
-from elo import BASE, K, PLACEMENT, db, model, schedule        # noqa: E402
+from elo import BASE, K, PLACEMENT, db, model, schedule
 
 FAILS = []
 

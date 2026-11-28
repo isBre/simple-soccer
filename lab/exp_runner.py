@@ -24,7 +24,7 @@ an empty pitch), and it is placed in that size's ratings.
 Everything is written to exp/ (see lab/tracker.py). After a reboot the runner resumes the running experiment from its last checkpoint.
 
   lab/run.sh                                         (the usual way: background QoS, health sampler, thermal guard; lab/SETUP.md)
-  .venv/bin/python lab/exp_runner.py --loop [--viewer]
+  python3 lab/exp_runner.py --loop [--viewer]          (with the venv active, lab/SETUP.md)
 
 While the queue is empty (--loop) it plays rounds of the Elo ranking (lab/ladder.py round: 6 pairs, 2 matches each, 3 niced
 workers, a few minutes) and looks at the queue again after each round. `touch local/refine_off` stops that (and the web
@@ -41,8 +41,9 @@ import subprocess
 import sys
 import time
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))   # the project root BEFORE lab/ (lab/lab.py would hide the lab package)
-from lab import tracker  # noqa: E402
+if os.path.realpath(sys.path[0]) == os.path.dirname(os.path.realpath(__file__)):
+    del sys.path[0]                 # run as lab/<script>.py: lab/ would come first and lab/lab.py would hide the lab package
+from lab import tracker
 
 ROOT, EXP = tracker.ROOT, tracker.EXP
 CKPT = os.path.join(ROOT, "out_5v5", "ckpt")

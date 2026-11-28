@@ -7,12 +7,16 @@
 A Haxball-style football game in the browser, built for AI experiments: custom 60 Hz Haxball physics, data-driven pitches/teams/players, rule-based and reinforcement-learning AI, per-player stats and grades, and tournaments.
 
 ```bash
+python3 -m venv .venv && .venv/bin/pip install -e '.[train]'     # once: the project as an installed package (numpy, torch)
+source .venv/bin/activate                                         # every new terminal (or call .venv/bin/python directly)
 python3 web/app.py
 ```
 
-Then open <http://localhost:8080/#/game> (from another computer: `http://<this machine>:8080`). It needs Python 3 with numpy; the
-same page has the **Lab** (the experiment dashboard) next to the **Game**. Dependencies are listed in `pyproject.toml` (numpy;
-torch for training); nothing needs installing, every script runs from the checkout as `python3 <dir>/<script>.py`. One machine runs everything: [lab/SETUP.md](lab/SETUP.md).
+Then open <http://localhost:8080/#/game> (from another computer: `http://<this machine>:8080`). The same page has the **Lab** (the
+experiment dashboard) next to the **Game**. Dependencies and packages are listed in `pyproject.toml` (numpy; torch for training,
+`.[train]`); with the venv active every script runs as `python3 <dir>/<script>.py` from anywhere in the checkout, and the packages
+(`soccer`, `rl`, `lab`, `elo`, ...) import from anywhere (`python -m elo`, `python -m rl.evaluate ...`). One machine runs
+everything: [lab/SETUP.md](lab/SETUP.md).
 
 ## Screenshots
 
@@ -217,7 +221,7 @@ result, which the report shows. Tournament rounds are simulated in one request (
 
 ## Tests
 ```bash
-python3 tests/run_all.py            # everything, about 40 s; no Godot or other setup needed
+python3 tests/run_all.py            # everything, about 40 s, with the venv active (README top); no Godot needed
 sh .githooks/install.sh             # once per computer you write code on: runs the tests before every push that changes code
 ```
 With the hook installed, a push whose commits change code runs the tests first and is stopped if one fails (`git push

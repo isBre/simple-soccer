@@ -18,14 +18,13 @@ import os
 import random
 import re
 import socket
-import sys
 import time
 
+from game import session
+from soccer.data import database, res_path
+from soccer.match import ENDED, Match, make_config
+
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-sys.path.insert(0, ROOT)
-from game import session                               # noqa: E402
-from soccer.data import database, res_path             # noqa: E402
-from soccer.match import ENDED, Match, make_config     # noqa: E402
 
 LOGS = os.path.join(ROOT, "logs")
 CKPT = os.path.join(ROOT, "out_5v5", "ckpt")

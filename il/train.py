@@ -21,7 +21,6 @@ import argparse
 import json
 import math
 import os
-import sys
 import time
 
 import numpy as np
@@ -29,11 +28,9 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-if ROOT not in sys.path:
-    sys.path.insert(0, ROOT)
+from il import dataset
 
-from il import dataset                       # noqa: E402
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 OUT = os.path.join(ROOT, "out_il")
 UNIT = np.array([[0.0, 0.0]] + [[x / math.hypot(x, y), y / math.hypot(x, y)] for x, y in

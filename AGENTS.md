@@ -2,7 +2,8 @@
 
 This repository trains 5v5 soccer nets with PPO and runs experiments unattended, all on one machine (setup: `lab/SETUP.md`). If you
 are an AI agent working on the experiments, start here. People: the same applies; the dashboard (the Lab area of the web app) is at
-`http://localhost:8080`.
+`http://localhost:8080`. The project is an installed package in `.venv/` (`python3 -m venv .venv && .venv/bin/pip install -e '.[train]'`):
+run every command below with it active (`source .venv/bin/activate`) or with `.venv/bin/python` in place of `python3`.
 
 ## Read first
 - `docs/rewards.md`: every reward term sorted into beneficial / unsure / not good, with the evidence (update it after each review).

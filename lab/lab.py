@@ -28,8 +28,9 @@ import subprocess
 import sys
 import time
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))   # the project root BEFORE lab/ (lab/lab.py would hide the lab package)
-from lab import tracker  # noqa: E402
+if os.path.realpath(sys.path[0]) == os.path.dirname(os.path.realpath(__file__)):
+    del sys.path[0]                 # run as lab/<script>.py: lab/ would come first and lab/lab.py would hide the lab package
+from lab import tracker
 
 ROOT, EXP = tracker.ROOT, tracker.EXP
 LOGS = os.path.join(ROOT, "logs")

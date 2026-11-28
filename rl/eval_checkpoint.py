@@ -21,8 +21,6 @@ import sys
 import time
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-if ROOT not in sys.path:                     # run as a script: the project root, for the package imports
-    sys.path.insert(0, ROOT)
 
 REFERENCES = [("RL Team 4", "data/models/rl_5v5_arena_v4.json"), ("RL Team 5", "data/models/rl_5v5_arena_v5.json")]
 

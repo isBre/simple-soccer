@@ -23,8 +23,8 @@ average / strong teams, `rl/ppo.py`); every run since continues from a trained n
 it is in the git history).
 
 ```bash
-python3 -m venv ~/rl-venv && ~/rl-venv/bin/pip install torch numpy --index-url https://download.pytorch.org/whl/cpu
-~/rl-venv/bin/python rl/evaluate.py league_eval --model res://data/models/rl_5v5_arena_v5.json --games 2
+python3 -m venv .venv && .venv/bin/pip install -e '.[train]'    # once (README top); then source .venv/bin/activate
+python3 rl/evaluate.py league_eval --model res://data/models/rl_5v5_arena_v5.json --games 2
 ```
 
 ## Every team size, with calls: the curriculum (phase D)
@@ -69,10 +69,10 @@ the learner, resampled every 20 updates). Checkpoints: `out_5v5/ckpt/<tag>_u<N>.
 
 ```bash
 # cooperation fine-tune (anti-farming settings used for the coop3 run)
-~/rl-venv/bin/python rl/selfplay.py --start out_5v5/ckpt/coop_u600.pt --tag coop3 --updates 1200 \
+python3 rl/selfplay.py --start out_5v5/ckpt/coop_u600.pt --tag coop3 --updates 1200 \
   --pass_individual 1 --w_recv 0.1 --w_open 0.003 --w_key_pass 0.15 --w_xa 1.5 --coop_cap 3 --w_keeper 0.006 --random_start 0.6 --eval_every 99999
-~/rl-venv/bin/python rl/evaluate.py behaviour_stats --model res://out_5v5/ckpt/coop3_u600.json   # jitter, passes, key passes, spacing, keeper distance
-~/rl-venv/bin/python rl/evaluate.py league_eval --model res://out_5v5/ckpt/coop3_u600.json --games 2
+python3 rl/evaluate.py behaviour_stats --model res://out_5v5/ckpt/coop3_u600.json   # jitter, passes, key passes, spacing, keeper distance
+python3 rl/evaluate.py league_eval --model res://out_5v5/ckpt/coop3_u600.json --games 2
 ```
 
 Reward terms (per agent, `env.py`): goals, ball/goal shaping, `--w_space` (spacing, only while our team has the ball), `--w_kick` (kick discipline),
@@ -92,7 +92,7 @@ Results of the first teams: `docs/history/results_league_final.txt`, `docs/histo
 - Run training at low priority (`nice -n 15`) next to the live demo match (`lab/live.py`), so the demo keeps real time.
 
 ```bash
-nice -n 15 ~/rl-venv/bin/python rl/selfplay.py --start out_5v5/ckpt/jit3_u50.pt --baseline out_5v5/rl_v5_start.pt --tag jit6 \
+nice -n 15 python3 rl/selfplay.py --start out_5v5/ckpt/jit3_u50.pt --baseline out_5v5/rl_v5_start.pt --tag jit6 \
   --workers_rule 3 --workers_self 1 --envs_per_worker 16 --minibatch 4096 --ckpt_every 25 --log_every 2 \
   --pass_individual 1 --w_recv 0.1 --w_open 0.003 --w_key_pass 0.25 --w_xa 2.5 --coop_cap 8 --w_keeper 0.006 --random_start 0.6 --w_jitter 0.004 \
   > logs/jit6.out 2>&1 &

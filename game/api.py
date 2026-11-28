@@ -11,18 +11,15 @@ import json
 import math
 import os
 import random
-import sys
 from concurrent.futures import ProcessPoolExecutor
 import multiprocessing as mp
 
-ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-if ROOT not in sys.path:
-    sys.path.insert(0, ROOT)
+from soccer import control as sc
+from soccer import match as sm
+from soccer import data as sd
+from soccer.data import database, resolve_kits, team_colors
 
-from soccer import control as sc                                     # noqa: E402
-from soccer import match as sm                                       # noqa: E402
-from soccer import data as sd                                         # noqa: E402
-from soccer.data import database, resolve_kits, team_colors   # noqa: E402
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 LEAGUES = [{"id": "rules", "name": "Rule Based League"}, {"id": "rl", "name": "Reinforcement Learning League"},
            {"id": "mixed", "name": "Mixed League"}, {"id": sd.MY_LEAGUE, "name": "My Teams"}]

@@ -13,9 +13,11 @@ cd "$(dirname "$0")/.."
 MAX=${1:-33}
 RESUME=${2:-32}
 mkdir -p logs
+PY=python3
+[ -x .venv/bin/python ] && PY=.venv/bin/python            # the installed project (lab/SETUP.md)
 if pgrep -f lab/exp_runner.py >/dev/null; then echo "a runner is already running"; exit 1; fi
-pgrep -f lab/health_log.py >/dev/null || nohup nice -n 10 python3 lab/health_log.py >/dev/null 2>&1 &
-SOCCER_PROCS=3 nohup caffeinate -i taskpolicy -b nice -n 10 python3 lab/exp_runner.py --viewer >> logs/runner.out 2>&1 &
+pgrep -f lab/health_log.py >/dev/null || nohup nice -n 10 "$PY" lab/health_log.py >/dev/null 2>&1 &
+SOCCER_PROCS=3 nohup caffeinate -i taskpolicy -b nice -n 10 "$PY" lab/exp_runner.py --viewer >> logs/runner.out 2>&1 &
 sleep 3
-nohup nice -n 5 python3 lab/thermal_guard.py --max "$MAX" --resume "$RESUME" >> logs/thermal_guard.out 2>&1 &
+nohup nice -n 5 "$PY" lab/thermal_guard.py --max "$MAX" --resume "$RESUME" >> logs/thermal_guard.out 2>&1 &
 echo "runner started (thermal guard: pause above $MAX °C, resume at $RESUME °C)"

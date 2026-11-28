@@ -14,14 +14,10 @@ No login: use it on a trusted network only."""
 import argparse
 import json
 import os
-import sys
 import threading
 from http.server import ThreadingHTTPServer
 from urllib.parse import unquote
 
-ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-if ROOT not in sys.path:
-    sys.path.insert(0, ROOT)
 for _v in ("OPENBLAS_NUM_THREADS", "OMP_NUM_THREADS", "MKL_NUM_THREADS"):   # tiny matrix products: no BLAS thread pools
     os.environ.setdefault(_v, "1")
 

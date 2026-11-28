@@ -13,16 +13,13 @@ Only consecutive decisions count for changes (a goal celebration or a pause in b
   python3 il/analysis.py           prints the summary as JSON"""
 import json
 import os
-import sys
 
 import numpy as np
 
-ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-if ROOT not in sys.path:
-    sys.path.insert(0, ROOT)
+from il import human_data
+from soccer.match import AI_PERIOD, DIRS
 
-from il import human_data                                   # noqa: E402
-from soccer.match import AI_PERIOD, DIRS                    # noqa: E402
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 GX, GY = 14, 8                       # heatmap grid, as rl/evaluate.py
 PER_SEC = 60.0 / AI_PERIOD           # decisions per second
