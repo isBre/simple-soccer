@@ -2,7 +2,7 @@
 "use strict";
 
 // ---------- RUNS ----------
-const TYPE_LABEL = { rl: ["RL", "reinforcement learning (PPO self-play on the Pi)"], imitation: ["Imitation", "behaviour cloning on the recorded play (il/train.py)"] };
+const TYPE_LABEL = { rl: ["RL", "reinforcement learning (PPO self-play)"], imitation: ["Imitation", "behaviour cloning on the recorded play (il/train.py)"] };
 function changeChips(list) {
   return (list || []).map((c) => {
     const was = c.was !== undefined && c.was !== null && c.k !== "start" ? `<span class="was">${esc(shortVal(c.was))} →</span> ` : "";
@@ -43,7 +43,7 @@ function eloCell(e, top, est) {
   if (!e && est) return `<b class="est" title="${esc(estTip)}">~${Math.round(est.elo)}</b><span class="pm">±${Math.round(1.96 * est.se)}</span><div class="muted small">estimate · u${est.update} · ${est.games} games</div>`;
   if (!e) return '<span class="muted" title="not in the Elo ladder (no exported best checkpoint)">–</span>';
   const pm = e.hi != null ? Math.round((e.hi - e.lo) / 2) : null;
-  return `<b class="${e.id === top ? "pos" : ""}">${Math.round(e.elo)}</b>${pm != null ? `<span class="pm">±${pm}</span>` : ""}<div class="muted small" title="${e.w}-${e.d}-${e.l} (won-drawn-lost) in ${e.games} ladder matches">${e.placed ? `#${e.rank}` : "placing"} · ${e.games} games${e.stored ? ' <span class="stored" title="rated from the ladder matches the Pi already played; this machine has no copy of the weights (out_5v5/ckpt/ stays on the Pi)">*</span>' : ""}</div>`;
+  return `<b class="${e.id === top ? "pos" : ""}">${Math.round(e.elo)}</b>${pm != null ? `<span class="pm">±${pm}</span>` : ""}<div class="muted small" title="${e.w}-${e.d}-${e.l} (won-drawn-lost) in ${e.games} ladder matches">${e.placed ? `#${e.rank}` : "placing"} · ${e.games} games${e.stored ? ' <span class="stored" title="rated from ladder matches played before; this machine has no copy of the weights (out_5v5/ckpt/)">*</span>' : ""}</div>`;
 }
 const STOPPED = ["diverged", "regressed", "failed", "cancelled"];
 const RF0 = { state: "all", type: "all", net: "", change: "", vs: "", ranked: false, hidden: false };
@@ -118,5 +118,5 @@ function viewRuns() {
   return `<div class="head"><div><h1>Runs</h1><p>Experiments, imitation trainings, imported runs and the queue, the latest first (click a column to sort, e.g. by Elo), with goals scored and conceded against the average rated team (grey ~ = estimated during training). Tick runs to compare them; click a row for details.</p></div>
       <div class="tools"><a class="btn ${n ? "" : "disabled"}" href="#/compare?runs=${[...state.selected].map(encodeURIComponent).join(",")}">Compare ${n ? "(" + n + ")" : ""}</a></div></div>
     ${filters}
-    <div class="card flush"><div class="tbl-wrap"><table class="runs"><thead><tr><th></th>${th("name", "Run")}${th("cost", "Cost", "r", "Pi hours: training + evaluation")}${th("fin", "When")}${th("type", "Type", "", "how the net was trained")}${th("state", "State")}<th title="what this run changes against its control (vs …), or against the default recipe (from = the net it starts from)">Changes</th><th class="r">Update</th>${th("elo", "Elo", "r", "rating of the run's best checkpoint in the Elo ladder (lab/ladder.py: every team and net against each other), ±95%; the number to pick the best model by. ~ = estimated during training, until the ladder has placed it")}${th("gf", "GF", "r", "goals scored per 90 s match against the average ladder team (opponent-adjusted, from the same matches as the Elo)")}${th("ga", "GA", "r", "goals conceded per 90 s match against the average ladder team (opponent-adjusted)")}${th("gd", "GD", "r", "GF - GA")}</tr></thead><tbody>${body || '<tr><td colspan="12" class="muted">No runs match</td></tr>'}</tbody></table></div>${pg.html}</div>`;
+    <div class="card flush"><div class="tbl-wrap"><table class="runs"><thead><tr><th></th>${th("name", "Run")}${th("cost", "Cost", "r", "machine hours: training + evaluation")}${th("fin", "When")}${th("type", "Type", "", "how the net was trained")}${th("state", "State")}<th title="what this run changes against its control (vs …), or against the default recipe (from = the net it starts from)">Changes</th><th class="r">Update</th>${th("elo", "Elo", "r", "rating of the run's best checkpoint in the Elo ladder (lab/ladder.py: every team and net against each other), ±95%; the number to pick the best model by. ~ = estimated during training, until the ladder has placed it")}${th("gf", "GF", "r", "goals scored per 90 s match against the average ladder team (opponent-adjusted, from the same matches as the Elo)")}${th("ga", "GA", "r", "goals conceded per 90 s match against the average ladder team (opponent-adjusted)")}${th("gd", "GD", "r", "GF - GA")}</tr></thead><tbody>${body || '<tr><td colspan="12" class="muted">No runs match</td></tr>'}</tbody></table></div>${pg.html}</div>`;
 }

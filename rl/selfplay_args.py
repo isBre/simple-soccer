@@ -81,7 +81,7 @@ def parser():
     ap.add_argument("--fast_rules", type=int, default=1, help="1: the FAST check also plays the fixed matches against the rule bots (logs/sp_eval/<tag>_fast.txt); 0: only the estimated Elo")
     ap.add_argument("--elo_pairs", type=int, default=0, help="with each FAST check: estimated Elo from this many pairs of ladder matches (lab/ladder.py estimate, 2 matches per pair, training paused); 0 = none")
     ap.add_argument("--fast_ref", default="", help="game-model JSON of the net the run started from (the fast check plays it head to head)")
-    ap.add_argument("--learn_threads", type=int, default=2, help="torch threads of the learning step (all 4 would fight the env workers for the CPU: the Pi froze)")
+    ap.add_argument("--learn_threads", type=int, default=2, help="torch threads of the learning step (more would fight the env workers for the CPU)")
     ap.add_argument("--trainer_fg", type=int, default=1, help="macOS, runner in background mode (TrainerQos): 1 = the trainer process leaves it (about 1.5x faster, about 0.7 W more), 0 = it stays (coolest). Env workers and evaluations always keep it. Speed only")
     ap.add_argument("--base_port", type=int, default=7100, help="first port of the rule-group workers (self-play group: +100)")
     ap.add_argument("--hidden", type=int, default=128, help="width of the two hidden layers (must match --start)")

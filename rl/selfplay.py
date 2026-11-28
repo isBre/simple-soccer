@@ -11,7 +11,7 @@ Extra reward terms (per player) push towards human-like play: completed progress
 With --obs slots (76 numbers, every size) the net also makes a call to its teammates every decision (soccer.match.INTENTS, 5
 logits after the kick); calls carry no reward: what they come to mean is up to training. --start scratch = a fresh net.
 
-  /root/rl-venv/bin/python rl/selfplay.py --updates 1500
+  python3 rl/selfplay.py --updates 1500
 """
 import copy
 import json
@@ -27,20 +27,18 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-if ROOT not in sys.path:                     # run as a script: the project root, for the package imports
-    sys.path.insert(0, ROOT)
+from rl.client import VecEnv
+from rl.agent import Agent, OUT, OUT_DRAW, OUT_GOAL, OUT_WIN, dists, load_padded, team_pools
+from soccer.ai.obs import SLOTS_NAME
+from rl.selfplay_args import OBS_DIMS, parser
 
-from rl.client import VecEnv                                                                   # noqa: E402
-from rl.agent import Agent, OUT, OUT_DRAW, OUT_GOAL, OUT_WIN, dists, load_padded, team_pools    # noqa: E402
-from soccer.ai.obs import SLOTS_NAME                                                          # noqa: E402
-from rl.selfplay_args import OBS_DIMS, parser                                                  # noqa: E402
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 torch.distributions.Distribution.set_default_validate_args(False)    # argument checks only (no effect on any value): ~20% of the rollout inference
 
 
 class TrainerQos:
-    """macOS: lab/mac_run.sh starts the runner with `taskpolicy -b` (background mode: efficiency cores only, low clock), the
+    """macOS: lab/run.sh starts the runner with `taskpolicy -b` (background mode: efficiency cores only, low clock), the
     coolest way to run the long simulation. The trainer process itself only works in short bursts (the nets between two env
     steps, the learning step) and otherwise waits for the env workers, so with --trainer_fg 1 it leaves background mode once its
     workers are started (they inherit background mode and keep it): the bursts run about 4.5 times faster on the performance cores

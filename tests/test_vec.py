@@ -8,13 +8,11 @@
 
   python3 tests/test_vec.py"""
 import math
-import os
 import random
 import sys
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from soccer import match, vec              # noqa: E402
-from soccer.ai import kit                  # noqa: E402
+from soccer import match, vec
+from soccer.ai import kit
 
 
 def check(name, ok, detail):

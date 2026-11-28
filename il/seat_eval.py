@@ -6,11 +6,6 @@ The same matches (same seeds, both sides) are played without the swap, so the di
 import argparse
 import multiprocessing as mp
 import os
-import sys
-
-ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-if ROOT not in sys.path:
-    sys.path.insert(0, ROOT)
 
 OPPONENTS = ["cobalt", "fern", "owls", "rose", "aurora", "tide"]
 

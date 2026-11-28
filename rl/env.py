@@ -15,18 +15,12 @@ Config (configure()):
   selfplay     probability that team 1 is driven by `opp_net` (all 5 players incl. keeper) instead of rules
   own_team     id of the learner's team (only matters for a rule-based keeper / lineup)"""
 import math
-import os
-import sys
 
-ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-if ROOT not in sys.path:
-    sys.path.insert(0, ROOT)
-
-from soccer.ai.obs import features_many, features_slots              # noqa: E402
-from soccer.ai.view import View                                      # noqa: E402
-from soccer.data import database                                     # noqa: E402
-from soccer.match import ENDED, HIST, INTENTS, PLAYING, Match, MatchConfig   # noqa: E402
-from soccer.rng import RandomNumberGenerator                         # noqa: E402
+from soccer.ai.obs import features_many, features_slots
+from soccer.ai.view import View
+from soccer.data import database
+from soccer.match import ENDED, HIST, INTENTS, PLAYING, Match, MatchConfig
+from soccer.rng import RandomNumberGenerator
 
 REPEAT = 2                 # sim ticks per decision (same as the match's AI_PERIOD)
 OUT_NONE, OUT_GOAL, OUT_OWN, OUT_TIMEOUT, OUT_CONCEDED, OUT_WIN, OUT_DRAW, OUT_LOSS = range(8)

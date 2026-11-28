@@ -8,14 +8,11 @@ import argparse
 import json
 import multiprocessing as mp
 import os
-import sys
 import time
 
-ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-if ROOT not in sys.path:
-    sys.path.insert(0, ROOT)
+from lab import ladder
 
-from lab import ladder                           # noqa: E402
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 OPPONENTS = ["player:daan_de_vries", "player:sam_taylor", "player:felix_wagner", "net:t46_best", "player:elias_berg", "net:t48_u100",
              "player:hugo_lindqvist", "net:team46_start", "net:x_anchor_wall_best", "player:leo_schneider"]

@@ -13,19 +13,14 @@ that drifts into states the teacher never visited and plays much worse than its 
 """
 import argparse
 import os
-import sys
 import time
 
 import numpy as np
 import torch
 import torch.nn.functional as F
 
-ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-if ROOT not in sys.path:                     # run as a script: the project root, for the package imports
-    sys.path.insert(0, ROOT)
-
-from rl.client import VecEnv                                         # noqa: E402
-from rl.agent import Agent, load_padded, save_model, team_pools, OUT   # noqa: E402
+from rl.client import VecEnv
+from rl.agent import Agent, load_padded, save_model, team_pools, OUT
 
 N_TEAM, N_RANK, N_LEGACY = 46, 56, 54
 N_STUDENT = {"team": N_TEAM, "rank": N_RANK}       # student observation -> its size

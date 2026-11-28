@@ -7,14 +7,10 @@ Writes the .pt (actor and critic padded) and its game-model .json next to it."""
 import argparse
 import json
 import os
-import sys
 
 import torch
 
-ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-if ROOT not in sys.path:                     # run as a script: the project root, for the package imports
-    sys.path.insert(0, ROOT)
-from rl.agent import Agent, load_padded  # noqa: E402
+from rl.agent import Agent, load_padded
 
 
 def main():

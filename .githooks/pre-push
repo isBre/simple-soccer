@@ -1,7 +1,7 @@
 #!/bin/sh
-# Runs the tests (python3 tests/run_all.py, ~40 s) before a push whose commits change code, and stops the push if they fail.
+# Runs the tests (tests/run_all.py with the project venv's Python, .venv/bin/python, ~40 s) before a push whose commits change code, and stops the push if they fail.
 # A push that only changes results, notes or docs (exp/, docs/, *.md, logs/) is not held up.
-# Installed by .githooks/install.sh (once per computer that writes code; not on the Pi). Skip once: git push --no-verify
+# Installed by .githooks/install.sh (once per clone). Skip once: git push --no-verify
 # git passes the refs being pushed on stdin: <local ref> <local sha> <remote ref> <remote sha>
 zero=0000000000000000000000000000000000000000
 files=""
@@ -18,8 +18,10 @@ $(git diff --name-only "$base" "$local_sha")"; else files="$files
 done
 code=$(printf '%s\n' "$files" | grep -v '^$' | grep -vE '^(exp|docs|logs)/|\.md$')
 [ -z "$code" ] && exit 0
-echo "pre-push: code changed, running the tests (python3 tests/run_all.py; skip once with git push --no-verify)" >&2
-if ! python3 tests/run_all.py >&2; then
+py=python3
+[ -x .venv/bin/python ] && py=.venv/bin/python                           # the installed project (README "Setup")
+echo "pre-push: code changed, running the tests ($py tests/run_all.py; skip once with git push --no-verify)" >&2
+if ! "$py" tests/run_all.py >&2; then
   echo "pre-push: tests failed, push stopped. A FAIL from an intended change: re-record with --update and commit the new tests/golden files." >&2
   exit 1
 fi

@@ -14,12 +14,8 @@ import sys
 
 import numpy as np
 
-ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-if ROOT not in sys.path:
-    sys.path.insert(0, ROOT)
-
-from game.recorder import data_dir            # noqa: E402
-from soccer.ai.obs import features_team       # noqa: E402
+from game.recorder import data_dir
+from soccer.ai.obs import features_team
 
 MOVES = ["stand", "up", "up-fwd", "fwd", "down-fwd", "down", "down-back", "back", "up-back"]   # soccer.match.DIRS, own frame
 

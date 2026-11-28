@@ -4,14 +4,11 @@ teams, every fixture, every match seed, the results, standings and player statis
 knockout round names.
 
   python3 tests/test_tournament.py [--update]"""
-import os
 import sys
 
-ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-sys.path.insert(0, ROOT)
-from game import tournament as tn                         # noqa: E402
-from soccer.data import database                          # noqa: E402
-from tests import golden                                   # noqa: E402
+from game import tournament as tn
+from soccer.data import database
+import golden
 
 CASES = [[0, 5, 1], [0, 6, 12345], [0, 16, 777], [1, 4, 2], [1, 8, 99999], [1, 16, 31337], [2, 8, 4242], [2, 16, 5]]
 

@@ -17,20 +17,17 @@ import json
 import math
 import multiprocessing as mp
 import os
-import sys
 import time
 
 for _v in ("OPENBLAS_NUM_THREADS", "OMP_NUM_THREADS", "MKL_NUM_THREADS"):   # before numpy: the nets' products are tiny, and BLAS
     os.environ.setdefault(_v, "1")                                         # thread pools in every worker starve the simulation
 
-ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-if ROOT not in sys.path:
-    sys.path.insert(0, ROOT)
-
 from soccer.data import database, res_path                            # noqa: E402
 from soccer.match import ENDED, PLAYING, Match, MatchConfig           # noqa: E402
 from soccer.stats import snapped                                      # noqa: E402
 from soccer.vec import roundi                                         # noqa: E402
+
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 CORNER_ZONE = 150.0      # the ball counts as "in a corner" within this many px of both the goal line and the side line
 GX, GY = 14, 8           # heatmap grid (the RL team always attacks to the right)

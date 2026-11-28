@@ -1,13 +1,9 @@
 """Speed of the match core: rule-vs-rule matches (sim ticks/s) and the RL training environment (steps/s, rule opponents).
   python3 tools/bench.py"""
-import os
-import sys
 import time
 
-ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-sys.path.insert(0, ROOT)
-from soccer.match import Match, make_config     # noqa: E402
-from rl.env import RLEnv                        # noqa: E402
+from soccer.match import Match, make_config
+from rl.env import RLEnv
 
 t0, ticks = time.time(), 0
 ids = ["aurora", "cobalt", "granite", "tide"]

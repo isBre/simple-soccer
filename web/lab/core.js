@@ -61,18 +61,8 @@ function notes(key, text, lines = 2) {
   const more = text.length > 110 * lines ? `<button class="linkbtn" data-open="${esc(key)}">${open ? "less" : "more"}</button>` : "";
   return `<div class="notes-row"><div class="notes${open ? "" : " clamp" + lines}">${esc(text)}</div>${more}</div>`;
 }
-function throttle(hex) {
-  if (!hex) return { text: "–", cls: "" };
-  const v = parseInt(hex, 16);
-  if (!v) return { text: "OK", cls: "pos", sub: "no throttling since boot" };
-  const now = v & 0xf, past = v >> 16, names = ["under-voltage", "freq. capped", "throttled", "soft temp limit"];
-  const list = (bits) => names.filter((_, i) => bits & (1 << i)).join(", ");
-  return { text: now ? list(now) : "OK now", cls: now ? "neg" : "warn", sub: past ? "since boot: " + list(past) : "" };
-}
-// the health box describes whatever machine the pipeline runs on (lab/lab.py machine): the Pi reports throttle flags,
-// a Mac its thermal pressure (macOS slows the CPU from "moderate" up), power source and battery charge
+// the health box (lab/lab.py machine): thermal pressure (macOS slows the CPU from "moderate" up), power source and battery charge
 function powerState(m) {
-  if (m.kind !== "mac") return throttle(m.throttled);
   const lv = m.thermal, src = m.power ? (m.power === "AC" ? "on AC" : "on battery") + (m.battery_pct != null ? " · " + f(m.battery_pct, 0) + "%" : "") : "";
   if (lv == null) return { text: "–", cls: "", sub: src };
   return { text: lv === 0 ? "OK" : "thermal " + m.thermal_text, cls: lv === 0 ? "pos" : lv === 1 ? "warn" : "neg", sub: src };

@@ -2,12 +2,10 @@
 Every match seed, kickoff and random start comes from it, so its outputs must never change.
 
   python3 tests/test_rng.py [--update]"""
-import os
 import sys
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from soccer.rng import RandomNumberGenerator   # noqa: E402
-from tests import golden                       # noqa: E402
+from soccer.rng import RandomNumberGenerator
+import golden
 
 SEEDS = [0, 1, 42, 12345, 987654321, (1 << 40) + 7]
 
